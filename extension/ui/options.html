@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>BridgeDeck · 设置</title>
+  <link rel="stylesheet" href="ui.css" />
+<script type="module" src="i18n.js"></script>
+</head>
+<body class="options">
+  <header class="brand">
+    <img src="../icons/icon32.png" alt="" />
+    <h1>BridgeDeck · 设置</h1>
+  </header>
+  <p class="hint">这些设置立刻对已打开和新建的任务生效，保存在当前浏览器配置里。</p>
+
+  <form id="form">
+    <fieldset>
+      <legend>浏览器实例</legend>
+      <label class="field">
+        <span>
+          名称
+          <small>给这个浏览器起个名字，Agent 可用 <code>--browser &lt;名字&gt;</code> 精确选中它。</small>
+        </span>
+        <input id="instanceLabel" type="text" maxlength="40" placeholder="例如：工作账号" />
+      </label>
+      <div class="row" style="margin-top:10px">
+        <button type="button" id="copyCmd">复制该实例的启动命令</button>
+      </div>
+      <p class="hint mono" id="cmdPreview" style="margin:10px 0 0"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>自动化</legend>
+      <label class="field">
+        <span>
+          借用标签页前确认
+          <small>Agent 接管你已有的标签页前，先在页面顶部弹出确认条。</small>
+        </span>
+        <input id="borrowConfirm" type="checkbox" />
+      </label>
+      <label class="field">
+        <span>
+          允许请求人工协助
+          <small>允许 Agent 请你处理登录、验证码等必须本人参与的步骤。</small>
+        </span>
+        <input id="allowHelp" type="checkbox" />
+      </label>
+      <label class="field">
+        <span>
+          页面守卫
+          <small>外部链接或手动新建的标签页落进 Agent 窗口时，自动移回普通窗口。</small>
+        </span>
+        <input id="pageGuard" type="checkbox" />
+      </label>
+      <label class="field">
+        <span>界面语言 / Language</span>
+        <select id="uiLang">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>默认长截图模式</span>
+        <select id="longShotMode">
+          <option value="auto">自动滚动</option>
+          <option value="manual">手动拼接</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <div class="row">
+      <button type="submit" class="primary">保存设置</button>
+      <button type="button" id="reset">恢复默认</button>
+    </div>
+  </form>
+
+  <p class="hint" style="margin:14px 0 0">数据默认只在本机流转；详见 <a href="privacy.html" target="_blank" rel="noopener">隐私说明</a>。</p>
+  <div id="toast" class="toast"></div>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

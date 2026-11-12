@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>视频录制 · BridgeDeck</title>
+  <link rel="stylesheet" href="ui.css" />
+<script type="module" src="i18n.js"></script>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <button id="back" class="back-btn" title="返回">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2Z"/></svg>
+      </button>
+      <div>
+        <h1>视频录制</h1>
+        <div class="sub">将任务标签页录制为 MP4 视频</div>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>录制</h2>
+      <div class="toolbar">
+        <select id="tabSelect" class="inline-input" style="min-width:220px"></select>
+        <button id="start" class="btn primary">开始录制</button>
+        <button id="stop" class="btn danger" disabled>停止录制</button>
+        <span id="status" class="muted">未开始</span>
+      </div>
+      <p class="muted" style="margin:10px 0 0;line-height:1.6">
+        录制的是标签页画面（无声）。浏览器会在标签页上显示「正在共享」提示。
+        优先用 MP4（H.264），浏览器不支持时自动退回 WebM。
+      </p>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <h2 style="margin:0">录制文件</h2>
+        <span class="grow"></span>
+        <button id="refresh" class="btn">刷新</button>
+      </div>
+      <div id="list" class="list" style="margin-top:12px"></div>
+      <div id="empty" class="muted" style="margin-top:10px">还没有录制文件</div>
+      <div id="previewWrap" class="video-wrap" hidden>
+        <div class="toolbar">
+          <span id="previewTitle" class="muted"></span>
+          <span class="grow"></span>
+          <button id="closePreview" class="btn">关闭预览</button>
+        </div>
+        <video id="preview" controls playsinline></video>
+      </div>
+    </section>
+
+    <p class="muted" style="margin-top:14px"><a href="ops.html" style="color:#2f6fed;text-decoration:none">操作录制历史</a></p>
+    <div id="note" class="note"></div>
+  </main>
+  <script type="module" src="record.js"></script>
+</body>
+</html>

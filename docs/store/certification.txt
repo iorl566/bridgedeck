@@ -1,0 +1,10 @@
+BridgeDeck is a local-only extension. No account or credentials are required for the extension UI; all settings pages are reachable without the daemon.
+
+To test the core features:
+1. Download the CLI/daemon package: https://github.com/iorl566/bridgedeck-privacy/releases/download/v0.1.0/bridgedeck-cli-0.1.0.zip
+2. Requires Node.js 20+. Unzip, then run: node daemon/server.mjs --foreground
+3. Load the extension, open the popup, and confirm "Connected".
+4. Run: node cli/bridge.mjs session start
+5. Use the popup/quick pages or the CLI to test navigation, fill, screenshots and recordings.
+
+The extension connects only to 127.0.0.1. No test accounts, paid services or special network access are needed. Privacy policy: https://iorl566.github.io/bridgedeck-privacy/privacy-policy.html

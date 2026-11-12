@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Mock Bridge Test</title>
+  <script>
+    console.log('mock fixture: head script');
+  </script>
+</head>
+<body>
+  <main aria-label="测试主区域">
+    <h1>Mock Bridge Test</h1>
+    <p id="intro">用于验证BridgeDeck扩展的本地测试页。</p>
+    <nav aria-label="测试导航">
+      <a id="details-link" href="#details">Details</a>
+    </nav>
+    <form id="form" onsubmit="return false">
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" placeholder="Name">
+      <label for="color">Favorite color</label>
+      <select id="color">
+        <option value="red">Red</option>
+        <option value="blue">Blue</option>
+      </select>
+      <button id="submit" type="button">Submit</button>
+      <button id="delayed-nav" type="button">Delayed nav</button>
+      <button id="menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="menu">More</button>
+      <div id="menu" role="menu" hidden>
+        <div role="menuitem">Alpha</div>
+        <div role="menuitem">Beta</div>
+      </div>
+    </form>
+    <div id="out" role="status">pending</div>
+    <section id="tall" aria-label="长内容"></section>
+  </main>
+  <script>
+    console.log('mock fixture: body script', { ready: true });
+    document.getElementById('submit').addEventListener('click', () => {
+      const name = document.getElementById('name').value;
+      document.getElementById('out').textContent = 'clicked';
+      console.log('submit clicked, name=' + name);
+    });
+    document.getElementById('details-link').addEventListener('click', () => {
+      document.getElementById('out').textContent = 'link clicked';
+    });
+    document.getElementById('delayed-nav').addEventListener('click', () => {
+      console.log('delayed nav scheduled');
+      setTimeout(() => {
+        window.location.href = 'self-test.html?nav=1';
+      }, 500);
+    });
+    // 制造一个比视口高的页面，供 fullPage 截图拼接验证
+    const tall = document.getElementById('tall');
+    for (let i = 0; i < 40; i += 1) {
+      const paragraph = document.createElement('p');
+      paragraph.textContent = `第 ${i + 1} 段：用于撑高页面，验证整页截图拼接。`;
+      tall.appendChild(paragraph);
+    }
+    console.log('mock fixture: loaded');
+  </script>
+</body>
+</html>
