@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>BridgeDeck E2E 夹具页</title>
+  <style>
+    body { font: 15px/1.6 system-ui, sans-serif; margin: 32px; max-width: 860px; }
+    #hidden-box { display: none; }
+    .row { margin: 12px 0; }
+    button { padding: 6px 14px; }
+    table { border-collapse: collapse; margin: 12px 0; }
+    th, td { border: 1px solid #ccd; padding: 4px 10px; text-align: left; }
+    #drag-src { width: 120px; height: 60px; background: #eef; border: 1px dashed #99f; display: flex; align-items: center; justify-content: center; }
+    #dropzone { width: 220px; height: 110px; background: #efe; border: 1px dashed #6c6; margin-top: 10px; display: flex; align-items: center; justify-content: center; }
+    .flex { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    #spacer { height: 2200px; margin-top: 20px; background: linear-gradient(#ffffff, #e9efff); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>E2E 夹具页</h1>
+    <p>这个页面供BridgeDeck 的端到端测试使用：填表、点按钮、读回结果、导出表格、拖拽、上传、对话框、网络。</p>
+
+    <form id="demo-form" onsubmit="return false">
+      <div class="row">
+        <label for="kw">关键词</label>
+        <input id="kw" name="kw" type="text" aria-label="搜索关键词" placeholder="输入关键词" />
+      </div>
+      <div class="row">
+        <label for="kind">类型</label>
+        <select id="kind" name="kind" aria-label="类型">
+          <option value="a">甲</option>
+          <option value="b">乙</option>
+        </select>
+      </div>
+      <div class="row">
+        <label><input id="agree" type="checkbox" aria-label="同意条款" /> 同意条款</label>
+      </div>
+      <div class="row">
+        <label>密码 <input id="pw" type="password" autocomplete="current-password" /></label>
+    <button id="submit-btn" type="button">提交查询</button>
+      </div>
+    </form>
+
+    <p>结果：<strong id="out">未提交</strong></p>
+    <p><a href="#details" id="more-link">查看详情</a></p>
+
+    <section id="details">
+      <h2>详情</h2>
+      <p>详情段落内容。</p>
+    </section>
+
+    <h2>人员表</h2>
+    <table id="people">
+      <thead>
+        <tr><th>姓名</th><th>城市</th><th>年龄</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>张三</td><td>北京</td><td>30</td></tr>
+        <tr><td>李四</td><td>上海</td><td>28</td></tr>
+        <tr><td>王五</td><td>深圳</td><td>35</td></tr>
+      </tbody>
+    </table>
+
+    <h2>ARIA 网格</h2>
+    <div id="demo-grid" role="grid" aria-label="示例网格" style="display:grid;gap:4px;max-width:320px">
+      <div role="row" style="display:flex;gap:8px"><div role="columnheader" col-id="name" style="flex:1">姓名</div><div role="columnheader" col-id="city" style="flex:1">城市</div></div>
+      <div role="row" row-index="0" style="display:flex;gap:8px"><div role="gridcell" col-id="name" style="flex:1">张三</div><div role="gridcell" col-id="city" style="flex:1">北京</div></div>
+      <div role="row" row-index="1" style="display:flex;gap:8px"><div role="gridcell" col-id="name" style="flex:1">李四</div><div role="gridcell" col-id="city" style="flex:1">上海</div></div>
+    </div>
+
+    <h2>ARIA 树</h2>
+    <div id="demo-tree" role="tree" aria-label="示例树">
+      <div role="treeitem" aria-level="1" aria-expanded="true">节点 A</div>
+      <div role="treeitem" aria-level="1">节点 B</div>
+    </div>
+
+    <h2>多行表头</h2>
+    <table id="multi-head">
+      <thead>
+        <tr><th rowspan="2">等级</th><th colspan="2">金额</th></tr>
+        <tr><th>小</th><th>大</th></tr>
+      </thead>
+      <tbody>
+        <tr><td rowspan="2">A</td><td>1</td><td>2</td></tr>
+        <tr><td>A</td><td>3</td><td>4</td></tr>
+      </tbody>
+    </table>
+    <p><a id="ext-link" href="https://example.com/x">外链</a></p>
+
+    <h2>列表</h2>
+    <ul id="items">
+      <li>第一项</li>
+      <li>第二项</li>
+      <li><a href="#details">第三项有链接</a></li>
+    </ul>
+
+    <h2>拖拽与滑块</h2>
+    <div class="flex">
+      <div id="drag-src" aria-label="拖拽源">拖这里</div>
+      <div id="dropzone" aria-label="放置区">放到这里</div>
+    </div>
+    <p>拖拽：<strong id="drop-out">none</strong></p>
+    <div class="flex">
+      <input id="slider" type="range" min="0" max="100" value="0" aria-label="滑块" />
+      <strong id="slider-out">0</strong>
+    </div>
+
+    <h2>文件上传</h2>
+    <input id="file" type="file" aria-label="选择文件" />
+    <button id="pick-file" type="button">选择文件…</button>
+    <input id="hidden-file" type="file" hidden />
+    <p>文件：<strong id="file-out">none</strong></p>
+    <div id="file-drop" style="width:240px;padding:18px;border:1px dashed #6c6;border-radius:8px;text-align:center;color:#356">拖放文件到这里</div>
+    <p>拖放：<strong id="drop-file-out">none</strong></p>
+
+    <h2>closed shadow</h2>
+    <div id="closed-host"></div>
+    <p>封闭结果：<strong id="closed-result">none</strong></p>
+
+    <h2>跨源 iframe</h2>
+    <iframe id="x-frame" src="http://127.0.0.1:__XFRAME_PORT__/frame-x.html" title="跨源框架" style="width:360px;height:90px;border:1px solid #ccd"></iframe>
+    <p>跨域结果：<strong id="xframe-out">none</strong></p>
+
+    <h2>子资源</h2>
+    <script>
+      (function () {
+        var s = document.createElement('script');
+        s.src = '/api/script?x=' + Date.now();
+        document.head.appendChild(s);
+      })();
+    </script>
+    <img id="sub-img" src="/api/image" alt="子资源图片" width="2" height="2" />
+    <p>图片宽度：<strong id="sub-img-out">?</strong></p>
+
+    <h2>Canvas 区域</h2>
+    <canvas id="canvas-demo" width="200" height="100" style="border:1px solid #ccd"></canvas>
+
+    <h2>iframe 与 Shadow DOM</h2>
+    <iframe id="inner-frame" src="/frame.html" title="内嵌框架" style="width:360px;height:120px;border:1px solid #ccd"></iframe>
+    <iframe id="hidden-frame" src="/frame.html?hidden=1" title="隐藏框架" style="display:none"></iframe>
+    <iframe id="hidden-x-frame" src="http://127.0.0.1:__XFRAME_PORT__/frame-x.html?hidden=1" title="跨源隐藏框架" style="display:none"></iframe>
+    <div id="shadow-host"></div>
+    <p>影子结果：<strong id="shadow-out">未点击</strong></p>
+    <script>
+      const host = document.getElementById('shadow-host');
+      const root = host.attachShadow({ mode: 'open' });
+      root.innerHTML = '<div style="padding:8px;border:1px dashed #99f"><button id="shadow-btn">影子按钮</button></div>';
+      root.getElementById('shadow-btn').addEventListener('click', () => {
+        document.getElementById('shadow-out').textContent = '影子已点击';
+      });
+    </script>
+
+    <h2>VOM 标记</h2>
+    <div class="flex">
+      <div id="marker-menu" role="button" aria-haspopup="menu" aria-expanded="true" aria-label="菜单触发器">菜单</div>
+      <div id="marker-drag" role="button" draggable="true" aria-label="可拖拽项">拖拽项</div>
+      <div id="marker-drop" role="button" data-drop-target="true" aria-label="放置目标">放置区</div>
+      <div id="marker-drag" role="button" data-drag-handle="true" aria-label="拖拽手柄">拖拽手柄</div>
+      <div id="marker-opt" role="option" aria-selected="true" class="selected" aria-label="选项一">选项一</div>
+      <div id="marker-opt2" role="option" data-selected="true" aria-label="选项二">选项二</div>
+    </div>
+
+    <h2>文件下载</h2>
+    <a id="dl" href="/api/download" download="sample.txt">下载示例文件</a>
+
+    <h2>原生对话框</h2>
+    <div class="flex">
+      <button id="dlg-confirm" type="button">弹 confirm</button>
+      <button id="dlg-alert" type="button">弹 alert</button>
+      <button id="dlg-prompt" type="button">弹 prompt</button>
+    </div>
+    <p>对话框结果：<strong id="dlg-out">none</strong></p>
+
+    <h2>网络请求</h2>
+    <button id="ping-btn" type="button">请求 /api/ping</button>
+    <p>接口：<strong id="ping-out">none</strong></p>
+
+    <div id="spacer">长页面占位（用于滚轮测试）</div>
+    <p id="bottom">页面底部</p>
+  </main>
+
+  <div id="hidden-box">这是一段默认不可见的文本，observe 不应输出它。</div>
+
+  <script>
+    const out = document.getElementById('out');
+    document.getElementById('submit-btn').addEventListener('click', () => {
+      const kw = document.getElementById('kw').value;
+      const kind = document.getElementById('kind').value;
+      const agree = document.getElementById('agree').checked;
+      out.textContent = 'clicked:' + kw + ':' + kind + ':' + (agree ? 'yes' : 'no');
+      document.title = 'E2E 夹具页 · 已提交';
+    });
+    document.getElementById('more-link').addEventListener('click', (event) => {
+      event.preventDefault();
+      out.textContent = 'link-clicked';
+    });
+
+    const dropOut = document.getElementById('drop-out');
+    const dragSrc = document.getElementById('drag-src');
+    const dropzone = document.getElementById('dropzone');
+    let dragging = false;
+    dragSrc.addEventListener('pointerdown', () => { dragging = true; });
+    document.addEventListener('pointerup', () => { dragging = false; });
+    dropzone.addEventListener('pointerup', (event) => { dropOut.textContent = 'dropped' + (event.ctrlKey ? '+ctrl' : '') + (event.shiftKey ? '+shift' : ''); });
+
+    const slider = document.getElementById('slider');
+    const sliderOut = document.getElementById('slider-out');
+    slider.addEventListener('input', () => { sliderOut.textContent = slider.value; });
+
+    const fileInput = document.getElementById('file');
+    const fileOut = document.getElementById('file-out');
+    fileInput.addEventListener('change', () => {
+      fileOut.textContent = fileInput.files.length ? fileInput.files[0].name : 'none';
+    });
+    const fileDrop = document.getElementById('file-drop');
+    if (fileDrop) {
+      fileDrop.addEventListener('dragover', (event) => { event.preventDefault(); });
+      fileDrop.addEventListener('drop', (event) => {
+        event.preventDefault();
+        const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+        document.getElementById('drop-file-out').textContent = file ? file.name : 'none';
+      });
+    }
+    const closedHost = document.getElementById('closed-host');
+    if (closedHost) {
+      const closedRoot = closedHost.attachShadow({ mode: 'closed' });
+      closedRoot.innerHTML = '<button id="closed-btn">封闭按钮</button>';
+      closedRoot.getElementById('closed-btn').addEventListener('click', () => {
+        document.getElementById('closed-result').textContent = 'closed-clicked';
+      });
+    }
+    const xFrame = document.getElementById('x-frame');
+    if (xFrame) {
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'xframe-clicked') {
+          document.getElementById('xframe-out').textContent = 'xframe-clicked';
+        }
+      });
+    }
+    const hiddenFile = document.getElementById('hidden-file');
+    document.getElementById('pick-file').addEventListener('click', () => hiddenFile.click());
+    hiddenFile.addEventListener('change', () => {
+      fileOut.textContent = hiddenFile.files.length ? hiddenFile.files[0].name : 'none';
+    });
+
+    const dlgOut = document.getElementById('dlg-out');
+    document.getElementById('dlg-confirm').addEventListener('click', () => {
+      dlgOut.textContent = confirm('确定继续吗？') ? 'accepted' : 'dismissed';
+    });
+    document.getElementById('dlg-alert').addEventListener('click', () => {
+      alert('提示一下');
+      dlgOut.textContent = 'alerted';
+    });
+    document.getElementById('dlg-prompt').addEventListener('click', () => {
+      const value = prompt('输入名字', 'default');
+      dlgOut.textContent = value == null ? 'dismissed' : 'value:' + value;
+    });
+
+    const pingOut = document.getElementById('ping-out');
+    document.getElementById('ping-btn').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/ping');
+        const json = await response.json();
+        pingOut.textContent = json && json.ok ? 'ok' : 'bad';
+      } catch (error) {
+        pingOut.textContent = 'error';
+      }
+    });
+  </script>
+  <script>
+    (() => {
+      const canvas = document.getElementById('canvas-demo');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#2f6fed';
+      ctx.fillRect(10, 10, 100, 50);
+      ctx.fillStyle = '#ff9900';
+      ctx.fillRect(120, 20, 60, 60);
+    })();
+  </script>
+</body>
+</html>

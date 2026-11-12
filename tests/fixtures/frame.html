@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8" /><title>内嵌页</title></head>
+<body>
+  <p>内嵌文档</p>
+  <button id="frame-btn" type="button">框架内按钮</button>
+  <strong id="frame-out">未点击</strong>
+  <script>
+    document.getElementById('frame-btn').addEventListener('click', () => {
+      document.getElementById('frame-out').textContent = '框架已点击';
+    });
+  </script>
+</body></html>

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BridgeDeck</title>
+<link rel="stylesheet" href="popup.css" />
+<script type="module" src="i18n.js"></script>
+</head>
+<body>
+<main id="app" class="popup">
+  <header class="brand">
+    <button type="button" id="backFromFeatures" class="icon-btn hidden" aria-label="返回" title="返回">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2Z"/></svg>
+    </button>
+    <img src="../icons/icon48.png" alt="" />
+    <h1>BridgeDeck</h1>
+    <button type="button" id="openFeatures" class="icon-btn" aria-label="快捷功能" title="快捷功能">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v3.2L4.5 16h15L18 12.2V9a6 6 0 0 0-6-6Z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+    </button>
+  </header>
+
+  <section id="featuresView" class="card hidden">
+    <div class="features">
+      <button type="button" class="feature" data-page="record.html" data-title="视频录制">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-6l2 3h-2l-2-3-2 3H8l2-3H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm8 3.5 4 2.5-4 2.5v-5Z"/></svg>
+        <span class="text"><b>视频录制</b><span>将任务标签页录制为 MP4 视频</span></span>
+        <span class="chev">›</span>
+      </button>
+      <button type="button" class="feature" data-page="debug.html" data-title="网站调试">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 8h-2.81a5.99 5.99 0 0 0-1.7-1.7L17 4.66 15.66 3.3l-2.2 2.2a6.4 6.4 0 0 0-3.42 0L7.84 3.3 6.5 4.66l1.52 1.64A5.99 5.99 0 0 0 6.3 8H3.5v2h2.2c-.1.5-.1 1 0 1.5H3.5v2h2.2a6 6 0 0 0 11.6 0h2.2v-2h-2.2c.1-.5.1-1 0-1.5H20V8Z"/></svg>
+        <span class="text"><b>网站调试</b><span>记录请求、异常与页面上下文</span></span>
+        <span class="chev">›</span>
+      </button>
+      <button type="button" class="feature" data-page="longshot.html" data-title="长截图">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 3h16v2H4V3Zm0 4h16v10H4V7Zm2 2v6h12V9H6Zm-2 8h16v2H4v-2Z"/></svg>
+        <span class="text"><b>长截图</b><span>从网页顶部截到底部，预览并保存</span></span>
+        <span class="chev">›</span>
+      </button>
+      <button type="button" class="feature" data-page="ops.html" data-title="操作录制">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/></svg>
+        <span class="text"><b>操作录制</b><span>录制你的操作，供 Agent 参考</span></span>
+        <span class="chev">›</span>
+      </button>
+      <button type="button" class="feature" data-page="audit.html" data-title="操作审计">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 10.41 3.3 3.3-1.42 1.41L11 13.24V6h2v6.41Z"/></svg>
+        <span class="text"><b>操作审计</b><span>查看任务操作审计</span></span>
+        <span class="chev">›</span>
+      </button>
+    </div>
+  </section>
+
+  <section id="subView" class="card hidden" style="padding:0">
+    <div id="auditPanel" class="hidden" style="padding:12px">
+      <div class="settings-body" style="margin-top:0">
+        <div class="row">
+          <label for="auditToggle">启用操作审计</label>
+          <button type="button" id="auditToggle" class="sw" role="switch" aria-checked="false"></button>
+        </div>
+        <p id="auditStatus" class="hint" style="margin:0">读取中…</p>
+        <div id="auditRuns" class="audit-runs"></div>
+        <button type="button" id="auditOpen" class="btn subtle sm" style="align-self:flex-start">打开完整审计</button>
+      </div>
+    </div>
+    <div id="longshotPanel" class="hidden" style="padding:12px">
+      <div class="settings-body" style="margin-top:0">
+        <p class="hint" style="margin:0">自动滚动并拼接当前标签页，完成后可在完整页预览保存。</p>
+        <div class="row">
+          <label for="longshotMode">模式</label>
+          <select id="longshotMode" class="select" style="width:130px">
+            <option value="auto">自动整页</option>
+            <option value="visible">仅可见区域</option>
+          </select>
+        </div>
+        <p id="longshotStatus" class="hint" style="margin:0"></p>
+        <div class="btn-row">
+          <button type="button" id="longshotStart" class="btn primary sm">开始截图</button>
+          <button type="button" id="longshotOpen" class="btn subtle sm">打开完整页</button>
+        </div>
+      </div>
+    </div>
+    <div id="videoPanel" class="hidden" style="padding:12px">
+      <div class="settings-body" style="margin-top:0">
+        <p class="hint" style="margin:0">录制当前标签页为 MP4；停止后文件写入视频库。</p>
+        <p id="videoStatus" class="hint" style="margin:0">读取中…</p>
+        <div class="btn-row">
+          <button type="button" id="videoStart" class="btn primary sm">开始录制</button>
+          <button type="button" id="videoStop" class="btn subtle sm" disabled>停止</button>
+          <button type="button" id="videoOpen" class="btn subtle sm">打开完整页</button>
+        </div>
+      </div>
+    </div>
+    <div id="debugPanel" class="hidden" style="padding:12px">
+      <div class="settings-body" style="margin-top:0">
+        <p id="debugStatus" class="hint" style="margin:0">读取中…</p>
+        <p id="debugSummary" class="hint" style="margin:0"></p>
+        <div class="btn-row">
+          <button type="button" id="debugStart" class="btn primary sm">开始采集</button>
+          <button type="button" id="debugStop" class="btn subtle sm" disabled>停止</button>
+          <button type="button" id="debugHistory" class="btn subtle sm">历史</button>
+        </div>
+      </div>
+    </div>
+    <div id="opsPanel" class="hidden" style="padding:12px">
+      <div class="settings-body" style="margin-top:0">
+        <p class="hint" style="margin:0">记录当前标签页的操作步骤，供 Agent 参考。</p>
+        <p id="opsStatus" class="hint" style="margin:0">读取中…</p>
+        <div class="audit-runs" id="opsRuns"></div>
+        <div class="btn-row">
+          <button type="button" id="opsStart" class="btn primary sm">开始录制</button>
+          <button type="button" id="opsStop" class="btn subtle sm" disabled>停止</button>
+          <button type="button" id="opsOpen" class="btn subtle sm">打开完整页</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="mainView">
+
+  <section class="card">
+    <div class="row">
+      <div class="status"><span id="stateDot" class="dot"></span><span id="stateLabel" class="state-label">未连接</span></div>
+      <p id="stateError" class="hint hidden" style="margin:4px 0 0;color:#c2410c"></p>
+      <button type="button" id="connToggle" class="sw on" role="switch" aria-checked="true" aria-label="BridgeDeck 连接"></button>
+    </div>
+    <p id="localAuthBadge" class="hint hidden" style="margin:6px 0 0"></p>
+    <div class="profile">
+      <div style="min-width:0;flex:1">
+        <p class="muted small" style="margin:0 0 2px">当前浏览器</p>
+        <div class="name">
+          <strong id="browserLabel">未命名浏览器</strong>
+          <button type="button" id="rename" class="icon-btn" style="width:20px;height:20px" aria-label="修改浏览器名称" title="修改浏览器名称">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          </button>
+          <input id="labelInput" class="rename hidden" maxlength="48" />
+        </div>
+      </div>
+      <button type="button" id="copyCmd" class="btn subtle sm" title="复制后发给 Agent，指定当前浏览器">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 6V3h12v14h-3v4H5V6h2zm2 0h7v9h3V5H9v1zM7 8H6v11h8v-1H7V8z"/></svg>
+        <span id="copyCmdText">复制指令</span>
+      </button>
+    </div>
+
+    <details class="settings" id="connSettings" open>
+      <summary>连接设置<span id="connMode" class="muted">· 本机</span></summary>
+      <div class="settings-body">
+        <p id="daemonInfo" class="hint" style="margin:0">本机 · 未连接</p>
+        <div class="seg">
+          <button type="button" id="modeLocal" class="on">本机</button>
+          <button type="button" id="modeRemote">远程配对</button>
+        </div>
+        <div id="localSection" class="settings-body" style="margin-top:0">
+          <form id="portForm" class="settings-body" style="margin-top:0">
+            <div class="field">
+              <label for="daemonPort">本机端口</label>
+              <input id="daemonPort" inputmode="numeric" placeholder="52900" type="text" />
+            </div>
+            <p class="hint" style="margin:0">留空恢复默认端口。</p>
+            <button type="submit" id="savePort" class="btn primary sm" style="align-self:flex-start">保存端口</button>
+          </form>
+        </div>
+        <div id="pairDetails" class="hidden settings-body" style="margin-top:0">
+          <input id="pairLink" placeholder="配对链接（ws://host:port/ws#token）" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px" />
+          <input id="pairUrl" placeholder="wss://host:port/ws" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px" />
+          <input id="pairToken" placeholder="配对 token" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px" />
+          <p id="pairError" class="hint hidden" style="color:#c2410c;margin:0"></p>
+          <div style="display:flex;gap:8px">
+            <button type="button" id="pairSave" class="btn primary sm">保存并连接</button>
+            <button type="button" id="pairClear" class="btn sm">恢复本机</button>
+          </div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="settings-body">
+        <div class="row">
+          <div class="setting-row" style="flex:1">
+            <label>控制提示</label>
+            <span class="info">
+              <button type="button" class="icon-btn" style="width:18px;height:18px" aria-label="控制提示说明" aria-describedby="tip-control">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-5h2v2h-2v-2zm0-8h2v6h-2V7z"/></svg>
+              </button>
+              <span class="tip" id="tip-control" role="tooltip">Agent 控制页面时显示提示条和蓝色高亮。</span>
+            </span>
+          </div>
+          <button type="button" id="controlHint" class="sw on" role="switch" aria-checked="true"></button>
+        </div>
+      </div>
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">自动化设置</h2>
+      <div class="settings-body">
+        <div class="row">
+          <div class="setting-row" style="flex:1">
+            <label for="borrowConfirm">借用标签页前确认</label>
+            <span class="info">
+              <button type="button" class="icon-btn" style="width:18px;height:18px" aria-label="借用标签页确认说明" aria-describedby="tip-borrow">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-5h2v2h-2v-2zm0-8h2v6h-2V7z"/></svg>
+              </button>
+              <span class="tip" id="tip-borrow" role="tooltip">开启时，借用你已打开的标签页前会请求允许；关闭时，直接借用。自动保存到当前浏览器配置，对到达插件的所有会话请求生效；命令行参数不能覆盖。</span>
+            </span>
+          </div>
+          <button type="button" id="borrowConfirm" class="sw on" role="switch" aria-checked="true"></button>
+        </div>
+        <div class="row">
+          <div class="setting-row" style="flex:1">
+            <label for="allowHelp">允许请求人工协助</label>
+            <span class="info">
+              <button type="button" class="icon-btn" style="width:18px;height:18px" aria-label="允许人工协助说明" aria-describedby="tip-help">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-5h2v2h-2v-2zm0-8h2v6h-2V7z"/></svg>
+              </button>
+              <span class="tip" id="tip-help" role="tooltip">开启时，Agent 可以请求你协助。关闭时，Agent 会尽力自主完成操作，遇到无法处理的步骤再报告受阻。自动保存到当前浏览器配置，对到达插件的所有会话请求生效；命令行参数不能覆盖。</span>
+            </span>
+          </div>
+          <button type="button" id="allowHelp" class="sw on" role="switch" aria-checked="true"></button>
+        </div>
+      </div>
+  </section>
+
+  <section id="tasksSection" class="card hidden">
+    <h2 class="section-title">当前任务</h2>
+    <ul id="taskList" class="tasks" style="list-style:none;padding:0;margin:0"></ul>
+  </section>
+
+  <section class="meta">
+    <div class="left">CLI <span id="cliVersion">0.4.0</span><span aria-hidden="true">/</span> Ext <span id="extVersion">0.4.0</span></div>
+    <div class="right">实例 ID <code id="instanceId">—</code>
+      <button type="button" id="copyInstance" class="icon-btn" style="width:20px;height:20px" aria-label="复制实例 ID" title="复制实例 ID">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 6V3h12v14h-3v4H5V6h2zm2 0h7v9h3V5H9v1zM7 8H6v11h8v-1H7V8z"/></svg>
+      </button>
+    </div>
+  </section>
+  </div>
+</main>
+
+<script src="popup.js" type="module"></script>
+</body>
+</html>

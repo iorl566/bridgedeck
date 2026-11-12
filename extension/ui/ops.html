@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>操作录制 · BridgeDeck</title>
+  <link rel="stylesheet" href="ui.css" />
+<script type="module" src="i18n.js"></script>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <button id="back" class="back-btn" title="返回">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2Z"/></svg>
+      </button>
+      <div>
+        <h1>操作录制</h1>
+        <div class="sub">录制你的点击/输入/选择/导航，导出 JSON 给 Agent 参考</div>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>录制</h2>
+      <div class="toolbar">
+        <select id="tabSelect" class="inline-input" style="min-width:220px"></select>
+        <button id="start" class="btn primary">开始录制</button>
+        <button id="stop" class="btn danger" disabled>停止录制</button>
+        <span id="status" class="muted">未开始</span>
+      </div>
+      <p class="muted" style="margin:10px 0 0;line-height:1.6">
+        录制只发生在你选中的这个标签页；密码框的值会被记成 <code>********</code>。
+        停止后可导出 JSON，配合 <code>bridge plan</code> 或 <code>bridge recipe</code> 复现步骤。
+      </p>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <h2 style="margin:0">录制记录</h2>
+        <span class="grow"></span>
+        <button id="refresh" class="btn">刷新</button>
+      </div>
+      <div id="list" class="list" style="margin-top:12px"></div>
+      <div id="empty" class="muted" style="margin-top:10px">还没有录制记录</div>
+    </section>
+
+    <section class="panel" id="jsonPanel" hidden>
+      <div class="toolbar">
+        <h2 style="margin:0">JSON 预览</h2>
+        <span class="grow"></span>
+        <button id="copyJson" class="btn">复制</button>
+        <button id="closeJson" class="btn">关闭</button>
+      </div>
+      <pre id="json" class="mono" style="margin:10px 0 0;max-height:360px;overflow:auto;font-size:12px;white-space:pre-wrap"></pre>
+    </section>
+
+    <div id="note" class="note"></div>
+  </main>
+  <script type="module" src="ops.js"></script>
+</body>
+</html>

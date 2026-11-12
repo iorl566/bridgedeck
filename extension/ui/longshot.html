@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>长截图 · BridgeDeck</title>
+  <link rel="stylesheet" href="ui.css" />
+<script type="module" src="i18n.js"></script>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <button id="back" class="back-btn" title="返回">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2Z"/></svg>
+      </button>
+      <div>
+        <h1>长截图</h1>
+        <div class="sub">自动滚动整页，或手动滚动采集，将内容拼成清晰长图。</div>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="toolbar">
+        <h2 style="margin:0">预览</h2>
+        <span class="grow"></span>
+        <button id="openPreview" class="btn">打开预览</button>
+      </div>
+      <div id="lastEmpty" class="muted" style="margin-top:12px;line-height:1.6">
+        截图暂不可用<br />
+        <span style="font-size:12px">预览可能已过期或被清理。请回到网页，通过快捷功能重新截图。</span>
+      </div>
+      <div class="preview" id="lastWrap" hidden><img id="lastPreview" alt="最近一次长截图" /></div>
+    </section>
+
+
+    <details class="panel">
+      <summary>重新截图（高级）</summary>
+      <h2 style="margin-top:10px">目标与模式</h2>
+      <div class="toolbar">
+        <select id="tabSelect" class="inline-input" style="min-width:220px"></select>
+        <select id="modeSelect" class="inline-input" style="min-width:130px">
+          <option value="auto">自动滚动</option>
+          <option value="manual">手动拼接</option>
+        </select>
+      </div>
+
+      <div id="autoBox" class="toolbar" style="margin-top:12px">
+        <button id="autoShot" class="btn primary">截取整页</button>
+        <span class="muted" id="autoHint">自动滚动并拼接，最多 8 屏</span>
+      </div>
+
+      <div id="manualBox" class="toolbar" style="margin-top:12px" hidden>
+        <button id="manualStart" class="btn">开始拼接</button>
+        <button id="manualFrame" class="btn" disabled>拍一帧</button>
+        <button id="manualStitch" class="btn primary" disabled>拼接</button>
+        <span class="muted" id="manualCount">0 帧</span>
+      </div>
+    </details>
+
+    <section class="panel" id="previewPanel" hidden>
+      <h2>预览 <span class="muted" id="previewSize"></span></h2>
+      <div class="preview"><img id="preview" alt="长截图预览" /></div>
+      <div class="toolbar" style="margin-top:10px">
+        <button id="save" class="btn primary">保存到下载目录</button>
+        <button id="discard" class="btn">丢弃</button>
+      </div>
+    </section>
+
+    <div id="note" class="note"></div>
+  </main>
+  <script type="module" src="longshot.js"></script>
+</body>
+</html>

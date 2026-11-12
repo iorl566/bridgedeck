@@ -1,0 +1,22 @@
+export const RECORD_DOCUMENT_ATTRIBUTE = 'data-bb-record-document';
+
+const RECORDING_DOCUMENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const RECORDING_DOCUMENT_MARKER_PREFIX = 'bb:';
+
+/**
+ * Build the marker for a version-4 recording Document UUID.
+ * @param {string} identity
+ * @returns {string}
+ */
+export function recordingDocumentMarkerValue(identity) {
+  if (!RECORDING_DOCUMENT_ID_PATTERN.test(identity)) throw new TypeError('recording Document identity must be a random UUID');
+  return `${RECORDING_DOCUMENT_MARKER_PREFIX}${identity}`;
+}
+
+/** Read the opaque per-Document recording identity from captured attributes. */
+export function readRecordingDocumentIdentity(attrs) {
+  const marker = attrs[RECORD_DOCUMENT_ATTRIBUTE];
+  if (!marker?.startsWith(RECORDING_DOCUMENT_MARKER_PREFIX)) return undefined;
+  const identity = marker.slice(RECORDING_DOCUMENT_MARKER_PREFIX.length);
+  return identity && RECORDING_DOCUMENT_ID_PATTERN.test(identity) ? identity : undefined;
+}

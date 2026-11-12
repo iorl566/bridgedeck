@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>VOM 命中测试夹具</title>
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 24px; }
+  .row { position: relative; width: 220px; height: 48px; margin: 12px 0; }
+  .row button { position: absolute; left: 0; top: 0; width: 160px; height: 36px; }
+  #cover { position: absolute; left: 0; top: 0; width: 160px; height: 36px; background: #fff; border: 1px solid #cbd5e1; z-index: 2; }
+</style>
+</head>
+<body>
+<h1>VOM 命中测试夹具</h1>
+<p>正常按钮、被遮挡按钮、pointer-events:none 按钮、屏外按钮各一个。</p>
+
+<button id="normal-btn">正常按钮</button>
+
+<div class="row">
+  <button id="covered-btn">被遮挡按钮</button>
+  <div id="cover">遮挡层</div>
+</div>
+
+<button id="no-pointer" style="pointer-events:none">不可点击按钮</button>
+
+<button id="offscreen-btn" style="position:absolute; left:-5000px; top:0">屏外按钮</button>
+</body>
+</html>

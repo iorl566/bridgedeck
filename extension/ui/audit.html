@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>操作审计 · BridgeDeck</title>
+  <link rel="stylesheet" href="ui.css" />
+<script type="module" src="i18n.js"></script>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <button id="back" class="back-btn" title="返回">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2Z"/></svg>
+      </button>
+      <div>
+        <h1>操作审计</h1>
+        <div class="sub">浏览器本地记录</div>
+      </div>
+    </header>
+
+    <section class="panel">
+      <p class="muted" style="margin:0;line-height:1.7">
+        记录仅保存在本机，已结束的任务保留 30 天。只保存方法名、耗时、结果码、会话、标签页与 URL；
+        输入值、页面正文与截图不会保存。可用 <code>bridge audit list</code> 读取，可在弹窗关闭。
+      </p>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <h2 style="margin:0">全部任务</h2>
+        <span class="grow"></span>
+        <select id="range" class="inline-input" style="min-width:110px">
+          <option value="3600000">最近 1 小时</option>
+          <option value="86400000" selected>最近 24 小时</option>
+          <option value="604800000">最近 7 天</option>
+        </select>
+        <button id="openFolder" class="btn">清空记录</button>
+        <button id="refresh" class="btn">刷新</button>
+      </div>
+      <div id="list" class="list" style="margin-top:12px"></div>
+      <div id="empty" class="muted" style="margin-top:10px">还没有任务记录。后续通过 BridgeDeck 执行的操作会显示在这里。</div>
+    </section>
+
+    <div id="note" class="note"></div>
+  </main>
+  <script type="module" src="audit.js"></script>
+</body>
+</html>
