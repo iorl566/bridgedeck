@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>隐私说明 · BridgeDeck</title>
+  <link rel="stylesheet" href="ui.css" />
+<script type="module" src="i18n.js"></script>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <button id="back" class="back-btn" title="返回" onclick="history.length > 1 ? history.back() : location.replace('options.html')">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2Z"/></svg>
+      </button>
+      <div>
+        <h1>隐私说明</h1>
+        <div class="sub">数据默认只在本机流转</div>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>保存什么</h2>
+      <p class="muted" style="line-height:1.7">
+        调试记录、长截图、视频和操作录制默认保存在当前浏览器的本地存储中，不会上传到服务器。
+        调试记录保留最近 30 天，最多 50 份、总计 50 MiB；凭据类字段会脱敏，正文有大小上限。
+      </p>
+    </section>
+
+    <section class="panel">
+      <h2>不保存什么</h2>
+      <p class="muted" style="line-height:1.7">
+        不保存输入框密码值、页面完整正文和截图内容到调试历史。操作录制会把密码框的值记成
+        <code>********</code>。远程配对令牌只保存在扩展私有存储中，不写入普通偏好设置。
+      </p>
+    </section>
+
+    <section class="panel">
+      <h2>你的控制</h2>
+      <p class="muted" style="line-height:1.7">
+        你可以在弹窗或设置页关闭连接、控制提示、自动化设置；可以随时清空调试历史、录制和视频。
+        本扩展只连接 <code>127.0.0.1</code> 上的本地 daemon；远程连接必须由你主动配置并授权。
+      </p>
+    </section>
+  </main>
+</body>
+</html>

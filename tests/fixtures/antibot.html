@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>反爬 / 反自动化靶场</title>
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 24px; max-width: 860px; }
+  table { border-collapse: collapse; margin: 12px 0; }
+  td, th { border: 1px solid #ccd; padding: 4px 10px; text-align: left; }
+  .ok { color: #15803d; font-weight: 600; }
+  .bad { color: #b91c1c; font-weight: 600; }
+  #challenge { margin: 24px 0; padding: 16px; border: 1px dashed #94a3b8; border-radius: 10px; position: relative; height: 120px; }
+  #challenge button { position: absolute; left: 20px; top: 40px; padding: 8px 16px; }
+  #honeypot { position: absolute; left: -9999px; }
+  #status { font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>反爬 / 反自动化靶场</h1>
+<p>这个页面模拟常见的自动化检测：webdriver、无头 UA、Canvas/WebGL 指纹、可信鼠标事件、蜜罐字段、事件信任链。</p>
+<table id="report"><tbody></tbody></table>
+
+<div id="challenge">
+  <p>挑战：请先移动鼠标经过按钮区域，再用<b>可信点击</b>按下按钮。</p>
+  <button id="challenge-btn" type="button">我是人类</button>
+  <p id="status">未通过</p>
+</div>
+
+<input id="typed" type="text" placeholder="可信输入测试" style="width:260px;padding:6px" />
+<p>可信输入：<strong id="typed-out">none</strong></p>
+<input id="honeypot" name="email" type="text" autocomplete="off" tabindex="-1" aria-hidden="true" />
+
+<script>
+  const rows = [];
+  function add(name, pass, detail) {
+    rows.push({ name, pass, detail });
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + name + '</td><td class="' + (pass ? 'ok' : 'bad') + '">' + (pass ? 'PASS' : 'FAIL') + '</td><td>' + String(detail == null ? '' : detail) + '</td>';
+    document.querySelector('#report tbody').appendChild(tr);
+  }
+
+  add('navigator.webdriver', navigator.webdriver !== true, String(navigator.webdriver));
+  add('UA 不含 Headless', !/Headless/i.test(navigator.userAgent), navigator.userAgent.slice(0, 80));
+  add('window.chrome 存在', typeof window.chrome === 'object' && window.chrome !== null, typeof window.chrome);
+  add('languages 非空', Array.isArray(navigator.languages) && navigator.languages.length > 0, (navigator.languages || []).join(','));
+  add('plugins 非空', navigator.plugins && navigator.plugins.length > 0, navigator.plugins ? navigator.plugins.length : 0);
+
+  try {
+    const c = document.createElement('canvas');
+    c.width = 120; c.height = 40;
+    const ctx = c.getContext('2d');
+    ctx.textBaseline = 'top';
+    ctx.font = '16px Arial';
+    ctx.fillStyle = '#123456';
+    ctx.fillText('browser-bridge antibot', 2, 2);
+    const hash = c.toDataURL().length;
+    add('Canvas 指纹可读', hash > 200, 'dataURL=' + hash);
+  } catch (e) { add('Canvas 指纹可读', false, String(e)); }
+
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    const vendor = gl ? gl.getParameter(gl.VENDOR) : '';
+    const renderer = gl ? gl.getParameter(gl.RENDERER) : '';
+    add('WebGL 可用', Boolean(gl), vendor + ' / ' + renderer);
+  } catch (e) { add('WebGL 可用', false, String(e)); }
+
+  let moves = 0;
+  let trustedMoves = 0;
+  const btn = document.getElementById('challenge-btn');
+  const status = document.getElementById('status');
+  document.addEventListener('mousemove', (event) => {
+    moves += 1;
+    if (event.isTrusted) trustedMoves += 1;
+    const rect = btn.getBoundingClientRect();
+    if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
+      btn.style.left = (20 + Math.min(120, moves * 3)) + 'px';
+    }
+  });
+  btn.addEventListener('click', (event) => {
+    const pass = event.isTrusted && trustedMoves >= 3;
+    status.textContent = pass ? '通过（可信点击 + 鼠标移动）' : '未通过（非可信点击或缺少鼠标移动）';
+    status.className = pass ? 'ok' : 'bad';
+    window.__antibot = { passed: pass, moves, trustedMoves, trusted: event.isTrusted };
+  });
+
+  const typedInput = document.getElementById('typed');
+  window.__trustedInput = { input: 0, keydown: 0, value: '' };
+  if (typedInput) {
+    typedInput.addEventListener('input', (event) => {
+      if (event.isTrusted) window.__trustedInput.input += 1;
+      window.__trustedInput.value = typedInput.value;
+      document.getElementById('typed-out').textContent = typedInput.value || 'none';
+    });
+    typedInput.addEventListener('keydown', (event) => {
+      if (event.isTrusted) window.__trustedInput.keydown += 1;
+    });
+  }
+  const hp = document.getElementById('honeypot');
+  hp.addEventListener('input', () => { window.__honeypotFilled = true; });
+  window.__antibotReport = rows;
+  window.__antibot = { passed: false, moves: 0, trustedMoves: 0 };
+</script>
+</body>
+</html>

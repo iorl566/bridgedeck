@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>网站调试 · BridgeDeck</title>
+  <link rel="stylesheet" href="ui.css" />
+<script type="module" src="i18n.js"></script>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <button id="back" class="back-btn" title="返回">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2Z"/></svg>
+      </button>
+      <div>
+        <h1>网站调试</h1>
+        <div class="sub">浏览器本地记录</div>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2 style="margin:0 0 6px">每一次调查，都有迹可循。</h2>
+      <p class="muted" style="margin:0;line-height:1.6">查看网页上下文、请求和异常，或导出记录交给 Agent 分析。</p>
+    </section>
+
+    <details class="panel">
+      <summary>手动采集（高级）</summary>
+
+      <div class="toolbar">
+        <select id="tabSelect" class="inline-input" style="min-width:220px"></select>
+        <button id="start" class="btn primary">开始采集</button>
+        <button id="stop" class="btn danger" disabled>停止采集</button>
+        <span id="status" class="muted">未开始</span>
+      </div>
+      <p class="muted" style="margin:10px 0 0;line-height:1.6">
+        采集当前标签页的请求元数据（方法/状态/耗时）与控制台输出/未捕获异常；停止后保存为历史，最多保留 10 条。
+      </p>
+    </details>
+
+    <section class="panel" id="livePanel" hidden>
+      <div class="toolbar">
+        <h2 style="margin:0">请求 <span class="muted" id="reqCount"></span></h2>
+        <span class="grow"></span>
+        <button id="exportLive" class="btn">导出 JSON</button>
+      </div>
+      <div id="requests" class="list" style="margin-top:10px"></div>
+      <div id="reqEmpty" class="muted" style="margin-top:8px">还没有请求</div>
+
+      <h2 style="margin:16px 0 8px">控制台 / 异常 <span class="muted" id="conCount"></span></h2>
+      <div id="consoleList" class="list"></div>
+      <div id="conEmpty" class="muted" style="margin-top:8px">没有控制台输出</div>
+
+      <h2 style="margin:16px 0 8px">页面上下文</h2>
+      <div id="context" class="kv-inline"></div>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <h2 style="margin:0">性能指标</h2>
+        <span class="grow"></span>
+        <button id="refreshPerf" class="btn">刷新</button>
+      </div>
+      <div id="perf" class="kv-inline" style="margin-top:10px"></div>
+      <div id="perfEmpty" class="muted" style="margin-top:8px">先选一个目标标签页</div>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <h2 style="margin:0">请求规则</h2>
+        <span class="grow"></span>
+        <button id="refreshRules" class="btn">刷新</button>
+      </div>
+      <p class="muted" style="margin:8px 0;line-height:1.6">给当前标签页加临时规则：fulfill / block / modify（URL 支持 *）。规则只在本浏览器本地生效，刷新后自动重注入。</p>
+      <div class="toolbar">
+        <input id="rulePattern" class="inline-input" style="flex:1;min-width:180px" placeholder="URL pattern，例如 */api/*" />
+        <select id="ruleAction" class="inline-input">
+          <option value="fulfill">fulfill</option>
+          <option value="block">block</option>
+          <option value="modify">modify</option>
+        </select>
+        <button id="addRule" class="btn primary">添加</button>
+        <button id="clearRules" class="btn danger">清空</button>
+      </div>
+      <div id="ruleBody" class="toolbar" style="margin-top:8px">
+        <input id="ruleStatus" class="inline-input" style="width:90px" placeholder="status" value="200" />
+        <input id="ruleText" class="inline-input" style="flex:1;min-width:200px" placeholder="fulfill 的响应正文（block/modify 可留空）" />
+      </div>
+      <div id="rules" class="list" style="margin-top:10px;max-height:220px;overflow:auto"></div>
+      <div id="rulesEmpty" class="muted" style="margin-top:8px">当前标签页没有规则</div>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <h2 style="margin:0">操作时间线</h2>
+        <span class="grow"></span>
+        <button id="refreshOps" class="btn">刷新</button>
+      </div>
+      <div id="operations" class="list" style="margin-top:10px;max-height:260px;overflow:auto"></div>
+      <div id="opsEmpty" class="muted" style="margin-top:8px">还没有操作记录</div>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <h2 style="margin:0">历史记录</h2>
+        <span class="grow"></span>
+        <button id="refresh" class="btn">刷新</button>
+      </div>
+      <div id="history" class="list" style="margin-top:10px"></div>
+      <div id="historyEmpty" class="muted" style="margin-top:8px">还没有调试记录<br /><span style="font-size:12px">把网站地址和遇到的问题告诉 Agent，它会建立任务并开启采集。</span></div>
+    </section>
+
+    <section class="panel" id="detailPanel" hidden>
+      <div class="toolbar">
+        <h2 style="margin:0">历史详情</h2>
+        <span class="grow"></span>
+        <button id="exportDetail" class="btn">导出 JSON</button>
+        <button id="closeDetail" class="btn">关闭</button>
+      </div>
+      <div id="detailMeta" class="kv-inline" style="margin-top:10px"></div>
+      <div id="detailBody" class="list" style="margin-top:10px;max-height:360px;overflow:auto"></div>
+    </section>
+
+    <div id="note" class="note"></div>
+    <p class="muted" style="margin-top:14px;line-height:1.6">调试记录保存在当前浏览器本地，任务结束后仍可查看和导出。保留最近 30 天、最多 50 份、总计 50 MiB；常见凭据脱敏，正文有上限。</p>
+    <details class="panel">
+      <summary>采集范围与限制</summary>
+      <p class="muted" style="margin:8px 0 0;line-height:1.6">记录请求元数据（方法/状态/耗时）、控制台输出与未捕获异常、页面基础上下文；不记录请求正文与截图。单次采集在本地保留 10 条历史。</p>
+    </details>
+  </main>
+  <script type="module" src="debug.js"></script>
+</body>
+</html>

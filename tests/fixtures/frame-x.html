@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8" /><title>跨源内嵌页</title></head>
+<body>
+  <p>跨源文档</p>
+  <button id="x-btn" type="button">跨域按钮</button>
+  <strong id="x-out">none</strong>
+  <script>
+    document.getElementById('x-btn').addEventListener('click', () => {
+      document.getElementById('x-out').textContent = 'clicked';
+      if (parent) parent.postMessage({ type: 'xframe-clicked' }, '*');
+    });
+  </script>
+</body></html>

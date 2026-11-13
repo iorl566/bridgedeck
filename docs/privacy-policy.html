@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BridgeDeck Privacy Notice</title>
+<style>
+body{margin:0;background:#f7f9fc;color:#1c2230;font:15px/1.75 system-ui,"PingFang SC","Noto Sans CJK SC",sans-serif}
+main{max-width:760px;margin:0 auto;padding:48px 24px 72px;background:#fff;min-height:100vh;box-sizing:border-box}
+h1{font-size:26px;margin:0 0 24px}h2{font-size:19px;margin:32px 0 12px}h3{font-size:16px;margin:24px 0 8px}
+p{margin:10px 0;color:#344054}li{margin:6px 0;color:#344054}hr{border:0;border-top:1px solid #e4e8f0;margin:28px 0}
+a{color:#2f6fed}
+</style></head><body><main>
+<h1>隐私说明 / Privacy Notice</h1>
+<p>BridgeDeck扩展在你的本机运行，用于让本机命令行 Agent 操作用户已登录的浏览器。</p>
+<h2>访问的数据</h2>
+<ul>
+<li>页面内容：DOM/文本、可访问性树、截图、表单状态（仅在用户或 Agent 发起命令时读取）。</li>
+<li>标签页信息：标题、URL、窗口与标签页结构。</li>
+<li>网络与控制台：仅在用户显式开启“网站调试/采集”时读取请求元数据、响应正文与控制台输出。</li>
+<li>视频与录制：仅在用户显式开始录制时捕获当前标签页画面/操作事件。</li>
+<li>设置与审计：保存在浏览器本地存储（chrome.storage）与下载目录。</li>
+</ul>
+<h2>数据去向</h2>
+<ul>
+<li>默认只在本机流转：扩展 ↔ 本机 daemon（127.0.0.1）。</li>
+<li>如果用户配置了远程 daemon，数据会发送到该地址；非本机地址强制使用 wss://。</li>
+<li>扩展不包含遥测、分析 SDK 或广告；不向任何第三方服务器上传数据。</li>
+<li>用户主动导出/下载的文件保存在本机下载目录。</li>
+</ul>
+<h2>权限用途</h2>
+<ul>
+<li>`tabs`/`scripting`/`activeTab`/`&lt;all_urls&gt;`：读取和操作用户指定的页面。</li>
+<li>`debugger`：可信输入、设备仿真、关闭 shadow DOM 读取、整页截图。</li>
+<li>`webRequest`/`declarativeNetRequest`：网站调试时的请求观察与规则（仅用户开启时）。</li>
+<li>`downloads`：保存截图、表格、视频与导出文件。</li>
+<li>`tabCapture`/`offscreen`：用户主动开始的标签页录制。</li>
+<li>`storage`/`alarms`/`windows`：本地设置、会话与窗口管理。</li>
+</ul>
+<h2>保留与删除</h2>
+<ul>
+<li>设置、审计、录制历史保存在本地，可在扩展页面清空或删除扩展后由浏览器清理。</li>
+<li>下载文件由用户自行管理。</li>
+</ul>
+<h2>联系</h2>
+<p>请通过扩展商店页面的发布者联系方式反馈。</p>
+<hr>
+<p>The extension runs locally and lets a local command-line agent operate the browser session the user is already signed in to. It reads pages, tabs, screenshots, and (only when explicitly enabled) network/console data or recordings. Data stays on the machine by default; a user-configured remote daemon receives data only over wss://. There is no telemetry, analytics, or advertising, and no third-party upload.</p>
+
+</main></body></html>

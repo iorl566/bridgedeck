@@ -1,0 +1,17 @@
+﻿# 参考材料与逆向产物：不随发布
+.ref/
+# 依赖与运行产物
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+dist/
+tests/browser/dist-overlays/
+ref/
+# 会话恢复/临时截图，不随发布
+DSH-会话恢复-*.md
+t.slice(0
+
+# Python 缓存
+__pycache__/
+*.pyc

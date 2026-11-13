@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>VOM 命中测试夹具</title>
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 24px; }
+  .row { position: relative; width: 220px; height: 48px; margin: 12px 0; }
+  .row button { position: absolute; left: 0; top: 0; width: 160px; height: 36px; }
+  #cover { position: absolute; left: 0; top: 0; width: 160px; height: 36px; background: #fff; border: 1px solid #cbd5e1; z-index: 2; }
+</style>
+</head>
+<body>
+<h1>VOM 命中测试夹具</h1>
+<p>正常按钮、被遮挡按钮、pointer-events:none 按钮、屏外按钮各一个。</p>
+
+<button id="normal-btn">正常按钮</button>
+
+<div class="row">
+  <button id="covered-btn">被遮挡按钮</button>
+  <div id="cover">遮挡层</div>
+</div>
+
+<button id="no-pointer" style="pointer-events:none">不可点击按钮</button>
+
+<button id="offscreen-btn" style="position:absolute; left:-5000px; top:0">屏外按钮</button>
+
+<h2>对比度</h2>
+<p id="good-contrast" style="color:#000; background:#fff">高对比度文字</p>
+<p id="bad-contrast" style="color:#999; background:#fff">低对比度文字</p>
+<p id="oklch-contrast" style="color: oklch(0.2 0.05 240); background: color-mix(in srgb, white 70%, black)">oklch / color-mix</p>
+
+<button id="focus-swap" type="button" onclick="window.__fswap=(window.__fswap||0)+1">focus-swap</button>
+<script>
+(() => {
+  const first = document.getElementById('focus-swap');
+  first.addEventListener('focus', () => {
+    const next = document.createElement('button');
+    next.id = 'focus-swap';
+    next.type = 'button';
+    next.textContent = 'focus-swap';
+    next.onclick = () => { window.__fswap = (window.__fswap || 0) + 1; };
+    first.replaceWith(next);
+  }, { once: true });
+})();
+</script>
+</body>
+</html>

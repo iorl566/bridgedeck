@@ -1,0 +1,9 @@
+# BridgeDeck：注册模型可见的 browser_* 工具（依赖 bridge CLI + 扩展）
+- insert:
+    - id: browser-bridge-tools
+      name: dsh-browser-bridge
+      config:
+        bridgeCli: ''
+        nodePath: ''
+        home: ''
+        timeoutMs: 120000

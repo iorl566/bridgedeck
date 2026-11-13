@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>COOP_PENDING</title>
+<body>
+<input id="field" type="text">
+<script type="module">
+let ready;
+let listeners = 0;
+let handler;
+window.chrome = {
+  runtime: {
+    id: 'ext',
+    getURL: (path) => location.origin + '/' + path,
+    sendMessage: async (message) => { ready = message; },
+    onMessage: {
+      addListener(fn) { listeners += 1; handler = fn; },
+      removeListener() { listeners -= 1; },
+    },
+  },
+};
+try {
+  const { attachCooperationCapture } = await import('/extension/src/content/cooperation-capture.js');
+  const dispose = attachCooperationCapture();
+  const field = document.getElementById('field');
+  field.focus();
+  field.value = 'hello';
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  field.dispatchEvent(new Event('change', { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  const attached = listeners === 1 && ready?.kind === 'cooperation.ready';
+  const video = document.createElement('video');
+  video.id = 'media1';
+  video.setAttribute('src', 'test.mp4');
+  document.body.appendChild(video);
+  const timeline = document.createElement('input');
+  timeline.type = 'range';
+  timeline.setAttribute('aria-label', 'video progress');
+  timeline.value = '10';
+  document.body.appendChild(timeline);
+  const mediaState = await new Promise((resolve) => handler({ kind: 'cooperation.read', lease: 'media-lease' }, {}, resolve));
+  const mediaOk = mediaState?.media?.length === 1 && mediaState.media[0].src === 'test.mp4';
+  const fieldsOk = mediaState?.fields?.some((fieldState) => fieldState.value === 'hello');
+  const mediaProgressOk = mediaState?.fields?.some((fieldState) => fieldState.kind === 'media_progress');
+  dispose();
+  const { startRecordCapture } = await import('/extension/src/content/record-capture.js');
+  const steps = [];
+  const controller = startRecordCapture('browser-test', (step) => steps.push(step));
+  const button = document.createElement('button');
+  button.textContent = 'click';
+  document.body.appendChild(button);
+  button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, pointerType: 'mouse' }));
+  button.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true, pointerType: 'mouse' }));
+  button.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+  field.focus();
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  field.value = 'recorded';
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  field.dispatchEvent(new Event('change', { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  controller.dispose();
+  const recorded = steps.some((step) => step.op === 'click' && step.target?.tag === 'button')
+    && steps.some((step) => step.op === 'fill' && step.target?.tag === 'input' && step.value === 'recorded');
+  const { isPositionedFloatingElement } = await import('/extension/src/content/record-hover-surface.js');
+  const floating = document.createElement('div');
+  floating.style.cssText = 'position:absolute;left:0;top:0;width:40px;height:30px';
+  document.body.appendChild(floating);
+  const floatingOk = isPositionedFloatingElement(floating) === true;
+  document.title = attached && listeners === 0 && recorded && mediaOk && fieldsOk && mediaProgressOk && floatingOk
+    ? 'CONTENT_OK'
+    : `CONTENT_FAIL:listeners=${listeners},ready=${ready?.kind},steps=${steps.map((step) => step.op).join('+')},media=${mediaOk},fields=${fieldsOk},progress=${mediaProgressOk},floating=${floatingOk}`;
+} catch (error) {
+  document.title = 'CONTENT_FAIL:' + (error instanceof Error ? (error.stack ?? error.message) : String(error)).slice(0, 300);
+}
+</script>
