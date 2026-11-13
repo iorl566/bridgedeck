@@ -40,7 +40,7 @@ Agent 配置示例：
 | `browser_video` | 视频录制 |
 | `browser_audit` | 审计列表 |
 
-完整 49 个工具以 `initialize` / `tools/list` 返回为准（当前 50 个）。
+完整 50 个工具以 `initialize` / `tools/list` 返回为准。
 
 每个工具都声明了对应的协议方法（`methods`），`tools/protocol-check.mjs` 会校验它们都在
 `lib/protocol.mjs` 的 `METHOD_EFFECT` 中；本地 CLI/文件类工具使用显式空映射。

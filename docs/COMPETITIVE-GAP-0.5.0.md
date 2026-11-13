@@ -78,7 +78,7 @@
 - **DSH 自动 scope**：插件运行器在 DSH `exec` 提供 `sessionScope/sessionId/agentId` 时自动注入 `BB_SESSION_SCOPE`；显式 `sessionScope` 配置优先；新增 2 项运行器测试（插件 24/24）。
 - **按步骤截图**：`record start --screenshots` 在录制时抓缩略图（≤30 张、320px JPEG），写入事件 `screenshot`；Trace v3 步骤带 `screenshot`，查看器内嵌 `<img class="step-shot">`。真实 Edge 两步点击均带 dataUrl，导出 `stepScreenshots=2`。
 - **扩展清单门禁**：新增单测校验 manifest 的 background/content scripts 文件都存在、`content/human-watch.js` 在列、权限未扩大；E2E 默认同步 `docs/assets` 截图，`BB_E2E_SYNC_DOCS=0` 可关闭。
-- 回归：CLI selftest 143/143、单测 898/898、MCP 10/10、protocol-check 全绿、Python SDK 7/7、插件 24/24；真实 Edge E2E **131/133 通过、2 项按借用确认安全策略跳过**。
+- 回归：CLI selftest 143/143、单测 902/902、MCP 10/10、protocol-check 全绿、Python SDK 7/7、插件 24/24；真实 Edge E2E **131/133 通过、2 项按借用确认安全策略跳过**。
 
 ## E. 设计边界（非能力差距）
 
@@ -99,10 +99,10 @@
 
 | 套件 | 命令 | 结果 |
 | --- | --- | --- |
-| 单元测试 | `node --test tests/unit/*.test.mjs` | 898/898 |
+| 单元测试 | `node --test tests/unit/*.test.mjs` | 902/902 |
 | CLI 自测 | `node tests/cli/selftest.mjs` | 143/143 |
 | MCP 自测 | `node tests/mcp/selftest.mjs` | 10/10 |
-| 协议门禁 | `node tools/protocol-check.mjs` | exit 0；`handlersNotInProtocol=[]`、`schemaMissing=[]`、`mcpMethodsNotInProtocol=[]`、`registryErrors=[]` |
+| 协议门禁 | `node tools/protocol-check.mjs` | exit 0；`handlersNotInProtocol=[]`、`extensionWithoutHandler=[]`、`protocolUnclassified=[]`、`localWithoutRoute=[]`、`schemaMissing=[]` |
 | Python SDK | `python -m unittest discover -s tests/python` | 7/7 |
 | DSH 插件 | `node tests/plugin/selftest.mjs` | 24/24 |
 | 真实 Edge E2E | `node tools/e2e.mjs` | 131/133 通过，2 跳过（借用确认策略），exit 0 |

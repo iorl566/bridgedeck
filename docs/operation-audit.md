@@ -1,55 +1,71 @@
 # 操作审计
 
-操作审计记录 Agent 任务期间的操作，用于事后复盘。它和网站调试是两套独立数据：审计关注“谁在什么任务里做了什么”，调试关注“页面/网络发生了什么”。
+操作审计记录 Agent 任务期间的方法调用元数据，用于事后复盘。它和网站调试是两套独立数据：审计关注“谁在什么任务里做了什么”，调试关注“页面/网络发生了什么”。
 
-## 开关
+## 存储
+
+- 位置：`~/.browser-bridge/audit/`（或 `BB_HOME/audit/`）
+- 格式：按天一个 `YYYY-MM-DD.jsonl`，每行一条记录
+- 默认开启；`BB_AUDIT=0` 可关闭
+- 只记方法名、成功/失败、耗时、sessionId、tabId、结果 URL；**不记输入值、页面正文、请求头、响应体**
+
+弹窗“操作审计”面板可查看最近记录；完整数据用 CLI。
+
+## 列表
 
 ```powershell
-node cli/bridge.mjs audit list --limit 20
+bridge audit list --since 24h --limit 20 --offset 0
 ```
 
-弹窗“操作审计”面板可直接开关审计。开关保存在扩展本地设置，对之后到达的会话生效。
-
-## 运行列表
-
-```powershell
-node cli/bridge.mjs audit list --since 24h --limit 20 --offset 0
-```
-
-每条运行包含：
+字段：
 
 | 字段 | 说明 |
 | --- | --- |
-| `id` | 运行 id |
-| `browser_id` | 浏览器实例 |
-| `session_id` | 会话 |
-| `started_at` | 开始时间 |
-| `updated_at` | 最后状态变化 |
-| `status` | `running` / `ended` / `interrupted` |
-| `name` / `site` | 任务名与站点 |
-| `operations` / `errors` | 操作数与失败数 |
-| `partial` | 是否已知不完整 |
+| `id` | 记录 id |
+| `ts` | 时间戳（毫秒） |
+| `method` | 协议方法名 |
+| `ok` / `code` | 成功或失败错误码 |
+| `durationMs` | 耗时 |
+| `sessionId` / `tabId` | 会话与标签页 |
+| `url` | 结果 URL（若有） |
 
-## 查看与导出
+## 导出
 
 ```powershell
-node cli/bridge.mjs ui --page audit
+bridge audit export --out .\audit-export.jsonl
+bridge audit export --out .\audit-export.json --format json --since 7d
 ```
 
-完整审计页可按运行查看事件时间线、操作详情与错误；支持导出。弹窗面板只显示最近 5 条，点击进入完整页。
+导出文件权限尽量收紧到 0600；导出内容仍然是脱敏后的元数据。
+
+## 清理
+
+```powershell
+# 删除 30 天前的记录（先 dry-run 看数量）
+bridge audit prune --older-than 30d --dry-run
+bridge audit prune --older-than 30d
+
+# 或按日期
+bridge audit prune --before 2026-10-01
+
+# 清空全部（需要确认）
+bridge audit clear --yes
+```
+
+`prune` 会保留时间戳不早于截止时间的记录；整天没有记录的文件会被删除。
 
 ## 隐私
 
 - 审计文件只落在本机。
-- 输入值、请求头、响应体按调试同一套脱敏规则处理。
-- 关闭审计后不再写入新运行；已有记录保留到保留期结束。
-- 删除运行会同时删除其事件。
+- 输入值、请求头、响应体不进入审计；URL 会做脱敏。
+- 关闭审计后不再写入新记录；已有记录不会自动删除，需要手动 `prune` / `clear`。
+- 删除文件不可恢复，清理前建议先 `audit export`。
 
 ## 与其他记录的区别
 
 | 记录 | 用途 |
 | --- | --- |
-| 操作审计 | 任务级操作复盘 |
+| 操作审计 | 方法级操作复盘 |
 | 操作录制 | 用户操作序列，供 Agent 参考 |
 | 网站调试 | 页面/网络证据 |
 | Trace v3 | 录制步骤与状态导出 |

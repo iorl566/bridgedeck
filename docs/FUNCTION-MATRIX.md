@@ -29,8 +29,8 @@
 | 仿真 | emulate viewport/DPR/UA/touch + reset | 21 | emulate | 基本一致 |
 | 多实例 | browsers/label/--browser | 2, 12 | browsers/--browser | 基本一致 |
 | 远程/配对 | pair create/list/redeem/revoke，WSS | 配对 10/10、TLS 8/8 | daemon pair/devices/revoke | 命令名不同，能力对齐 |
-| MCP | stdio MCP，13 工具 | 20j | mcp 子命令 | 基本一致 |
-| DSH 插件 | 18 个 browser_* 工具 | 插件 21/21 | 无 DSH 插件 | 我们独有 |
+| MCP | stdio MCP，50 工具 | 20j | mcp 子命令 | 基本一致 |
+| DSH 插件 | 34 个 browser_* 工具 | 插件 24/24 | 无 DSH 插件 | 我们独有 |
 | 反爬靶场 | 指纹 + 可信点击挑战 | 20z | 同页拒绝移动目标 | **我们通过，对方拒绝** |
 | 真实反爬站点 | sannysoft/g2/nowsecure/walmart | 实测 | sannysoft 结果逐项一致；g2 正常加载 | 指纹基本一致；tiktok 返回 E_PAGE_ERROR |
 | CTRM SSO 登录页 | 7 refs（含输入框/按钮），可 fill | 实测 | 3 refs，多个 input 全漏 | **我们的观察覆盖更全** |

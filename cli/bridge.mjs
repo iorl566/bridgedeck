@@ -174,15 +174,19 @@ function requirePos(pos, index, label) {
   return value;
 }
 
-/** 解析 500ms / 20s / 2m 这类时长，返回毫秒。 */
+/** 解析 500ms / 20s / 2m / 1h / 30d 这类时长，返回毫秒。 */
 function parseDurationMs(text, fallback) {
   if (text === undefined || text === null || text === '') return fallback;
   const value = String(text).trim();
-  const match = /^(\d+(?:\.\d+)?)(ms|s|m|h)?$/.exec(value);
-  if (!match) throw new ArgError('时间格式应为 500ms / 20s / 2m，收到 "' + value + '"');
+  const match = /^(\d+(?:\.\d+)?)(ms|s|m|h|d)?$/.exec(value);
+  if (!match) throw new ArgError('时间格式应为 500ms / 20s / 2m / 1h / 30d，收到 "' + value + '"');
   const amount = Number(match[1]);
   const unit = match[2] || 'ms';
-  const factor = unit === 'ms' ? 1 : unit === 's' ? 1000 : unit === 'm' ? 60000 : 3600000;
+  const factor = unit === 'ms' ? 1
+    : unit === 's' ? 1000
+      : unit === 'm' ? 60000
+        : unit === 'h' ? 3600000
+          : 86400000;
   return Math.round(amount * factor);
 }
 
@@ -383,6 +387,9 @@ async function ensureDaemon() {
   }
   if (found.health) {
     throw new BridgeError('E_AUTH', `检测到 daemon 正在运行（pid ${found.health.pid}, port ${found.health.port}），但 ${DAEMON_JSON_PATH} 缺失或损坏，无法取得 token；请先结束该进程后重试`);
+  }
+  if (process.env.BB_AUTO_START === '0') {
+    throw new BridgeError('E_DAEMON', 'daemon 未运行，且 BB_AUTO_START=0；请在主机上显式启动 bridge daemon start，或取消该环境变量');
   }
   daemonInfo = await spawnDaemon(requestedPort);
   return daemonInfo;
@@ -4850,7 +4857,7 @@ tab / window：
   --timeout <ms|20s|2m>   RPC 超时（默认 60000）
   -h, --help       显示本帮助
 
-MCP：node mcp/server.mjs（stdio，13 个 browser_* 工具）
+MCP：node mcp/server.mjs（stdio，50 个 browser_* 工具）
 
 退出码：0 成功；1 业务失败；2 参数错误；6 对话框待处理（dialog_pending）`);
 }

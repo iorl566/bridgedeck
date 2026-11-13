@@ -58,7 +58,16 @@ node cli/bridge.mjs status
 | 长截图重复/缺失 | 调整 `--overlap`；固定头尾用可见区域或手动模式 |
 | 截图太小/空白 | 确认标签页可见；无痕/受限页需要权限 |
 
-## 7. 提交问题时
+## 7. 沙箱 / 受限环境
+
+| 现象 | 处理 |
+| --- | --- |
+| `spawn EPERM` 或 daemon 拉不起来 | 在主机上先 `bridge daemon start`，再在沙箱里设 `BB_AUTO_START=0` 复用主机 daemon |
+| 沙箱里同时有别的 daemon | 设 `BB_NO_PROBE=1` 只读本 `BB_HOME` 的 `daemon.json` |
+| 端口被占用 | 用 `BB_PORT` 或 `bridge --port` 指定；主机 daemon 的端口保持一致 |
+| 测试/打包要起子进程 | 用非沙箱终端，或放到 CI 跑 |
+
+## 8. 提交问题时
 
 附上：
 

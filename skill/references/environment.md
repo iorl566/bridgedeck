@@ -18,6 +18,7 @@ bridge daemon status
 - 运行目录 `BB_HOME`，默认 `%USERPROFILE%\.browser-bridge`：`daemon.json`（pid/port/token/tls）、`daemon.log`、`sessions.json`、`audit/`、`recipes/`。
 - daemon 默认监听 `127.0.0.1:52900`；被占用时在 52900–52909 里挑。`BB_PORT` 指定首选端口，`--port` 只影响本次自动拉起。
 - `BB_NO_PROBE=1` 关掉“猜孤儿端口”的探测（多 daemon 并存时用）。
+- `BB_AUTO_START=0` 禁止 CLI 自动拉起 daemon：没有 daemon 时直接报 `E_DAEMON`，适合沙箱/主机托管 daemon；先 `bridge daemon start` 再复用。
 - CLI 发现没有 daemon 会 detached 自动拉起，最多等 10s；拉不起来回 `E_DAEMON` 并给出日志路径。
 
 ## daemon
@@ -50,5 +51,5 @@ bridge pair revoke <code>
 
 ## TLS / MCP
 
-- `BB_TLS=1` 启动 daemon：HTTP/WS 变 HTTPS/WSS，同端口；自签证书写到 `$BB_HOME/tls/cert.pfx`。浏览器需信任该证书，或在 daemon 前放一层带正式证书的反向代理。
+- `BB_TLS=1` 启动 daemon：HTTP/WS 变 HTTPS/WSS，同端口；Windows 自签证书写到 `$BB_HOME/tls/cert.pfx`，macOS/Linux 用 `openssl` 生成 `key.pem`/`cert.pem`。浏览器需信任该证书，或在 daemon 前放一层带正式证书的反向代理。
 - `bridge mcp` 以 stdio 启动 MCP server（等价 `node mcp/server.mjs`），供外部客户端接入；它和 CLI 共用 `daemon.json` 的 token。

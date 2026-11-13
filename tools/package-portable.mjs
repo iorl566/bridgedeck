@@ -143,9 +143,14 @@ function assertStage(stage) {
 
 function buildStage() {
   const stage = fs.mkdtempSync(path.join(os.tmpdir(), `bb-${LABEL}-`));
+  const exclude = new Set(['__pycache__', 'node_modules', '.git', '.rollback', 'dist']);
+  const keep = (src) => {
+    const base = path.basename(src);
+    return !exclude.has(base) && !base.endsWith('.pyc') && !base.endsWith('.log') && base !== '.DS_Store';
+  };
   for (const dir of DIRS) {
     const from = path.join(ROOT, dir);
-    if (fs.existsSync(from)) fs.cpSync(from, path.join(stage, dir), { recursive: true });
+    if (fs.existsSync(from)) fs.cpSync(from, path.join(stage, dir), { recursive: true, filter: keep });
   }
   for (const file of FILES) {
     const from = path.join(ROOT, file);

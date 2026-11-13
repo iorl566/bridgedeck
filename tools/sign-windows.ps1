@@ -9,7 +9,8 @@ param(
   [string]$Url = 'https://github.com/iorl566/bridgedeck',
   [switch]$NoTimestamp,
   [switch]$VerifyOnly,
-  [switch]$RequireTimestamp
+  [switch]$RequireTimestamp,
+  [switch]$AllowUntrusted
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,16 +33,22 @@ function Get-SignTool {
 }
 
 function Show-Signature {
-  param([string]$Path)
+  param([string]$Path, [switch]$AllowUntrusted)
   $signature = Get-AuthenticodeSignature -LiteralPath $Path
   $signature | Select-Object Status, StatusMessage, @{Name = 'Subject'; Expression = { $_.SignerCertificate.Subject } }, @{Name = 'Thumbprint'; Expression = { $_.SignerCertificate.Thumbprint } }, @{Name = 'Timestamp'; Expression = { $_.TimeStamperCertificate.NotBefore }} | Format-List
-  if ($signature.Status -ne 'Valid') { throw "signature is not valid: $($signature.Status) $($signature.StatusMessage)" }
+  if ($signature.Status -ne 'Valid') {
+    if ($AllowUntrusted -and $signature.SignerCertificate) {
+      Write-Warning "signature is present but not trusted: $($signature.Status) $($signature.StatusMessage)"
+    } else {
+      throw "signature is not valid: $($signature.Status) $($signature.StatusMessage)"
+    }
+  }
   if ($RequireTimestamp -and -not $signature.TimeStamperCertificate) { throw 'signature has no timestamp' }
   return $signature
 }
 
 if ($VerifyOnly) {
-  Show-Signature -Path $File | Out-Null
+  Show-Signature -Path $File -AllowUntrusted:$AllowUntrusted | Out-Null
   Write-Host "signature ok: $File"
   return
 }
@@ -68,7 +75,7 @@ if (-not $signTool) {
   if ($TimestampUrl) { $params.TimestampServer = $TimestampUrl }
   $result = Set-AuthenticodeSignature @params
   if ($result.Status -eq 'NotSigned') { throw "signing failed: $($result.StatusMessage)" }
-  Show-Signature -Path $File | Out-Null
+  Show-Signature -Path $File -AllowUntrusted:$AllowUntrusted | Out-Null
   Write-Host "signed: $File"
   return
 }
@@ -86,5 +93,5 @@ if ($hasPfx) {
 $arguments += $File
 & $signTool @arguments
 if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
-Show-Signature -Path $File | Out-Null
+Show-Signature -Path $File -AllowUntrusted:$AllowUntrusted | Out-Null
 Write-Host "signed: $File"

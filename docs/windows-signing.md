@@ -2,6 +2,21 @@
 
 发布流水线支持 **EV 代码签名**（Authenticode）；本地开发仍可用自签证书。签名只影响安装器与可执行文件，不影响 CLI 的 JS 代码。
 
+## 自签测试证书（不是 EV）
+
+EV 证书只能由 CA 完成组织验证后签发，**不能用脚本“生成”**。本地联调可以生成自签证书：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\make-selfsigned-cert.ps1 `
+  -OutDir .\dist\signing -Password '<test password>'
+
+.\tools\sign-windows.ps1 -File .\dist\BridgeDeckSetup-0.1.2.exe `
+  -Pfx .\dist\signing\BridgeDeck-selfsigned.pfx `
+  -Password '<test password>' -NoTimestamp -AllowUntrusted
+```
+
+自签证书的签名状态会是 `UnknownError`（根证书不受信任）；`-AllowUntrusted` 只用于本地测试，发布流水线必须要求 `Valid`。
+
 ## 证书类型
 
 | 类型 | 用途 | `signtool` 参数 |

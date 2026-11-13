@@ -45,7 +45,7 @@ BridgeDeck 不绑定模型，也不要求换 Agent。只要能调用本地命令
 | 接入方式 | 入口 | 适合 |
 | --- | --- | --- |
 | **CLI** | `bridge` / `node cli/bridge.mjs` | Codex、Claude Code、Cursor 等能跑 Shell 的 Agent |
-| **MCP** | `node mcp/server.mjs`（49 个工具） | 支持 MCP 的客户端 |
+| **MCP** | `node mcp/server.mjs`（50 个工具） | 支持 MCP 的客户端 |
 | **DSH 插件** | `dsh-plugin/`（34 个工具） | DeepSeek Harness，带任务预览与截图结果 |
 | **Node/Python SDK** | `import { connect } from 'browser-bridge/sdk'` / `sdk/python/browser_bridge.py` | 写 Node/TypeScript 或 Python 脚本、集成测试 |
 | **内嵌技能** | `bridge install-skill` | 支持 skill 的宿主，一条命令装上使用说明 |
@@ -272,7 +272,7 @@ node tools/release.mjs --check      # 发布产物一致性
 
 CI 共 5 条流水线：`ci.yml`（三平台测试 + 交叉打包）、`publish-cli.yml`（手动预发布）、`release-cli.yml`、`release-extension.yml`、`release-dsh-plugin.yml`（tag 触发发布）。
 
-最近结果：单测 **898/898**、CLI **143/143**、MCP **10/10**、DSH 插件 **24/24**、Python SDK **7/7**、protocol-check 全绿（`handlersNotInProtocol=[]`、`schemaMissing=[]`、`mcpMethodsNotInProtocol=[]`）、真实 Edge E2E **131/133 通过（2 项因借用确认安全策略跳过）**。
+最近结果：单测 **902/902**、CLI **143/143**、MCP **10/10**、DSH 插件 **24/24**、Python SDK **7/7**、protocol-check 全绿（`handlersNotInProtocol=[]`、`extensionWithoutHandler=[]`、`protocolUnclassified=[]`、`localWithoutRoute=[]`、`schemaMissing=[]`）、真实 Edge E2E **131/133 通过（2 项因借用确认安全策略跳过）**。
 
 ```text
 cli/            CLI 入口
