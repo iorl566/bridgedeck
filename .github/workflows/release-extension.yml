@@ -18,12 +18,12 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-env:
-  HAS_WIN_CERT: ${{ secrets.WINDOWS_PFX_BASE64 != '' }}
-
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      HAS_WIN_CERT: ${{ secrets.WINDOWS_PFX_BASE64 != '' }}
+      HAS_WIN_THUMB: ${{ secrets.WINDOWS_CERT_THUMBPRINT != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,18 +38,23 @@ jobs:
         run: node tools/build-setup-exe.mjs
 
       - name: Sign setup exe (EV)
-        if: env.HAS_WIN_CERT == 'true'
+        if: env.HAS_WIN_CERT == 'true' || env.HAS_WIN_THUMB == 'true'
         shell: pwsh
         env:
           WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
           WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+          WINDOWS_CERT_THUMBPRINT: ${{ secrets.WINDOWS_CERT_THUMBPRINT }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $pfx = Join-Path $env:RUNNER_TEMP 'bridge.pfx'
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
           $exe = Get-ChildItem dist/BridgeDeckSetup-*.exe | Select-Object -First 1
           if (-not $exe) { throw 'setup exe not found' }
-          ./tools/sign-windows.ps1 -File $exe.FullName -Pfx $pfx -Password $env:WINDOWS_PFX_PASSWORD -RequireTimestamp
+          if ($env:WINDOWS_PFX_BASE64) {
+            $pfx = Join-Path $env:RUNNER_TEMP 'bridge.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
+            ./tools/sign-windows.ps1 -File $exe.FullName -Pfx $pfx -Password $env:WINDOWS_PFX_PASSWORD -RequireTimestamp
+          } else {
+            ./tools/sign-windows.ps1 -File $exe.FullName -Thumbprint $env:WINDOWS_CERT_THUMBPRINT -RequireTimestamp
+          }
 
       - name: Checksums
         shell: bash

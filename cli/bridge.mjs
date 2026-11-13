@@ -29,8 +29,12 @@ import { RecipeStoreError, approveRecipe, assertRunnable, listRecipes, readRecip
 import { fetchManifest, fetchManifestWithFallback, DOMESTIC_MANIFEST_URL, GITHUB_MANIFEST_URL } from '../lib/update-source.mjs';
 import { isControllerInfo } from '../extension/src/lib/controller-info.js';
 import { readUpdateState, writeUpdateState } from '../lib/update-state.mjs';
+import { RELEASE_PUBLIC_KEY } from '../lib/release-public-key.mjs';
 
-const VERSION = '0.1.2';
+const VERSION = (() => {
+  try { return JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version || '0.1.2'; }
+  catch { return '0.1.2'; }
+})();
 const SERVICE = 'browser-bridge';
 const DEFAULT_PORT = 52900;
 const PORT_CANDIDATES = Array.from({ length: 10 }, (_, i) => DEFAULT_PORT + i);
@@ -92,7 +96,7 @@ const VALUE_FLAGS = new Set([
 ]);
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
 for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force']) BOOL_FLAGS.add(name);
-for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest']) VALUE_FLAGS.add(name);
+for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback']) VALUE_FLAGS.add(name);
 for (const name of ['no-restart']) BOOL_FLAGS.add(name);
 
 const REPEATABLE_FLAGS = new Set(['file', 'param']);
@@ -1036,9 +1040,7 @@ function cmdUpdate(flags, pos) {
     return 0;
   }
   const { artifacts, verified, result } = verifyRelease(manifest, manifestPath);
-  const signKey = flags.key !== undefined
-    ? fs.readFileSync(path.resolve(process.cwd(), String(flags.key)), 'utf8').trim()
-    : '';
+  const signKey = releaseVerifyKey(manifest, flags);
   const signature = { present: Boolean(manifest.signature), valid: null };
   if (manifest.signature && signKey) signature.valid = verifyReleaseSignature(manifest, signKey);
   else if (!manifest.signature && signKey) signature.valid = false;
@@ -1092,16 +1094,28 @@ function cmdUpdate(flags, pos) {
   return verified ? 0 : 1;
 }
 
+function releaseVerifyKey(manifest, flags) {
+  if (flags.key !== undefined) {
+    return fs.readFileSync(path.resolve(process.cwd(), String(flags.key)), 'utf8').trim();
+  }
+  if (manifest && manifest.signature && manifest.signature.alg === 'ed25519') return RELEASE_PUBLIC_KEY;
+  return '';
+}
+
 /**
  * update install：把便携包安装到当前安装目录，并按“装新 → 试跑 → 原端口重启 → 失败回滚”执行。
  * 文件替换交给临时目录里的独立脚本，避免覆盖正在运行的 cli/lib 代码。
  */
 function cmdUpdateInstall(flags) {
-  if (flags.from === undefined) throw new ArgError('update install 需要 --from <zip|tar.gz>');
-  const archive = path.resolve(process.cwd(), String(flags.from));
-  if (!fs.existsSync(archive)) throw new BridgeError('E_NOT_FOUND', '更新包不存在：' + archive);
+  const rollbackDir = flags.rollback !== undefined ? path.resolve(process.cwd(), String(flags.rollback)) : '';
+  if (!rollbackDir && flags.from === undefined) throw new ArgError('update install 需要 --from <zip|tar.gz>（或 --rollback <备份目录>）');
+  const archive = flags.from !== undefined ? path.resolve(process.cwd(), String(flags.from)) : '';
+  if (archive && !fs.existsSync(archive)) throw new BridgeError('E_NOT_FOUND', '更新包不存在：' + archive);
+  if (rollbackDir && !fs.existsSync(path.join(rollbackDir, 'install.json'))) {
+    throw new BridgeError('E_NOT_FOUND', '回滚目录缺少 install.json：' + rollbackDir);
+  }
   const dest = flags.dest !== undefined ? path.resolve(process.cwd(), String(flags.dest)) : REPO_ROOT;
-  if (!fs.existsSync(path.join(dest, 'cli', 'bridge.mjs'))) {
+  if (!rollbackDir && !fs.existsSync(path.join(dest, 'cli', 'bridge.mjs'))) {
     throw new BridgeError('E_NOT_FOUND', '目标目录不是 BridgeDeck 安装：' + dest);
   }
   const helper = path.join(REPO_ROOT, 'tools', 'install-update.mjs');
@@ -1111,7 +1125,13 @@ function cmdUpdateInstall(flags) {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-update-helper-'));
   const script = path.join(temp, 'install-update.mjs');
   fs.copyFileSync(helper, script);
-  const args = [script, '--archive', archive, '--dest', dest];
+  const args = [script];
+  if (rollbackDir) {
+    args.push('--rollback', rollbackDir);
+  } else {
+    args.push('--archive', archive, '--dest', dest);
+    if (flags.manifest !== undefined) args.push('--manifest', path.resolve(process.cwd(), String(flags.manifest)));
+  }
   if (flags.port !== undefined) args.push('--port', String(flags.port));
   if (flags['no-restart'] === true) args.push('--no-restart');
   if (jsonMode) args.push('--json');
@@ -1148,9 +1168,9 @@ async function cmdUpdateFetch(flags) {
     throw new BridgeError('E_RELEASE_INVALID', '发布清单缺少 version/artifacts');
   }
   let signature = { present: Boolean(manifest.signature), valid: null };
-  if (flags.key !== undefined) {
-    const key = fs.readFileSync(path.resolve(process.cwd(), String(flags.key)), 'utf8').trim();
-    signature.valid = verifyReleaseSignature(manifest, key);
+  const verifyKey = releaseVerifyKey(manifest, flags);
+  if (verifyKey) {
+    signature.valid = verifyReleaseSignature(manifest, verifyKey);
     if (!signature.valid) throw new BridgeError('E_RELEASE_INVALID', '远程发布清单签名无效');
   }
   const out = path.resolve(process.cwd(), flags.out !== undefined ? String(flags.out) : path.join(HOME_DIR, 'update-cache', 'release.json'));
@@ -4182,7 +4202,9 @@ const SKILL_TARGETS = {
   'qoder-cn': () => path.join(os.homedir(), '.qoder-cn', 'skills', 'browser-bridge'),
   // 技能安装目标：Pi / Hermes Agent / Kimi Code
   pi: () => path.join(os.homedir(), '.pi', 'agent', 'skills', 'browser-bridge'),
-  hermes: () => path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'hermes', 'skills', 'browser-bridge'),
+  hermes: () => process.platform === 'win32'
+    ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'hermes', 'skills', 'browser-bridge')
+    : path.join(os.homedir(), '.hermes', 'skills', 'browser-bridge'),
   'kimi-code': () => path.join(os.homedir(), '.kimi-code', 'skills', 'browser-bridge'),
 };
 
@@ -4603,7 +4625,7 @@ function printHelp() {
                                   --mcp 同时写入 Codex/Cursor/Claude 的 MCP 客户端配置
   update check|verify|stage|fetch|state|auto [--manifest <path>] [--source <url>] [--out <path>] [--key <file>] [--force] [--download] [--apply --target <dir>]
                                   校验/暂存 dist/release.json（不自动替换当前安装）
-  update install --from <zip|tar.gz> [--dest <dir>] [--port <n>] [--no-restart]
+  update install --from <zip|tar.gz> [--manifest <release.json>] [--dest <dir>] [--port <n>] [--no-restart] | --rollback <备份目录>
                                   装新 → 试跑 → 原端口重启；失败自动回滚到上一版本
   daemon start|stop|restart|status|log [--tail [N]]
   daemon pair [--replace <browserId>]      生成本机配对链接（5 分钟）

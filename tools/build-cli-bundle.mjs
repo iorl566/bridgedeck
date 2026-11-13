@@ -13,13 +13,17 @@ const name = `BridgeDeck-cli-bundle-${pkg.version}.zip`;
 const out = path.join(DIST, name);
 const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-cli-bundle-'));
 
-const DIRS = ['cli', 'daemon', 'lib', 'mcp', 'skill'];
-const FILES = ['install.ps1', 'install-online.ps1', 'AGENT_INSTALL.md', 'LICENSE', 'package.json', 'README.md', 'uninstall.ps1'];
+const DIRS = ['cli', 'daemon', 'lib', 'mcp', 'skill', 'sdk'];
+const FILES = ['install.ps1', 'install-online.ps1', 'install.sh', 'install-online.sh', 'uninstall.sh', 'AGENT_INSTALL.md', 'LICENSE', 'package.json', 'README.md', 'uninstall.ps1'];
 
 try {
   fs.mkdirSync(DIST, { recursive: true });
   for (const dir of DIRS) fs.cpSync(path.join(ROOT, dir), path.join(stage, dir), { recursive: true });
   for (const file of FILES) fs.copyFileSync(path.join(ROOT, file), path.join(stage, file));
+  if (fs.existsSync(path.join(ROOT, 'tools', 'install-update.mjs'))) {
+    fs.mkdirSync(path.join(stage, 'tools'), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, 'tools', 'install-update.mjs'), path.join(stage, 'tools', 'install-update.mjs'));
+  }
   fs.rmSync(out, { force: true });
   const psPath = (value) => String(value).replace(/'/g, "''");
   const script = `Compress-Archive -Path '${psPath(path.join(stage, '*'))}' -DestinationPath '${psPath(out)}' -Force`;

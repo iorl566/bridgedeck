@@ -49,9 +49,11 @@ node tools/release.mjs --check
 | --- | --- |
 | `WINDOWS_PFX_BASE64` | PFX 的 Base64（`[Convert]::ToBase64String([IO.File]::ReadAllBytes('cert.pfx'))`） |
 | `WINDOWS_PFX_PASSWORD` | PFX 密码 |
+| `WINDOWS_CERT_THUMBPRINT` | 可选；证书已装在 runner 证书库时按指纹签名（需要自托管 runner 或已导入证书） |
 | `RELEASE_SIGNING_KEY` | 可选；`release.json` 的 HMAC 签名密钥 |
+| `RELEASE_SIGNING_PRIVATE_KEY` | 可选；`release.json` 的 Ed25519 私钥（推荐，见 [发布清单签名](release-signing.md)） |
 
-`release-extension.yml` 在检测到 `WINDOWS_PFX_BASE64` 时自动签名 `BridgeDeckSetup-*.exe`；没有证书时跳过签名并继续发布（产物会显示“未知发布者”）。
+`release-extension.yml` 优先使用 PFX；没有 PFX 但配置了指纹时使用证书库中的证书。两者都没有时跳过签名并继续发布（产物会显示“未知发布者”）。
 
 ## 证书边界
 

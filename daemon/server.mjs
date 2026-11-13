@@ -32,12 +32,16 @@ import { createSessionRecord, markSessionDisconnected, rebindSessionRecord, setS
 import { fetchManifest, fetchArtifact } from '../lib/update-source.mjs';
 import { readUpdateState, writeUpdateState } from '../lib/update-state.mjs';
 import { verifyReleaseSignature } from '../lib/release-sign.mjs';
+import { RELEASE_PUBLIC_KEY } from '../lib/release-public-key.mjs';
 import { isControllerInfo } from '../extension/src/lib/controller-info.js';
 import { IntentLedger, isUnknownOutcome } from '../lib/intent-ledger.mjs';
 import { LOCAL_METHODS, SESSION_METHODS, EXT_METHODS, SESSION_QUEUE_BYPASS, isMutating } from '../lib/methods.mjs';
 import { resolveSessionByScope } from '../lib/session-scope.mjs';
 
-const VERSION = '0.1.2';
+const VERSION = (() => {
+  try { return JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version || '0.1.2'; }
+  catch { return '0.1.2'; }
+})();
 const SERVICE = 'browser-bridge';
 const PROTOCOL_VERSION = '1.8';
 const PROTOCOL_MAJOR = 1;
@@ -81,7 +85,12 @@ const TLS_PASSPHRASE = 'browser-bridge';
 
 function tlsPaths() {
   const dir = path.join(HOME_DIR, 'tls');
-  return { dir, cert: path.join(dir, 'cert.pfx') };
+  return {
+    dir,
+    cert: path.join(dir, 'cert.pfx'),
+    keyPem: path.join(dir, 'key.pem'),
+    certPem: path.join(dir, 'cert.pem'),
+  };
 }
 const PAIR_TTL_MS = 10 * 60 * 1000;
 let LOCAL_TRUST_PATH = '';
@@ -2058,32 +2067,56 @@ function handleHttpRequest(req, res) {
 }
 
 function ensureTlsCert() {
-  const { dir, cert } = tlsPaths();
+  const paths = tlsPaths();
   try {
-    if (fs.existsSync(cert) && fs.statSync(cert).size > 0) return cert;
+    if (process.platform !== 'win32') {
+      if (fs.existsSync(paths.certPem) && fs.existsSync(paths.keyPem)
+        && fs.statSync(paths.certPem).size > 0 && fs.statSync(paths.keyPem).size > 0) return paths;
+    } else if (fs.existsSync(paths.cert) && fs.statSync(paths.cert).size > 0) {
+      return paths;
+    }
   } catch {
     // 继续生成
   }
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(paths.dir, { recursive: true });
+  if (process.platform !== 'win32') {
+    const result = spawnSync('openssl', [
+      'req', '-x509', '-newkey', 'rsa:2048', '-sha256', '-nodes', '-days', '730',
+      '-subj', '/CN=localhost',
+      '-keyout', paths.keyPem,
+      '-out', paths.certPem,
+    ], { encoding: 'utf8', timeout: 30000 });
+    let size = 0;
+    try { size = fs.statSync(paths.certPem).size; } catch { size = 0; }
+    if (!size) {
+      throw new Error('生成自签证书失败（需要 openssl）：' + String((result && (result.stderr || result.stdout)) || 'unknown'));
+    }
+    log('已生成自签 TLS 证书 ' + paths.certPem);
+    return paths;
+  }
   const script = path.join(path.dirname(SCRIPT_PATH), '..', 'tools', 'make-cert.ps1');
-  const result = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-OutFile', cert], {
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-OutFile', paths.cert], {
     encoding: 'utf8',
     timeout: 30000,
   });
   let size = 0;
-  try { size = fs.statSync(cert).size; } catch { size = 0; }
+  try { size = fs.statSync(paths.cert).size; } catch { size = 0; }
   if (!size) {
     throw new Error('生成自签证书失败：' + String((result && (result.stderr || result.stdout)) || 'unknown'));
   }
-  log('已生成自签 TLS 证书 ' + cert);
-  return cert;
+  log('已生成自签 TLS 证书 ' + paths.cert);
+  return paths;
 }
 
 function createHttpServer() {
   let server;
   if (TLS_ENABLED) {
-    ensureTlsCert();
-    server = https.createServer({ pfx: fs.readFileSync(tlsPaths().cert), passphrase: TLS_PASSPHRASE }, handleHttpRequest);
+    const paths = ensureTlsCert();
+    if (process.platform === 'win32') {
+      server = https.createServer({ pfx: fs.readFileSync(paths.cert), passphrase: TLS_PASSPHRASE }, handleHttpRequest);
+    } else {
+      server = https.createServer({ key: fs.readFileSync(paths.keyPem), cert: fs.readFileSync(paths.certPem) }, handleHttpRequest);
+    }
   } else {
     server = http.createServer(handleHttpRequest);
   }
@@ -2156,6 +2189,16 @@ async function listenOnCandidatePort(explicitPort) {
 let autoUpdateTimer = null;
 let autoUpdateRunning = false;
 
+function extractReleaseArchive(archive, target) {
+  let result = spawnSync('tar', ['-xf', archive, '-C', target], { encoding: 'utf8' });
+  if (result.status === 0) return;
+  if (process.platform !== 'win32') {
+    result = spawnSync('unzip', ['-q', '-o', archive, '-d', target], { encoding: 'utf8' });
+    if (result.status === 0) return;
+  }
+  throw new Error('自动应用失败：' + String(result.error?.message || result.stderr || result.stdout || archive));
+}
+
 async function checkAutoUpdate() {
   if (autoUpdateRunning) return;
   const statePath = path.join(HOME_DIR, 'update-state.json');
@@ -2169,13 +2212,15 @@ async function checkAutoUpdate() {
   try {
     const manifest = await fetchManifest(auto.source);
     let signature = null;
+    let verifyKey = '';
     if (auto.key) {
-      try {
-        const key = fs.readFileSync(auto.key, 'utf8').trim();
-        signature = verifyReleaseSignature(manifest, key);
-      } catch {
-        signature = false;
-      }
+      try { verifyKey = fs.readFileSync(auto.key, 'utf8').trim(); } catch { verifyKey = ''; }
+    } else if (manifest && manifest.signature && manifest.signature.alg === 'ed25519') {
+      verifyKey = RELEASE_PUBLIC_KEY;
+    }
+    if (verifyKey) {
+      try { signature = verifyReleaseSignature(manifest, verifyKey); } catch { signature = false; }
+      if (signature === false) throw new Error('发布清单签名无效');
     }
     const latest = typeof manifest.version === 'string' ? manifest.version : null;
     const available = Boolean(latest && latest !== VERSION);
@@ -2195,11 +2240,8 @@ async function checkAutoUpdate() {
     let appliedAt = null;
     if (available && auto.apply === true && auto.applyTarget && downloadedDir) {
       fs.mkdirSync(auto.applyTarget, { recursive: true });
-      for (const file of fs.readdirSync(downloadedDir).filter((name) => name.toLowerCase().endsWith('.zip'))) {
-        const zip = path.join(downloadedDir, file).replace(/'/g, "''");
-        const target = String(auto.applyTarget).replace(/'/g, "''");
-        const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${zip}' -DestinationPath '${target}' -Force`], { encoding: 'utf8' });
-        if (result.status !== 0) throw new Error('自动应用失败：' + (result.stderr || result.stdout || file));
+      for (const file of fs.readdirSync(downloadedDir).filter((name) => /\.(zip|tar\.gz)$/i.test(name))) {
+        extractReleaseArchive(path.join(downloadedDir, file), auto.applyTarget);
       }
       appliedAt = new Date().toISOString();
     }

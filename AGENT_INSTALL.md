@@ -1,6 +1,6 @@
 # AGENT_INSTALL — 让 Agent 自己安装 BridgeDeck
 
-这份文件写给 **AI Agent** 看。目标：在一台 Windows 电脑上安装 BridgeDeck（CLI + 本机 daemon + 浏览器扩展），并完成一次真实浏览器操作验证。
+这份文件写给 **AI Agent** 看。目标：在一台 Windows / macOS / Linux 电脑上安装 BridgeDeck（CLI + 本机 daemon + 浏览器扩展），并完成一次真实浏览器操作验证。
 
 > 给用户的提示词（可直接复制）：
 >
@@ -22,11 +22,11 @@
 
 ```powershell
 $PSVersionTable.PSVersion      # 需要 5.1+
-node --version                 # 需要 18+，推荐 22
+node --version                 # 需要 20+，推荐 24
 ```
 
-- 系统：Windows 10 及以上。
-- 浏览器：Microsoft Edge 或 Chrome（Chromium 125+）。
+- 系统：Windows 10+、macOS 12+ 或主流 Linux（x64/arm64）。
+- 浏览器：Microsoft Edge 或 Chrome（Chromium 111+）。
 - 没有 Node.js 时先装 Node（`winget install OpenJS.NodeJS.LTS`），再继续。
 
 **不要假设盘符。** 安装目录一律用环境变量推导，例如 `$env:LOCALAPPDATA\BridgeDeck`、`$env:TEMP\...`，不要写死 `D:\` 之类的路径。
@@ -38,13 +38,21 @@ node --version                 # 需要 18+，推荐 22
 ```powershell
 $api = 'https://api.github.com/repos/iorl566/bridgedeck/releases/latest'
 $rel = Invoke-RestMethod $api
-$asset = $rel.assets | Where-Object { $_.name -like 'BridgeDeck-cli-bundle-*.zip' } | Select-Object -First 1
+$asset = $rel.assets | Where-Object { $_.name -like 'BridgeDeck-cli-*-win32-x64.zip' } | Select-Object -First 1
 $work = Join-Path $env:TEMP ('bridgedeck-install-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Path $work -Force | Out-Null
 Invoke-WebRequest $asset.browser_download_url -OutFile (Join-Path $work 'bundle.zip')
 Expand-Archive (Join-Path $work 'bundle.zip') -DestinationPath $work -Force
 & (Join-Path $work 'install.ps1') -Dest (Join-Path $env:LOCALAPPDATA 'BridgeDeck') -AddToPath -Force
 ```
+
+macOS / Linux 用一行脚本：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/iorl566/bridgedeck/main/install-online.sh | sh
+```
+
+或手动下载对应架构的 `BridgeDeck-cli-<version>-<darwin|linux>-<arm64|x64>.tar.gz`，解压后运行 `sh install.sh --add-to-path`。macOS 也可以安装发布页的 `.pkg`。
 
 ### 方式 B：从源码安装
 
@@ -127,7 +135,7 @@ $sid = $out.result.sessionId
 
 | 现象 | 处理 |
 | --- | --- |
-| `node` 找不到 | 安装 Node 18+，重开终端；或用 `-NodePath` 指定 node.exe |
+| `node` 找不到 | 安装 Node 20+，重开终端；或用 `-NodePath` 指定 node.exe |
 | `E_NO_BROWSER` | 扩展未连接：让用户打开弹窗确认；必要时 `bridge daemon restart` |
 | 端口 52900 被占用 | `bridge daemon status` 看是否已有 daemon；或 `bridge --port 53900 ...` |
 | 扩展版本与 CLI 不一致 | 重新安装同版本扩展包或等待商店更新 |

@@ -20,9 +20,9 @@ function Get-SignTool {
   $command = Get-Command signtool.exe -ErrorAction SilentlyContinue
   if ($command) { return $command.Source }
   $candidates = @(
-    "$env:ProgramFiles(x86)\Windows Kits\10\bin\*\x64\signtool.exe",
+    "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe",
     "$env:ProgramFiles\Windows Kits\10\bin\*\x64\signtool.exe",
-    "$env:ProgramFiles(x86)\Windows Kits\10\bin\*\arm64\signtool.exe"
+    "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\arm64\signtool.exe"
   )
   foreach ($pattern in $candidates) {
     $found = Get-ChildItem $pattern -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1

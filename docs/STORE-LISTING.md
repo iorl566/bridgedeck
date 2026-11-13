@@ -41,9 +41,9 @@ LOCAL AND PRIVATE BY DEFAULT
 • The extension never calls an AI provider by itself.
 
 REQUIREMENTS
-• Microsoft Edge or Chrome (Chromium 125+).
-• Node.js 18+ for the local daemon and CLI.
-• Windows 10 or later (the daemon currently ships for Windows).
+• Microsoft Edge or Chrome (Chromium 111+).
+• Node.js 20+ for the local daemon and CLI.
+• Windows 10+, macOS 12+, or mainstream Linux (x64/arm64). Bundled CLI packages include Node.
 
 Start at the GitHub repository for the CLI, installation guide and documentation:
 https://github.com/iorl566/bridgedeck

@@ -19,8 +19,11 @@ New-Item -ItemType Directory -Path $work -Force | Out-Null
 try {
   Write-Host '[bridge] 查询最新版本…'
   $release = Invoke-RestMethod -UseBasicParsing "https://api.github.com/repos/$repo/releases/latest"
-  $asset = $release.assets | Where-Object { $_.name -like 'BridgeDeck-cli-bundle-*.zip' } | Select-Object -First 1
-  if (-not $asset) { throw 'latest release has no cli bundle asset' }
+  $asset = $release.assets |
+    Where-Object { $_.name -like 'BridgeDeck-cli-*-win32-x64.zip' } |
+    Select-Object -First 1
+  if (-not $asset) { $asset = $release.assets | Where-Object { $_.name -like 'BridgeDeck-cli-bundle-*.zip' } | Select-Object -First 1 }
+  if (-not $asset) { throw 'latest release has no Windows CLI asset' }
   $zip = Join-Path $work 'bundle.zip'
   Write-Host "[bridge] 下载 $($asset.name)…"
   Invoke-WebRequest -UseBasicParsing $asset.browser_download_url -OutFile $zip

@@ -13,6 +13,7 @@ import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -24,8 +25,18 @@ const jsonMode = flag('--json');
 const dryRun = flag('--dry-run');
 const noRestart = flag('--no-restart');
 
+if (args.includes('--help') || args.includes('-h')) {
+  process.stdout.write([
+    'Usage:',
+    '  node install-update.mjs --archive <zip|tar.gz> --dest <dir> [--port N] [--no-restart] [--dry-run] [--json]',
+    '  node install-update.mjs --rollback <backupDir> [--port N] [--json]',
+    '',
+  ].join('\n'));
+  process.exit(0);
+}
+
 const MANAGED_DIRS = ['cli', 'daemon', 'lib', 'mcp', 'skill', 'extension', 'sdk'];
-const MANAGED_FILES = ['package.json', 'README.md', 'LICENSE', 'install.sh', 'install.ps1', 'uninstall.sh', 'uninstall.ps1'];
+const MANAGED_FILES = ['package.json', 'README.md', 'LICENSE', 'install.sh', 'install.ps1', 'uninstall.sh', 'uninstall.ps1', 'tools/install-update.mjs', 'tools/make-cert.ps1'];
 const WRAPPERS = ['bridge', 'bridge.cmd'];
 
 function log(message) {
@@ -161,11 +172,16 @@ async function waitVersion({ port, tls }, version, timeoutMs) {
 
 function extract(archive, destination) {
   fs.mkdirSync(destination, { recursive: true });
-  const result = spawnSync('tar', ['-xf', archive, '-C', destination], { encoding: 'utf8' });
-  if (result.status !== 0) fail('解压更新包失败：' + (result.stderr || result.stdout));
+  let result = spawnSync('tar', ['-xf', archive, '-C', destination], { encoding: 'utf8' });
+  if (result.status === 0) return;
+  if (process.platform !== 'win32' && /\.zip$/i.test(archive)) {
+    result = spawnSync('unzip', ['-q', '-o', archive, '-d', destination], { encoding: 'utf8' });
+    if (result.status === 0) return;
+  }
+  fail('解压更新包失败：' + (result.error?.message || result.stderr || result.stdout));
 }
 
-function findRoot(dir) {
+export function findRoot(dir) {
   if (fs.existsSync(path.join(dir, 'cli', 'bridge.mjs'))) return dir;
   const entries = fs.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory());
   for (const entry of entries) {
@@ -175,16 +191,27 @@ function findRoot(dir) {
   return null;
 }
 
-function readVersion(root) {
+export function readVersion(root) {
   try { return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version || null; }
   catch { return null; }
+}
+
+function verifyArchive(archive, manifestPath) {
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const name = path.basename(archive);
+  const artifact = (Array.isArray(manifest.artifacts) ? manifest.artifacts : [])
+    .find((item) => item && (item.name === name || path.basename(String(item.file || '')) === name));
+  if (!artifact || !artifact.sha256) fail('发布清单里没有该更新包：' + name);
+  const hash = crypto.createHash('sha256').update(fs.readFileSync(archive)).digest('hex');
+  if (hash !== String(artifact.sha256).toLowerCase()) fail('更新包 sha256 与发布清单不一致');
+  return { version: manifest.version || null, sha256: hash };
 }
 
 function stamp() {
   return new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14) + '-' + crypto.randomBytes(3).toString('hex');
 }
 
-function backupAndSwap(newRoot, dest, backupDir) {
+export function backupAndSwap(newRoot, dest, backupDir) {
   fs.mkdirSync(backupDir, { recursive: true });
   const entries = [];
   const managed = [...MANAGED_DIRS, ...MANAGED_FILES];
@@ -192,7 +219,11 @@ function backupAndSwap(newRoot, dest, backupDir) {
     const target = path.join(dest, rel);
     const source = path.join(newRoot, rel);
     const existed = fs.existsSync(target);
-    if (existed) fs.cpSync(target, path.join(backupDir, rel), { recursive: true });
+    if (existed) {
+      const backupTarget = path.join(backupDir, rel);
+      fs.mkdirSync(path.dirname(backupTarget), { recursive: true });
+      fs.cpSync(target, backupTarget, { recursive: true });
+    }
     if (fs.existsSync(source)) {
       fs.rmSync(target, { recursive: true, force: true });
       fs.cpSync(source, target, { recursive: true });
@@ -226,7 +257,7 @@ function backupAndSwap(newRoot, dest, backupDir) {
   return entries;
 }
 
-function restore(backupDir) {
+export function restore(backupDir) {
   const recordPath = path.join(backupDir, 'install.json');
   if (!fs.existsSync(recordPath)) fail('回滚目录缺少 install.json：' + recordPath);
   const record = JSON.parse(fs.readFileSync(recordPath, 'utf8'));
@@ -235,7 +266,10 @@ function restore(backupDir) {
     const target = path.join(dest, entry.rel);
     const backup = path.join(backupDir, entry.rel);
     fs.rmSync(target, { recursive: true, force: true });
-    if (entry.existed && fs.existsSync(backup)) fs.cpSync(backup, target, { recursive: true });
+    if (entry.existed && fs.existsSync(backup)) {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.cpSync(backup, target, { recursive: true });
+    }
   }
   return record;
 }
@@ -267,11 +301,13 @@ function writeState(details) {
   fs.writeFileSync(file, JSON.stringify(state, null, 2) + '\n');
 }
 
-async function apply() {
+export async function apply() {
   const archive = path.resolve(option('--archive'));
   const dest = path.resolve(option('--dest', process.cwd()));
   if (!fs.existsSync(archive)) fail('更新包不存在：' + archive);
   if (!fs.existsSync(path.join(dest, 'cli', 'bridge.mjs'))) fail('目标目录不是 BridgeDeck 安装：' + dest);
+  const manifestPath = option('--manifest');
+  if (manifestPath) verifyArchive(archive, path.resolve(manifestPath));
 
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-update-'));
   try {
@@ -294,16 +330,21 @@ async function apply() {
     backupAndSwap(newRoot, dest, backupDir);
 
     if (!noRestart) {
-      startDaemon(dest, port);
-      const started = port ? { port, tls } : await waitForDaemonInfo(10_000);
-      if (!started) {
+      let started = null;
+      try {
+        startDaemon(dest, port);
+        started = port ? { port, tls } : await waitForDaemonInfo(10_000);
+        if (!started) throw new Error('daemon 未发布 daemon.json');
+      } catch (error) {
+        log('新版本启动失败，回滚：' + (error.message || error));
+        await stopDaemon(readDaemonInfo());
         restore(backupDir);
         if (oldInfo) {
           startDaemon(dest, oldInfo.port);
           await waitHealthy(oldInfo, 15_000);
         }
-        writeState({ ok: false, version, dest, port, backupDir, error: 'daemon 未发布 daemon.json' });
-        fail('新版本启动后未找到 daemon.json');
+        writeState({ ok: false, version, dest, port, backupDir, error: String(error.message || error) });
+        throw error;
       }
       try {
         await waitVersion(started, version, 25_000);
@@ -329,7 +370,7 @@ async function apply() {
   }
 }
 
-async function rollback() {
+export async function rollback() {
   const backupDir = path.resolve(option('--rollback'));
   const current = readDaemonInfo();
   if (!noRestart) await stopDaemon(current);
@@ -346,17 +387,21 @@ async function rollback() {
   return { ok: true, restored: record.version || null, dest: record.dest, backupDir };
 }
 
-async function main() {
+export async function main() {
   const result = option('--rollback') ? await rollback() : await apply();
   if (jsonMode) console.log(JSON.stringify(result));
   else log(JSON.stringify(result));
 }
 
-main().catch((error) => {
-  if (jsonMode) {
-    console.log(JSON.stringify({ ok: false, error: { message: String(error && error.message ? error.message : error) } }));
-  } else {
-    process.stderr.write(`[update] 失败：${error && error.message ? error.message : error}\n`);
-  }
-  process.exit(1);
-});
+const invokedDirectly = Boolean(process.argv[1])
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) {
+  main().catch((error) => {
+    if (jsonMode) {
+      console.log(JSON.stringify({ ok: false, error: { message: String(error && error.message ? error.message : error) } }));
+    } else {
+      process.stderr.write(`[update] 失败：${error && error.message ? error.message : error}\n`);
+    }
+    process.exit(1);
+  });
+}

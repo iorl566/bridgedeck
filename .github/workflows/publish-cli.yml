@@ -11,14 +11,14 @@ on:
 permissions:
   contents: read
 
-env:
-  HAS_APPLE_CERT: ${{ secrets.APPLE_CERT_P12_BASE64 != '' }}
-  HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' }}
-
 jobs:
   build:
     name: ${{ matrix.platform }}-${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
+    env:
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERT_P12_BASE64 != '' }}
+      HAS_APPLE_INSTALLER: ${{ secrets.APPLE_INSTALLER_IDENTITY != '' }}
+      HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -120,7 +120,7 @@ jobs:
           fi
 
       - name: Notarize macOS package
-        if: matrix.platform == 'darwin' && env.HAS_APPLE_CERT == 'true' && env.HAS_APPLE_NOTARY == 'true'
+        if: matrix.platform == 'darwin' && env.HAS_APPLE_CERT == 'true' && env.HAS_APPLE_INSTALLER == 'true' && env.HAS_APPLE_NOTARY == 'true'
         shell: bash
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}

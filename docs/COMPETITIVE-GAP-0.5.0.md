@@ -108,3 +108,17 @@
 | 真实 Edge E2E | `node tools/e2e.mjs` | 131/133 通过，2 跳过（借用确认策略），exit 0 |
 
 E2E 的 2 项跳过均因“借用确认只能由扩展设置页关闭”的产品策略，不是功能失败；其余 131 项全部通过。
+
+## H. 平台、签名、更新与 CI（2026-11-13 补齐）
+
+| 项 | 落地 |
+| --- | --- |
+| 跨平台打包 | `tools/package-portable.mjs` 支持 win32/darwin/linux × x64/arm64，按目标平台下载 Node 运行时；macOS/Linux 用 `tar.gz`，Windows 用 `zip` |
+| 安装 | 新增 `install.sh` / `uninstall.sh` / `install-online.sh`；`bin/bridge`（POSIX）与 `bin/bridge.cmd` 都优先使用随包 Node |
+| Windows 签名 | `tools/sign-windows.ps1` 支持 EV PFX / 指纹 / 主题、描述、时间戳与 `-RequireTimestamp` |
+| macOS 签名/公证 | `tools/sign-macos.sh`、`tools/build-macos-pkg.sh`、`tools/notarize-macos.sh`，含 Node JIT entitlements |
+| 更新闭环 | `bridge update install --from <archive>`：停旧 daemon → 备份 → 覆盖 → 原端口启动 → 版本校验 → 失败自动回滚并重启旧版；`--rollback` 可手动回滚 |
+| CI | `ci.yml`、`publish-cli.yml`、`release-cli.yml`、`release-extension.yml`、`release-dsh-plugin.yml` 五条流水线 |
+
+平台从“仅 Windows”扩到 Windows/macOS/Linux；Chrome Web Store 因账号原因暂不发布，仓库仍提供 Edge 商店与解压加载。
+

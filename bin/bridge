@@ -1,7 +1,16 @@
 #!/bin/sh
 # BridgeDeck CLI entry (POSIX). Prefers the bundled runtime next to this file.
 set -e
-DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SELF=$0
+while [ -h "$SELF" ]; do
+  DIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
+  LINK=$(readlink "$SELF")
+  case "$LINK" in
+    /*) SELF=$LINK ;;
+    *) SELF=$DIR/$LINK ;;
+  esac
+done
+DIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
 if [ -x "$DIR/node" ]; then
   NODE_BIN="$DIR/node"
 elif command -v node >/dev/null 2>&1; then

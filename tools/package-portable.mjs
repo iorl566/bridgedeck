@@ -30,6 +30,7 @@ const withNode = !flag('--no-node');
 const stageOnly = flag('--stage-only');
 const keepStage = flag('--keep-stage');
 const packDirArg = option('--pack-dir');
+const cacheDir = path.resolve(ROOT, option('--cache-dir', path.join('dist', '.node-cache')));
 const jsonMode = flag('--json');
 
 const LABEL = `${platform}-${arch}`;
@@ -66,8 +67,8 @@ function nodeDistribution() {
   return {
     version,
     base,
-    archive: path.join(ROOT, 'dist', '.node-cache', `${base}.${ext}`),
-    extractDir: path.join(ROOT, 'dist', '.node-cache', base),
+    archive: path.join(cacheDir, `${base}.${ext}`),
+    extractDir: path.join(cacheDir, base),
     url: `https://nodejs.org/dist/v${version}/${base}.${ext}`,
   };
 }
@@ -116,19 +117,19 @@ function createArchive(stage, destination, ext) {
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.rmSync(destination, { force: true });
   if (ext === 'zip') {
+    const result = spawnSync('tar', ['-a', '-cf', destination, '-C', stage, '.'], { encoding: 'utf8' });
+    if (result.status === 0) return;
     if (process.platform === 'win32') {
       const psPath = (value) => String(value).replace(/'/g, "''");
       const script = `Compress-Archive -Path '${psPath(path.join(stage, '*'))}' -DestinationPath '${psPath(destination)}' -Force`;
-      const result = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' });
-      if (result.status !== 0) fail('Compress-Archive 失败：' + (result.stderr || result.stdout));
-    } else {
-      const result = spawnSync('tar', ['-a', '-cf', destination, '-C', stage, '.'], { encoding: 'utf8' });
-      if (result.status !== 0) fail('创建 zip 失败：' + (result.stderr || result.stdout));
+      const packed = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' });
+      if (packed.status !== 0) fail('创建 zip 失败：' + (packed.error?.message || packed.stderr || packed.stdout || result.error?.message || result.stderr || result.stdout));
+      return;
     }
-    return;
+    fail('创建 zip 失败：' + (result.error?.message || result.stderr || result.stdout));
   }
   const result = spawnSync('tar', ['-czf', destination, '-C', stage, '.'], { encoding: 'utf8' });
-  if (result.status !== 0) fail('创建 tar.gz 失败：' + (result.stderr || result.stdout));
+  if (result.status !== 0) fail('创建 tar.gz 失败：' + (result.error?.message || result.stderr || result.stdout));
 }
 
 function assertStage(stage) {
@@ -150,10 +151,12 @@ function buildStage() {
     const from = path.join(ROOT, file);
     if (fs.existsSync(from)) fs.copyFileSync(from, path.join(stage, file));
   }
-  const updateHelper = path.join(ROOT, 'tools', 'install-update.mjs');
-  if (fs.existsSync(updateHelper)) {
+  const toolFiles = ['install-update.mjs', 'make-cert.ps1'];
+  for (const name of toolFiles) {
+    const from = path.join(ROOT, 'tools', name);
+    if (!fs.existsSync(from)) continue;
     fs.mkdirSync(path.join(stage, 'tools'), { recursive: true });
-    fs.copyFileSync(updateHelper, path.join(stage, 'tools', 'install-update.mjs'));
+    fs.copyFileSync(from, path.join(stage, 'tools', name));
   }
   // Drop the Windows launcher from Unix packages and vice versa.
   const foreign = platform === 'win32' ? 'bridge' : 'bridge.cmd';

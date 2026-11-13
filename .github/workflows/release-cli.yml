@@ -18,10 +18,6 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-env:
-  HAS_APPLE_CERT: ${{ secrets.APPLE_CERT_P12_BASE64 != '' }}
-  HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' }}
-
 jobs:
   resolve:
     runs-on: ubuntu-latest
@@ -56,6 +52,10 @@ jobs:
     needs: resolve
     name: ${{ matrix.platform }}-${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
+    env:
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERT_P12_BASE64 != '' }}
+      HAS_APPLE_INSTALLER: ${{ secrets.APPLE_INSTALLER_IDENTITY != '' }}
+      HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -151,7 +151,7 @@ jobs:
           fi
 
       - name: Notarize macOS package
-        if: matrix.platform == 'darwin' && env.HAS_APPLE_CERT == 'true' && env.HAS_APPLE_NOTARY == 'true'
+        if: matrix.platform == 'darwin' && env.HAS_APPLE_CERT == 'true' && env.HAS_APPLE_INSTALLER == 'true' && env.HAS_APPLE_NOTARY == 'true'
         shell: bash
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
@@ -198,10 +198,17 @@ jobs:
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
           SIGN_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "${SIGN_KEY:-}" ]; then
+          if [ -n "${SIGNING_PRIVATE_KEY:-}" ]; then
+            case "$SIGNING_PRIVATE_KEY" in
+              -----BEGIN*) printf '%s' "$SIGNING_PRIVATE_KEY" > "$RUNNER_TEMP/release-private.pem" ;;
+              *) printf '%s' "$SIGNING_PRIVATE_KEY" | base64 -d > "$RUNNER_TEMP/release-private.pem" ;;
+            esac
+            node tools/release.mjs --sign-ed25519 "$RUNNER_TEMP/release-private.pem"
+          elif [ -n "${SIGN_KEY:-}" ]; then
             printf '%s' "$SIGN_KEY" > "$RUNNER_TEMP/release.key"
             node tools/release.mjs --sign-key "$RUNNER_TEMP/release.key"
           else

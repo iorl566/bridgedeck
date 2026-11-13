@@ -55,6 +55,10 @@ if [ -f "$ROOT/tools/install-update.mjs" ]; then
   mkdir -p "$DEST/tools"
   cp "$ROOT/tools/install-update.mjs" "$DEST/tools/install-update.mjs"
 fi
+if [ -f "$ROOT/tools/make-cert.ps1" ]; then
+  mkdir -p "$DEST/tools"
+  cp "$ROOT/tools/make-cert.ps1" "$DEST/tools/make-cert.ps1"
+fi
 
 for file in package.json README.md LICENSE uninstall.sh; do
   if [ -f "$ROOT/$file" ]; then
@@ -85,7 +89,16 @@ fi
 cat > "$DEST/bin/bridge" <<'WRAPPER'
 #!/bin/sh
 set -e
-DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SELF=$0
+while [ -h "$SELF" ]; do
+  DIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
+  LINK=$(readlink "$SELF")
+  case "$LINK" in
+    /*) SELF=$LINK ;;
+    *) SELF=$DIR/$LINK ;;
+  esac
+done
+DIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
 if [ -x "$DIR/node" ]; then
   NODE_BIN="$DIR/node"
 elif command -v node >/dev/null 2>&1; then
@@ -97,6 +110,8 @@ fi
 exec "$NODE_BIN" "$DIR/../cli/bridge.mjs" "$@"
 WRAPPER
 chmod 755 "$DEST/bin/bridge"
+if [ -f "$DEST/bin/node" ]; then chmod 755 "$DEST/bin/node"; fi
+rm -f "$DEST/bin/bridge.cmd"
 if [ -n "$NODE_PATH_ARG" ] && [ -x "$NODE_PATH_ARG" ]; then
   cp "$NODE_PATH_ARG" "$DEST/bin/node"
   chmod 755 "$DEST/bin/node"

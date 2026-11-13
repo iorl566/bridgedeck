@@ -1,14 +1,22 @@
 #!/usr/bin/env node
-// tools/release.mjs —— 生成/校验 dist 发布清单（SHA256 + 字节数）。
+// tools/release.mjs —— 生成/校验 dist 发布清单（SHA256 + 字节数 + 可选签名）。
 //
 // 用法：
-//   node tools/release.mjs            # 写入 dist/release.json
-//   node tools/release.mjs --check    # 校验现有清单与 dist 文件一致
+//   node tools/release.mjs                                  # 写入 dist/release.json
+//   node tools/release.mjs --sign-key <secret>              # HMAC-SHA256
+//   node tools/release.mjs --sign-ed25519 <private.pem>     # Ed25519（推荐公开分发）
+//   node tools/release.mjs --check [--public-key <pem>]     # 校验现有清单
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { signRelease, verifyReleaseSignature } from '../lib/release-sign.mjs';
+import {
+  ed25519PublicKeyFromPrivate,
+  signRelease,
+  signReleaseEd25519,
+  verifyReleaseSignature,
+} from '../lib/release-sign.mjs';
+import { RELEASE_PUBLIC_KEY } from '../lib/release-public-key.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -31,16 +39,37 @@ function collect() {
     });
 }
 
+function option(name, fallback = '') {
+  const index = process.argv.indexOf(name);
+  return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : fallback;
+}
+
 const artifacts = collect();
 const manifest = {
   version: pkg.version,
   generatedAt: new Date().toISOString(),
   artifacts,
 };
-const signKeyIndex = process.argv.indexOf('--sign-key');
-const signKeyPath = signKeyIndex >= 0 ? process.argv[signKeyIndex + 1] : '';
-const signKey = signKeyPath ? readFileSync(path.resolve(signKeyPath), 'utf8').trim() : '';
+
+const signKeyPath = option('--sign-key');
+const ed25519KeyPath = option('--sign-ed25519');
+const publicKeyPath = option('--public-key');
+if (signKeyPath && ed25519KeyPath) {
+  console.error('--sign-key 与 --sign-ed25519 只能二选一');
+  process.exit(1);
+}
+
+let signKey = '';
+let ed25519Key = '';
+if (signKeyPath) signKey = readFileSync(path.resolve(signKeyPath), 'utf8').trim();
+if (ed25519KeyPath) ed25519Key = readFileSync(path.resolve(ed25519KeyPath), 'utf8').trim();
 if (signKey) manifest.signature = signRelease(manifest, signKey);
+if (ed25519Key) {
+  manifest.signature = signReleaseEd25519(manifest, ed25519Key);
+  const publicPem = ed25519PublicKeyFromPrivate(ed25519Key);
+  writeFileSync(path.join(DIST, 'release-public.pem'), publicPem, 'utf8');
+  console.log(`ed25519 keyId: ${manifest.signature.keyId}（公钥已写入 dist/release-public.pem）`);
+}
 
 if (process.argv.includes('--check')) {
   if (!existsSync(MANIFEST)) {
@@ -57,12 +86,22 @@ if (process.argv.includes('--check')) {
     if (!recorded) problems.push(`missing ${artifact.name}`);
     else if (recorded.sha256 !== artifact.sha256 || recorded.bytes !== artifact.bytes) problems.push(`changed ${artifact.name}`);
   }
-  if (signKey) {
-    if (!existing.signature) problems.push('missing signature');
-    else if (!verifyReleaseSignature(existing, signKey)) problems.push('signature mismatch');
-  } else if (existing.signature) {
-    console.log('note: release.json 含签名；加 --sign-key <file> 可校验');
+
+  let verifyKey = '';
+  if (publicKeyPath) verifyKey = readFileSync(path.resolve(publicKeyPath), 'utf8').trim();
+  else if (signKeyPath) verifyKey = signKey;
+  else if (existing.signature && existing.signature.alg === 'ed25519') verifyKey = RELEASE_PUBLIC_KEY;
+
+  if (existing.signature) {
+    if (!verifyKey) {
+      console.log('note: release.json 含签名；提供 --public-key <pem> 或 --sign-key <secret> 可校验');
+    } else if (!verifyReleaseSignature(existing, verifyKey)) {
+      problems.push('signature mismatch');
+    }
+  } else if (verifyKey) {
+    problems.push('missing signature');
   }
+
   if (!existsSync(CHECKSUMS)) {
     problems.push('missing SHA256SUMS');
   } else {

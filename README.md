@@ -78,6 +78,8 @@ BridgeDeck 由三部分组成：**浏览器扩展 + 本机 daemon + CLI**。扩�
 
 扩展装好后打开弹窗，确认显示 **已连接**。daemon 会在第一次执行 `bridge` 命令时自动拉起。
 
+Chrome Web Store 暂未上架；Chrome 用户可先用开发者模式加载 `extension/`，或解压发布页的 `BridgeDeck-extension-*.zip` 后加载。
+
 ### 方案 B：一行命令安装（Windows）
 
 ```powershell
@@ -100,18 +102,20 @@ irm https://raw.githubusercontent.com/iorl566/bridgedeck/main/install-online.ps1
 # macOS（Apple Silicon / Intel）与 Linux（x64 / arm64）
 tar -xzf BridgeDeck-cli-0.1.2-darwin-arm64.tar.gz   # 或 linux-x64 / linux-arm64
 cd BridgeDeck-cli-0.1.2-darwin-arm64
-./install.sh --add-to-path
+sh install.sh --add-to-path
 bridge status
 ```
 
-macOS 也可以安装签名并公证的 `.pkg`（由发布流水线生成）：双击安装后运行 `bridge status`。未公证的 `tar.gz` 首次运行可能被 Gatekeeper 拦截，可在“系统设置 → 隐私与安全性”里允许，或改用 `.pkg`。
+macOS 也可以安装签名并公证的 `.pkg`（由发布流水线生成）：双击安装后运行 `bridge status`。`.pkg` 装到 `/usr/local/lib/bridgedeck`，更新时需要 `sudo bridge update install ...`；不想用 sudo 就用上面的 `tar.gz` + `install.sh` 装到用户目录。
+
+未公证的 `tar.gz` 首次运行可能被 Gatekeeper 拦截，可在“系统设置 → 隐私与安全性”里允许，或改用 `.pkg`。
 
 Linux 默认安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/bridgedeck`，用 `--dest` 改目录；`--add-to-path` 会链接到 `~/.local/bin/bridge`。
 
 <details>
 <summary><b>方案 C：从源码加载（开发用）</b></summary>
 
-1. 克隆仓库并确认 Node.js 22+。
+1. 克隆仓库并确认 Node.js 20+（推荐 24）。
 2. 打开 `edge://extensions`，开启"开发者模式"。
 3. 选择"加载已解压的扩展"，指向 `extension/`。
 4. 在扩展详情页允许无痕模式（如需要 InPrivate）。
@@ -250,7 +254,7 @@ bridge update install --rollback .rollback/<timestamp>/
 | 了解协议与消息 | [协议](docs/PROTOCOL.md) |
 | 遇到问题先看 | [排障](docs/troubleshooting.md) |
 | 安全边界与凭据 | [安全](docs/security.md) |
-| 构建与自签名 | [Windows 签名](docs/windows-signing.md) |
+| 构建与签名 | [Windows 签名](docs/windows-signing.md) · [macOS 签名与公证](docs/macos-signing.md) · [发布清单签名](docs/release-signing.md) |
 
 ## 面向开发者
 
@@ -260,8 +264,13 @@ node tests/cli/selftest.mjs         # CLI 全链路
 node tests/mcp/selftest.mjs         # MCP
 node tools/e2e.mjs                  # 端到端（默认同步 docs/assets 截图；BB_E2E_SYNC_DOCS=0 可关闭）
 node tools/build-extension.mjs      # 重建扩展 zip（dist/BridgeDeck-extension-<version>.zip）
+node tools/package-portable.mjs     # 当前平台便携包（Windows zip / macOS+Linux tar.gz）
+node tools/package-portable.mjs --platform linux --arch arm64   # 交叉打包（下载对应 Node 运行时）
+bash tools/build-macos-pkg.sh --stage <dir> --version 0.1.2 --out dist/x.pkg   # 仅 macOS
 node tools/release.mjs --check      # 发布产物一致性
 ```
+
+CI 共 5 条流水线：`ci.yml`（三平台测试 + 交叉打包）、`publish-cli.yml`（手动预发布）、`release-cli.yml`、`release-extension.yml`、`release-dsh-plugin.yml`（tag 触发发布）。
 
 最近结果：单测 **898/898**、CLI **143/143**、MCP **10/10**、DSH 插件 **24/24**、Python SDK **7/7**、protocol-check 全绿（`handlersNotInProtocol=[]`、`schemaMissing=[]`、`mcpMethodsNotInProtocol=[]`）、真实 Edge E2E **131/133 通过（2 项因借用确认安全策略跳过）**。
 

@@ -32,7 +32,8 @@ jobs:
         run: node --version
 
       - name: Unit tests
-        run: node --test tests/unit
+        shell: bash
+        run: node --test tests/unit/*.test.mjs
 
       - name: Protocol gate
         run: node tools/protocol-check.mjs
@@ -89,7 +90,7 @@ jobs:
           node-version: '24'
 
       - name: Build portable package
-        run: node tools/package-portable.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --out dist/BridgeDeck-cli-ci-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.platform == 'win32' && '.zip' || '.tar.gz' }} --json
+        run: node tools/package-portable.mjs --no-node --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --out dist/BridgeDeck-cli-ci-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.platform == 'win32' && '.zip' || '.tar.gz' }} --json
 
       - name: Check artifact
         shell: bash
