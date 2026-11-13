@@ -30,8 +30,8 @@ const opt = (name, fallback) => {
 };
 const browser = opt('--browser', 'edge');
 const keep = args.includes('--keep');
-// 默认不把测试截图写回 docs/assets，避免跑完 E2E 工作树变脏；需要更新文档图时设 BB_E2E_SYNC_DOCS=1。
-const SYNC_DOCS = process.env.BB_E2E_SYNC_DOCS === '1';
+// 默认每次 E2E 都同步 README 截图；需要保持工作树干净时设 BB_E2E_SYNC_DOCS=0。
+const SYNC_DOCS = process.env.BB_E2E_SYNC_DOCS !== '0';
 const BROWSER_PATHS = {
   edge: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   chrome: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',

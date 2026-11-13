@@ -228,7 +228,8 @@ CLI、daemon、扩展、DSH 插件应保持同一版本使用新功能。
 node --test tests/unit/*.test.mjs   # 单元测试
 node tests/cli/selftest.mjs         # CLI 全链路
 node tests/mcp/selftest.mjs         # MCP
-node tools/e2e.mjs                  # 端到端（默认不改 docs/assets；BB_E2E_SYNC_DOCS=1 时同步文档截图）
+node tools/e2e.mjs                  # 端到端（默认同步 docs/assets 截图；BB_E2E_SYNC_DOCS=0 可关闭）
+node tools/build-extension.mjs      # 重建扩展 zip（dist/BridgeDeck-extension-<version>.zip）
 node tools/release.mjs --check      # 发布产物一致性
 ```
 

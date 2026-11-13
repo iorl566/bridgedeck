@@ -27,6 +27,7 @@
     "selftest:ws": "node tests/ws-selftest.mjs",
     "selftest:ext": "node tests/extension/mock-daemon.mjs",
     "make:icons": "node tools/make-icons.mjs",
+    "build:extension": "node tools/build-extension.mjs",
     "test": "node tests/cli/selftest.mjs && node tests/extension/module-load.mjs && node tests/extension/page-guard.mjs && node tests/plugin/selftest.mjs && node tests/ws-selftest.mjs && node tests/mcp/selftest.mjs && node tests/pairing/selftest.mjs && node tests/tls/selftest.mjs && node tools/content-browser-selftest.mjs && node tools/overlay-browser-selftest.mjs && node tools/cooperation-trusted-input-selftest.mjs && node tools/e2e.mjs",
     "selftest:plugin": "node tests/plugin/selftest.mjs",
     "check:plugin-profile": "node tools/plugin-profile-check.mjs",
