@@ -31,7 +31,7 @@ function sha256(file) {
 function collect() {
   if (!existsSync(DIST)) return [];
   return readdirSync(DIST)
-    .filter((name) => /\.(zip|tar\.gz|pkg|exe)$/.test(name))
+    .filter((name) => /\.(zip|tar\.gz|pkg|exe)$/.test(name) && !/^(test|tmp)-/.test(name))
     .sort()
     .map((name) => {
       const file = path.join(DIST, name);
