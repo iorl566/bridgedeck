@@ -30,6 +30,8 @@ const opt = (name, fallback) => {
 };
 const browser = opt('--browser', 'edge');
 const keep = args.includes('--keep');
+// 默认不把测试截图写回 docs/assets，避免跑完 E2E 工作树变脏；需要更新文档图时设 BB_E2E_SYNC_DOCS=1。
+const SYNC_DOCS = process.env.BB_E2E_SYNC_DOCS === '1';
 const BROWSER_PATHS = {
   edge: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   chrome: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -2003,7 +2005,9 @@ try {
       await sleep(500);
       expectOk(await cliJson(['screenshot', '--out', shot, '--session', borrowed.sessionId]), 'screenshot popup');
       bytes = readFileSync(shot).length;
-      try { copyFileSync(shot, path.join(ROOT, 'docs', 'assets', 'popup.png')); } catch { /* 文档图同步失败忽略 */ }
+      if (SYNC_DOCS) {
+        try { copyFileSync(shot, path.join(ROOT, 'docs', 'assets', 'popup.png')); } catch { /* 文档图同步失败忽略 */ }
+      }
       expectOk(await cliJson(['session', 'stop', borrowed.sessionId]), 'stop ui session');
     } finally {
       await cli(['tab', 'close', String(opened.tabId)]);
@@ -2097,7 +2101,9 @@ try {
         expectOk(await cliJson(['emulate', '--width', '360', '--height', '640', '--session', borrowed.sessionId]), 'emulate quick');
         await sleep(500);
         expectOk(await cliJson(['screenshot', '--out', shot, '--session', borrowed.sessionId]), 'screenshot quick');
-        try { copyFileSync(shot, path.join(ROOT, 'docs', 'assets', 'quick.png')); } catch { /* 文档图同步失败忽略 */ }
+        if (SYNC_DOCS) {
+          try { copyFileSync(shot, path.join(ROOT, 'docs', 'assets', 'quick.png')); } catch { /* 文档图同步失败忽略 */ }
+        }
       } catch (error) {
         console.log('  WARN  快捷功能文档截图失败（不影响功能断言）：' + error.message);
       }

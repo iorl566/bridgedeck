@@ -228,11 +228,11 @@ CLI、daemon、扩展、DSH 插件应保持同一版本使用新功能。
 node --test tests/unit/*.test.mjs   # 单元测试
 node tests/cli/selftest.mjs         # CLI 全链路
 node tests/mcp/selftest.mjs         # MCP
-node tools/e2e.mjs                  # 端到端
+node tools/e2e.mjs                  # 端到端（默认不改 docs/assets；BB_E2E_SYNC_DOCS=1 时同步文档截图）
 node tools/release.mjs --check      # 发布产物一致性
 ```
 
-最近结果：单测 **896/896**、CLI **143/143**、MCP **10/10**、DSH 插件 **24/24**、Python SDK **7/7**、protocol-check 全绿（`handlersNotInProtocol=[]`、`schemaMissing=[]`、`mcpMethodsNotInProtocol=[]`）、真实 Edge E2E **131/133 通过（2 项因借用确认安全策略跳过）**。
+最近结果：单测 **898/898**、CLI **143/143**、MCP **10/10**、DSH 插件 **24/24**、Python SDK **7/7**、protocol-check 全绿（`handlersNotInProtocol=[]`、`schemaMissing=[]`、`mcpMethodsNotInProtocol=[]`）、真实 Edge E2E **131/133 通过（2 项因借用确认安全策略跳过）**。
 
 ```text
 cli/            CLI 入口
