@@ -15,3 +15,6 @@ t.slice(0
 # Python 缓存
 __pycache__/
 *.pyc
+
+# 临时分析文件
+.tmp-*
