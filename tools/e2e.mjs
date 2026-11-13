@@ -2174,6 +2174,8 @@ try {
 
   await check('35b. observe --vom 命中测试：遮挡 / pointer-events / 屏外', async () => {
     const vomUrl = pageUrl.replace(/test\.html.*$/, 'vom.html');
+    // 前面的 UI/人工接管检查可能让会话处于暂停态；这里先恢复，避免级联 E_SESSION_PAUSED。
+    await cliJson(['session', 'resume', sessionId]).catch(() => {});
     expectOk(await cliJson(['navigate', vomUrl, '--session', sessionId]), 'navigate vom');
     const res = expectOk(await cliJson(['observe', '--vom', '--session', sessionId]), 'observe vom');
     const byId = (id) => (res.nodes || []).find((node) => node.id === id);

@@ -17,6 +17,9 @@ async function captureStepShot(session, event) {
     const tabs = await chrome.tabs.query({ active: true, windowId: session.windowId });
     if (!tabs.length || tabs[0].id !== session.tabId) return;
     const dataUrl = await chrome.tabs.captureVisibleTab(session.windowId, { format: 'jpeg', quality: 45 });
+    // 截图是异步的：期间用户可能切走标签页，切走则丢弃，避免把别的页面录进 trace。
+    const after = await chrome.tabs.query({ active: true, windowId: session.windowId });
+    if (!after.length || after[0].id !== session.tabId) return;
     const base64 = String(dataUrl || '').split(',')[1] || '';
     if (!base64) return;
     const binary = atob(base64);

@@ -1760,7 +1760,7 @@ async function cmdPage(command, flags, pos) {
       if (flags.force === true) params.force = true;
       let beforeUrl = null;
       if (command === 'click' && flags['wait-navigation'] === true) {
-        const probe = await callRpc('evaluate', withControl(flags, { expression: 'location.href' }), Math.max(timeoutOf(flags), 5000));
+        const probe = await callRpc('evaluate', withNavigationProbe(flags, 'location.href'), Math.max(timeoutOf(flags), 5000));
         if (probe.ok) beforeUrl = String((probe.result || {}).value || '');
       }
       const body = await callRpc(command, params, timeoutOf(flags));
@@ -1889,13 +1889,22 @@ function withSession(flags, params) {
   return params;
 }
 
+/** 导航探针只带 session/tab，不携带 --expect/--context 等动作约束。 */
+function withNavigationProbe(flags, expression) {
+  const params = withSession(flags, { expression: String(expression) });
+  if (flags['tab-id'] !== undefined) {
+    const tabId = Number(flags['tab-id']);
+    if (!Number.isInteger(tabId)) throw new ArgError('--tab-id 需要整数');
+    params.tabId = tabId;
+  }
+  return params;
+}
+
 /** 页面动作的公共参数：session + context/expect/observation。 */
 async function waitForNavigationAfterClick(flags, beforeUrl, timeoutMs = 8000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    const body = await callRpc('evaluate', withControl(flags, {
-      expression: "JSON.stringify({ href: location.href, ready: document.readyState })",
-    }), 5000).catch(() => null);
+    const body = await callRpc('evaluate', withNavigationProbe(flags, "JSON.stringify({ href: location.href, ready: document.readyState })"), 5000).catch(() => null);
     if (body && body.ok) {
       let info = null;
       try {

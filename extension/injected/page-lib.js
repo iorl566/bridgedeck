@@ -592,10 +592,14 @@
   }
 
   /** 扩展自己的浮层（__bb_*）不算页面遮挡：动作前会临时隐藏，脚本动作也应能穿透。 */
+  const OWN_OVERLAY_IDS = new Set([
+    '__bb_takeover_host', '__bb_help_host', '__bb_help_highlight', '__bb_record_host',
+    '__bb_manual_host', '__bb_borrow_modal', '__bb_control_hint', '__bb_human_banner',
+  ]);
   function isOwnOverlayNode(node) {
     let current = node;
     for (let depth = 0; current && current.nodeType === 1 && depth < 12; depth += 1) {
-      if (String(current.id || '').startsWith('__bb_')) return true;
+      if (OWN_OVERLAY_IDS.has(String(current.id || ''))) return true;
       current = current.parentElement;
     }
     return false;
