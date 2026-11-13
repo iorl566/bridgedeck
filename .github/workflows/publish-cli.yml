@@ -27,11 +27,11 @@ jobs:
             platform: win32
             arch: x64
             ext: zip
-          - os: macos-14
+          - os: macos-latest
             platform: darwin
             arch: arm64
             ext: tar.gz
-          - os: macos-14
+          - os: macos-latest
             platform: darwin
             arch: x64
             ext: tar.gz
