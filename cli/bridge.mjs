@@ -92,7 +92,8 @@ const VALUE_FLAGS = new Set([
 ]);
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
 for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force']) BOOL_FLAGS.add(name);
-for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval']) VALUE_FLAGS.add(name);
+for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest']) VALUE_FLAGS.add(name);
+for (const name of ['no-restart']) BOOL_FLAGS.add(name);
 
 const REPEATABLE_FLAGS = new Set(['file', 'param']);
 
@@ -959,9 +960,10 @@ function verifyRelease(manifest, manifestPath) {
 
 function cmdUpdate(flags, pos) {
   const sub = pos && pos[1] ? String(pos[1]) : (flags.check === true ? 'check' : '');
-  if (sub && !['check', 'verify', 'stage', 'apply', 'rollback', 'fetch', 'state', 'auto'].includes(sub)) {
-    throw new ArgError('update 只支持 check|verify|stage|apply|rollback|fetch|state|auto');
+  if (sub && !['check', 'verify', 'stage', 'apply', 'rollback', 'fetch', 'state', 'auto', 'install'].includes(sub)) {
+    throw new ArgError('update 只支持 check|verify|stage|apply|rollback|fetch|state|auto|install');
   }
+  if (sub === 'install') return cmdUpdateInstall(flags);
   if (sub === 'apply') return cmdUpdateApply(flags);
   if (sub === 'rollback') return cmdUpdateRollback(flags);
   if (sub === 'auto') {
@@ -1088,6 +1090,44 @@ function cmdUpdate(flags, pos) {
   for (const item of artifacts) print((item.ok ? 'OK   ' : 'FAIL ') + item.name + '  ' + (item.bytes == null ? '缺文件' : item.bytes + 'B'));
   print(verified ? '发布清单校验通过。' : '发布清单校验失败。');
   return verified ? 0 : 1;
+}
+
+/**
+ * update install：把便携包安装到当前安装目录，并按“装新 → 试跑 → 原端口重启 → 失败回滚”执行。
+ * 文件替换交给临时目录里的独立脚本，避免覆盖正在运行的 cli/lib 代码。
+ */
+function cmdUpdateInstall(flags) {
+  if (flags.from === undefined) throw new ArgError('update install 需要 --from <zip|tar.gz>');
+  const archive = path.resolve(process.cwd(), String(flags.from));
+  if (!fs.existsSync(archive)) throw new BridgeError('E_NOT_FOUND', '更新包不存在：' + archive);
+  const dest = flags.dest !== undefined ? path.resolve(process.cwd(), String(flags.dest)) : REPO_ROOT;
+  if (!fs.existsSync(path.join(dest, 'cli', 'bridge.mjs'))) {
+    throw new BridgeError('E_NOT_FOUND', '目标目录不是 BridgeDeck 安装：' + dest);
+  }
+  const helper = path.join(REPO_ROOT, 'tools', 'install-update.mjs');
+  if (!fs.existsSync(helper)) {
+    throw new BridgeError('E_NOT_FOUND', '当前安装缺少 tools/install-update.mjs；请用新版完整包重装一次');
+  }
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-update-helper-'));
+  const script = path.join(temp, 'install-update.mjs');
+  fs.copyFileSync(helper, script);
+  const args = [script, '--archive', archive, '--dest', dest];
+  if (flags.port !== undefined) args.push('--port', String(flags.port));
+  if (flags['no-restart'] === true) args.push('--no-restart');
+  if (jsonMode) args.push('--json');
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, args, { stdio: 'inherit', env: { ...process.env } });
+    child.on('error', (error) => {
+      fs.rmSync(temp, { recursive: true, force: true });
+      if (jsonMode) emitJson({ ok: false, error: { code: 'E_UPDATE', message: String(error && error.message ? error.message : error) } });
+      else print('update install 失败：' + (error && error.message ? error.message : error));
+      resolve(1);
+    });
+    child.on('close', (code) => {
+      fs.rmSync(temp, { recursive: true, force: true });
+      resolve(typeof code === 'number' ? code : 1);
+    });
+  });
 }
 
 async function cmdUpdateFetch(flags) {
@@ -4563,6 +4603,8 @@ function printHelp() {
                                   --mcp 同时写入 Codex/Cursor/Claude 的 MCP 客户端配置
   update check|verify|stage|fetch|state|auto [--manifest <path>] [--source <url>] [--out <path>] [--key <file>] [--force] [--download] [--apply --target <dir>]
                                   校验/暂存 dist/release.json（不自动替换当前安装）
+  update install --from <zip|tar.gz> [--dest <dir>] [--port <n>] [--no-restart]
+                                  装新 → 试跑 → 原端口重启；失败自动回滚到上一版本
   daemon start|stop|restart|status|log [--tail [N]]
   daemon pair [--replace <browserId>]      生成本机配对链接（5 分钟）
   daemon trust-local on|off                本机未配对连接是否允许（off=严格模式）

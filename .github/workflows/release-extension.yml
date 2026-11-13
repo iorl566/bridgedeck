@@ -1,0 +1,86 @@
+name: Release extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release (for example v0.1.2)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  HAS_WIN_CERT: ${{ secrets.WINDOWS_PFX_BASE64 != '' }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Build extension zip
+        run: node tools/build-extension.mjs
+
+      - name: Build Windows setup exe
+        run: node tools/build-setup-exe.mjs
+
+      - name: Sign setup exe (EV)
+        if: env.HAS_WIN_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pfx = Join-Path $env:RUNNER_TEMP 'bridge.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
+          $exe = Get-ChildItem dist/BridgeDeckSetup-*.exe | Select-Object -First 1
+          if (-not $exe) { throw 'setup exe not found' }
+          ./tools/sign-windows.ps1 -File $exe.FullName -Pfx $pfx -Password $env:WINDOWS_PFX_PASSWORD -RequireTimestamp
+
+      - name: Checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          for f in BridgeDeck-extension-*.zip BridgeDeckSetup-*.exe; do
+            [ -f "$f" ] || continue
+            sha256sum "$f" > "$f.sha256" 2>/dev/null || certutil -hashfile "$f" SHA256 > "$f.sha256"
+          done
+
+      - name: Ensure release exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${VERSION#v}"
+          if gh release view "$TAG" >/dev/null 2>&1; then exit 0; fi
+          NOTES="docs/releases/${VERSION}.md"
+          if [ -f "$NOTES" ]; then
+            gh release create "$TAG" --title "$TAG" --notes-file "$NOTES"
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+
+      - name: Upload assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: gh release upload "$TAG" dist/BridgeDeck-extension-*.zip dist/BridgeDeckSetup-*.exe --clobber

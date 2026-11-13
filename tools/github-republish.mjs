@@ -128,7 +128,7 @@ for (const asset of release.assets || []) {
   await api(`/repos/${repo}/releases/assets/${asset.id}`, { method: 'DELETE' });
 }
 
-const assets = readdirSync(dist).filter((name) => name.endsWith('.zip') || name.endsWith('.exe'));
+const assets = readdirSync(dist).filter((name) => /\.(zip|tar\.gz|pkg|exe)$/.test(name));
 for (const name of assets) {
   const content = readFileSync(join(dist, name));
   const response = await request(`https://uploads.github.com/repos/${repo}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`, {

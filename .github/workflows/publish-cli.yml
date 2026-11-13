@@ -1,0 +1,149 @@
+name: Publish CLI (dry run)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version label for artifact names (defaults to package.json)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  HAS_APPLE_CERT: ${{ secrets.APPLE_CERT_P12_BASE64 != '' }}
+  HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' }}
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            ext: zip
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+            ext: tar.gz
+          - os: macos-14
+            platform: darwin
+            arch: x64
+            ext: tar.gz
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            ext: tar.gz
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm64
+            ext: tar.gz
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ]; then VERSION=$(node -p "require('./package.json').version"); fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Stage package
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/package-portable.mjs --stage-only --json \
+            --platform "${{ matrix.platform }}" --arch "${{ matrix.arch }}" > stage.json
+          node -e "process.stdout.write(require('./stage.json').stage)" > stage.path
+          echo "STAGE=$(cat stage.path)" >> "$GITHUB_ENV"
+
+      - name: Import Apple certificate
+        if: matrix.platform == 'darwin' && env.HAS_APPLE_CERT == 'true'
+        shell: bash
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "$APPLE_CERT_P12_BASE64" | base64 -D > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$APPLE_CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/productsign
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+
+      - name: Sign Mach-O binaries
+        if: matrix.platform == 'darwin' && env.HAS_APPLE_CERT == 'true'
+        shell: bash
+        env:
+          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+        run: bash tools/sign-macos.sh --dir "$STAGE" --identity "$APPLE_SIGN_IDENTITY"
+
+      - name: Package archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="dist/BridgeDeck-cli-${VERSION}-${{ matrix.platform }}-${{ matrix.arch }}.${{ matrix.ext }}"
+          node tools/package-portable.mjs --pack-dir "$STAGE" \
+            --platform "${{ matrix.platform }}" --arch "${{ matrix.arch }}" --out "$OUT"
+          sha256sum "$OUT" > "$OUT.sha256" 2>/dev/null || shasum -a 256 "$OUT" > "$OUT.sha256"
+
+      - name: Build macOS installer package
+        if: matrix.platform == 'darwin' && env.HAS_APPLE_CERT == 'true'
+        shell: bash
+        env:
+          APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
+        run: |
+          set -euo pipefail
+          OUT="dist/BridgeDeck-${VERSION}-darwin-${{ matrix.arch }}.pkg"
+          if [ -n "${APPLE_INSTALLER_IDENTITY:-}" ]; then
+            bash tools/build-macos-pkg.sh --stage "$STAGE" --version "$VERSION" --out "$OUT" \
+              --identity-installer "$APPLE_INSTALLER_IDENTITY"
+          else
+            bash tools/build-macos-pkg.sh --stage "$STAGE" --version "$VERSION" --out "$OUT"
+          fi
+
+      - name: Notarize macOS package
+        if: matrix.platform == 'darwin' && env.HAS_APPLE_CERT == 'true' && env.HAS_APPLE_NOTARY == 'true'
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          bash tools/notarize-macos.sh --file "dist/BridgeDeck-${VERSION}-darwin-${{ matrix.arch }}.pkg" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+
+      - name: Remove stage
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${STAGE:-}" ] && [ -d "$STAGE" ]; then rm -rf "$STAGE"; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist/BridgeDeck-cli-*.zip
+            dist/BridgeDeck-cli-*.tar.gz
+            dist/BridgeDeck-*.pkg
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14

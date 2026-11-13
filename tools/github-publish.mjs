@@ -104,7 +104,7 @@ const release = await api(`/repos/${repo}/releases`, {
   body: JSON.stringify({ tag_name: tag, name: tag, body, draft: false, prerelease: false, target_commitish: 'main' }),
 });
 for (const name of readdirSync(dist)) {
-  if (!name.endsWith('.zip') && !name.endsWith('.exe')) continue;
+  if (!/\.(zip|tar\.gz|pkg|exe)$/.test(name)) continue;
   const content = readFileSync(join(dist, name));
   const response = await fetch(`https://uploads.github.com/repos/${repo}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`, {
     method: 'POST',

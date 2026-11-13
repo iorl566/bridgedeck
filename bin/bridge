@@ -1,0 +1,13 @@
+#!/bin/sh
+# BridgeDeck CLI entry (POSIX). Prefers the bundled runtime next to this file.
+set -e
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -x "$DIR/node" ]; then
+  NODE_BIN="$DIR/node"
+elif command -v node >/dev/null 2>&1; then
+  NODE_BIN=node
+else
+  echo "[bridge] Node.js 20+ is required: https://nodejs.org/" >&2
+  exit 1
+fi
+exec "$NODE_BIN" "$DIR/../cli/bridge.mjs" "$@"

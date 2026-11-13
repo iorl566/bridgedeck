@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Root = $PSScriptRoot
-$Dirs = @('bin', 'cli', 'daemon', 'lib', 'mcp', 'skill', 'extension')
+$Dirs = @('bin', 'cli', 'daemon', 'lib', 'mcp', 'skill', 'extension', 'sdk')
 
 if (-not (Test-Path (Join-Path $Root 'cli\bridge.mjs'))) {
   throw "install.ps1 must run from the BridgeDeck repository root"
@@ -24,6 +24,10 @@ foreach ($Dir in $Dirs) {
   }
 }
 Copy-Item -LiteralPath (Join-Path $Root 'package.json') -Destination (Join-Path $Dest 'package.json') -Force
+if (Test-Path (Join-Path $Root 'tools\install-update.mjs')) {
+  New-Item -ItemType Directory -Path (Join-Path $Dest 'tools') -Force | Out-Null
+  Copy-Item -LiteralPath (Join-Path $Root 'tools\install-update.mjs') -Destination (Join-Path $Dest 'tools\install-update.mjs') -Force
+}
 
 $Cmd = @'
 @echo off

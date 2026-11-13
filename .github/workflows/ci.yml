@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Node version
+        run: node --version
+
+      - name: Unit tests
+        run: node --test tests/unit
+
+      - name: Protocol gate
+        run: node tools/protocol-check.mjs
+
+      - name: MCP self-test
+        run: node tests/mcp/selftest.mjs
+
+      - name: Pairing self-test
+        run: node tests/pairing/selftest.mjs
+
+      - name: TLS self-test
+        run: node tests/tls/selftest.mjs
+
+      - name: WebSocket self-test
+        run: node tests/ws-selftest.mjs
+
+      - name: DSH plugin self-test
+        run: node tests/plugin/selftest.mjs
+
+      - name: Extension module load
+        run: node tests/extension/module-load.mjs
+
+      - name: CLI smoke
+        run: node cli/bridge.mjs --version
+
+  package:
+    name: package (${{ matrix.platform }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm64
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: macos-14
+            platform: darwin
+            arch: x64
+          - os: windows-latest
+            platform: win32
+            arch: x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Build portable package
+        run: node tools/package-portable.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --out dist/BridgeDeck-cli-ci-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.platform == 'win32' && '.zip' || '.tar.gz' }} --json
+
+      - name: Check artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=$(ls dist/BridgeDeck-cli-ci-${{ matrix.platform }}-${{ matrix.arch }}.* | head -1)
+          [ -s "$file" ]
+          echo "artifact: $file"

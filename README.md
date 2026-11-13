@@ -13,7 +13,7 @@
   <a href="https://microsoftedge.microsoft.com/addons/detail/ieflpefpmlmmlfgmpfakaglhgmcbcnig"><img src="https://img.shields.io/badge/Edge%20%E5%8A%A0%E8%BD%BD%E9%A1%B9-%E5%AE%89%E8%A3%85%E6%89%A9%E5%B1%95-2f6fed" alt="Edge 加载项" /></a>
   <a href="https://github.com/iorl566/bridgedeck/releases/latest"><img src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Windows%20%E5%AE%89%E8%A3%85%E5%8C%85-0b1220" alt="下载" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-64748b" alt="MIT" /></a>
-  <img src="https://img.shields.io/badge/Platform-Windows%2010%2B%20%C2%B7%20Edge%2FChrome-334155" alt="平台" />
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%C2%B7%20Edge%2FChrome-334155" alt="平台" />
 </p>
 
 <p align="center">
@@ -90,7 +90,23 @@ irm https://raw.githubusercontent.com/iorl566/bridgedeck/main/install-online.ps1
 .\install-online.ps1 -Dest D:\Apps\BridgeDeck -AddToPath
 ```
 
-也可以从 [Releases](https://github.com/iorl566/bridgedeck/releases/latest) 手动下载 `BridgeDeckSetup-0.1.2.exe` 或 `BridgeDeck-cli-bundle-0.1.2.zip`。安装器目前是自签名，Windows 会显示"未知发布者"；签名与校验方式见 [Windows 签名](docs/windows-signing.md)。
+也可以从 [Releases](https://github.com/iorl566/bridgedeck/releases/latest) 手动下载 `BridgeDeckSetup-0.1.2.exe` 或 `BridgeDeck-cli-0.1.2-win32-x64.zip`。安装器目前是自签名，Windows 会显示"未知发布者"；发布流水线支持 EV 签名，证书配置见 [Windows 签名](docs/windows-signing.md)。
+
+### 方案 B2：macOS / Linux
+
+从 [Releases](https://github.com/iorl566/bridgedeck/releases/latest) 下载对应架构的包：
+
+```sh
+# macOS（Apple Silicon / Intel）与 Linux（x64 / arm64）
+tar -xzf BridgeDeck-cli-0.1.2-darwin-arm64.tar.gz   # 或 linux-x64 / linux-arm64
+cd BridgeDeck-cli-0.1.2-darwin-arm64
+./install.sh --add-to-path
+bridge status
+```
+
+macOS 也可以安装签名并公证的 `.pkg`（由发布流水线生成）：双击安装后运行 `bridge status`。未公证的 `tar.gz` 首次运行可能被 Gatekeeper 拦截，可在“系统设置 → 隐私与安全性”里允许，或改用 `.pkg`。
+
+Linux 默认安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/bridgedeck`，用 `--dest` 改目录；`--add-to-path` 会链接到 `~/.local/bin/bridge`。
 
 <details>
 <summary><b>方案 C：从源码加载（开发用）</b></summary>
@@ -189,7 +205,21 @@ BridgeDeck 没有必须使用的云服务，也不收集产品遥测。扩展不
 
 CLI、daemon、扩展、DSH 插件应保持同一版本使用新功能。
 
-1. 先更新 CLI（替换 `bin/bridge.cmd` 或重新运行安装包）；
+推荐用一条命令完成“装新 → 试跑 → 原端口重启”：
+
+```sh
+bridge update install --from BridgeDeck-cli-0.1.2-linux-x64.tar.gz
+```
+
+它会先停旧 daemon、备份当前安装、覆盖 CLI/daemon/lib，再用**原端口**启动新 daemon 并校验版本；启动失败或版本不符会自动回滚并重启旧版本。备份保留在安装目录的 `.rollback/` 下，也可以手动回滚：
+
+```sh
+bridge update install --rollback .rollback/<timestamp>/
+```
+
+手动升级的顺序：
+
+1. 先更新 CLI（替换 `bin/bridge` 或重新运行安装包）；
 2. 重启 daemon：`bridge daemon restart`；
 3. 再更新扩展（商店更新，或重新加载解压目录）；
 4. 最后更新 DSH 插件并重启 profile。
