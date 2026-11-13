@@ -42,7 +42,9 @@ test('popup DOM references and views stay wired', () => {
   for (const id of ['openFeatures', 'featuresView', 'subView', 'backFromFeatures', 'mainView']) {
     assert.ok(ids.has(id), `missing #${id}`);
   }
-  assert.match(html, /id="connSettings" open/);
+  // 连接设置默认折叠，点击 summary 才展开
+  assert.match(html, /id="connSettings"/);
+  assert.doesNotMatch(html, /id="connSettings"[^>]*\sopen(?:\s|>)/);
   for (const id of ['tip-control', 'tip-borrow', 'tip-help']) assert.ok(ids.has(id), `missing ${id}`);
   const described = [...html.matchAll(/aria-describedby="([^"]+)"/g)].map((match) => match[1]);
   assert.deepEqual(described.sort(), ['tip-borrow', 'tip-control', 'tip-help']);
