@@ -96,8 +96,8 @@ const VALUE_FLAGS = new Set([
 ]);
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
 for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force']) BOOL_FLAGS.add(name);
-for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback']) VALUE_FLAGS.add(name);
-for (const name of ['no-restart']) BOOL_FLAGS.add(name);
+for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before']) VALUE_FLAGS.add(name);
+for (const name of ['no-restart', 'yes', 'dry-run']) BOOL_FLAGS.add(name);
 
 const REPEATABLE_FLAGS = new Set(['file', 'param']);
 
@@ -4365,7 +4365,10 @@ function parseSince(text) {
 
 async function cmdAudit(flags, pos) {
   const sub = pos[1] || 'list';
-  if (sub !== 'list') throw new ArgError('用法：bridge audit list [--since 24h] [--limit N]');
+  if (sub === 'export') return auditExport(flags);
+  if (sub === 'prune') return auditPrune(flags);
+  if (sub === 'clear') return auditClear(flags);
+  if (sub !== 'list') throw new ArgError('用法：bridge audit list|export|prune|clear');
   const since = parseSince(flags.since);
   const limit = intFlag(flags, 'limit', { min: 1 }) ?? 50;
   const offset = intFlag(flags, 'offset', { min: 0 }) ?? 0;
@@ -4413,6 +4416,120 @@ async function cmdAudit(flags, pos) {
   ])));
   print('');
   print('共 ' + entries.length + ' 条（offset ' + offset + '，显示 ' + sliced.length + ' 条）');
+  return 0;
+}
+
+function auditFileNames() {
+  try {
+    return fs.readdirSync(AUDIT_DIR).filter((name) => name.endsWith('.jsonl')).sort();
+  } catch {
+    return [];
+  }
+}
+
+function readAuditEntries(since = 0) {
+  const entries = [];
+  for (const name of auditFileNames()) {
+    let raw = '';
+    try {
+      raw = fs.readFileSync(path.join(AUDIT_DIR, name), 'utf8');
+    } catch {
+      continue;
+    }
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      try {
+        const row = JSON.parse(line);
+        if (Number(row.ts) >= since) entries.push(row);
+      } catch {
+        // 跳过损坏行
+      }
+    }
+  }
+  entries.sort((a, b) => Number(a.ts) - Number(b.ts));
+  return entries;
+}
+
+function auditExport(flags) {
+  if (flags.out === undefined) throw new ArgError('audit export 需要 --out <file>');
+  const since = parseSince(flags.since);
+  const format = flags.format === 'json' ? 'json' : 'jsonl';
+  const entries = readAuditEntries(since);
+  const out = path.resolve(process.cwd(), String(flags.out));
+  const content = format === 'json'
+    ? JSON.stringify(entries, null, 2) + '\n'
+    : entries.map((row) => JSON.stringify(row)).join('\n') + (entries.length ? '\n' : '');
+  writeFileAtomic(out, content, 0o600);
+  const result = { dir: AUDIT_DIR, out, format, entries: entries.length, bytes: Buffer.byteLength(content) };
+  if (jsonMode) {
+    emitJson({ ok: true, result });
+    return 0;
+  }
+  print('已导出 ' + entries.length + ' 条审计 → ' + out + '（' + format + '，' + result.bytes + 'B）');
+  return 0;
+}
+
+function auditPrune(flags) {
+  let cutoff;
+  if (flags.before !== undefined) {
+    cutoff = Date.parse(String(flags.before));
+    if (!Number.isFinite(cutoff)) throw new ArgError('--before 需要可解析的日期，例如 2026-10-01');
+  } else if (flags['older-than'] !== undefined) {
+    cutoff = Date.now() - parseDurationMs(flags['older-than'], 0);
+  } else {
+    throw new ArgError('audit prune 需要 --older-than <30d> 或 --before <日期>');
+  }
+  const dryRun = flags['dry-run'] === true;
+  const kept = [];
+  let removed = 0;
+  let emptied = 0;
+  for (const name of auditFileNames()) {
+    const file = path.join(AUDIT_DIR, name);
+    let raw = '';
+    try { raw = fs.readFileSync(file, 'utf8'); } catch { continue; }
+    const rows = [];
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      try {
+        const row = JSON.parse(line);
+        if (Number(row.ts) >= cutoff) rows.push(row);
+        else removed += 1;
+      } catch {
+        removed += 1;
+      }
+    }
+    kept.push(...rows);
+    if (dryRun) continue;
+    if (!rows.length) {
+      fs.rmSync(file, { force: true });
+      emptied += 1;
+    } else {
+      writeFileAtomic(file, rows.map((row) => JSON.stringify(row)).join('\n') + '\n', 0o600);
+    }
+  }
+  const result = { dir: AUDIT_DIR, cutoff: new Date(cutoff).toISOString(), kept: kept.length, removed, emptied, dryRun };
+  if (jsonMode) {
+    emitJson({ ok: true, result });
+    return 0;
+  }
+  print((dryRun ? '[dry-run] ' : '') + '审计清理：保留 ' + kept.length + ' 条，删除 ' + removed + ' 条' + (emptied ? '，移除 ' + emptied + ' 个空文件' : ''));
+  return 0;
+}
+
+function auditClear(flags) {
+  if (flags.yes !== true) throw new ArgError('audit clear 需要 --yes 确认');
+  const files = auditFileNames();
+  let removed = 0;
+  for (const name of files) {
+    fs.rmSync(path.join(AUDIT_DIR, name), { force: true });
+    removed += 1;
+  }
+  const result = { dir: AUDIT_DIR, files: removed };
+  if (jsonMode) {
+    emitJson({ ok: true, result });
+    return 0;
+  }
+  print('已删除 ' + removed + ' 个审计文件');
   return 0;
 }
 
@@ -4621,6 +4738,9 @@ function printHelp() {
                [--daemon-url ws://host:port/ws] [--daemon-token <token>]
                                  借用前确认（--borrow-confirm）只能在扩展设置页改，CLI 不可改
   audit list [--since 24h] [--limit N] [--offset N]
+  audit export --out <file> [--since 24h] [--format jsonl|json]
+  audit prune --older-than 30d | --before <日期> [--dry-run]
+  audit clear --yes
   install-skill [--harness <name>] [--dir <path>] [--force] [--list] [--embedded] [--mcp]
                                   --mcp 同时写入 Codex/Cursor/Claude 的 MCP 客户端配置
   update check|verify|stage|fetch|state|auto [--manifest <path>] [--source <url>] [--out <path>] [--key <file>] [--force] [--download] [--apply --target <dir>]
