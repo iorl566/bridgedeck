@@ -52,7 +52,7 @@ node cli/bridge.mjs daemon trust-local off
 握手 transcript 使用协议域分隔常量，用于区分不同产品/版本的配对协议：
 
 - 新配对：`bridgedeck-local-auth-v1`
-- 旧配对（升级前建立）：`bsk-local-auth-v1`
+- 旧配对（升级前建立）：`legacy-local-auth-v1`
 
 兼容策略：
 

@@ -4,7 +4,7 @@
 目标：不依赖任何第三方包（Node 内置模块 + 浏览器原生 API），在 Windows 上跑通
 「AI agent 用命令行驱动用户已登录的 Chromium 浏览器」的最小闭环。
 
-对标 参考实现 / bridge 的行为，但完全自研、零依赖、可读可改。
+完全自研、零依赖、可读可改。
 
 ---
 
@@ -145,12 +145,33 @@ daemon → 扩展：
 ### `browsers`
 → `{ "browsers": [ <同上> ] }`
 
-### `session.start`
+### `session.start` / `session.start_tracked`
 params: `{ "browser": "<instanceId 或 edge/chrome 前缀，可选>", "noFocus": false }`
 行为：选一个实例 → 发扩展命令 `window.ensureAgent`（见 5.1）→ 记录 session → 置为 `active`。
 → `{ "sessionId": "abcd", "tabId": 12, "windowId": 3, "instanceId": "a1b2c3d4" }`
 若没有浏览器连上：`E_NO_BROWSER`（message 里提示"请在浏览器里加载/启用扩展"）。
 同一 session 重复 start 返回 `E_SESSION_BUSY`。
+
+**可恢复启动**（`session.start_tracked`）：可选 `params.requestId`，形如
+`<expiry-unix-ms>:<8-80 位 id>`（最长 10 分钟内有效）。daemon 在创建窗口前把 token 写入
+`$BB_HOME/session-starts.json`（`starting`），成功写 `ready`（含 sessionId/tabId/windowId），失败写 `failed`。
+同一个 requestId 重试：`ready` 且会话仍存在 → 返回同一会话并附 `"reused": true`；`starting` 未超过
+120 秒 → `E_START_PENDING`（附 requestId/startedAt）；token 过期或格式错误 → `E_BAD_ARG`。
+CLI：`bridge session start --request-id <token>` 自动走该方法；DSH 插件新建窗口时自动生成 token 并在
+超时后重试一次，避免回复丢失留下孤儿窗口。
+
+**请求生命周期**（prepare/claim/cancel 生命周期）：
+
+| 方法 | 行为 |
+| --- | --- |
+| `session.request_prepare` | 校验 token 并写 `prepared`（不创建窗口）；已存在则返回既有状态；`cancelled` → `E_REQUEST_CANCELLED` |
+| `session.start_tracked` | `prepared`/新 token → `starting` → `ready`（`ready`/`claimed` 且会话存活 → 同会话 + `reused:true`） |
+| `session.request_claim` | `ready`/`claimed` → `claimed`（调用方已持久化会话）；未 ready → `E_START_NOT_READY` |
+| `session.request_cancel` | `prepared`/`ready`/`claimed` → `cancelled` 墓碑，返回原 `sessionId`；`starting` 中 → `E_START_PENDING` |
+| `session.request_status` | 返回 `{requestId, entry}`（不存在时为 null） |
+
+状态机：`prepared → starting → ready → claimed`，任意可取消阶段可进 `cancelled`；墓碑 token 不能再启动。
+CLI：`bridge session prepare|claim|cancel|request --request-id <token>`。
 
 ### `session.stop`
 params: `{ "session": "abcd" }` → 发扩展命令 `tab.close` 关闭 agent 窗口（除非 `keep=true`），删掉 session。
@@ -215,10 +236,14 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `select` | `{ tabId, ref?, selector?, value }` | `{ ok: true }` |
 | `focus` | `{ tabId, ref?, selector? }` | `{ ok: true }` |
 | `scroll-to` | `{ tabId, ref?, selector? }` | `{ ok: true }` |
-| `evaluate` | `{ tabId, expression }` | `{ value }`（JSON 可序列化；不可序列化则 `null` + `note`） |
+| `evaluate` | `{ tabId, expression, unverified? }` | `{ value }`（JSON 可序列化；不可序列化则 `null` + `note`）；`unverified:true` 时带 `verified:false` |
 | `console` | `{ tabId, since?: int }` | `{ entries: [ { level, text, ts } ] }` |
 
 `ref` 形如 `"@e3"`；`selector` 是 CSS 选择器。**两者必须恰好给一个**，都给或都不给 → `E_BAD_ARG`。
+
+`evaluate --unverified`（协议 1.9）：跳过观察/上下文一致性校验后执行表达式，控制权、暂停状态、
+会话与标签页归属仍然生效；不能与 `--expect`/`--depends-on`/`--observation` 同时使用，结果带
+`verified:false`。daemon 会对未声明 `unverified` 能力的扩展返回 `E_UNSUPPORTED_CAPABILITY`。
 
 ### 5.3 错误码（扩展侧）
 | code | 含义 |
@@ -232,6 +257,19 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `E_NO_TAB` | tabId 不存在（tab 被用户关了） |
 | `E_UNKNOWN_METHOD` | 未知 method |
 | `E_INTERNAL` | 其它异常 |
+
+### 5.4 `effect_state`
+
+变异方法（click/fill/press/navigate/evaluate/session.start 等）的响应带效果状态：
+
+| 位置 | 值 | 含义 |
+| --- | --- | --- |
+| 成功 `result.effectState` | `committed` | 扩展已回包成功，动作已派发 |
+| 失败 `error.data.effect_state` | `none` | 未派发（参数/`--expect`/`--depends-on`/遮挡等前置校验失败，同时带 `dispatched:false`） |
+| 失败 `error.data.effect_state` | `unknown` | 已派发或无法证明是否生效（超时/断连/页面异常） |
+
+只读方法不带该字段。`effect_state=unknown` 时不要自动重放，先重新 observe、`cooperate sync` 或查
+`ledger status`。
 
 ---
 
@@ -267,7 +305,7 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 **ref 生命周期**：`observe` 每次重建 ref 表（`@e1` 从 1 重新编号）。导航、`reload`、`tab.close` 清空该 tab 的 ref 表。
 元素被移出文档后，动作命令检查 `element.isConnected === false` → `E_STALE_REF`。
 
-`snapshot` 是静态 a11y 树（role + name + level），带 `@eN` ref，可直接用于 read/click（与 参考实现 一致）。
+`snapshot` 是静态 a11y 树（role + name + level），带 `@eN` ref，可直接用于 read/click。
 
 ---
 
@@ -281,8 +319,9 @@ bridge browsers                      # 已连接浏览器实例
 bridge doctor                        # 环境自检（node/端口/扩展/daemon）
 bridge daemon start|stop|restart|status|log [--tail]
 
-bridge session start [--browser <id|名字|edge|chrome>] [--tab <tabId>] [--no-focus]
+bridge session start [--browser <id|名字|edge|chrome>] [--tab <tabId>] [--no-focus] [--request-id <token>]
                      # 每个 session 新建并聚焦一个独立 Agent Window；--no-focus 才后台开窗
+bridge open [url] [--observe]   # 一步式：session + navigate（可同时返回 observation）
 bridge session stop <id> [--keep]
 bridge session list
 
@@ -299,7 +338,7 @@ bridge press <key> [--ref <ref>]
 bridge select <ref|selector> --value <value>
 bridge focus <ref|selector>
 bridge scroll-to <ref|selector>
-bridge evaluate <expression> [--json]
+bridge evaluate <expression> [--unverified] [--json]
 bridge wait-for-element <selector> [--state visible] [--timeout 10000]
 bridge wait-ms <ms>
 bridge console [--since N]
@@ -327,7 +366,7 @@ bridge window resize --width <n> --height <n>
 
 ---
 
-## 8. 安全与边界（照搬 参考实现 的克制）
+## 8. 安全与边界
 
 * 只监听回环；token 保护 `/rpc`；WS 只认 `/ws` 且忽略来源（扩展不会带 Origin）。
 * 不读取/不导出 cookie、localStorage、密码管理器内容；`evaluate` 只做用户要求的页面操作。
@@ -384,10 +423,10 @@ bridge window resize --width <n> --height <n>
 
 ---
 
-# 第二部分 · v0.2（对标 参考实现 的能力面扩展）
+# 第二部分 · v0.2（能力面扩展）
 
 v0.1 只覆盖「开窗口 → 读页面 → 点填选 → 截图」的最小闭环。v0.2 在**不引入任何第三方依赖**的前提下
-补齐 参考实现 的核心能力面：读取字段、表格导出、拖拽/滚轮/失焦、文件上传下载、原生对话框、
+补齐核心能力面：读取字段、表格导出、拖拽/滚轮/失焦、文件上传下载、原生对话框、
 网络采集、仿真、标签页借用与归还、人工协助、长截图与扩展弹窗/设置 UI、观察结果缓存、plan/recipe、
 profile 命名、操作审计、install-skill。
 
@@ -540,9 +579,19 @@ bridge settings [--json]` 与 `bridge settings set --label <名字> --borrow-con
 
 | method | params | result |
 | --- | --- | --- |
-| `request-help` | `{ tabId, reason, timeoutMs?: 180000 }` | `{ action: "done"\|"skip"\|"timeout", note? }` |
+| `request-help` | `{ tabId, reason, timeoutMs?: 180000, criteria?: Criterion[] }` | `{ action: "done"\|"skip"\|"timeout", note? }` |
+
+`Criterion`（completion_criteria，最多 10 条）：
+
+| kind | 字段 | 满足条件 |
+| --- | --- | --- |
+| `selector_exists` | `selector` | `document.querySelector(selector)` 非空 |
+| `selector_visible` | `selector` | 元素存在、面积 > 0 且 `display/visibility/opacity` 可见 |
+| `text_exists` | `text` | `document.body.innerText` 包含该文本 |
+| `url_contains` | `text` | 当前标签页 URL 包含该文本（扩展侧判断） |
 
 * 扩展在页面上叠加一条协助条（说明 `reason` + 「我先处理好了」/「跳过」两个按钮），并把窗口置前。
+* 带 `criteria` 时后台每 400ms 检查一次；全部满足 → 自动返回 `action:"done"`（note=`completion criteria satisfied`），不必再点按钮。
 * 用户点击后通过 `event: help-resolved` 回 daemon；`allowHelp: false` 时直接 `E_HELP_DISABLED`。
 * 超时返回 `action:"timeout"`（不算错误），让 Agent 自行决定。
 
@@ -740,7 +789,7 @@ bridge install-skill [--harness dsh|claude|cursor] [--dir <path>] [--force] [--l
 * 工具清单、安装方式（`link:` / `file:`）、配置项与验证步骤见 `dsh-plugin/README.md`。
 
 
-## 25. 扩展界面（v0.3，对齐 参考实现 弹窗与快捷功能）
+## 25. 扩展界面（v0.3，弹窗与快捷功能）
 
 界面全部是扩展自己的页面（`extension/ui/`），不参与线上协议；它们通过 `chrome.runtime` 消息调用
 service worker，SW 再走既有命令/WS 通道。
@@ -800,7 +849,7 @@ SW 在扩展 WebSocket 上发 `{ type:"call", id, method, params }`，daemon 只
 
 ## 26. 语义对齐（v0.1 波次 1）
 
-对齐 参考实现 的行为约定，CLI/扩展同步修改：
+行为约定，CLI/扩展同步修改：
 
 1. **wait-for-element 超时不报错**：返回
    `{ satisfied, timedOut, state, selector|ref, attached, visible, elapsedMs }`，退出码 0；
@@ -825,7 +874,7 @@ SW 在扩展 WebSocket 上发 `{ type:"call", id, method, params }`，daemon 只
 
 ## 27. 对话框 pending 与 operation（v0.1 波次 2）
 
-对齐 参考实现 的「动作被原生弹窗挡住」模型：
+「动作被原生弹窗挡住」模型：
 
 1. **会话自动挂载对话框拦截**：`session.start` 成功后 daemon 对任务标签页执行
    `dialog.arm { policy: { queue: true } }`（挂载期间浏览器显示调试提示条）；`session.stop` 时
@@ -847,7 +896,7 @@ SW 在扩展 WebSocket 上发 `{ type:"call", id, method, params }`，daemon 只
 
 ## 28. 共享控制（cooperate，v0.1 波次 3）
 
-对齐 参考实现 的 context/observation 授权模型（简化实现，保持向后兼容）：
+context/observation 授权模型（简化实现，保持向后兼容）：
 
 1. **`cooperate sync`**：观测当前页面并签发一对收据
    `{ control_policy, context_id, observation_id, generation, url, title, observation: { observation_id, text, refs } }`。
@@ -869,7 +918,7 @@ SW 在扩展 WebSocket 上发 `{ type:"call", id, method, params }`，daemon 只
 
 ## 29. 调试命令（v0.1 波次 4）
 
-对齐 参考实现 `bridge debug …` 的采集与读取面（规则/operations 尚未实现）：
+debug 采集与读取面（规则/operations 尚未实现）：
 
 | 命令 | 行为 |
 | --- | --- |
@@ -941,7 +990,7 @@ IndexedDB `bb-videos`；`recordingId` 由 SW 生成并贯穿 offscreen/SW，停�
 
 1. **open shadow root**：观察会遍历 `el.shadowRoot` 的子节点；影子树里的元素照常分配 `@eN`，
    动作（click/fill/…）用 ref 即可命中。**CSS selector 仍只在主文档查找**，不会穿透 shadow 边界
-   （与 参考实现 “refs 优先、selector 搜主文档”的语义一致）。
+   （refs 优先、selector 搜主文档）。
 2. **同源 iframe**：`walk` 会通过 `iframe.contentDocument` 继续遍历内部文档，内部元素同样获得 ref；
    跨源 iframe 受同源策略限制，仍只输出 `iframe` 占位（后续波次用 CDP 跨帧补）。
 3. **可见性**：`isVisible` 使用元素所属文档的 window 计算样式，因此 iframe/shadow 内的元素判断正确。
@@ -1161,7 +1210,7 @@ bridge debug operation <id>
 
 ## 46b. 跨源 iframe 的 ref 模型
 
-- 默认 `observe` 会包含所有可观察 frame，ref 统一为 `@eN`（与 参考实现 一致）。
+- 默认 `observe` 会包含所有可观察 frame，ref 统一为 `@eN`。
 - `observe --frames` 仍返回逐 frame 结构，并附带 `aliases`（`@eN` → frameId + 局部 `@eN`）。
 - `@fNeM` 仍然兼容，可直接用于 click/fill 等动作。
 
@@ -1180,8 +1229,8 @@ bridge debug operation <id>
 ## 49. 能力门禁与降级（v0.1 波次 28）
 
 - 扩展 hello 里的 `capabilities` 会被 daemon 记录，并通过 `browsers/status` 暴露。
-- 门禁：`debug.rule_add`→rules、`video.start`→video、`record.start`→recording；
-  缺能力返回 `E_UNSUPPORTED_CAPABILITY`。
+- 门禁：`debug.rule_add`→rules、`video.start`→video、`record.start`→recording、
+  `evaluate --unverified`→unverified；缺能力返回 `E_UNSUPPORTED_CAPABILITY`。
 - 降级：`observe-frames` 缺 `frames` 时自动改为 `observe`，结果带
   `downgraded:true` 和单 frame 列表，CLI 会打印“已降级为主文档观察”。
 - 老客户端（未声明 capabilities）不做门禁，保持兼容。
@@ -1219,12 +1268,15 @@ bridge debug operation <id>
 （页面内 fetch/XHR 规则会由 `tabs.onUpdated` 自动重新注入）。
 
 
-## 52. 协议版本 1.8 与协商（v0.1 波次 36）
+## 52. 协议版本 1.9 与协商（v0.1 波次 36）
 
-- `protocol` 字段改为字符串 **`"1.8"`**，与 参考实现 0.4.2 的协议版本号对齐。
-- 兼容规则：major 必须为 1，minor ≤ 8；不带 protocol 的旧客户端按 **1.0** 处理。
-- 不兼容（major≠1 或 minor>8）时返回 `E_PROTOCOL_UNSUPPORTED` 并以 4004 关闭连接。
-- hello / hello-ack / status / `browsers` 均返回 `"1.8"`；能力仍由 `capabilities` 协商（见 §49）。
+- `protocol` 字段为字符串 **`"1.9"`**，与协议 1.9 对齐；1.8 客户端仍可连接。
+- 兼容规则：major 必须为 1；同一 major 内允许 minor 偏斜（1.7/1.8 老扩展可连接），
+  `browsers`/`status` 里用 `protocolSkew: "older" | "newer" | null` 标注偏斜方向。
+- 不兼容（major≠1）时返回 `E_PROTOCOL_UNSUPPORTED` 并以 4004 关闭连接；不带 protocol 的旧客户端按 **1.0** 处理。
+- hello / hello-ack / status / `browsers` 均返回 `"1.9"`；能力仍由 `capabilities` 协商（见 §49）。
+- 1.9 新增能力：`unverified`（`evaluate --unverified`）、`dom-read`（固定函数的有界 DOM 读取）。
+  老扩展缺少这些能力时，新命令返回 `E_UNSUPPORTED_CAPABILITY`，其余功能照常。
 
 - `recipe approve` 会把步骤哈希写入 recipe，并记录 24 小时有效期；审批后修改步骤返回 `E_RECIPE_CHANGED`，超过有效期返回 `E_RECIPE_EXPIRED`。
 
@@ -1265,6 +1317,121 @@ bridge debug operation <id>
 5. `hitTest` 是对元素可见区域中心点做 `elementFromPoint` 的结果；被遮挡时 `clickable=false` 且给出 `occludedBy`。它用于解释“看得到但点不到”，不改变动作命令的选中逻辑。
 6. `pointer-events:none`、屏外、零尺寸元素仍会出现在节点数组里（`observe` 的可见性判定是 CSS 可见，不是视口内），并通过 `hitTest`/`inViewport` 区分。
 
+## 53b. `observe --facts`（DOMSnapshot 事实）
+
+开启 `--facts` 后额外调用一次 `DOMSnapshot.captureSnapshot`（计算样式 + 几何 + isClickable），
+按 `backendNodeId` 映射到 `nodes` / `axNodes`，为命中的节点附加：
+
+| 字段 | 说明 |
+| --- | --- |
+| `bounds` | `{x,y,width,height}`，DOMSnapshot 子像素几何；可能与本节的整数 `rect` 有亚像素差异 |
+| `visible` | `display!=none && visibility!=hidden/collapse && opacity!=0 && 有面积` |
+| `clickable` | page-lib 命中测试结论（动作可用性以此为准） |
+| `domClickable` | DOMSnapshot `isClickable`，仅作交叉参考，不覆盖 page-lib 的 `clickable` |
+| `visibilityStale` | DOMSnapshot 判定不可见、但 page-lib `hitTest=self` 时为 `true` |
+| `underBlockingLayer` | 节点完全落在某个 `blockingLayers` 矩形内时，记录 `{role,name,coverage}` |
+| `domValue` | 表单控件在 DOMSnapshot 里的当前值；password/sensitive autocomplete 固定为 `********` |
+| `domChecked` / `domSelected` | DOMSnapshot 的 checked / option-selected 事实 |
+| `formStateStale` | page-lib 采样值与 DOMSnapshot 不一致时为 `true`（密码字段不参与比较） |
+| `domPaintOrder` | DOMSnapshot 的绘制顺序（越小越先绘制），可与 page-lib 的 `paintOrder` 交叉校验 |
+
+返回汇总 `facts: { nodes, axMatched, vomMatched }`。
+
+- `--vom --facts` 不需要 `--ax`：页面侧临时 `data-bb-vom` 标记 + `DOM.getDocument(pierce)` 完成映射。
+- 语义树文本会同步修正：DOMSnapshot 判定不可见、但语义树仍带 ref 的行末尾追加 `[dom-hidden]`；
+  结果另带 `hiddenRefs: ["@eN"]`，`facts.hiddenRefs` 为数量。
+- `--facts` 是 opt-in；未开启时零附加 CDP 成本，语义树文本不变。
+- 事实采集失败只记日志，不影响 observe 主体结果。
+
+## 53c. `observe --fallback-ax`（AX 兜底观察）
+
+当 page-lib 无法在该页执行（受限页、错误页、页面脚本异常、扩展重载后的旧页面等）时，
+`observe` 会自动尝试用 CDP AX 树 + DOMSnapshot 几何渲染一份降级语义树；也可以显式
+`observe --fallback-ax` 强制使用。
+
+- 结果带 `fallback: "ax"`、`refs: 0`、`axNodes`、`url`、`title`；文本形如
+  `- button "提交" (interactive, @x,y wxh)`，不分配 `@eN` ref（ref 必须来自页面侧）。
+- 不支持与 `--vom`/`--ax` 同用（无 page-lib ref），会返回 `E_BAD_ARG`。
+- AX 树更新有一拍延迟，兜底前会先收起 BridgeDeck 接管浮层并等待约 300ms；
+  极端情况下仍可能包含少量自身浮层节点。
+- 自动兜底失败时仍返回原始错误，不会掩盖 page-lib 的真实失败。
+
+## 53d. 未映射的 AX 交互元素
+
+`observe --ax --vom [--facts]` 时，AX 树里可交互、但没有映射到 VOM ref 的节点（典型是
+closed shadow DOM 或 page-lib 漏掉的虚拟列表项）会作为补充信息返回：
+
+- 结果字段 `unmappedAx: [{ role, name, value, backendNodeId, bounds? }]`（最多 20 条）。
+- 语义树末尾追加 `── 未映射的可交互元素（AX/DOMSnapshot，仅供定位）──`，每条带几何
+  `(@x,y wxh)` 且标注 `[仅供定位，无 ref]`。
+- 只在同时给 `--vom` 时计算（需要 VOM → backendNodeId 的映射基准）；单独 `--ax` 不输出该段，
+  避免把所有交互元素误报为未映射。
+- BridgeDeck 自己接管浮层上的按钮文案会被过滤掉。
+
+## 53e. `click-backend`（按 backendNodeId 点击）
+
+用途：点击 AX/DOMSnapshot 发现、但没有 `@eN` ref 的元素（closed shadow、page-lib 漏掉的节点）。
+
+```
+bridge click-backend --backend <backendNodeId> [--session <id>]
+params: { backendId }
+→ { ok: true, trusted: true, via: "cdp-backend", backendNodeId, x, y }
+```
+
+流程：`DOM.resolveNode` → `Runtime.callFunctionOn` 校验 attached/零尺寸/`display`/`visibility`/`opacity`/
+`pointer-events`，主文档元素再做 `elementFromPoint` 遮挡检查并 `scrollIntoView` → 派发 CDP
+`mouseMoved/mousePressed/mouseReleased`（`isTrusted=true`）。
+
+- 失败：`E_NOT_FOUND`（backend 失效）、`E_NOT_ACTIONABLE`（隐藏/零尺寸/不可交互）、
+  `E_OCCLUDED`（命中测试被遮挡），均带 `dispatched:false`。
+- 安全边界：属于 `TAB_METHODS`，受 pause/context/`--expect` 策略约束；同时计入
+  `AGENT_INPUT_METHODS`，不会被误判为人工输入而自动暂停会话。
+- 它不替代 ref 体系：导航/重渲染后 backendNodeId 同样失效；不改变 ref 的选择与校验规则。
+
+## 53f. 表格结构事实（AX 层级）
+
+`observe --ax --vom` 时，从 AX 树的 `table/grid/treegrid → row → cell/columnheader/rowheader`
+层级推导表格坐标：
+
+- 结果字段 `tables: [{ role, name, rowCount, colCount, headers }]`。
+- `axNodes` 中的单元格附 `table: { role, row, col, header?, headerRow? }`；`row`/`col` 从 0 开始。
+- 表头行单元格带 `headerRow: true`；数据行单元格带同名列表头 `header`。
+- VOM 节点若通过 backendNodeId 匹配到单元格，也会附同样的 `table` 字段。
+- 纯只读推导，不改变 ref/动作规则；复杂合并单元格/多级表头以 AX 实际层级为准。
+
+## 53g. 阻挡层事实（dialog / alertdialog）
+
+`observe --ax --vom --facts` 时，结合 AX 角色与 DOMSnapshot 几何识别阻挡层：
+
+- 结果字段 `blockingLayers: [{ role, name, backendNodeId, bounds, coverage }]`。
+- 仅统计 `dialog` / `alertdialog`、DOMSnapshot 判定可见、且面积 ≥ 视口 25% 的节点；
+  `coverage` = 节点面积 / RootWebArea 面积（保留 3 位小数）。
+- 落在阻挡层矩形内的 VOM 节点会带 `underBlockingLayer:{role,name,coverage}`（阻挡层自身除外）。
+- 最多返回 5 条；它是独立交叉检查，不替代 page-lib 的 `blocking`/`hitTest`，也不改变动作策略。
+
+## 53h. 观察管线双跑校验（`observe --compare-ax`）
+
+诊断模式：默认 observe 输出不变，额外独立跑一次 AX + DOMSnapshot 管线，用于替换采集器前的量化基线。
+
+- 结果字段 `pipelineCompare: { pageLib:{ms,refs,chars,lines}, ax:{ms,nodes,chars,lines},
+  interactiveTotal, matched, unmappedInteractive, axCoverage }`。
+- 校验前给页面打临时 `data-bb-vom` 标记，用同一张 DOMSnapshot 解出 `vomId→backendNodeId`，
+  结束后清理；`axCoverage = matched / interactiveTotal`。
+- `interactiveTotal` 只统计 AX 中交互角色、且 DOMSnapshot 未判定隐藏的节点；
+  `matched` 是其中能在 VOM 找到同 backendNodeId 的数量。
+- 该模式有额外 AX/快照开销，不建议生产高频使用；默认 observe 不受影响。
+
+## 53i. 备用采集器（`observe --pipeline ax`）
+
+不经过 page-lib，直接用 AX + DOMSnapshot 产出观察，用于采集器替换前的量化校验与降级：
+
+- 返回 `pipeline:"ax"`、`refs:0`、`fallback:"ax"`；
+- `nodes: [{role,name,value,backendNodeId,bounds,visible,clickable,interactive,table?}]`，
+  按 AX 顺序最多 `maxNodes` 条（默认 200），跳过 `none/generic/InlineTextBox` 与 DOMSnapshot 不可见节点；
+- `observation` 为 AX 文本树（含几何与表格缩进）；
+- 没有 `@eN` ref，不能直接 click/fill；需要动作时用 `backendNodeId` + `click-backend`，或改用默认 page-lib；
+- 与 `--vom`/`--ax`/`--fallback-ax` 互斥（`E_BAD_ARG`）。
+
 
 ## 54. transfer.* 分块文件传输（v0.1 波次 38）
 
@@ -1292,7 +1459,7 @@ CLI/页面只持有 opaque `transferId`，真实路径只出现在 daemon 内部
 7. 下载完成后 daemon 把浏览器文件导入 staging 并返回 `transferId`/`transferBytes`；CLI 用 `transfer.read`
    分块写入 `--out`，提交成功后立即 `transfer.release`（结果带 `transferReleased:true`）。浏览器路径仍以
    `browserPath` 回显，兼容本地调试。
-8. 远程浏览器连接（WSS 配对）暂不支持文件传输，与参考实现一致。
+8. 远程浏览器连接（WSS 配对）暂不支持文件传输，
 9. `transfer.*` 参数在 daemon 进入业务逻辑前由 `lib/schemas.mjs` 校验（字段/范围/`tr_` id pattern），
    失败返回带字段路径的 `E_BAD_ARG`；同一 validator 也覆盖 `observe`/`console`/`navigate`/`wait-*`/`click`/`fill`/`press` 等动作参数。
 
@@ -1339,7 +1506,7 @@ CLI/页面只持有 opaque `transferId`，真实路径只出现在 daemon 内部
 约束：
 
 1. 只保留未 ignored、role 非 `none/generic` 的节点；最多 1000 个。
-2. AX 树不带 `@eN` ref；它用于和 DOM 语义树对照，不替代 `--vom`。
+2. AX 树不带 `@eN` ref；它用于补充 DOM 语义树，不替代 `--vom`。
 3. 每次调用临时挂 debugger（`Accessibility.enable`），完成后释放；页面会短暂显示“正在调试”。
 4. 与 `--vom` 可同时使用：`nodes` 是 DOM 结构化节点，`axNodes` 是 AX 语义节点。
 5. 同时给 `--vom --ax` 时做两级 join：先用页面侧临时 `data-bb-vom` 标记 + CDP `DOM.getDocument(pierce)`

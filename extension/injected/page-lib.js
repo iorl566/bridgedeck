@@ -6,7 +6,7 @@
   'use strict';
 
   const KEY = '__BB_PAGE__';
-  const LIB_VERSION = 32;
+  const LIB_VERSION = 35;
   if (globalThis[KEY] && globalThis[KEY].version >= LIB_VERSION) return;
 
   const NAME_MAX = 80;
@@ -1500,6 +1500,42 @@
     return { ok: true, checked: conditions.length };
   }
 
+  /** request-help 的完成条件：只读检查，不修改页面。 */
+  function helpCriteriaCheck(args) {
+    const criteria = Array.isArray(args && args.criteria) ? args.criteria : [];
+    const results = [];
+    for (const criterion of criteria) {
+      if (!criterion || typeof criterion !== 'object') {
+        return { ok: false, results, error: 'invalid_criterion' };
+      }
+      const kind = String(criterion.kind || criterion.type || '');
+      if (kind === 'selector_exists' || kind === 'selector') {
+        const selector = String(criterion.selector || '');
+        let element = null;
+        try { element = selector ? document.querySelector(selector) : null; } catch { element = null; }
+        results.push({ kind, ok: Boolean(element) });
+      } else if (kind === 'selector_visible') {
+        const selector = String(criterion.selector || '');
+        let element = null;
+        try { element = selector ? document.querySelector(selector) : null; } catch { element = null; }
+        let visible = false;
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          visible = rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+        }
+        results.push({ kind, ok: visible });
+      } else if (kind === 'text_exists' || kind === 'text') {
+        const text = String(criterion.text || '');
+        const bodyText = document.body ? String(document.body.innerText || '') : '';
+        results.push({ kind, ok: text.length > 0 && bodyText.includes(text) });
+      } else {
+        results.push({ kind, ok: false, error: 'unsupported' });
+      }
+    }
+    return { ok: results.every((item) => item.ok === true), results };
+  }
+
   function visualRefs() {
     const out = [];
     for (const entry of state.refs) {
@@ -2489,6 +2525,8 @@
           return ok(clearVomMarkers());
         case 'expect-check':
           return ok(expectCheck(input));
+        case 'help-criteria-check':
+          return ok(helpCriteriaCheck(input));
         case 'perf-metrics':
           return ok(perfMetrics());
         case 'human-activity':

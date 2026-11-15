@@ -3,6 +3,7 @@ import z from '@deepseek-ai/schemastery';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { createRunner } from './bridge.mjs';
 import { buildToolSpecs } from './tools.mjs';
+import { createPluginStartJournal, defaultJournalPath, recoverOrphanStarts } from './start-journal.mjs';
 
 export const name = 'browser-bridge-tools';
 export const inject = ['tools'];
@@ -56,7 +57,8 @@ export function apply(ctx, config) {
     return;
   }
 
-  const specs = buildToolSpecs(run);
+  const startJournal = createPluginStartJournal({ filePath: defaultJournalPath(settings.home) });
+  const specs = buildToolSpecs(run, { journal: startJournal });
   for (const spec of specs) {
     ctx.effect(
       () => ctx.tools.register(defineTool({
@@ -73,4 +75,10 @@ export function apply(ctx, config) {
     );
   }
   ctx.logger.info('BridgeDeck已注册 %d 个工具', specs.length);
+  // 后台回收上次插件崩溃/超时遗留的 starting 记录；失败不影响工具注册。
+  void recoverOrphanStarts({ run, journal: startJournal })
+    .then((results) => {
+      if (results.length) ctx.logger.info('BridgeDeck启动回收：%s', JSON.stringify(results));
+    })
+    .catch(() => {});
 }

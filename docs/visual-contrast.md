@@ -1,6 +1,6 @@
 # VOM 颜色对比度
 
-`observe --vom` 返回的结构化节点现在带 WCAG 对比度，用于发现“文字看不清 / 低对比度按钮 / 深色模式失效”等问题。对标 BrowserSkill 0.5.0 的 `oklch/lab/color-mix` 对比度解析。
+`observe --vom` 返回的结构化节点现在带 WCAG 对比度，用于发现“文字看不清 / 低对比度按钮 / 深色模式失效”等问题。支持 `oklch/lab/color-mix` 对比度解析。
 
 ## 字段
 

@@ -348,14 +348,14 @@ const TOOLS = [
   },
   {
     name: 'browser_observe',
-    description: '观察当前页面，返回带 @eN ref 的语义树；vom=true 时额外返回结构化节点。',
+    description: '观察当前页面，返回带 @eN ref 的语义树；vom=true 时额外返回结构化节点；facts=true 时附加 DOMSnapshot 几何/可见性/表单事实；ax=true 时附加 tables/unmappedAx。',
     inputSchema: mcpInputSchema('observe', { omit: ['sessionId', 'tabId'] }),
     async run(args) {
       const sessionId = await ensureSession(args);
       const params = withSession(sessionId, {});
       const mapping = {
         probe_hover: 'probeHover', debug_surfaces: 'debugSurfaces', closed_shadow: 'closedShadow',
-        vom: 'vom', ax: 'ax', max_tokens: 'maxTokens', max_depth: 'maxDepth', cursor: 'cursor',
+        vom: 'vom', ax: 'ax', facts: 'facts', fallback_ax: 'fallbackAx', max_tokens: 'maxTokens', max_depth: 'maxDepth', cursor: 'cursor',
       };
       for (const [arg, param] of Object.entries(mapping)) {
         if (args[arg] !== undefined) params[param] = args[arg];
@@ -383,6 +383,16 @@ const TOOLS = [
       if (args.force !== undefined) params.force = args.force === true;
       if (args.wait_timeout !== undefined) params.waitTimeoutMs = Number(args.wait_timeout);
       return rpc('click', withSession(sessionId, params));
+    },
+  },
+  {
+    name: 'browser_click_backend',
+    description: '按 backendNodeId 点击 AX/DOMSnapshot 发现但没有 @eN ref 的元素（closed shadow、page-lib 漏掉的节点）。先用 observe --ax --vom 从 unmappedAx 取 backendNodeId。',
+    inputSchema: mcpInputSchema('click-backend', { omit: ['sessionId', 'tabId'] }),
+    async run(args) {
+      const sessionId = await ensureSession(args);
+      const backendId = Number(args.backendId !== undefined ? args.backendId : args.backend_id);
+      return rpc('click-backend', withSession(sessionId, { backendId }));
     },
   },
   {
@@ -429,7 +439,9 @@ const TOOLS = [
     inputSchema: mcpInputSchema('evaluate', { omit: ['sessionId', 'tabId'] }),
     async run(args) {
       const sessionId = await ensureSession(args);
-      return rpc('evaluate', withSession(sessionId, { expression: String(args.expression) }));
+      const params = { expression: String(args.expression) };
+      if (args.unverified === true) params.unverified = true;
+      return rpc('evaluate', withSession(sessionId, params));
     },
   },
   {
@@ -815,6 +827,7 @@ const TOOL_METHODS = {
   browser_observe: ['observe'],
   browser_navigate: ['navigate'],
   browser_click: ['click'],
+  browser_click_backend: ['click-backend'],
   browser_fill: ['fill'],
   browser_read: ['read'],
   browser_extract: ['extract'],

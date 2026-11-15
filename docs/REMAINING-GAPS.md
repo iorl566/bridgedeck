@@ -1,10 +1,8 @@
-# 剩余真实差异
+# 已知边界与后续计划
 
-最后核对：v0.1，E2E **131/131**、CLI **139/139**、单测 **804/804**、内容采集浏览器自测 **1/1**、浮层浏览器自测 **1/1**、DSH 插件 **21/21**、MCP **9/9**、配对 **10/10**、TLS **8/8**。
+最后更新：2026-11-15。当前结果见 [STATUS.md](STATUS.md) 与 [收官报告](FINAL-REPORT-2026-11-15.md)。
 
-源码级覆盖审计见 [SOURCE-PARITY.md](SOURCE-PARITY.md)：152/149 文件（含辅助）、**28958/28826 行（约 100.5%，差额为两个辅助模块）**；逐文件差异见 [PARITY-MANIFEST.md](PARITY-MANIFEST.md)。
-
-## 已对齐并有验证
+## 已验证
 
 | 领域 | 结论 |
 | --- | --- |
@@ -12,27 +10,29 @@
 | 本地认证 | HMAC challenge-response、TLS、一次性 challenge、16MiB 帧 |
 | Trace v3 | version/entry/recorder/states/steps + 状态文件 |
 | 录制 | allFrames recorder + frameId + Trace v3 |
-| 视频 | 分片持久化、恢复、导出、下载结算、RPC、导航暂停/恢复；真实 E2E 录制 MP4 并落库 |
-| 调试构造 | 严格 `(sessions, cdp, tabs, now, archive)`，sessions 必需，无浅捕获/无主回退 |
-| 调试持久化 | journal retain 支持首次 checkpoint 前占位；Local 归档把 requests 写入独立 store；persist 有 journal 时写空 requests |
-| CDP 事件结构 | 分域监听：auto-detach、dialog、console、network、frame target；公共 onEvent 每事件一次；dispose 清理 5 个监听器 |
-| 内容层 | overlay-controller、录制/协作采集核心、隐藏帧、媒体进度、时钟归因；`cooperation-capture` 与 `record-capture` 的 attach/click/fill/dispose 已有真实 Edge 自测 |
+| 视频 | 分片持久化、恢复、导出、下载结算、RPC、导航暂停/恢复 |
+| 调试 | requests/console/pages/perf/aggregate/duplicates/operations/export/replay |
+| 内容层 | overlay-controller、录制/协作采集、隐藏帧、媒体进度、时钟归因 |
 | 窗口/标签页 | window list/focus/ensure/resize、tab move、借用/归还 |
 | 长截图 | tile 调度、renderer、overlap、freshness |
-| 工具 | MCP 49、DSH 34 |
+| 工具 | MCP 51、DSH 插件 35、插件直连冒烟 11/11 |
 | 分发 | 内嵌 Node 的 Setup.exe、自签、DigiCert 时间戳 |
 
-## 仍然存在的真实差异
+## 已知边界
 
 | 项 | 现状 |
 | --- | --- |
 | 视频权限 | 已补 session 存在性、tab 归属与 agentWindow 校验；lookupSession 的 remote/窗口策略仍在调用方 |
-| 内容采集验证 | closed shadow root 的 click 在 `composedPath()` 中会被重定向到 host，`record-capture` 因此只能看到 host；媒体元素身份、`media_progress`、CDP 可信 key/click、坐标不匹配 attribution、匹配窗口的 agent click 均已真实浏览器验证 |
-| 内容采集其余模块 | `record-hover-surface` 的悬停归属只在真实浏览器通过点击路径间接覆盖；四浮层渲染、Help 折叠/拖拽/rect 刷新、Borrow allow/deny/自动拒绝、Control minimize、Record finish/拖拽均已验证 |
-| UI 子页 | 审计、长截图、视频、调试、操作录制均已改为弹窗内嵌面板 |
-| CDP dispose | 额外清理 console/network buffer 与外部 handler，现有测试依赖 |
-| 行数分布 | 目录合计约 101%，但逐文件仍有差异；lib/content/browser 的契约注释多于对照，debug 略少 |
+| closed shadow | `composedPath()` 会把 click 重定向到 host，`record-capture` 因此只能看到 host；`observe --ax` + `click-backend` 可覆盖观察与点击 |
+| 内容采集 | `record-hover-surface` 的悬停归属只通过真实浏览器点击路径间接覆盖；浮层渲染与拖拽已在 E2E 验证 |
+| UI 子页 | 审计、长截图、视频、调试、操作录制均为弹窗内嵌面板 |
+| CDP dispose | 额外清理 console/network buffer 与外部 handler |
+| CLI 冷启动 | 72–86ms，受 Node 运行时限制；MCP/插件直连已绕开 |
+| 观察主遍历 | page-lib 仍为默认；`--compare-ax` 提供 0.97 覆盖率基线与降级路径 |
 
-## 结论
+## 后续计划
 
-当前是“149 个文件边界全覆盖 + 主要行为补齐 + 803 单测/131 E2E 全绿”，**不是逐文件逐行源码完全等价**。剩余工作集中在内容采集真实浏览器覆盖、UI 子页结构，以及逐文件注释/类型体量，而不是核心运行路径。
+1. 低频工具（网络/调试/录制/视频/规则）按需直连 daemon。
+2. 视口截图编码优化（当前 358ms，受 CDP PNG 编码限制）。
+3. 观察主遍历替换：先用 `--compare-ax` 持续量化，再决定是否切换。
+4. 原生 thin client：仅在 CLI 冷启动成为硬指标时评估。

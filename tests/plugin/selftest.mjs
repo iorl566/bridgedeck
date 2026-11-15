@@ -25,6 +25,7 @@ function check(name, fn) {
 }
 
 const calls = [];
+process.env.BB_PLUGIN_DIRECT_RPC = '0'; // 自测固定走 CLI 假运行器；直连由 daemon-rpc 单测覆盖
 const fakeRun = async (argv) => {
   calls.push(argv);
   return { ok: true, argv };
@@ -88,6 +89,12 @@ await check('browser_act：未知动作与缺目标都报错', async () => {
   await assert.rejects(() => byName.get('browser_act').execute({ action: 'click' }, {}), /需要 ref/);
 });
 
+await check('browser_click_backend：传 --backend 与 session', async () => {
+  calls.length = 0;
+  await byName.get('browser_click_backend').execute({ backendNodeId: 42, sessionId: 'abcd' }, {});
+  assert.deepEqual(calls[0], ['click-backend', '--backend', '42', '--session', 'abcd']);
+});
+
 await check('browser_observe：grep 过滤 + session', async () => {
   const local = buildToolSpecs(async (argv) => ({
     url: 'https://x/',
@@ -98,6 +105,27 @@ await check('browser_observe：grep 过滤 + session', async () => {
   const result = await local.find((spec) => spec.name === 'browser_observe').execute({ grep: '提交', sessionId: 'abcd' }, {});
   assert.equal(result.observation, '  - button "提交" [@e1]');
   assert.equal(result.refs, 2);
+});
+
+await check('browser_observe：ax 透出 tables/unmappedAx', async () => {
+  const localCalls = [];
+  const local = buildToolSpecs(async (argv) => {
+    localCalls.push(argv);
+    return {
+      url: 'https://x/',
+      title: 'T',
+      refs: 1,
+      observation: '- document',
+      tables: [{ role: 'table', headers: ['姓名'] }],
+      unmappedAx: [{ role: 'button', name: 'AX only' }],
+      blockingLayers: [{ role: 'dialog', name: '弹窗', coverage: 0.6 }],
+    };
+  });
+  const result = await local.find((spec) => spec.name === 'browser_observe').execute({ ax: true, sessionId: 'abcd' }, {});
+  assert.deepEqual(localCalls[0], ['observe', '--ax', '--session', 'abcd']);
+  assert.equal(result.tables[0].headers[0], '姓名');
+  assert.equal(result.unmappedAx[0].name, 'AX only');
+  assert.equal(result.blockingLayers[0].coverage, 0.6);
 });
 
 await check('browser_read：extract 带 maxRows', async () => {
@@ -230,10 +258,10 @@ const ctx = {
   },
 };
 
-await check('apply() 注册 34 个工具且结构与 defineTool 一致', async () => {
+await check('apply() 注册 35 个工具且结构与 defineTool 一致', async () => {
   const entry = await import('file:///' + path.join(entryDir, 'lib', 'index.mjs').replace(/\\/g, '/'));
   entry.apply(ctx, { bridgeCli: fakeCli, timeoutMs: 10000 });
-  assert.equal(registered.length, 34, '注册工具数不对：' + registered.length);
+  assert.equal(registered.length, 35, '注册工具数不对：' + registered.length);
   for (const tool of registered) {
     assert.match(tool.name, /^browser_/, '工具名：' + tool.name);
     assert.equal(typeof tool.execute, 'function', tool.name + ' 缺 execute');
@@ -241,7 +269,7 @@ await check('apply() 注册 34 个工具且结构与 defineTool 一致', async (
   }
   const names = registered.map((tool) => tool.name).sort();
   assert.deepEqual(names, [
-    'browser_act', 'browser_audit', 'browser_brief', 'browser_cooperate', 'browser_debug', 'browser_debug_evidence',
+    'browser_act', 'browser_audit', 'browser_brief', 'browser_click_backend', 'browser_cooperate', 'browser_debug', 'browser_debug_evidence',
     'browser_debug_query', 'browser_dialog', 'browser_eval', 'browser_install_skill', 'browser_navigate', 'browser_network',
     'browser_network_list', 'browser_observe', 'browser_pair', 'browser_read', 'browser_recipe', 'browser_record',
     'browser_rule_list', 'browser_screenshot', 'browser_session_start', 'browser_session_stop', 'browser_settings',

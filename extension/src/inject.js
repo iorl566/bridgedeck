@@ -3,10 +3,11 @@
 // 因此它们必须自包含（只能引用自身参数和页面全局对象），不能引用本模块其它变量。
 import { bridgeError, mapChromeError } from './errors.js';
 import { log } from './log.js';
+import { acquire, release, send as cdpSend } from './debugger.js';
 
 const MAIN_FRAME = 0;
 /** 页面能力库版本；必须与 injected/page-lib.js 的 LIB_VERSION 同步。 */
-const PAGE_LIB_VERSION = 32;
+const PAGE_LIB_VERSION = 35;
 
 /** 注入函数：调用页面侧能力库 __BB_PAGE__。 */
 export function pageCallFunc(name, args, requiredVersion) {
@@ -147,14 +148,54 @@ export async function execPage(tabId, name, args, frameId = 0) {
   return raw.result;
 }
 
-/** 页面主世界执行表达式。 */
+/** 页面 CSP 禁止 eval 时的错误特征（GitHub、Bing 等的 script-src 不含 unsafe-eval）。 */
+const CSP_EVAL_HINT = /Content Security Policy|unsafe-eval/i;
+
+function isCspEvalBlocked(error) {
+  return Boolean(error) && error.code === 'E_JS_ERROR' && CSP_EVAL_HINT.test(String(error.message || ''));
+}
+
+/** 页面主世界执行表达式；CSP 禁止 eval 时回退到 CDP Runtime.evaluate（不经过页面 CSP）。 */
 export async function evalInMain(tabId, expression) {
-  const raw = await runInjection(tabId, 'MAIN', evalMainFunc, [expression]);
-  if (!raw || typeof raw !== 'object') throw bridgeError('E_INTERNAL', '主世界执行无返回');
-  if (raw.ok === false) {
-    throw bridgeError(raw.error.code, raw.error.message);
+  try {
+    const raw = await runInjection(tabId, 'MAIN', evalMainFunc, [expression]);
+    if (!raw || typeof raw !== 'object') throw bridgeError('E_INTERNAL', '主世界执行无返回');
+    if (raw.ok === false) {
+      throw bridgeError(raw.error.code, raw.error.message);
+    }
+    return raw.note ? { value: raw.value, note: raw.note } : { value: raw.value };
+  } catch (error) {
+    if (!isCspEvalBlocked(error)) throw error;
+    log('页面 CSP 禁止 eval，改用 CDP Runtime.evaluate tab=' + tabId);
+    return evalByCdp(tabId, expression);
   }
-  return raw.note ? { value: raw.value, note: raw.note } : { value: raw.value };
+}
+
+/** CDP Runtime.evaluate：绕过页面 CSP，按值返回结果。 */
+export async function evalByCdp(tabId, expression) {
+  const feature = 'evaluate';
+  await acquire(tabId, feature);
+  try {
+    const reply = await cdpSend(tabId, 'Runtime.evaluate', {
+      expression,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (reply && reply.exceptionDetails) {
+      const details = reply.exceptionDetails;
+      const text = (details.exception && (details.exception.description || details.exception.value)) || details.text || '页面脚本异常';
+      throw bridgeError('E_JS_ERROR', String(text).split('\n')[0]);
+    }
+    const result = (reply && reply.result) || {};
+    if (result.type === 'undefined') return { value: null, note: '表达式结果为 undefined' };
+    if (result.type === 'function' || result.type === 'symbol') {
+      return { value: null, note: '结果不可 JSON 序列化（function/symbol）' };
+    }
+    if (result.unserializableValue !== undefined) return { value: result.unserializableValue };
+    return { value: result.value === undefined ? null : result.value };
+  } finally {
+    await release(tabId, feature);
+  }
 }
 
 /** 读取主世界 console 缓冲。 */

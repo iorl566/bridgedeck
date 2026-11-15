@@ -1,6 +1,6 @@
 // src/dispatch.js —— 命令分发：方法表 + 同一 tabId 串行
 import { bridgeError, toWireError } from './errors.js';
-import { cancelWait, observe, observeSmart, observeFrames, resolveFrameAlias, shadowClick, shadowRead, snapshot, getHtml, click, hover, fill, actionable, press, select, focus, scrollTo, evaluate, consoleEntries, navigate, reload, goBack, goForward, waitMs, waitForElement, waitForNavigationCmd, read, extract, extractDiscover, extractList, extractTable, drag, wheel, blur, upload } from './actions.js';
+import { cancelWait, observe, observeSmart, observeFrames, resolveFrameAlias, shadowClick, shadowRead, snapshot, getHtml, click, clickBackend, hover, fill, actionable, press, select, focus, scrollTo, evaluate, consoleEntries, navigate, reload, goBack, goForward, waitMs, waitForElement, waitForNavigationCmd, read, extract, extractDiscover, extractList, extractTable, drag, wheel, blur, upload } from './actions.js';
 import { ensureAgent, newAgentWindow, windowClose, sleep, tabList, tabNew, tabClose, tabSelect, tabMove, windowList, windowFocus, windowResize, tabBorrow, tabReturn, requestHelp, controlHint } from './tabs.js';
 import { settingsGet, settingsSet } from './settings.js';
 import { clickByImage, takeScreenshot } from './screenshot.js';
@@ -46,7 +46,7 @@ export const HANDLERS = {
   'wait-for-navigation': waitForNavigationCmd,
   'wait-for-element': waitForElement,
   actionable,
-  observe: (params = {}) => (params && (params.closedShadow || params.cursor || params.maxTokens || params.vom || params.ax || params.delta)) ? observe(params) : observeSmart(params),
+  observe: (params = {}) => (params && (params.closedShadow || params.cursor || params.maxTokens || params.vom || params.ax || params.facts || params.fallbackAx || params.compareAx || params.pipeline || params.delta)) ? observe(params) : observeSmart(params),
   snapshot,
   'get-html': getHtml,
   screenshot: takeScreenshot,
@@ -55,6 +55,7 @@ export const HANDLERS = {
   'screenshot.manual.frame': manualFrame,
   'screenshot.manual.save': manualSave,
   click,
+  'click-backend': clickBackend,
   hover,
   fill,
   press,
@@ -261,19 +262,28 @@ async function dispatchCommand(method, params) {
     }
   }
   if (TAB_METHODS.has(method)) {
-    checkControl({ ...input, method });
-    const isDepends = !Array.isArray(input.expect) && Array.isArray(input.dependsOn);
-    const conditions = Array.isArray(input.expect) ? input.expect : isDepends ? input.dependsOn : [];
-    if (conditions.length) {
-      const checked = await execPage(input.tabId, 'expect-check', { conditions });
-      if (!checked || checked.ok !== true) {
-        const mismatch = (checked && checked.mismatch) || {};
-        throw bridgeError(
-          isDepends ? 'E_DEPENDS_FAILED' : 'E_EXPECT_FAILED',
-          (isDepends ? '依赖校验失败：' : '动作前校验失败：') + (mismatch.target || '?') + ' ' + (mismatch.field || '') +
-            ' 期望 ' + JSON.stringify(mismatch.expected) + '，实际 ' + JSON.stringify(mismatch.actual),
-          { mismatch, conditions, kind: isDepends ? 'depends-on' : 'expect' },
-        );
+    const unverified = method === 'evaluate' && input.unverified === true;
+    if (unverified) {
+      const conditions = Array.isArray(input.expect) ? input.expect : Array.isArray(input.dependsOn) ? input.dependsOn : [];
+      if (conditions.length || input.observation != null) {
+        throw bridgeError('E_BAD_ARG', 'evaluate --unverified 不能与 --expect/--depends-on/--observation 同时使用');
+      }
+      checkControl({ ...input, method });
+    } else {
+      checkControl({ ...input, method });
+      const isDepends = !Array.isArray(input.expect) && Array.isArray(input.dependsOn);
+      const conditions = Array.isArray(input.expect) ? input.expect : isDepends ? input.dependsOn : [];
+      if (conditions.length) {
+        const checked = await execPage(input.tabId, 'expect-check', { conditions });
+        if (!checked || checked.ok !== true) {
+          const mismatch = (checked && checked.mismatch) || {};
+          throw bridgeError(
+            isDepends ? 'E_DEPENDS_FAILED' : 'E_EXPECT_FAILED',
+            (isDepends ? '依赖校验失败：' : '动作前校验失败：') + (mismatch.target || '?') + ' ' + (mismatch.field || '') +
+              ' 期望 ' + JSON.stringify(mismatch.expected) + '，实际 ' + JSON.stringify(mismatch.actual),
+            { mismatch, conditions, kind: isDepends ? 'depends-on' : 'expect', dispatched: false },
+          );
+        }
       }
     }
   }
@@ -297,7 +307,7 @@ async function dispatchCommand(method, params) {
 // 记下这些命令的执行窗口，后台据此忽略“自产”的 human.input，避免误自动暂停会话。
 const agentInputWindows = new Map(); // tabId -> { start, end }
 const AGENT_INPUT_METHODS = new Set([
-  'click', 'hover', 'fill', 'press', 'select', 'drag', 'wheel', 'upload', 'download', 'click-point',
+  'click', 'click-backend', 'hover', 'fill', 'press', 'select', 'drag', 'wheel', 'upload', 'download', 'click-point',
 ]);
 
 export function isAgentInputWindow(tabId, at) {

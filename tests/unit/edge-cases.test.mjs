@@ -69,7 +69,8 @@ test('protocol parse rejects malformed versions and reports skew', () => {
   assert.equal(parseProtocol('1.8.1'), null);
   assert.equal(parseProtocol('-1.0'), null);
   assert.equal(parseProtocol(' 1.8 ').minor, 8);
-  assert.equal(protocolSkew('1.9'), 'daemon_newer');
+  assert.equal(protocolSkew('1.10'), 'daemon_newer');
+  assert.equal(protocolSkew('1.9'), null);
   assert.equal(protocolSkew('0.9'), 'major');
   assert.equal(protocolSkew(null), 'missing');
 });

@@ -430,10 +430,132 @@ try {
     return 'ax=' + nodes.length + ' matched=' + res.axJoin.matched + ' backend=' + res.axJoin.byBackendNodeId + ' button=' + joinedButton.ref;
   });
 
+  await check('5d. DOMSnapshot 事实：几何 / 可见性 / 可点击', async () => {
+    const res = expectOk(await cliJson(['observe', '--vom', '--ax', '--facts', '--session', sessionId]), 'observe --facts');
+    assert(res.facts && res.facts.nodes > 0, 'DOMSnapshot 事实为空：' + JSON.stringify(res.facts));
+    assert(res.facts.axMatched > 0, 'AX 节点未匹配到事实：' + JSON.stringify(res.facts));
+    const button = (res.axNodes || []).find((node) => node.role === 'button' && String(node.name || '').includes('提交查询'));
+    assert(button && button.bounds && button.bounds.width > 0, 'AX 按钮缺少 geometry：' + JSON.stringify(button));
+    assert(button.visible === true, 'AX 按钮应可见：' + JSON.stringify(button));
+    return 'nodes=' + res.facts.nodes + ' axMatched=' + res.facts.axMatched + ' vomMatched=' + res.facts.vomMatched;
+  });
+
+  await check('5d2. observe --vom --facts 直接富化结构化节点', async () => {
+    const res = expectOk(await cliJson(['observe', '--vom', '--facts', '--session', sessionId]), 'observe --vom --facts');
+    assert(res.facts && res.facts.vomMatched > 0, 'VOM 节点未匹配到事实：' + JSON.stringify(res.facts));
+    const node = (res.nodes || []).find((item) => item && item.bounds && Number.isInteger(item.backendNodeId));
+    assert(node, 'VOM 节点缺少 bounds/backendNodeId：' + JSON.stringify((res.nodes || []).slice(0, 3)));
+    assert(typeof node.visible === 'boolean', 'VOM 节点缺少 visible：' + JSON.stringify(node));
+    assert(typeof node.domPaintOrder === 'number', 'VOM 节点缺少 domPaintOrder：' + JSON.stringify(node));
+    return 'vomMatched=' + res.facts.vomMatched + ' node=' + node.role + ' ' + node.bounds.width + 'x' + node.bounds.height;
+  });
+
+  await check('5e. observe --fallback-ax：AX 兜底观察（无 ref）', async () => {
+    const res = expectOk(await cliJson(['observe', '--fallback-ax', '--session', sessionId]), 'observe --fallback-ax');
+    assert(res.fallback === 'ax', '应标记 fallback=ax：' + JSON.stringify(res).slice(0, 300));
+    assert(res.refs === 0, '兜底观察不应有 ref：' + JSON.stringify(res.refs));
+    assert(typeof res.observation === 'string' && res.observation.includes('- '), '兜底文本为空：' + JSON.stringify(res.observation));
+    return 'fallback=ax lines=' + res.observation.split('\n').length;
+  });
+
+  await check('5f. observe --ax --vom 补充未映射的可交互元素（closed shadow）', async () => {
+    expectOk(await cliJson([
+      'evaluate',
+      "const h=document.createElement('div');h.id='__ax_only_host';h.style='position:fixed;left:20px;top:20px;z-index:99999';" +
+        "const s=h.attachShadow({mode:'closed'});const b=document.createElement('button');b.textContent='AX only button';" +
+        "b.onclick=()=>{window.__axClicks=(window.__axClicks||0)+1};s.appendChild(b);document.body.appendChild(h);'ok'",
+      '--session', sessionId,
+    ]), 'inject closed shadow');
+    await sleep(300);
+    const res = expectOk(await cliJson(['observe', '--ax', '--vom', '--facts', '--session', sessionId]), 'observe --ax --vom --facts');
+    assert(Array.isArray(res.unmappedAx), '缺少 unmappedAx 数组：' + JSON.stringify(res).slice(0, 300));
+    const target = res.unmappedAx.find((item) => item && item.name === 'AX only button');
+    assert(target, 'closed-shadow 按钮未出现在 unmappedAx：' + JSON.stringify(res.unmappedAx));
+    assert(Number.isInteger(target.backendNodeId), '未映射元素缺少 backendNodeId');
+    assert(target.bounds && target.bounds.width > 0, '未映射元素缺少几何：' + JSON.stringify(target));
+    assert(!res.observation.includes('[@e' + target.backendNodeId + ']'), '未映射元素不应带 ref');
+    assert(res.observation.includes('未映射的可交互元素'), '文本缺少未映射段');
+    const clicked = expectOk(await cliJson(['click-backend', '--backend', String(target.backendNodeId), '--session', sessionId]), 'click-backend');
+    assert(clicked.via === 'cdp-backend' && clicked.trusted === true, 'click-backend 结果不对：' + JSON.stringify(clicked));
+    const counter = expectOk(await cliJson(['evaluate', 'window.__axClicks || 0', '--session', sessionId]), 'click counter');
+    assert(counter.value === 1, 'closed-shadow 按钮没有被点到：' + JSON.stringify(counter));
+    await cliJson(['evaluate', "document.getElementById('__ax_only_host')?.remove();'ok'", '--session', sessionId]);
+    return 'unmapped=' + res.unmappedAx.length + ' target=AX only button click=ok';
+  });
+
+  await check('5g. observe --compare-ax 双跑对照', async () => {
+    const res = expectOk(await cliJson(['observe', '--compare-ax', '--vom', '--session', sessionId]), 'observe --compare-ax');
+    const cmp = res.pipelineCompare;
+    assert(cmp && cmp.pageLib && cmp.ax, '缺少 pipelineCompare：' + JSON.stringify(res).slice(0, 300));
+    assert(cmp.pageLib.refs > 0 && cmp.pageLib.lines > 0, 'page-lib 指标不对：' + JSON.stringify(cmp.pageLib));
+    assert(cmp.ax.nodes > 0 && cmp.ax.lines > 0, 'AX 指标不对：' + JSON.stringify(cmp.ax));
+    assert(cmp.interactiveTotal > 0, '交互元素统计为 0：' + JSON.stringify(cmp));
+    assert(cmp.matched <= cmp.interactiveTotal, 'matched 越界：' + JSON.stringify(cmp));
+    assert(typeof cmp.axCoverage === 'number' && cmp.axCoverage >= 0 && cmp.axCoverage <= 1, 'axCoverage 不对：' + JSON.stringify(cmp));
+    assert(typeof res.observation === 'string' && res.observation.length > 0, '默认观察文本不应为空');
+    return 'pageLib=' + cmp.pageLib.lines + '行 ax=' + cmp.ax.lines + '行 coverage=' + cmp.axCoverage;
+  });
+
+  await check('5h. observe --pipeline ax 备用采集器', async () => {
+    const res = expectOk(await cliJson(['observe', '--pipeline', 'ax', '--session', sessionId]), 'observe --pipeline ax');
+    assert(res.pipeline === 'ax', 'pipeline 标记不对：' + JSON.stringify(res).slice(0, 200));
+    assert(res.refs === 0, 'AX 管线不应有 ref：' + res.refs);
+    assert(Array.isArray(res.nodes) && res.nodes.length > 0, 'AX 管线没有节点');
+    const withBounds = res.nodes.filter((node) => node && node.bounds);
+    assert(withBounds.length > 0, 'AX 管线没有几何信息');
+    const interactive = res.nodes.filter((node) => node && node.interactive);
+    assert(interactive.length > 0, 'AX 管线没有交互节点');
+    assert(typeof res.observation === 'string' && res.observation.length > 0, 'AX 管线文本为空');
+    return 'nodes=' + res.nodes.length + ' interactive=' + interactive.length + ' bounds=' + withBounds.length;
+  });
+
   await check('6. fill 填输入框', async () => {
     const r = await cliJson(['fill', `@${textboxRef}`, '--value', 'hello bridge', '--session', sessionId]);
     expectOk(r, 'fill');
     return '@' + textboxRef + ' ← "hello bridge"';
+  });
+
+  await check('6b. observe --vom --facts 表单值事实', async () => {
+    expectOk(await cliJson(['evaluate', "document.getElementById('pw').value='secret';'ok'", '--session', sessionId]), 'seed password');
+    const res = expectOk(await cliJson(['observe', '--vom', '--facts', '--session', sessionId]), 'observe form facts');
+    const kw = (res.nodes || []).find((node) => node && node.id === 'kw');
+    assert(kw && kw.domValue === 'hello bridge', 'kw.domValue 不对：' + JSON.stringify(kw));
+    assert(kw.formStateStale !== true, 'kw 不应标记 stale：' + JSON.stringify(kw.formStateStale));
+    const pw = (res.nodes || []).find((node) => node && node.id === 'pw');
+    assert(pw && pw.domValue === '********', 'password 未遮蔽：' + JSON.stringify(pw));
+    assert(!JSON.stringify(res.nodes || []).includes('"secret"'), '密码明文泄漏到 observe 结果');
+    const agree = (res.nodes || []).find((node) => node && node.id === 'agree');
+    if (agree) assert(agree.domChecked === false || agree.domChecked === undefined, 'agree.domChecked 初始值不对：' + JSON.stringify(agree));
+    return 'kw=hello bridge pw=masked';
+  });
+
+  await check('6c. observe --ax --vom 表格结构事实', async () => {
+    const res = expectOk(await cliJson(['observe', '--ax', '--vom', '--session', sessionId]), 'observe table facts');
+    assert(Array.isArray(res.tables) && res.tables.length > 0, '缺少 tables 汇总：' + JSON.stringify(res.tables));
+    const table = (res.tables || []).find((item) => Array.isArray(item.headers) && item.headers.includes('姓名') && item.headers.includes('城市'));
+    assert(table, '表格表头不对：' + JSON.stringify(res.tables));
+    const axCells = (res.axNodes || []).filter((node) => node && node.table && Number.isInteger(node.table.row) && Number.isInteger(node.table.col));
+    assert(axCells.length > 0, 'AX 节点缺少表格坐标：' + JSON.stringify(res.tables));
+    return 'tables=' + res.tables.length + ' axCells=' + axCells.length;
+  });
+
+  await check('6d. observe --ax --vom 阻挡层事实', async () => {
+    expectOk(await cliJson([
+      'evaluate',
+      "const d=document.createElement('div');d.id='__e2e_dialog';d.setAttribute('role','dialog');d.setAttribute('aria-label','E2E dialog');" +
+        "d.style='position:fixed;inset:10%;z-index:2147483646;background:rgba(0,0,0,.2)';document.body.appendChild(d);'ok'",
+      '--session', sessionId,
+    ]), 'inject dialog');
+    await sleep(300);
+    const res = expectOk(await cliJson(['observe', '--ax', '--vom', '--facts', '--session', sessionId]), 'observe blocking layers');
+    assert(Array.isArray(res.blockingLayers) && res.blockingLayers.length > 0, '缺少 blockingLayers：' + JSON.stringify(res).slice(0, 300));
+    const layer = res.blockingLayers.find((item) => item && item.name === 'E2E dialog');
+    assert(layer, '未识别注入的 dialog：' + JSON.stringify(res.blockingLayers));
+    assert(layer.coverage > 0.25, '阻挡层覆盖面积不对：' + JSON.stringify(layer));
+    const under = (res.nodes || []).filter((node) => node && node.underBlockingLayer);
+    assert(under.length > 0, '阻挡层内的节点缺少 underBlockingLayer：' + JSON.stringify(res.blockingLayers));
+    await cliJson(['evaluate', "document.getElementById('__e2e_dialog')?.remove();'ok'", '--session', sessionId]);
+    return 'layers=' + res.blockingLayers.length + ' coverage=' + layer.coverage + ' under=' + under.length;
   });
 
   await check('7. select 选项 + click 按钮', async () => {
@@ -446,16 +568,18 @@ try {
       else selectNote = `select 失败（不阻塞主断言）：${JSON.stringify(r.json?.error || r.stderr).slice(0, 120)}`;
     }
     const r = await cliJson(['click', `@${buttonRef}`, '--session', sessionId]);
+    let clickResult;
     if (!r.json?.ok && /E_STALE_REF/.test(JSON.stringify(r.json))) {
       const fresh = await observationText();
       const m = pickRef(fresh, 'button', '提交') || pickRef(fresh, 'button');
       assert(m, `重新 observe 后仍找不到提交按钮：\n${fresh}`);
       buttonRef = m;
-      expectOk(await cliJson(['click', `@${m}`, '--session', sessionId]), 'click(retry)');
+      clickResult = expectOk(await cliJson(['click', `@${m}`, '--session', sessionId]), 'click(retry)');
     } else {
-      expectOk(r, 'click');
+      clickResult = expectOk(r, 'click');
     }
-    return `${selectNote} click=@${buttonRef}`;
+    assert(clickResult.effectState === 'committed', '成功动作应带 effectState=committed：' + JSON.stringify(clickResult));
+    return `${selectNote} click=@${buttonRef} effect=committed`;
   });
 
   await check('8. get-html 读回结果（#out 变成 clicked:...）', async () => {
@@ -1222,11 +1346,11 @@ try {
 
   await check('20r. 协议协商（protocol + capabilities）', async () => {
     const status = expectOk(await cliJson(['status']), 'status protocol');
-    assert(status.protocol === '1.8', 'daemon protocol 不是 1.8：' + JSON.stringify(status.protocol));
+    assert(status.protocol === '1.9', 'daemon protocol 不是 1.9：' + JSON.stringify(status.protocol));
     const browser = (status.browsers || [])[0];
-    assert(browser && browser.protocol === '1.8', '扩展 protocol 不是 1.8：' + JSON.stringify(browser && browser.protocol));
+    assert(browser && browser.protocol === '1.9', '扩展 protocol 不是 1.9：' + JSON.stringify(browser && browser.protocol));
     assert(Array.isArray(browser.capabilities) && browser.capabilities.includes('frames'), '缺少 frames 能力：' + JSON.stringify(browser.capabilities));
-    return 'protocol=1.8 caps=' + browser.capabilities.length;
+    return 'protocol=1.9 caps=' + browser.capabilities.length;
   });
 
   await check('20s. recipe 草稿 → 审批 → 执行', async () => {
@@ -1785,7 +1909,8 @@ try {
     assert(bad.code === 1 && bad.json.error.code === 'E_EXPECT_FAILED', '错误码不对');
     const data = bad.json.error.data || {};
     assert(data.mismatch && data.mismatch.target === '#out', 'data.mismatch.target 不对：' + JSON.stringify(data));
-    return 'data.mismatch 完整';
+    assert(data.effect_state === 'none' && data.dispatched === false, '校验失败应带 effect_state=none/dispatched=false：' + JSON.stringify(data));
+    return 'data.mismatch 完整，effect_state=none';
   });
 
   await check('23u. 人工接管：cooperate wait 检测到人操作 → 等待后恢复', async () => {
@@ -1923,6 +2048,19 @@ try {
     const gone = expectOk(await cliJson(['evaluate', "!!document.getElementById('__bb_help_host')", '--session', sessionId]), 'help overlay removed');
     assert(gone.value === false, '协助卡片没有移除');
     return 'done + note';
+  });
+
+  await check('24b2. request-help 完成条件满足后自动交还', async () => {
+    const started = Date.now();
+    const result = expectOk(await cliJson([
+      'request-help', '--reason', '等待页面条件', '--until', '[{"kind":"selector_exists","selector":"body"}]',
+      '--timeout', '10s', '--session', sessionId,
+    ]), 'request-help criteria');
+    assert(result.action === 'done', '条件满足应返回 done：' + JSON.stringify(result));
+    assert(Date.now() - started < 8000, '完成条件应快速返回，不应等到超时');
+    const gone = expectOk(await cliJson(['evaluate', "!!document.getElementById('__bb_help_host')", '--session', sessionId]), 'criteria overlay removed');
+    assert(gone.value === false, '条件完成后协助卡片没有移除');
+    return 'done via criteria';
   });
 
   await check('24c. 操作录制浮层：出现 → 结束', async () => {

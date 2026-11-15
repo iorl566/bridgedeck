@@ -10,7 +10,7 @@
 | 已连接浏览器 | **0 个** | `browsers: []` |
 | 扩展 | **未加载** | Edge `Default` 配置里没有 BridgeDeck 条目 |
 | DSH 技能 | **已安装** | `C:\Users\CFT\.dsh\skills\browser-bridge`（15 个文件），本轮会话目录已出现 `browser-bridge` |
-| DSH 插件（34 个 `browser_*` 工具） | 未安装 | profile `desktop` 的依赖与 patch 里都没有 `dsh-browser-bridge` |
+| DSH 插件（35 个 `browser_*` 工具） | 未安装 | profile `desktop` 的依赖与 patch 里都没有 `dsh-browser-bridge` |
 | `node` 在 PATH 上 | **没有** | 用户/系统 PATH 均无 nodejs |
 
 因此本机执行 CLI 请统一用 `bin\bridge.cmd`（它会自己回退到 DSH 自带的 node），不要直接敲 `node cli/bridge.mjs`。
@@ -37,7 +37,7 @@ MV3 扩展  ──  标签页、CDP、内容脚本、截图、录制
 | --- | --- | --- |
 | CLI | `bin\bridge.cmd` | 所有命令的唯一事实来源：`bridge -h` |
 | 技能 | `~/.dsh/skills/browser-bridge/SKILL.md` | 给模型看的说明书，教它怎么用 CLI |
-| DSH 插件 | `dsh-plugin/` | 34 个 `browser_*` 工具，模型直接调用，不拼命令 |
+| DSH 插件 | `dsh-plugin/` | 35 个 `browser_*` 工具，模型直接调用，不拼命令 |
 | MCP | `mcp/server.mjs` | 49 个工具，给 Claude/Cursor 等外部 Agent |
 
 ## 2. 第一步：加载扩展（唯一手动步骤）
@@ -122,7 +122,7 @@ DSH 的技能发现规则（决定了为什么放这里就能被读到）：
 | 方式 | 入口 | 适合 | 现状 |
 | --- | --- | --- | --- |
 | 技能 + CLI | `bin\bridge.cmd` | 想看得见每条命令、想手工调参、排障 | ✅ 可用 |
-| DSH 插件 | `dsh-plugin/`，34 个 `browser_*` 工具 | 模型自主干活，不用拼命令行 | ⬜ 未装，见下 |
+| DSH 插件 | `dsh-plugin/`，35 个 `browser_*` 工具 | 模型自主干活，不用拼命令行 | ⬜ 未装，见下 |
 | MCP | `node mcp/server.mjs` | Claude/Cursor 等非 DSH 的 Agent | 未接入 |
 
 DSH 插件是可选的加速器，装法是把它 link 进当前 profile（`dsh` 没在 PATH 上，用桌面端自带的壳）：

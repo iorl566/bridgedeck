@@ -35,6 +35,7 @@ import { verifyReleaseSignature } from '../lib/release-sign.mjs';
 import { RELEASE_PUBLIC_KEY } from '../lib/release-public-key.mjs';
 import { isControllerInfo } from '../extension/src/lib/controller-info.js';
 import { IntentLedger, isUnknownOutcome } from '../lib/intent-ledger.mjs';
+import { createStartJournal, normalizeStartToken } from '../lib/start-journal.mjs';
 import { LOCAL_METHODS, SESSION_METHODS, EXT_METHODS, SESSION_QUEUE_BYPASS, isMutating } from '../lib/methods.mjs';
 import { resolveSessionByScope } from '../lib/session-scope.mjs';
 
@@ -43,9 +44,9 @@ const VERSION = (() => {
   catch { return '0.1.2'; }
 })();
 const SERVICE = 'browser-bridge';
-const PROTOCOL_VERSION = '1.8';
+const PROTOCOL_VERSION = '1.9';
 const PROTOCOL_MAJOR = 1;
-const PROTOCOL_MINOR = 8;
+const PROTOCOL_MINOR = 9;
 
 function parseProtocol(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? { major: value, minor: 0 } : null;
@@ -55,17 +56,26 @@ function parseProtocol(value) {
 }
 
 function protocolSupported(value) {
-  // 旧客户端不带 protocol：按 1.0 处理，保持兼容
+  // 旧客户端不带 protocol：按 1.0 处理，保持兼容。
+  // 同一 major 内允许 minor 偏斜（1.7/1.8 扩展仍可连接），由能力位决定新功能是否可用。
   if (value === undefined || value === null || value === '') return true;
   const parsed = parseProtocol(value);
-  return Boolean(parsed) && parsed.major === PROTOCOL_MAJOR && parsed.minor <= PROTOCOL_MINOR;
+  return Boolean(parsed) && parsed.major === PROTOCOL_MAJOR;
+}
+
+/** 同 major 下的 minor 偏斜：null=一致，older=对方更旧，newer=对方更新。 */
+function protocolSkewOf(value) {
+  const parsed = parseProtocol(value);
+  if (!parsed || parsed.major !== PROTOCOL_MAJOR) return null;
+  if (parsed.minor === PROTOCOL_MINOR) return null;
+  return parsed.minor < PROTOCOL_MINOR ? 'older' : 'newer';
 }
 
 function protocolLabel(value) {
   const parsed = parseProtocol(value);
   return parsed ? parsed.major + '.' + parsed.minor : '0';
 }
-const DAEMON_CAPABILITIES = ['observe', 'frames', 'dialog', 'screenshot', 'network', 'rules', 'video', 'recording', 'pairing', 'tls'];
+const DAEMON_CAPABILITIES = ['observe', 'frames', 'dialog', 'screenshot', 'network', 'rules', 'video', 'recording', 'pairing', 'tls', 'unverified', 'dom-read'];
 const DEFAULT_PORT = 52900;
 const PORT_CANDIDATES = Array.from({ length: 10 }, (_, i) => DEFAULT_PORT + i);
 const PING_INTERVAL_MS = 15_000; // 每 15s 发一次 ping
@@ -119,6 +129,9 @@ intentLedger.load();
 LOCAL_TRUST_PATH = path.join(HOME_DIR, 'local-trust.json');
 let auditSeq = 0;
 const SESSIONS_PATH = path.join(HOME_DIR, 'sessions.json');
+const START_JOURNAL_PATH = path.join(HOME_DIR, 'session-starts.json');
+// 可恢复启动：请求 token 预写日志；同 token 重试返回既有会话，不重复开窗。
+const startJournal = createStartJournal(START_JOURNAL_PATH);
 const TRANSFER_DIR = path.join(HOME_DIR, 'transfers');
 const TRANSFER_MAX_BYTES = 64 * 1024 * 1024;
 const TRANSFER_CHUNK_BYTES = 1024 * 1024;
@@ -619,6 +632,7 @@ function normalizeSettings(raw) {
 function normalizeHello(hello) {
   return {
     protocol: protocolLabel(hello.protocol),
+    protocolSkew: protocolSkewOf(hello.protocol),
     capabilities: Array.isArray(hello.capabilities) ? hello.capabilities.filter((item) => typeof item === 'string').slice(0, 32) : [],
     browser: typeof hello.browser === 'string' && hello.browser ? hello.browser : 'unknown',
     browserVersion: typeof hello.browserVersion === 'string' ? hello.browserVersion : '',
@@ -997,6 +1011,7 @@ function instancePublicView(instance) {
     browserVersion: instance.browserVersion,
     extVersion: instance.extVersion,
     protocol: instance.protocol || 0,
+    protocolSkew: instance.protocolSkew || null,
     capabilities: Array.isArray(instance.capabilities) ? instance.capabilities : [],
     label: instance.label || '',
     localAuth: instance.localVerified ? 'verified' : 'unpaired',
@@ -1249,6 +1264,14 @@ function verifyDecision(route, method) {
 async function routeExtension(route, method, timeoutMs) {
   // route 已在 dispatchInner 里 prepareRoute + verifyDecision 过；这里只做能力降级与派发。
   requireCapability(route.instance, method);
+  if (method === 'evaluate' && route.params && route.params.unverified === true) {
+    if (route.params.expect !== undefined || route.params.dependsOn !== undefined || route.params.observation !== undefined) {
+      throw new BridgeError('E_BAD_ARG', 'evaluate --unverified 不能与 --expect/--depends-on/--observation 同时使用');
+    }
+    if (!hasCapability(route.instance, 'unverified')) {
+      throw new BridgeError('E_UNSUPPORTED_CAPABILITY', '当前浏览器扩展不支持 evaluate --unverified（需要协议 1.9 扩展；请更新并重载扩展）');
+    }
+  }
   let effectiveMethod = method;
   if (method === 'observe-frames' && !hasCapability(route.instance, 'frames')) {
     effectiveMethod = 'observe';
@@ -1267,12 +1290,9 @@ async function routeExtension(route, method, timeoutMs) {
     if (typeof result.title === 'string' && result.title) route.session.title = result.title;
   }
   // 导航之后文档重建，控制提示条会随旧文档消失：补挂一次（受设置约束，失败忽略）。
+  // 不阻塞导航返回：提示条是可见性 UI，晚一两百毫秒出现不影响动作。
   if (route.session && ['navigate', 'reload', 'navigate-back', 'navigate-forward'].includes(method)) {
-    try {
-      await sendCommand(route.instance, 'control-hint', { tabId: route.session.tabId, enabled: true }, 3000);
-    } catch {
-      // 页面可能还在加载，下一次导航再挂
-    }
+    sendCommand(route.instance, 'control-hint', { tabId: route.session.tabId, enabled: true }, 3000).catch(() => {});
   }
   // observe 结果留在 daemon 里，view 可以直接分段检索，不必重新采集页面。
   if (method === 'observe' && route.session && result && typeof result.observation === 'string') {
@@ -1420,11 +1440,106 @@ function buildStatus() {
   };
 }
 
-async function startSession(params, timeoutMs) {
+/** 可恢复启动的 token 校验（转成协议错误）。 */
+function normalizeRequestToken(value) {
+  try {
+    return normalizeStartToken(String(value));
+  } catch (error) {
+    throw new BridgeError('E_BAD_ARG', String((error && error.message) || error));
+  }
+}
+
+function startRequestMeta(params) {
+  return {
+    browser: params.browser ?? null,
+    noFocus: params.noFocus === true,
+    incognito: params.incognito === true,
+    tab: params.tab ?? null,
+  };
+}
+
+/** 预登记：不创建任何窗口，只占住 token（bsk 的 prepare 语义）。 */
+async function prepareStartRequest(params) {
+  const requestId = normalizeRequestToken(params.requestId);
+  const existing = startJournal.get(requestId);
+  if (existing) {
+    if (existing.state === 'cancelled') {
+      throw new BridgeError('E_REQUEST_CANCELLED', '该 requestId 已被取消，请重新生成', { requestId, state: existing.state });
+    }
+    return { requestId, entry: existing };
+  }
+  return { requestId, entry: startJournal.prepare(requestId, startRequestMeta(params)) };
+}
+
+/** 认领：ready/claimed → claimed，表示调用方已经持久化会话。 */
+async function claimStartRequest(params) {
+  const requestId = normalizeRequestToken(params.requestId);
+  const existing = startJournal.get(requestId);
+  if (!existing) throw new BridgeError('E_BAD_ARG', 'requestId 不存在；请先 prepare 或 start', { requestId });
+  if (existing.state === 'cancelled') {
+    throw new BridgeError('E_REQUEST_CANCELLED', '该 requestId 已被取消', { requestId, state: existing.state });
+  }
+  if (existing.state !== 'ready' && existing.state !== 'claimed') {
+    throw new BridgeError('E_START_NOT_READY', '会话尚未 ready，不能认领', { requestId, state: existing.state });
+  }
+  if (existing.state === 'claimed') return { requestId, entry: existing };
+  return { requestId, entry: startJournal.setState(requestId, 'claimed', {}) };
+}
+
+/** 取消：prepared/ready/claimed 可直接取消并留下墓碑；starting 进行中拒绝。 */
+async function cancelStartRequest(params) {
+  const requestId = normalizeRequestToken(params.requestId);
+  const existing = startJournal.get(requestId);
+  if (existing && existing.state === 'cancelled') return { requestId, entry: existing };
+  if (existing && existing.state === 'starting') {
+    throw new BridgeError('E_START_PENDING', '启动进行中，暂不能取消；稍后用同一 requestId 查询', {
+      requestId,
+      startedAt: existing.at || null,
+    });
+  }
+  const sessionId = existing && existing.result ? existing.result.sessionId : null;
+  return { requestId, sessionId, entry: startJournal.setState(requestId, 'cancelled', {}) };
+}
+
+async function startRequestStatus(params) {
+  const requestId = normalizeRequestToken(params.requestId);
+  return { requestId, entry: startJournal.get(requestId) };
+}
+
+async function startSession(params, timeoutMs) {  const traceStart = Date.now();
+  const traceStep = (label) => {
+    if (process.env.BB_DAEMON_TRACE === '1') log(`session.start ${label} +${Date.now() - traceStart}ms`);
+  };
   const controller = params.controller;
   if (controller !== undefined && !isControllerInfo(controller)) {
     throw new BridgeError('E_BAD_ARG', 'session.start 的 controller 需要 name（1-80 字符），可选 project（1-120 字符）与 #rrggbb 颜色');
   }
+  // 可恢复启动：token 幂等。同一个 requestId 重试返回既有会话；进行中的同一 token 拒绝并给出状态。
+  let requestToken = null;
+  if (params.requestId !== undefined && params.requestId !== null) {
+    try {
+      requestToken = normalizeStartToken(String(params.requestId));
+    } catch (error) {
+      throw new BridgeError('E_BAD_ARG', String((error && error.message) || error));
+    }
+    const existing = startJournal.get(requestToken);
+    if (existing) {
+      if (existing.state === 'cancelled') {
+        throw new BridgeError('E_REQUEST_CANCELLED', '该 requestId 已被取消，请重新生成', { requestId: requestToken, state: existing.state });
+      }
+      if ((existing.state === 'ready' || existing.state === 'claimed') && existing.result && sessions.has(existing.result.sessionId)) {
+        return { ...existing.result, reused: true };
+      }
+      if (existing.state === 'starting' && Date.now() - Number(existing.at || 0) < 120000) {
+        throw new BridgeError('E_START_PENDING', '同一 requestId 的启动仍在进行中；稍后用同一 requestId 重试即可取回会话', {
+          requestId: requestToken,
+          startedAt: existing.at || null,
+        });
+      }
+    }
+    startJournal.begin(requestToken, { browser: params.browser ?? null, noFocus: params.noFocus === true });
+  }
+  try {
   let instance;
   let tabId = null;
   let windowId = 0;
@@ -1448,6 +1563,7 @@ async function startSession(params, timeoutMs) {
   } else {
     instance = pickInstance(params.browser);
     const result = await sendCommand(instance, 'window.newAgent', { noFocus: params.noFocus === true, incognito: params.incognito === true }, timeoutMs);
+    traceStep('window.newAgent');
     tabId = result && typeof result.tabId === 'number' ? result.tabId : null;
     if (tabId === null) throw new BridgeError('E_INTERNAL', 'window.ensureAgent 未返回 tabId');
     windowId = result && typeof result.windowId === 'number' ? result.windowId : 0;
@@ -1471,20 +1587,30 @@ async function startSession(params, timeoutMs) {
   saveSessions();
   log(`session ${sessionId} 创建 instance=${instance.instanceId} tab=${tabId}${borrowed ? '（借用）' : ''}`);
   // 自动挂载对话框拦截（queue 策略）：动作触发原生弹窗时先回 dialog_pending，由调用方决策。
-  try {
-    await sendCommand(instance, 'dialog.arm', { tabId, policy: { queue: true } }, 5000);
-  } catch (error) {
-    log('session ' + sessionId + ' 对话框拦截挂载失败（忽略）：' + ((error && error.message) || error));
-  }
+  // 同一 tab 的命令按队列串行，因此这里不等待 arm 完成也不会让后续动作抢在拦截器之前。
+  sendCommand(instance, 'dialog.arm', { tabId, policy: { queue: true } }, 5000)
+    .then(() => traceStep('dialog.arm'))
+    .catch((error) => {
+      log('session ' + sessionId + ' 对话框拦截挂载失败（忽略）：' + ((error && error.message) || error));
+    });
   // 接管浮层状态（新 UI 取代旧控制提示条）
   sendInstanceEvent(instance, 'takeover.state', { tabId, sessionId, paused: false, borrowed, controller: controller ?? null, project: controller?.project ?? null });
   try {
-    await sendCommand(instance, 'control-hint', { tabId, enabled: true }, 5000);
+    // 控制提示是可见性 UI；不阻塞会话返回，注入失败也不影响控制权。
+    sendCommand(instance, 'control-hint', { tabId, enabled: true }, 5000).catch(() => {});
+    traceStep('control-hint');
   } catch (error) {
     log('session ' + sessionId + ' 控制提示注入失败（忽略）：' + ((error && error.message) || error));
   }
   sessionState.activate(sessionId);
-  return { sessionId, tabId, windowId, instanceId: instance.instanceId, borrowed };
+  traceStep('done');
+  const started = { sessionId, tabId, windowId, instanceId: instance.instanceId, borrowed };
+  if (requestToken) startJournal.ready(requestToken, started);
+  return started;
+  } catch (error) {
+    if (requestToken) startJournal.fail(requestToken, (error && error.message) || error);
+    throw error;
+  }
 }
 
 /** session.rebind：把会话切到另一个标签页（可顺带归还旧的借用 tab）。 */
@@ -1555,21 +1681,24 @@ async function stopSession(params, timeoutMs) {
   const instance = instances.get(session.instanceId);
   const closeTimeout = Math.min(Number(timeoutMs) > 0 ? Number(timeoutMs) : 15_000, 15_000);
   if (instance) {
-    try {
-      await sendCommand(instance, 'dialog.disarm', { tabId: session.tabId }, 3000);
-    } catch {
-      // 标签页可能已关闭，忽略
+    // 独立清理动作并行下发，避免 3-4 个 RTT 串行叠加到 session stop 上。
+    const cleanup = [
+      sendCommand(instance, 'dialog.disarm', { tabId: session.tabId }, 3000).catch(() => {}),
+      sendCommand(instance, 'debugger.detach', { tabId: session.tabId }, 5000).catch((error) => {
+        log(`session ${session.sessionId} 释放 debugger 失败（忽略）：${error && error.message}`);
+      }),
+    ];
+    // 关闭标签页时控制提示会随页面消失，不必再单独下发；保留窗口/借用标签才需要。
+    if (params.keep === true || session.borrowed === true) {
+      cleanup.push(sendCommand(instance, 'control-hint', { tabId: session.tabId, enabled: false }, 3000).catch(() => {}));
     }
-    try {
-      await sendCommand(instance, 'control-hint', { tabId: session.tabId, enabled: false }, 3000);
-    } catch {
-      // 标签页可能已关闭，忽略
-    }
-    // 释放 debugger（对话框/网络/仿真）与会话态的采集器，避免「正在调试」提示条残留。
-    try {
-      await sendCommand(instance, 'debugger.detach', { tabId: session.tabId }, 5000);
-    } catch (error) {
-      log(`session ${session.sessionId} 释放 debugger 失败（忽略）：${error && error.message}`);
+    // 关闭标签页时清理动作无需等待：标签页马上消失，dialog/debugger 的清理随页面一起结束。
+    // 保留窗口或归还借用标签才需要确认清理完成。
+    const closingTab = session.borrowed !== true && params.keep !== true;
+    if (closingTab) {
+      for (const pending of cleanup) pending.catch(() => {});
+    } else {
+      await Promise.allSettled(cleanup);
     }
     if (session.borrowed === true) {
       // 借用的用户标签页：只清标记，不移动、不关闭。
@@ -1584,13 +1713,10 @@ async function stopSession(params, timeoutMs) {
       } catch (err) {
         logError(`session ${session.sessionId} 关闭 tab 失败：${err.code || ''} ${err.message}`);
       }
-      // 每个 session 独占一个 Agent 窗口：会话结束连窗口一起收掉（用户标签页不受影响）。
+      // 每个 session 独占一个 Agent 窗口：关闭标签页后窗口通常随之消失；这里只做兜底，
+      // 不等待结果，避免会话结束被窗口关闭流程拖慢。
       if (Number.isInteger(session.windowId) && session.windowId > 0) {
-        try {
-          await sendCommand(instance, 'window.close', { windowId: session.windowId }, Math.min(closeTimeout, 5000));
-        } catch {
-          // tab 关闭时窗口可能已随之消失，忽略
-        }
+        sendCommand(instance, 'window.close', { windowId: session.windowId }, Math.min(closeTimeout, 5000)).catch(() => {});
       }
     }
   }
@@ -1821,17 +1947,38 @@ async function dispatchExtension(method, params, timeoutMs) {
   return submitRouted(route, method, params, timeoutMs);
 }
 
+/** 给失败结果补 effect_state：未派发=none，其余无法证明时=unknown（对齐 bsk 的保守语义）。 */
+function withEffectState(error, effectState) {
+  if (!error || typeof error !== 'object') return error;
+  const data = { ...(error.data && typeof error.data === 'object' ? error.data : {}) };
+  if (data.effect_state === undefined && data.effectState === undefined) data.effect_state = effectState;
+  error.data = data;
+  return error;
+}
+
+/** 变异操作成功 → committed；业务失败结果（ok:false / failedAt）与只读方法保持原样。 */
+function annotateEffectSuccess(result, method) {
+  if (!isMutating(method) || !result || typeof result !== 'object' || Array.isArray(result)) return result;
+  if (result.ok === false || result.failed === true || result.failedAt !== undefined) return result;
+  if (result.effectState === undefined && result.effect_state === undefined) result.effectState = 'committed';
+  return result;
+}
+
 /** 落账 → routeExtension（内部 sendCommand）→ 按结果结算；intentLedger.begin 每次必调。 */
 async function submitRouted(route, method, params, timeoutMs) {
   const intent = intentLedger.begin(method, params, ledgerTargetFromRoute(route));
   try {
     const result = await routeExtension(route, method, timeoutMs);
     intentLedger.finish(intent, 'done');
-    return result;
+    return annotateEffectSuccess(result, method);
   } catch (error) {
     // evaluate 是诊断/读取通道：超时也视为已结算，避免只读命令把标签页冻结。
     const settleUnknown = isUnknownOutcome(error) && method !== 'evaluate';
     intentLedger.finish(intent, settleUnknown ? 'unknown' : 'failed');
+    if (isMutating(method)) {
+      const notDispatched = error && error.data && error.data.dispatched === false;
+      withEffectState(error, notDispatched ? 'none' : 'unknown');
+    }
     throw error;
   }
 }
@@ -1883,11 +2030,15 @@ async function dispatch(method, params, timeoutMs) {
     intentLedger.finish(intent, 'done');
     // 同步成功意味着 Agent 已重新确认页面状态：自动和解该 tab 的历史未知意图。
     if (method === 'cooperate.sync' && target && target.tabId != null) intentLedger.reconcile(target.tabId);
-    return result;
+    return annotateEffectSuccess(result, method);
   } catch (error) {
     // evaluate 是诊断/读取通道：超时也视为已结算，避免只读命令把标签页冻结。
     const settleUnknown = isUnknownOutcome(error) && method !== 'evaluate';
     intentLedger.finish(intent, settleUnknown ? 'unknown' : 'failed');
+    if (isMutating(method)) {
+      const notDispatched = error && (error.code === 'E_BAD_ARG' || (error.data && error.data.dispatched === false));
+      withEffectState(error, notDispatched ? 'none' : 'unknown');
+    }
     throw error;
   }
 }
@@ -1904,6 +2055,16 @@ async function dispatchInner(method, params, timeoutMs) {
       return { browsers: browserList() };
     case 'session.start':
       return startSession(params, timeoutMs);
+    case 'session.start_tracked':
+      return startSession({ ...params, requestId: params.requestId ?? params.request_id }, timeoutMs);
+    case 'session.request_prepare':
+      return prepareStartRequest(params);
+    case 'session.request_claim':
+      return claimStartRequest(params);
+    case 'session.request_cancel':
+      return cancelStartRequest(params);
+    case 'session.request_status':
+      return startRequestStatus(params);
     case 'session.stop':
       return stopSession(params, timeoutMs);
     case 'session.list':

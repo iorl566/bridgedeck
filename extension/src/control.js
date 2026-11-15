@@ -6,7 +6,7 @@ import { sleep } from './tabs.js';
 import { getTakeoverState } from './takeover.js';
 
 const TAB_METHODS = new Set([
-  'click', 'hover', 'fill', 'press', 'select', 'focus', 'blur', 'scroll-to',
+  'click', 'click-backend', 'hover', 'fill', 'press', 'select', 'focus', 'blur', 'scroll-to',
   'drag', 'wheel', 'evaluate', 'upload', 'download',
 ]);
 
@@ -137,6 +137,10 @@ export function checkControl(params = {}) {
     throw bridgeError('E_SESSION_PAUSED', '人工接管中：请先在浮层点“交给 Agent”或执行 cooperate handback');
   }
   const state = states.get(tabId);
+  if (params.unverified === true) {
+    // --unverified：跳过观察/上下文一致性校验，但暂停、会话归属与标签页归属仍然生效。
+    return;
+  }
   if (state && state.policy === 'strict' && params.context == null && (params.ref || params.selector)) {
     throw bridgeError('E_CONTEXT_REQUIRED', 'strict 策略下 DOM 动作必须带 --context（先 cooperate sync 获取）');
   }

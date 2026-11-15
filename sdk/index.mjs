@@ -187,6 +187,9 @@ export class Page {
   async click(target, options = {}) {
     return this.call('click', { ...targetParams(target), ...options });
   }
+  async clickBackend(backendNodeId, options = {}) {
+    return this.call('click-backend', { backendId: Number(backendNodeId), ...options });
+  }
   async hover(target, options = {}) {
     return this.call('hover', { ...targetParams(target), ...options });
   }
@@ -209,8 +212,10 @@ export class Page {
   async read(target) {
     return this.call('read', target ? targetParams(target) : {});
   }
-  async evaluate(expression) {
-    return this.call('evaluate', { expression: String(expression) });
+  async evaluate(expression, options = {}) {
+    const params = { expression: String(expression) };
+    if (options.unverified === true) params.unverified = true;
+    return this.call('evaluate', params);
   }
   async observe(options = {}) { return this.call('observe', options); }
   async snapshot() { return this.call('snapshot', {}); }

@@ -9,6 +9,13 @@ globalThis.chrome = {
       async remove() {},
     },
   },
+  debugger: {
+    onEvent: { addListener() {} },
+    onDetach: { addListener() {} },
+    attach: async () => {},
+    detach: async () => {},
+    sendCommand: async () => ({}),
+  },
   tabs: {},
   windows: {},
 };

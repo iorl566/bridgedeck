@@ -428,6 +428,11 @@ async function runTests() {
   const evaluateHuman = await runCli(['evaluate', '2+3', '--session', sessionId]);
   check('evaluate 人类输出 5', evaluateHuman.code === 0 && evaluateHuman.stdout.trim() === '5', evaluateHuman.stdout);
 
+  const unverified = jsonOf(await runCli(['evaluate', '1+1', '--unverified', '--json', '--session', sessionId]));
+  check('evaluate --unverified 返回 verified=false', Boolean(unverified && unverified.result.value === 2 && unverified.result.verified === false), JSON.stringify(unverified));
+  const unverifiedConflict = await runCli(['evaluate', '1+1', '--unverified', '--observation', 'x', '--session', sessionId]);
+  check('evaluate --unverified 与 --observation 互斥', unverifiedConflict.code === 2, unverifiedConflict.stderr.slice(0, 200));
+
   // -------------------------------------------------------------------------
   section('7. 页面动作 / tab / window');
   const getHtml = jsonOf(await runCli(['get-html', '--selector', 'h1', '--json', '--session', sessionId]));
@@ -710,6 +715,40 @@ async function runTests() {
     Boolean(rolledBack && rolledBack.ok === true && fs.readFileSync(targetFile, 'utf8') === 'old'),
     JSON.stringify(rolledBack),
   );
+
+  section('10c. 可恢复会话启动（requestId 幂等）');
+  const startToken = `${Date.now() + 5 * 60 * 1000}:selftest${Math.random().toString(36).slice(2, 10)}`;
+  const tracked1 = jsonOf(await runCli(['session', 'start', '--request-id', startToken, '--json']));
+  const tracked2 = jsonOf(await runCli(['session', 'start', '--request-id', startToken, '--json']));
+  check(
+    '同 requestId 重试返回同一 session',
+    Boolean(tracked1 && tracked2 && tracked1.result && tracked2.result && tracked1.result.sessionId === tracked2.result.sessionId),
+    JSON.stringify([tracked1, tracked2]),
+  );
+  check('第二次启动标记 reused=true', Boolean(tracked2 && tracked2.result && tracked2.result.reused === true));
+  const expiredStart = await runCli(['session', 'start', '--request-id', `${Date.now() - 1000}:expiredid1`, '--json']);
+  check('过期 requestId 被拒绝', expiredStart.code !== 0 && /过期/.test(expiredStart.stdout), expiredStart.stdout);
+
+  const lifecycleToken = `${Date.now() + 5 * 60 * 1000}:lifecycle${Math.random().toString(36).slice(2, 8)}`;
+  const prepared = jsonOf(await runCli(['session', 'prepare', '--request-id', lifecycleToken, '--json']));
+  check('session prepare 留下 prepared 记录', Boolean(prepared && prepared.result && prepared.result.entry && prepared.result.entry.state === 'prepared'), JSON.stringify(prepared));
+  const claimEarly = await runCli(['session', 'claim', '--request-id', lifecycleToken, '--json']);
+  check('未 ready 不能 claim', claimEarly.code !== 0 && /E_START_NOT_READY/.test(claimEarly.stdout), claimEarly.stdout);
+  const lifecycleStart = jsonOf(await runCli(['session', 'start', '--request-id', lifecycleToken, '--json']));
+  const lifecycleSid = lifecycleStart && lifecycleStart.result ? lifecycleStart.result.sessionId : null;
+  check('prepared token 可启动会话', Boolean(lifecycleSid), JSON.stringify(lifecycleStart));
+  const statusReady = jsonOf(await runCli(['session', 'request', '--request-id', lifecycleToken, '--json']));
+  check('request status=ready', Boolean(statusReady && statusReady.result && statusReady.result.entry && statusReady.result.entry.state === 'ready'), JSON.stringify(statusReady));
+  const claimed = jsonOf(await runCli(['session', 'claim', '--request-id', lifecycleToken, '--json']));
+  check('claim → claimed', Boolean(claimed && claimed.result && claimed.result.entry && claimed.result.entry.state === 'claimed'), JSON.stringify(claimed));
+  const cancelled = jsonOf(await runCli(['session', 'cancel', '--request-id', lifecycleToken, '--json']));
+  check('cancel → cancelled 且带 sessionId', Boolean(cancelled && cancelled.result && cancelled.result.entry.state === 'cancelled' && cancelled.result.sessionId === lifecycleSid), JSON.stringify(cancelled));
+  const blockedStart = await runCli(['session', 'start', '--request-id', lifecycleToken, '--json']);
+  check('墓碑 token 不能再次启动', blockedStart.code !== 0 && /E_REQUEST_CANCELLED/.test(blockedStart.stdout), blockedStart.stdout);
+  if (lifecycleSid) await runCli(['session', 'stop', lifecycleSid, '--json']);
+  if (tracked1 && tracked1.result && tracked1.result.sessionId) {
+    await runCli(['session', 'stop', tracked1.result.sessionId, '--json']);
+  }
 
   section('11. doctor 与 daemon stop');
   const doctor = await runCli(['doctor']);

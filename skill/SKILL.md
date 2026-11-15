@@ -39,6 +39,7 @@ description: |
    记下 `sessionId`。默认会新建并聚焦一个独立的 Agent Window，让用户看得见 Agent 在单独窗口里操作（不与用户标签页混在一起）；后台任务用 `--no-focus`。
 
 2. 新页面 `navigate`；已有用户标签页先读 [tab borrowing](references/tabs-and-profiles.md)。
+   想一步拿到页面与观察，可用 `bridge open <url> --observe`（返回 sessionId + observation，省一次调用）。
 
    ```sh
    bridge navigate https://example.com --session <id>

@@ -7,7 +7,7 @@ const PORTS = [52900, 52901, 52902, 52903, 52904, 52905, 52906, 52907, 52908, 52
 const CONNECT_TIMEOUT_MS = 2500;
 const HANDSHAKE_TIMEOUT_MS = 4000;
 const RETRY_MS = 3000;
-const CAPABILITIES = ['observe', 'frames', 'dialog', 'screenshot', 'network', 'rules', 'video', 'recording', 'pairing', 'auth-challenge'];
+const CAPABILITIES = ['observe', 'frames', 'dialog', 'screenshot', 'network', 'rules', 'video', 'recording', 'pairing', 'auth-challenge', 'unverified', 'dom-read'];
 
 function toHex(buffer) {
   return Array.from(new Uint8Array(buffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -275,7 +275,7 @@ export class BridgeSocket {
           browserVersion: browserVersion(),
           extVersion: chrome.runtime.getManifest().version,
           instanceId: this.instanceId || undefined,
-          protocol: '1.8',
+          protocol: PROTOCOL_VERSION,
           capabilities: CAPABILITIES,
           label: settings.instanceLabel || '',
           settings: {

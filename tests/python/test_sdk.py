@@ -109,6 +109,14 @@ class SdkTest(unittest.TestCase):
         self.assertEqual(MockDaemon.calls[4]["params"]["key"], "Enter")
         self.assertEqual(MockDaemon.calls[4]["params"]["selector"], "#name")
 
+    def test_click_backend_maps_backend_id(self):
+        bridge = BrowserBridge.connect(home=self.home)
+        page = bridge.new_page()
+        page.click_backend(42)
+        self.assertEqual(MockDaemon.calls[-1]["method"], "click-backend")
+        self.assertEqual(MockDaemon.calls[-1]["params"]["backendId"], 42)
+        self.assertEqual(MockDaemon.calls[-1]["params"]["session"], "s1")
+
     def test_error_mapping_keeps_code_and_method(self):
         bridge = BrowserBridge.connect(home=self.home)
         page = bridge.new_page()

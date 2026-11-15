@@ -1,4 +1,8 @@
 // lib/tools.mjs —— 模型可见工具的纯定义（不依赖 DSH 运行时，便于单测）
+import fs from 'node:fs';
+import path from 'node:path';
+import { daemonRpc } from './daemon-rpc.mjs';
+
 const SESSION = {
   type: 'string',
   description: 'BridgeDeck会话 id（bridge session start 返回）。只有一个会话时可省略。',
@@ -22,12 +26,43 @@ function filterObservation(text, grep) {
   return String(text || '').split(/\r?\n/).filter((line) => line.toLowerCase().includes(needle)).join('\n');
 }
 
+function directTarget(args) {
+  const params = {};
+  if (args && typeof args.ref === 'string' && args.ref) params.ref = args.ref;
+  else if (args && typeof args.selector === 'string' && args.selector) params.selector = args.selector;
+  return params;
+}
+
+// 只有“请求还没到 daemon”的错误才允许回退 CLI，避免动作被重复执行。
+function canFallbackToCli(error) {
+  const code = error && error.code;
+  return code === 'E_DAEMON' || code === 'E_DIRECT_RPC_DISABLED';
+}
+
 /**
  * 生成工具规格数组。
  * @param {(argv: string[], exec: any) => Promise<any>} run 调用 bridge CLI 的函数
  */
-export function buildToolSpecs(run) {
+export function buildToolSpecs(run, options = {}) {
+  const journal = options && options.journal ? options.journal : null;
   const call = (argv, args, exec) => run(withSession(argv, args), exec);
+  const rpcOrCli = async (method, params, argv, args, exec) => {
+    if (!args || typeof args.sessionId !== 'string' || !args.sessionId) return call(argv, args, exec);
+    try {
+      return await daemonRpc(method, { session: args.sessionId, ...params }, { timeoutMs: 60000 });
+    } catch (error) {
+      if (!canFallbackToCli(error)) throw error;
+      return call(argv, args, exec);
+    }
+  };
+  const rpcNoSessionOrCli = async (method, params, argv, args, exec) => {
+    try {
+      return await daemonRpc(method, params, { timeoutMs: 60000 });
+    } catch (error) {
+      if (!canFallbackToCli(error)) throw error;
+      return call(argv, args, exec);
+    }
+  };
 
   return [
     {
@@ -35,7 +70,12 @@ export function buildToolSpecs(run) {
       description: '查看BridgeDeck 的状态：daemon 是否在跑、已连接的浏览器实例（含实例名）、活动会话。任务开始时先用它确认环境。',
       parameters: {},
       async execute(args, exec) {
-        const status = await run(['status'], exec);
+        let status;
+        try {
+          status = await daemonRpc('status', {}, { timeoutMs: 10000 });
+        } catch {
+          status = await run(['status'], exec);
+        }
         return {
           port: status.port,
           version: status.version,
@@ -63,14 +103,75 @@ export function buildToolSpecs(run) {
         if (args && typeof args.agentName === 'string' && args.agentName) argv.push('--agent-name', args.agentName);
         if (args && typeof args.project === 'string' && args.project) argv.push('--project', args.project);
         if (args && typeof args.controllerColor === 'string' && args.controllerColor) argv.push('--controller-color', args.controllerColor);
-        const result = await run(argv, exec);
-        return {
-          sessionId: result.sessionId,
-          tabId: result.tabId,
-          windowId: result.windowId,
-          instanceId: result.instanceId,
-          borrowed: result.borrowed === true,
+        // 新建窗口的启动带 request-id：CLI 回复丢失时用同一 token 重试可取回既有会话，避免孤儿窗口。
+        const tracked = !(args && Number.isInteger(args.tab));
+        let token = null;
+        if (tracked) {
+          const random = globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function'
+            ? globalThis.crypto.randomUUID()
+            : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+          token = `${Date.now() + 5 * 60 * 1000}:${random}`;
+          argv.push('--request-id', token);
+          // 先写所有权记录：插件崩溃后仍能凭 token 找回/清理窗口。
+          if (journal) journal.add(token, { browser: args && args.browser ? String(args.browser) : null, noFocus: args && args.noFocus === true });
+        }
+        const finish = (result) => {
+          if (token && journal && result) {
+            journal.ready(token, { sessionId: result.sessionId, tabId: result.tabId, windowId: result.windowId });
+          }
+          return {
+            sessionId: result.sessionId,
+            tabId: result.tabId,
+            windowId: result.windowId,
+            instanceId: result.instanceId,
+            borrowed: result.borrowed === true,
+          };
         };
+        // 直连快路径：带 request-id 走 session.start_tracked（daemon 侧 journal 幂等）。
+        const params = {};
+        if (args && typeof args.browser === 'string' && args.browser) params.browser = args.browser;
+        if (args && Number.isInteger(args.tab)) params.tab = args.tab;
+        if (args && args.noFocus === true) params.noFocus = true;
+        if (args && typeof args.agentName === 'string' && args.agentName) {
+          params.controller = { name: args.agentName };
+          if (typeof args.project === 'string' && args.project) params.controller.project = args.project;
+          if (typeof args.controllerColor === 'string' && args.controllerColor) params.controller.color = args.controllerColor;
+        }
+        if (tracked && token) params.requestId = token;
+        const direct = async () => {
+          const attempt = () => daemonRpc(tracked ? 'session.start_tracked' : 'session.start', params, { timeoutMs: 120000 });
+          try {
+            return await attempt();
+          } catch (error) {
+            if (tracked && error && error.code === 'E_TIMEOUT') {
+              try {
+                return await attempt();
+              } catch (retryError) {
+                if (!canFallbackToCli(retryError)) {
+                  if (token && journal) journal.fail(token, retryError && retryError.code);
+                  throw retryError;
+                }
+                return null;
+              }
+            }
+            if (!canFallbackToCli(error)) {
+              if (token && journal) journal.fail(token, error && error.code);
+              throw error;
+            }
+            return null; // 交给 CLI 兜底
+          }
+        };
+        let result = await direct();
+        if (result === null) {
+          try {
+            result = await run(argv, exec);
+          } catch (error) {
+            if (token && journal) journal.fail(token, (error && error.code) || error);
+            throw error;
+          }
+          return finish(result);
+        }
+        return finish(result);
       },
     },
     {
@@ -83,7 +184,7 @@ export function buildToolSpecs(run) {
       async execute(args, exec) {
         const argv = ['session', 'stop', args.sessionId];
         if (args && args.keep === true) argv.push('--keep');
-        return run(argv, exec);
+        return rpcOrCli('session.stop', args && args.keep === true ? { keep: true } : {}, argv, args, exec);
       },
     },
     {
@@ -94,7 +195,7 @@ export function buildToolSpecs(run) {
         sessionId: SESSION,
       },
       async execute(args, exec) {
-        return call(['navigate', args.url], args, exec);
+        return rpcOrCli('navigate', { url: String(args.url) }, ['navigate', args.url], args, exec);
       },
     },
     {
@@ -103,6 +204,8 @@ export function buildToolSpecs(run) {
       parameters: {
         probeHover: { type: 'boolean', description: '为 true 时额外探测悬停才展开的菜单项。' },
         vom: { type: 'boolean', description: '为 true 时额外返回结构化节点数组（role/name/rect/inputState/inForm/clickable/dragHint 等），便于按字段决策。' },
+        facts: { type: 'boolean', description: '为 true 时用 DOMSnapshot 给节点补充 bounds/visible/clickable/domValue 等事实（通常与 vom 一起用）。' },
+        ax: { type: 'boolean', description: '为 true 时附带表格结构（tables）与未映射 AX 交互元素（unmappedAx）；开销略高。' },
         grep: { type: 'string', description: '只看包含该子串的行（不区分大小写）。' },
         sessionId: SESSION,
       },
@@ -110,13 +213,32 @@ export function buildToolSpecs(run) {
         const argv = ['observe'];
         if (args && args.probeHover === true) argv.push('--probe-hover');
         if (args && args.vom === true) argv.push('--vom');
-        const result = await call(argv, args, exec);
+        if (args && args.facts === true) argv.push('--facts');
+        if (args && args.ax === true) argv.push('--ax');
+        let result;
+        try {
+          if (!args || !args.sessionId) throw new Error('no session for direct rpc');
+          const params = { session: args.sessionId };
+          if (args.probeHover === true) params.probeHover = true;
+          if (args.vom === true) params.vom = true;
+          if (args.facts === true) params.facts = true;
+          if (args.ax === true) params.ax = true;
+          result = await daemonRpc('observe', params, { timeoutMs: 30000 });
+        } catch {
+          result = await call(argv, args, exec);
+        }
         return {
           url: result.url,
           title: result.title,
           refs: result.refs,
           observation: filterObservation(result.observation, args && args.grep),
           ...(args && args.vom === true ? { nodes: result.nodes || [], blocking: result.blocking || null } : {}),
+          ...(args && args.facts === true ? { facts: result.facts || null } : {}),
+          ...(result.tables ? { tables: result.tables } : {}),
+          ...(result.unmappedAx ? { unmappedAx: result.unmappedAx } : {}),
+          ...(result.blockingLayers ? { blockingLayers: result.blockingLayers } : {}),
+          ...(result.hiddenRefs ? { hiddenRefs: result.hiddenRefs } : {}),
+          ...(result.fallback ? { fallback: result.fallback } : {}),
         };
       },
     },
@@ -163,7 +285,36 @@ export function buildToolSpecs(run) {
         } else {
           throw new Error('不支持的 action：' + action);
         }
-        return call(argv, args, exec);
+        const method = action === 'scrollTo' ? 'scroll-to' : action;
+        const params = { ...directTarget(args) };
+        if (action === 'fill' || action === 'select') params.value = String(args.value);
+        if (action === 'fill' && args.noClear === true) params.noClear = true;
+        if (action === 'press') params.key = String(args.key);
+        if (action === 'drag') {
+          params.to = String(args.to);
+          if (typeof args.mode === 'string' && args.mode) params.mode = args.mode;
+        }
+        if (action === 'wheel') params.deltaY = Math.round(args.deltaY);
+        return rpcOrCli(method, params, argv, args, exec);
+      },
+    },
+    {
+      name: 'browser_click_backend',
+      description: '按 backendNodeId 点击 AX/DOMSnapshot 发现但没有 @eN ref 的元素（closed shadow、page-lib 漏掉的节点）。先用 observe 的 unmappedAx 拿 backendNodeId。',
+      parameters: {
+        backendNodeId: { type: 'integer', required: true, description: 'observe --ax --vom 返回的 unmappedAx[].backendNodeId。' },
+        sessionId: SESSION,
+      },
+      async execute(args, exec) {
+        if (!Number.isInteger(args.backendNodeId)) throw new Error('backendNodeId 需要整数');
+        const result = await call(['click-backend', '--backend', String(args.backendNodeId)], args, exec);
+        return {
+          ok: result.ok !== false,
+          backendNodeId: args.backendNodeId,
+          x: result.x,
+          y: result.y,
+          via: result.via || 'cdp-backend',
+        };
       },
     },
     {
@@ -184,20 +335,23 @@ export function buildToolSpecs(run) {
           const argv = ['read'];
           if (args.all === true) argv.push('--all');
           else if (target) argv.push(target);
-          const result = await call(argv, args, exec);
+          const params = args.all === true ? { all: true } : directTarget(args);
+          const result = await rpcOrCli('read', params, argv, args, exec);
           return { fields: result.fields || [] };
         }
         if (kind === 'html') {
           const argv = ['get-html'];
           if (target) argv.push(target);
-          const result = await call(argv, args, exec);
+          const result = await rpcOrCli('get-html', directTarget(args), argv, args, exec);
           return { html: result.html, url: result.url };
         }
         if (kind === 'extract') {
           const argv = ['extract'];
           if (target) argv.push(target);
           if (Number.isInteger(args.maxRows)) argv.push('--max-rows', String(args.maxRows));
-          const result = await call(argv, args, exec);
+          const params = { ...directTarget(args) };
+          if (Number.isInteger(args.maxRows)) params.maxRows = args.maxRows;
+          const result = await rpcOrCli('extract', params, argv, args, exec);
           return {
             kind: result.kind,
             columns: result.columns,
@@ -230,6 +384,39 @@ export function buildToolSpecs(run) {
         if (typeof args.region === 'string' && args.region) argv.push('--region', args.region);
         if (args.annotate === true) argv.push('--annotate');
         if (Number.isInteger(args.overlap) && args.overlap >= 0) argv.push('--overlap', String(args.overlap));
+        const mode = args.mode === 'auto' || args.fullPage === true ? 'auto' : 'visible';
+        const params = { fullPage: mode === 'auto' };
+        if (args.annotate === true) params.annotate = true;
+        if (Number.isInteger(args.overlap) && args.overlap >= 0) params.overlap = args.overlap;
+        if (typeof args.selector === 'string' && args.selector) params.selector = args.selector;
+        if (typeof args.region === 'string' && args.region) {
+          const parts = args.region.split(',').map((item) => Number(item.trim()));
+          if (parts.length === 4 && parts.every((n) => Number.isFinite(n) && n >= 0) && parts[2] > 0 && parts[3] > 0) {
+            params.region = { x: parts[0], y: parts[1], width: parts[2], height: parts[3] };
+          }
+        }
+        if (args.sessionId) {
+          try {
+            const result = await daemonRpc('screenshot', { session: args.sessionId, ...params }, { timeoutMs: 120000 });
+            if (result && typeof result.dataUrl === 'string') {
+              const comma = result.dataUrl.indexOf(',');
+              const buffer = Buffer.from(result.dataUrl.slice(comma + 1), 'base64');
+              const target = path.resolve(String(args.out));
+              fs.mkdirSync(path.dirname(target), { recursive: true });
+              fs.writeFileSync(target, buffer);
+              return {
+                path: target,
+                width: result.width ?? null,
+                height: result.height ?? null,
+                bytes: buffer.length,
+                ...(result.capture_id ? { capture_id: result.capture_id } : {}),
+                ...(Array.isArray(result.visual_refs) ? { visual_refs: result.visual_refs } : {}),
+              };
+            }
+          } catch (error) {
+            if (!canFallbackToCli(error)) throw error;
+          }
+        }
         const result = await call(argv, args, exec);
         return { path: result.path, width: result.width, height: result.height, bytes: result.bytes };
       },
@@ -239,11 +426,18 @@ export function buildToolSpecs(run) {
       description: '在页面主世界执行一段 JS 表达式并返回结果（只做用户要求的页面操作，别用它读 cookie/密码）。',
       parameters: {
         expression: { type: 'string', required: true, description: '要执行的表达式。' },
+        unverified: { type: 'boolean', description: '跳过观察校验直接执行（结果 verified=false；需要扩展协议 1.9）。' },
         sessionId: SESSION,
       },
       async execute(args, exec) {
-        const result = await call(['evaluate', args.expression], args, exec);
-        return { value: result.value, note: result.note || null };
+        const argv = ['evaluate', args.expression];
+        if (args.unverified === true) argv.push('--unverified');
+        const result = await call(argv, args, exec);
+        return {
+          value: result.value,
+          note: result.note || null,
+          ...(result.verified === false ? { verified: false } : {}),
+        };
       },
     },
     {
@@ -639,21 +833,32 @@ export function buildToolSpecs(run) {
       },
       async execute(args, exec) {
         const action = String(args.action || '');
-        if (action === 'list') return run(['tab', 'list', '--json'], exec);
+        if (action === 'list') {
+          const argv = ['tab', 'list', '--json'];
+          const params = { scope: 'agent' };
+          if (args.sessionId) params.session = args.sessionId;
+          return rpcNoSessionOrCli('tab.list', params, argv, args, exec);
+        }
         if (action === 'new') {
           const argv = ['tab', 'new'];
           if (typeof args.url === 'string' && args.url) argv.push(args.url);
           if (args.newWindow === true) argv.push('--window');
           if (args.noFocus === true) argv.push('--no-focus');
-          return run(argv, exec);
+          const params = { noFocus: args.noFocus === true };
+          if (typeof args.url === 'string' && args.url) params.url = args.url;
+          if (args.newWindow === true) params.newWindow = true;
+          if (args.sessionId) params.session = args.sessionId;
+          return rpcNoSessionOrCli('tab.new', params, argv, args, exec);
         }
         if (action === 'close' || action === 'select') {
           if (!Number.isInteger(args.tabId)) throw new Error(action + ' 需要 tabId');
-          return run(['tab', action, String(args.tabId)], exec);
+          return rpcNoSessionOrCli('tab.' + action, { tabId: args.tabId }, ['tab', action, String(args.tabId)], args, exec);
         }
         if (action === 'move') {
           if (!Number.isInteger(args.tabId) || !Number.isInteger(args.windowId)) throw new Error('move 需要 tabId 与 windowId');
-          return run(['tab', 'move', String(args.tabId), '--to-window', String(args.windowId)], exec);
+          const params = { tabId: args.tabId, windowId: args.windowId };
+          if (Number.isInteger(args.index)) params.index = args.index;
+          return rpcNoSessionOrCli('tab.move', params, ['tab', 'move', String(args.tabId), '--to-window', String(args.windowId)], args, exec);
         }
         throw new Error('action 只能是 list|new|close|select|move');
       },
@@ -685,7 +890,10 @@ export function buildToolSpecs(run) {
         if (typeof args.url === 'string' && args.url) argv.push(args.url);
         if (args.newWindow === true) argv.push('--window');
         if (args.noFocus === true) argv.push('--no-focus');
-        return run(argv, exec);
+        const params = { noFocus: args.noFocus === true };
+        if (typeof args.url === 'string' && args.url) params.url = args.url;
+        if (args.newWindow === true) params.newWindow = true;
+        return rpcNoSessionOrCli('tab.new', params, argv, args, exec);
       },
     },
     {
@@ -694,7 +902,7 @@ export function buildToolSpecs(run) {
       parameters: { tabId: { type: 'integer', required: true, description: '要关闭的 tabId。' } },
       async execute(args, exec) {
         if (!Number.isInteger(args.tabId)) throw new Error('close 需要 tabId');
-        return run(['tab', 'close', String(args.tabId)], exec);
+        return rpcNoSessionOrCli('tab.close', { tabId: args.tabId }, ['tab', 'close', String(args.tabId)], args, exec);
       },
     },
     {
@@ -703,7 +911,7 @@ export function buildToolSpecs(run) {
       parameters: { tabId: { type: 'integer', required: true, description: '要激活的 tabId。' } },
       async execute(args, exec) {
         if (!Number.isInteger(args.tabId)) throw new Error('select 需要 tabId');
-        return run(['tab', 'select', String(args.tabId)], exec);
+        return rpcNoSessionOrCli('tab.select', { tabId: args.tabId }, ['tab', 'select', String(args.tabId)], args, exec);
       },
     },
     {
@@ -767,11 +975,15 @@ export function buildToolSpecs(run) {
       },
       async execute(args, exec) {
         const action = String(args.action || '');
-        if (action === 'list') return run(['window', 'list', '--json'], exec);
-        if (action === 'ensure') return run(['window', 'ensure', '--json'], exec);
+        if (action === 'list') return rpcNoSessionOrCli('window.list', {}, ['window', 'list', '--json'], args, exec);
+        if (action === 'ensure') {
+          const params = {};
+          if (args.sessionId) params.session = args.sessionId;
+          return rpcNoSessionOrCli('window.ensureAgent', params, ['window', 'ensure', '--json'], args, exec);
+        }
         if (action === 'focus') {
           if (!Number.isInteger(args.windowId)) throw new Error('focus 需要 windowId');
-          return run(['window', 'focus', String(args.windowId), '--json'], exec);
+          return rpcNoSessionOrCli('window.focus', { windowId: args.windowId }, ['window', 'focus', String(args.windowId), '--json'], args, exec);
         }
         throw new Error('action 只能是 list|focus|ensure');
       },

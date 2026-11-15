@@ -4,6 +4,7 @@ import { readSettings } from './settings.js';
 import { withTimeout } from './timeout.js';
 import { log } from './log.js';
 import { execPage } from './inject.js';
+import { armTab } from './debugger.js';
 import { showTakeover, hideTakeover } from './takeover.js';
 import { closeOverlay, openOverlay } from './overlay-state.js';
 import { expectedTabMoves } from './session-manager/tab-moves.js';
@@ -176,11 +177,15 @@ export function waitForNavigation(tabId, timeoutMs = 30000) {
     timer = setTimeout(() => fail(bridgeError('E_TIMEOUT', `等待导航超时（${timeoutMs}ms）`)), timeoutMs);
     chrome.tabs.onUpdated.addListener(onUpdated);
     chrome.tabs.onRemoved.addListener(onRemoved);
-    // 命令到达前页面可能已经完成导航：先记下当前 URL，交给后续 onUpdated 比对
+    // 命令到达前页面可能已经完成导航：先读一次状态，若已经 complete 则短暂等待
+    // 新导航事件（避免 SPA 立刻跳走），没有新事件就按当前 URL 结束。
     chrome.tabs
       .get(tabId)
       .then((tab) => {
         log('wait-for-navigation 起始 url', tab && tab.url);
+        if (tab && tab.status === 'complete' && tab.url) {
+          setTimeout(() => finish(tab.url), 100);
+        }
       })
       .catch(() => fail(bridgeError('E_NO_TAB', `tabId ${tabId} 不存在或已关闭`)));
   });
@@ -336,8 +341,7 @@ export async function newAgentWindow(params = {}) {
   if (!created || !Number.isInteger(created.id)) throw bridgeError('E_INTERNAL', '浏览器没有返回 Agent 窗口 id');
   const windowId = created.id;
   markSelfCreatedWindow(windowId);
-  await addAgentWindow(windowId);
-  await writeAgentWindowId(windowId);
+  await Promise.all([addAgentWindow(windowId), writeAgentWindowId(windowId)]);
   const createdTab = Array.isArray(created.tabs) ? created.tabs[0] : null;
   let tab = createdTab;
   if (!tab) {
@@ -346,13 +350,14 @@ export async function newAgentWindow(params = {}) {
   }
   if (!tab || !Number.isInteger(tab.id)) throw bridgeError('E_INTERNAL', 'Agent 窗口里没有标签页');
   markSelfCreated(tab.id);
-  await showTakeover(tab.id, { name: 'BridgeDeck' }).catch(() => {});
+  // 会话标签页预挂 CDP + 焦点仿真：后续 evaluate 走 Runtime.evaluate、可信输入不用切前台。
+  // 不阻塞 session.start；预挂失败时动作路径自动回退到注入式/切前台。
+  armTab(tab.id).catch((error) => log('会话 CDP 预挂载失败：' + ((error && error.message) || error)));
+  // 浮层是可见性提示，不阻塞会话返回；注入失败不影响后续动作。
+  showTakeover(tab.id, { name: 'BridgeDeck' }).catch(() => {});
   if (noFocus && previousFocused && previousFocused.id !== windowId) {
-    try {
-      await withTimeout(chrome.windows.update(previousFocused.id, { focused: true }), 3000, 'windows.update');
-    } catch {
-      // 原窗口可能已关闭，忽略
-    }
+    // 后台建窗不需要等焦点回到原窗口：失败/延迟不影响会话。
+    withTimeout(chrome.windows.update(previousFocused.id, { focused: true }), 3000, 'windows.update').catch(() => {});
   }
   return { tabId: tab.id, windowId, incognito: created.incognito === true };
 }
@@ -877,6 +882,51 @@ export async function requestHelp(params = {}) {
   const timeoutMs = Math.min(Math.max(Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : 180000, 5000), 600000);
   const requestId = crypto.randomUUID();
   const pending = waitHumanDecision(requestId, timeoutMs, () => ({ action: 'timeout' }));
+  // 完成条件（bsk completion_criteria）：人工完成页面操作后自动交还，不必再点卡片按钮。
+  const criteria = (Array.isArray(params.criteria) ? params.criteria : [])
+    .filter((item) => item && typeof item === 'object')
+    .slice(0, 10)
+    .map((item) => {
+      const kind = String(item.kind || item.type || '');
+      if (kind === 'selector_exists' || kind === 'selector_visible') return { kind, selector: String(item.selector || '') };
+      if (kind === 'text_exists') return { kind, text: String(item.text || '') };
+      if (kind === 'url_contains') return { kind, text: String(item.text || '') };
+      return { kind, unsupported: true };
+    })
+    .filter((item) => !item.unsupported && (item.selector || item.text));
+  let stopCriteriaPolling = false;
+  let criteriaPoller = null;
+  let criteriaLast = null;
+  if (criteria.length) {
+    criteriaPoller = (async () => {
+      while (!stopCriteriaPolling) {
+        await sleep(400);
+        if (stopCriteriaPolling) return null;
+        let currentUrl = '';
+        try {
+          const current = await chrome.tabs.get(tabId);
+          currentUrl = current && current.url ? String(current.url) : '';
+        } catch {
+          // 标签页可能已关闭：交给 pending 的超时/关闭逻辑
+        }
+        const urlOk = criteria
+          .filter((item) => item.kind === 'url_contains')
+          .every((item) => currentUrl.includes(String(item.text || '')));
+        if (!urlOk) continue;
+        const pageCriteria = criteria.filter((item) => item.kind !== 'url_contains');
+        if (!pageCriteria.length) return { action: 'done', note: 'completion criteria satisfied' };
+        try {
+          const checked = await execPage(tabId, 'help-criteria-check', { criteria: pageCriteria });
+          criteriaLast = checked;
+          if (checked && checked.ok === true) return { action: 'done', note: 'completion criteria satisfied' };
+        } catch (error) {
+          criteriaLast = { error: String((error && error.message) || error), code: error && error.code };
+          // 页面暂时不可执行：下一轮再试
+        }
+      }
+      return null;
+    })();
+  }
   let highlightTarget = params.target ? String(params.target) : '';
   let highlightRect = null;
   if (highlightTarget.startsWith('@')) {
@@ -897,8 +947,13 @@ export async function requestHelp(params = {}) {
     } catch {
       // 忽略置前失败
     }
-    log('请求人工协助 tab=' + tabId + ' timeout=' + timeoutMs);
-    const answer = await pending;
+    log('请求人工协助 tab=' + tabId + ' timeout=' + timeoutMs + (criteria.length ? ' criteria=' + criteria.length : ''));
+    let answer;
+    try {
+      answer = criteriaPoller ? await Promise.race([pending, criteriaPoller]) : await pending;
+    } finally {
+      stopCriteriaPolling = true;
+    }
     try { await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: () => { const n = document.getElementById('__bb_help_host'); if (n) n.remove(); const h = document.getElementById('__bb_help_highlight'); if (h) h.remove(); } }); } catch { /* 页面可能已关闭 */ }
     await showTakeover(tabId, {}).catch(() => {});
     return { action: answer.action === 'done' ? 'done' : answer.action === 'skip' ? 'skip' : 'timeout', note: typeof answer.note === 'string' ? answer.note : '' };

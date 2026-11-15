@@ -12,6 +12,7 @@ bridge cooperate handback --session <id>
 - 返回 `context_id`、`observation_id`、`control_policy` 和观察文本。
 - 目标动作带 `--context`；strict 下必须带且单次有效，target 下同一 context 可复用，导航或文档替换才吊销。
 - 视觉/非目标动作（无目标 `press`、`wheel`、`evaluate`）还要 `--observation`，而且要用最新一次 sync 的收据；补充 observe 不能顶替。
+  例外：页面上内容一直变化、只需取一个值时，用 `evaluate <expr> --unverified` 跳过观察校验（结果 `verified:false`，控制权仍校验）。
 - 过期回 `E_CONTEXT_STALE` / `E_OBSERVATION_STALE`，重新 sync 后再动。
 - `wait` 在 1.5s 内检测到可信键鼠输入返回 `human`，停手后 `ready`；`ready:false` 期间不要发页面动作，也不要抢人正在操作的控件。
 - 人完成后用 `handback` 交回控制权。

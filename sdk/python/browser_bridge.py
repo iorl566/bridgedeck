@@ -177,6 +177,10 @@ class Page:
     def click(self, target: Union[str, Dict[str, Any]], **options: Any) -> Any:
         return self.call("click", {**target_params(target), **options})
 
+    def click_backend(self, backend_node_id: int, **options: Any) -> Any:
+        """按 backendNodeId 点击没有 @eN ref 的元素（closed shadow 等）。"""
+        return self.call("click-backend", {"backendId": int(backend_node_id), **options})
+
     def hover(self, target: Union[str, Dict[str, Any]], **options: Any) -> Any:
         return self.call("hover", {**target_params(target), **options})
 

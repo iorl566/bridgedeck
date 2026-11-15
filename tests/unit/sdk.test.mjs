@@ -92,6 +92,18 @@ test('newPage / goto / click / fill 自动带 session 并映射 ref/selector', a
   assert.equal(result.value, 42);
 });
 
+test('clickBackend 发送 click-backend 并带 session', async (t) => {
+  const h = await harness();
+  t.after(h.close);
+  const bridge = await BrowserBridge.connect({ home: h.home });
+  const page = await bridge.newPage();
+  const result = await page.clickBackend(42);
+  const last = h.calls.at(-1);
+  assert.equal(last.method, 'click-backend');
+  assert.deepEqual(last.params, { session: 's1', backendId: 42 });
+  assert.equal(result.method, 'click-backend');
+});
+
 test('错误映射为 BridgeRpcError，保留 code 与 method', async (t) => {
   const h = await harness();
   t.after(h.close);

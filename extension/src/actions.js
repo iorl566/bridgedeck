@@ -1,11 +1,11 @@
 // src/actions.js —— 页面动作、等待类命令
 import { bridgeError } from './errors.js';
-import { execPage, evalInMain, readConsole } from './inject.js';
+import { execPage, evalInMain, evalByCdp, readConsole } from './inject.js';
 import { getTab, sleep, waitForLoad, waitForNavigation } from './tabs.js';
 import { execPageAllFrames } from './inject.js';
-import { acquire, onEvent, release, send as cdpSend } from './debugger.js';
+import { acquire, isAttached, isTabArmed, onEvent, release, send as cdpSend } from './debugger.js';
 import { log } from './log.js';
-import { showTakeover } from './takeover.js';
+import { hideTakeover, showTakeover } from './takeover.js';
 import { withOverlaysHidden } from './overlay-suppress.js';
 import { takeTokenChunk } from './tokens.js';
 import { acquireInputLease, releaseInputLease } from './input-lease.js';
@@ -13,6 +13,16 @@ import { isCommandCancelled } from './command-cancel.js';
 import { ensureFrameGraph } from './frame-graph.js';
 import { withForegroundTab } from './background-execution.js';
 import { diffObservation, observationId } from './lib/observation-delta.js';
+import { readDocumentIdentity, sameDocumentIdentity } from './document-identity.js';
+import { captureDomSnapshot, captureDomSnapshotFacts } from './dom-snapshot.js';
+import { annotateHiddenRefs, collectHiddenRefs } from './lib/facts-annotate.js';
+import { renderAxObservation } from './lib/ax-render.js';
+import { collectUnmappedAx, isInteractiveAxRole, renderUnmappedAx } from './lib/unmapped-ax.js';
+import { computeTableFacts, summarizeTables } from './lib/table-facts.js';
+import { computeBlockingLayers } from './lib/blocking-layers.js';
+import { applyBlockingLayers, applyFactToNode } from './lib/facts-apply.js';
+import { buildAxNodes } from './lib/ax-pipeline.js';
+import { intersectsViewport, summarizePipeline } from './lib/pipeline-compare.js';
 
 const DEFAULT_NAV_TIMEOUT_MS = 30000;
 const DEFAULT_ELEMENT_TIMEOUT_MS = 10000;
@@ -20,6 +30,8 @@ const DEFAULT_WAIT_NAV_TIMEOUT_MS = 30000;
 const MAX_TIMEOUT_MS = 120000;
 const WAIT_ELEMENT_POLL_MS = 150;
 const VALID_ELEMENT_STATES = new Set(['visible', 'hidden', 'attached', 'detached']);
+// 刚 fill 过的目标：紧随其后的 trusted press 不需要再点击一次来聚焦（省 1 次可信鼠标往返）。
+const recentFillFocus = new Map(); // tabId -> { ref, at }
 
 export function requireTabId(params) {
   if (!params || !Number.isInteger(params.tabId)) {
@@ -52,6 +64,7 @@ export async function navigate(params = {}) {
   const tab = await getTab(tabId);
   shadowRefs.delete(tabId);
   clearFrameAliases(tabId);
+  recentFillFocus.delete(tabId);
   const timeoutMs = boundedTimeout(params.timeoutMs, DEFAULT_NAV_TIMEOUT_MS);
   try {
     if ((tab.url || '') === url) {
@@ -66,7 +79,8 @@ export async function navigate(params = {}) {
   if (!loaded) log(`tab ${tabId} 导航 ${timeoutMs}ms 内未完成加载，返回当前状态`);
   await resetRefsQuietly(tabId);
   const current = await getTab(tabId);
-  await showTakeover(tabId, { name: 'BridgeDeck' });
+  // 浮层是可见性提示，注入失败/延迟不影响导航结果；不阻塞导航返回。
+  showTakeover(tabId, { name: 'BridgeDeck' }).catch(() => {});
   return { url: current.url || current.pendingUrl || url, title: current.title || '' };
 }
 
@@ -230,12 +244,13 @@ export async function waitForNavigationCmd(params = {}) {
       const tab = await getTab(tabId);
       if (tab && tab.status === 'complete') break;
     } catch { break; }
-    await sleep(150);
+    await sleep(50);
   }
   if (waitUntil === 'networkidle') await sleep(700);
   // 宽限：页面刚 complete 时可能紧接着开始新的主导航（重定向/SPA 跳转），
-  // 只有在一段安静窗口内 URL 与状态都稳定，才算真正到达。
-  const graceMs = Math.max(0, Math.min(Number(params.graceMs) || 300, 2000));
+  // 只有在一段安静窗口内 URL 与状态都稳定，才算真正到达。60ms 覆盖常见重定向，
+  // 需要更保守时传 graceMs。
+  const graceMs = Math.max(0, Math.min(Number(params.graceMs) || 60, 2000));
   let stableSince = 0;
   let lastUrl = '';
   while (Date.now() < deadline) {
@@ -249,7 +264,7 @@ export async function waitForNavigationCmd(params = {}) {
       stableSince = 0;
     }
     lastUrl = url;
-    await sleep(100);
+    await sleep(30);
   }
   const settled = await getTab(tabId).catch(() => null);
   return { ok: true, url: (settled && settled.url) || navigation.url, phase: waitUntil };
@@ -354,7 +369,29 @@ async function collectAxNodes(tabId, limit = 1000) {
     await cdpSend(tabId, 'Accessibility.enable').catch(() => {});
     const tree = await cdpSend(tabId, 'Accessibility.getFullAXTree', {});
     const nodes = [];
-    for (const node of tree && Array.isArray(tree.nodes) ? tree.nodes : []) {
+    const allNodes = tree && Array.isArray(tree.nodes) ? tree.nodes : [];
+    const parentById = new Map();
+    for (const raw of allNodes) {
+      if (raw && raw.nodeId !== undefined) parentById.set(raw.nodeId, raw.parentId);
+    }
+    const depthMemo = new Map();
+    const depthOf = (nodeId) => {
+      if (depthMemo.has(nodeId)) return depthMemo.get(nodeId);
+      let depth = 0;
+      let current = nodeId;
+      const seen = new Set();
+      while (parentById.has(current)) {
+        const parent = parentById.get(current);
+        if (parent === undefined || parent === null || seen.has(parent)) break;
+        seen.add(parent);
+        current = parent;
+        depth += 1;
+        if (depth >= 20) break;
+      }
+      depthMemo.set(nodeId, depth);
+      return depth;
+    };
+    for (const node of allNodes) {
       if (!node || node.ignored === true) continue;
       const role = node.role && node.role.value ? String(node.role.value) : '';
       if (!role || role === 'none' || role === 'generic') continue;
@@ -377,6 +414,9 @@ async function collectAxNodes(tabId, limit = 1000) {
         required: props.required === true,
         selected: props.selected === undefined ? null : props.selected,
         backendNodeId: node.backendDOMNodeId || null,
+        nodeId: node.nodeId !== undefined && node.nodeId !== null ? String(node.nodeId) : null,
+        parentId: node.parentId !== undefined && node.parentId !== null ? String(node.parentId) : null,
+        depth: depthOf(node.nodeId),
       });
       if (nodes.length >= limit) break;
     }
@@ -386,20 +426,122 @@ async function collectAxNodes(tabId, limit = 1000) {
   }
 }
 
+/** page-lib 观察失败时的 AX 兜底：CDP 仍可用，返回无 ref 的降级语义树。 */
+async function observeAxFallback(tabId, params, options = {}) {
+  // 先收起 BridgeDeck 自己的浮层，避免 AX 树把接管卡片也当成页面内容。
+  // AX 树更新有一拍延迟，移除后稍等一下再取快照。
+  await hideTakeover(tabId).catch(() => {});
+  await sleep(300);
+  let axNodes;
+  try {
+    axNodes = await collectAxNodes(tabId, 800);
+  } finally {
+    showTakeover(tabId, {}).catch(() => {});
+  }
+  if (!axNodes.length) return null;
+  let facts = null;
+  try {
+    facts = await captureDomSnapshotFacts(tabId);
+  } catch {
+    facts = null;
+  }
+  const requested = Number(params.maxNodes);
+  const observation = renderAxObservation(axNodes, facts, {
+    maxNodes: Number.isFinite(requested) && requested > 0 ? requested : 120,
+  });
+  if (!observation.trim()) return null;
+  let pageUrl = '';
+  let pageTitle = '';
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    pageUrl = tab && typeof tab.url === 'string' ? tab.url : '';
+    pageTitle = tab && typeof tab.title === 'string' ? tab.title : '';
+  } catch {
+    // 页面可能已关闭；保留空 url/title
+  }
+  const factsSummary = facts
+    ? {
+      nodes: facts.size,
+      axMatched: axNodes.filter((node) => Number.isInteger(node.backendNodeId) && facts.has(node.backendNodeId)).length,
+      vomMatched: 0,
+    }
+    : null;
+  let nodes = [];
+  if (options.buildNodes === true) {
+    const limit = Number.isFinite(Number(params.maxNodes)) && Number(params.maxNodes) > 0
+      ? Number(params.maxNodes)
+      : 200;
+    nodes = buildAxNodes(axNodes, facts, { limit });
+    const tableFacts = computeTableFacts(axNodes);
+    if (tableFacts.size) {
+      for (const node of nodes) {
+        if (!node || !Number.isInteger(node.backendNodeId)) continue;
+        const fact = tableFacts.get(node.backendNodeId);
+        if (fact) node.table = fact;
+      }
+    }
+  }
+  return {
+    observation,
+    refs: 0,
+    nodes,
+    axNodes,
+    url: pageUrl,
+    title: pageTitle,
+    fallback: 'ax',
+    downgraded: true,
+    ...(options.pipeline ? { pipeline: options.pipeline } : {}),
+    ...(factsSummary ? { facts: factsSummary } : {}),
+  };
+}
+
 export async function observe(params = {}) {
   if (params.vom === true && (params.cursor || Number(params.maxTokens) > 0)) {
     throw bridgeError('E_BAD_ARG', '--vom 不能与 --cursor/--max-tokens 同时使用');
   }
+  if (params.fallbackAx === true && (params.vom === true || params.ax === true)) {
+    throw bridgeError('E_BAD_ARG', 'AX 兜底观察不支持 --vom/--ax（没有 page-lib ref）');
+  }
+  if (params.pipeline === 'ax' && (params.vom === true || params.ax === true || params.fallbackAx === true)) {
+    throw bridgeError('E_BAD_ARG', '--pipeline ax 是独立的备用采集器，不能与 --vom/--ax/--fallback-ax 组合');
+  }
   const observeTabId = Number.isInteger(params.tabId) ? params.tabId : null;
   if (observeTabId != null && (params.closedShadow || params.cursor || params.maxTokens)) clearFrameAliases(observeTabId);
   const tabId = requireTabId(params);
-  const base = await execPage(tabId, 'observe', {
-    probeHover: params.probeHover === true,
-    maxDepth: params.maxDepth,
-    debugSurfaces: params.debugSurfaces === true,
-    vom: params.vom === true,
-    markVom: params.vom === true && params.ax === true,
-  });
+  if (params.pipeline === 'ax') {
+    const observed = await observeAxFallback(tabId, params, { buildNodes: true, pipeline: 'ax' });
+    if (!observed) throw bridgeError('E_INTERNAL', 'AX 采集器不可用（页面无可访问的 AX 树）');
+    return observed;
+  }
+  const observeStartedAt = Date.now();
+  let base;
+  if (params.fallbackAx === true) {
+    base = await observeAxFallback(tabId, params);
+    if (!base) throw bridgeError('E_INTERNAL', 'AX 兜底观察不可用（页面无可访问的 AX 树）');
+    log('按请求使用 AX 兜底观察 tab=' + tabId);
+  } else {
+    try {
+      base = await execPage(tabId, 'observe', {
+        probeHover: params.probeHover === true,
+        maxDepth: params.maxDepth,
+        debugSurfaces: params.debugSurfaces === true,
+        vom: params.vom === true,
+        markVom: params.vom === true && (params.ax === true || params.facts === true),
+      });
+    } catch (error) {
+      if (params.fallback === false) throw error;
+      let fallback = null;
+      try {
+        fallback = await observeAxFallback(tabId, params);
+      } catch {
+        fallback = null;
+      }
+      if (!fallback) throw error;
+      log('observe 失败，已降级为 AX 观察：' + ((error && error.message) || error));
+      base = fallback;
+    }
+  }
+  const pageLibMs = Date.now() - observeStartedAt;
   let observation = String(base.observation || '');
   let closedShadow = null;
   if (params.closedShadow === true) {
@@ -423,8 +565,28 @@ export async function observe(params = {}) {
     }
   }
 
-  let axNodes = null;
-  if (params.ax === true) {
+  // --facts 先抓一次 DOMSnapshot：其中已带页面侧 data-bb-vom 标记，用它直接映射 backendNodeId，
+  // 大数据页可省掉一次 DOM.getDocument(pierce)。
+  let factsMap = null;
+  let factsCaptured = false;
+  let backendMap = null;
+  let backendMarked = false;
+  if (params.facts === true) {
+    try {
+      const snapshot = await captureDomSnapshot(tabId);
+      factsMap = snapshot.facts;
+      factsCaptured = true;
+      if (params.vom === true && Array.isArray(base.nodes) && snapshot.vomIds && snapshot.vomIds.size) {
+        backendMap = snapshot.vomIds;
+      }
+    } catch (error) {
+      factsMap = null;
+      log('DOMSnapshot 事实采集失败（忽略）：' + ((error && error.message) || error));
+    }
+  }
+
+  let axNodes = Array.isArray(base.axNodes) ? base.axNodes : null;
+  if (params.ax === true && !axNodes) {
     try {
       axNodes = await collectAxNodes(tabId);
     } catch (error) {
@@ -435,17 +597,169 @@ export async function observe(params = {}) {
 
   let axJoin = null;
   if (axNodes && params.vom === true && Array.isArray(base.nodes) && base.nodes.length) {
-    let backendMap = null;
-    try {
-      backendMap = await mapVomBackendNodeIds(tabId);
-    } catch (error) {
-      log('VOM backendNodeId 映射失败，退回 role+name：' + ((error && error.message) || error));
+    if (!backendMap) {
+      try {
+        backendMap = await mapVomBackendNodeIds(tabId);
+        backendMarked = true;
+      } catch (error) {
+        log('VOM backendNodeId 映射失败，退回 role+name：' + ((error && error.message) || error));
+      }
     }
     try {
       axJoin = joinAxIntoNodes(base.nodes, axNodes, backendMap);
     } finally {
       await execPage(tabId, 'clear-vom-markers', {}).catch(() => {});
+      backendMarked = false;
     }
+  }
+
+  // 把映射到的 backendNodeId 写回节点，供事实富化使用；snapshot 没给映射时回退 DOM.getDocument。
+  if (params.facts === true && params.vom === true && Array.isArray(base.nodes) && base.nodes.length) {
+    if (!backendMap) {
+      try {
+        backendMap = await mapVomBackendNodeIds(tabId);
+        backendMarked = true;
+      } catch (error) {
+        log('VOM backendNodeId 映射失败：' + ((error && error.message) || error));
+      }
+    }
+    if (backendMap) {
+      for (const node of base.nodes) {
+        if (!node || node.backendNodeId) continue;
+        const backend = node.vomId ? backendMap.get(node.vomId) : null;
+        if (backend) node.backendNodeId = backend;
+      }
+    }
+  }
+
+  let factsSummary = null;
+  if (params.facts === true && factsCaptured && factsMap) {
+    const apply = (target) => {
+      if (!target || !Number.isInteger(target.backendNodeId)) return 0;
+      const fact = factsMap.get(target.backendNodeId);
+      if (!fact) return 0;
+      applyFactToNode(target, fact);
+      return 1;
+    };
+    let axMatched = 0;
+    for (const ax of axNodes || []) axMatched += apply(ax);
+    let vomMatched = 0;
+    for (const node of Array.isArray(base.nodes) ? base.nodes : []) {
+      vomMatched += apply(node);
+      if (node && node.ax) apply(node.ax);
+    }
+    factsSummary = { nodes: factsMap.size, axMatched, vomMatched };
+  }
+
+  let hiddenRefs = [];
+  if (factsSummary) {
+    hiddenRefs = collectHiddenRefs(base.nodes);
+    if (hiddenRefs.length) {
+      observation = annotateHiddenRefs(observation, hiddenRefs);
+      factsSummary.hiddenRefs = hiddenRefs.length;
+    }
+  }
+
+  let unmappedAx = [];
+  let tableSummary = [];
+  if (params.ax === true && params.vom === true && Array.isArray(axNodes) && axNodes.length) {
+    const matchedBackend = new Set();
+    for (const node of Array.isArray(base.nodes) ? base.nodes : []) {
+      if (node && Number.isInteger(node.backendNodeId)) matchedBackend.add(node.backendNodeId);
+    }
+    unmappedAx = collectUnmappedAx(axNodes, matchedBackend, factsMap, { limit: 20 });
+    if (unmappedAx.length) {
+      observation += '\n\n── 未映射的可交互元素（AX/DOMSnapshot，仅供定位）──\n' + renderUnmappedAx(unmappedAx);
+    }
+    // 表格/网格结构事实：AX 层级 → row/col/header；同时给 AX 节点与匹配的 VOM 节点。
+    const tableFacts = computeTableFacts(axNodes);
+    if (tableFacts.size) {
+      for (const ax of axNodes) {
+        if (!ax || !Number.isInteger(ax.backendNodeId)) continue;
+        const fact = tableFacts.get(ax.backendNodeId);
+        if (fact) ax.table = fact;
+      }
+      for (const node of Array.isArray(base.nodes) ? base.nodes : []) {
+        if (!node || !Number.isInteger(node.backendNodeId)) continue;
+        const fact = tableFacts.get(node.backendNodeId);
+        if (fact) node.table = fact;
+      }
+    }
+    tableSummary = summarizeTables(axNodes);
+  }
+
+  let blockingLayers = [];
+  if (params.ax === true && factsMap) {
+    try {
+      blockingLayers = computeBlockingLayers(axNodes, factsMap);
+      if (blockingLayers.length) applyBlockingLayers(base.nodes, blockingLayers);
+    } catch (error) {
+      blockingLayers = [];
+      log('阻挡层推导失败（忽略）：' + ((error && error.message) || error));
+    }
+  }
+
+  // 双跑对照（诊断）：独立跑一次 AX+DOMSnapshot 管线，量化覆盖率与耗时，不影响主输出。
+  let pipelineCompare = null;
+  if (params.compareAx === true) {
+    try {
+      // 对照前收起 BridgeDeck 自身浮层，避免把“暂停 Agent/停止任务”算成页面交互元素。
+      await hideTakeover(tabId).catch(() => {});
+      await sleep(300);
+      const axStarted = Date.now();
+      const compareAx = await collectAxNodes(tabId, 800);
+      // 给 VOM 节点打临时标记，随后用同一张 DOMSnapshot 解出 vomId→backendNodeId，
+      // 这样即使主观察没开 --vom 也能计算 AX→VOM 覆盖率。
+      try {
+        await execPage(tabId, 'observe', { vom: true, markVom: true, maxDepth: params.maxDepth });
+      } catch {
+        // 页面可能不允许注入；覆盖率退化为 0
+      }
+      let compareFacts = null;
+      let compareVomIds = null;
+      try {
+        const snapshot = await captureDomSnapshot(tabId);
+        compareFacts = snapshot.facts;
+        compareVomIds = snapshot.vomIds;
+      } catch {
+        compareFacts = null;
+        compareVomIds = null;
+      }
+      await execPage(tabId, 'clear-vom-markers', {}).catch(() => {});
+      const compareText = renderAxObservation(compareAx, compareFacts, { maxNodes: 120 });
+      const axMs = Date.now() - axStarted;
+      const vomBackends = new Set(compareVomIds ? [...compareVomIds.values()] : []);
+      for (const node of Array.isArray(base.nodes) ? base.nodes : []) {
+        if (node && Number.isInteger(node.backendNodeId)) vomBackends.add(node.backendNodeId);
+      }
+      const rootAx = compareAx.find((node) => String(node.role || '').toLowerCase() === 'rootwebarea'
+        && compareFacts && compareFacts.get(node.backendNodeId) && compareFacts.get(node.backendNodeId).bounds);
+      const viewport = rootAx ? compareFacts.get(rootAx.backendNodeId).bounds : null;
+      const interactive = compareAx.filter((node) => {
+        if (!isInteractiveAxRole(node.role)) return false;
+        if (compareFacts === null) return true;
+        const fact = compareFacts.get(node.backendNodeId);
+        if (!fact) return true;
+        if (fact.visible === false) return false;
+        return intersectsViewport(fact.bounds, viewport);
+      });      const matched = interactive.filter((node) => Number.isInteger(node.backendNodeId) && vomBackends.has(node.backendNodeId)).length;
+      pipelineCompare = summarizePipeline({
+        pageLib: { ms: pageLibMs, refs: base.refs || 0, text: base.observation || '' },
+        ax: { ms: axMs, nodes: compareAx.length, text: compareText },
+        interactiveTotal: interactive.length,
+        matched,
+      });
+      showTakeover(tabId, {}).catch(() => {});
+    } catch (error) {
+      pipelineCompare = null;
+      showTakeover(tabId, {}).catch(() => {});
+      log('双跑对照失败（忽略）：' + ((error && error.message) || error));
+    }
+  }
+
+  if (backendMarked || (params.facts === true && params.vom === true)) {
+    await execPage(tabId, 'clear-vom-markers', {}).catch(() => {});
+    backendMarked = false;
   }
 
   const budget = Number(params.maxTokens) > 0 ? Math.min(Math.max(Math.round(Number(params.maxTokens)), 200), 20000) : 0;
@@ -517,6 +831,13 @@ export async function observe(params = {}) {
     ...(params.vom === true ? { nodes: Array.isArray(base.nodes) ? base.nodes : [] } : {}),
     ...(axNodes ? { axNodes } : {}),
     ...(axJoin ? { axJoin } : {}),
+    ...(factsSummary ? { facts: factsSummary } : {}),
+    ...(hiddenRefs.length ? { hiddenRefs } : {}),
+    ...(base.fallback ? { fallback: base.fallback } : {}),
+    ...(unmappedAx.length ? { unmappedAx } : {}),
+    ...(tableSummary.length ? { tables: tableSummary } : {}),
+    ...(blockingLayers.length ? { blockingLayers } : {}),
+    ...(pipelineCompare ? { pipelineCompare } : {}),
     ...(closedShadow ? { closedShadow } : {}),
     ...(base.downgraded ? { downgraded: true } : {}),
   };
@@ -573,6 +894,8 @@ async function retryTarget(params, run) {
  * 表现就是 --trusted 返回成功但页面 trustedMoves=0。只影响显式 --trusted。
  */
 async function ensureInputFocus(tabId) {
+  // 会话 CDP 已启用焦点仿真：页面自认可见，直接派发原生输入，不切 tab/窗口。
+  if (isTabArmed(tabId)) return true;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       const tab = await chrome.tabs.get(tabId);
@@ -620,7 +943,7 @@ async function trustedOrFallback(kind, params, fallback) {
       throw bridgeError(
         'E_OCCLUDED',
         '目标在动作前被遮挡（' + hit.state + '）：请先关闭浮层/弹窗，或用 --force 强制派发',
-        { hitTest: hit.state, occludedBy: hit.occludedBy || null, rect: hit.rect || null },
+        { hitTest: hit.state, occludedBy: hit.occludedBy || null, rect: hit.rect || null, dispatched: false },
       );
     }
   }
@@ -720,6 +1043,71 @@ export async function click(params = {}) {
     }
     return trustedOrFallback('click', params, rawClick);
   });
+}
+
+/**
+ * click-backend：按 backendNodeId 点击 AX/DOMSnapshot 发现、但没有 @eN ref 的元素
+ *（closed shadow、page-lib 漏掉的节点）。动作前做滚动/可见性/遮挡检查，
+ * 然后派发 CDP 原生鼠标事件（isTrusted=true）。
+ */
+export async function clickBackend(params = {}) {
+  const tabId = requireTabId(params);
+  const backendId = Number(params.backendId);
+  if (!Number.isInteger(backendId) || backendId <= 0) {
+    throw bridgeError('E_BAD_ARG', 'click-backend 需要 backendId 正整数');
+  }
+  await acquire(tabId, 'click-backend');
+  try {
+    await cdpSend(tabId, 'DOM.enable').catch(() => {});
+    const resolved = await cdpSend(tabId, 'DOM.resolveNode', { backendNodeId: backendId });
+    const objectId = resolved && resolved.object && resolved.object.objectId;
+    if (!objectId) throw bridgeError('E_NOT_FOUND', 'backendNodeId 已失效或不在当前文档');
+    const checked = await cdpSend(tabId, 'Runtime.callFunctionOn', {
+      objectId,
+      returnByValue: true,
+      awaitPromise: false,
+      functionDeclaration: `function () {
+        const el = this;
+        if (!el || !el.isConnected) return { ok: false, reason: 'detached' };
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        const rect = el.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return { ok: false, reason: 'zero-size' };
+        const style = getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || style.pointerEvents === 'none') {
+          return { ok: false, reason: 'not-actionable' };
+        }
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const root = el.getRootNode();
+        if (root === document) {
+          const hit = document.elementFromPoint(x, y);
+          if (!hit) return { ok: false, reason: 'no-hit' };
+          if (hit !== el && !el.contains(hit)) return { ok: false, reason: 'occluded', by: hit.tagName };
+        }
+        return { ok: true, x, y };
+      }`,
+    });
+    const value = checked && checked.result ? checked.result.value : null;
+    if (!value || value.ok !== true) {
+      const reason = value && value.reason ? value.reason : 'unknown';
+      if (reason === 'occluded') {
+        throw bridgeError('E_OCCLUDED', '目标被遮挡：' + (value.by || 'unknown'), {
+          hitTest: 'blocked', backendNodeId: backendId, dispatched: false,
+        });
+      }
+      throw bridgeError('E_NOT_ACTIONABLE', 'backend 节点当前不可点击（' + reason + '）', {
+        backendNodeId: backendId, reason, dispatched: false,
+      });
+    }
+    const x = Math.round(Number(value.x) * 100) / 100;
+    const y = Math.round(Number(value.y) * 100) / 100;
+    await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+    await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    return { ok: true, trusted: true, via: 'cdp-backend', backendNodeId: backendId, x, y };
+  } finally {
+    await release(tabId, 'click-backend').catch(() => {});
+  }
 }
 
 const KEY_CODES = {
@@ -891,7 +1279,9 @@ async function trustedFill(params, fallback) {
 async function trustedPress(params, fallback) {
   const tabId = requireTabId(params);
   await ensureInputFocus(tabId);
-  const point = await trustedFocusPoint(tabId, params);
+  const recent = recentFillFocus.get(tabId);
+  const skipClick = Boolean(params.ref && recent && recent.ref === params.ref && Date.now() - recent.at < 3000);
+  const point = skipClick ? null : await trustedFocusPoint(tabId, params);
   const lease = acquireInputLease(tabId, 'trusted:press');
   try {
     await acquire(tabId, 'input');
@@ -922,18 +1312,27 @@ export async function actionable(params = {}) {
 
 export async function fill(params = {}) {
   return retryTarget(params, async () => {
-    if (!params || params.trusted !== true) return rawFill(params);
+    if (!params || params.trusted !== true) {
+      const result = await rawFill(params);
+      if (params && params.ref) recentFillFocus.set(Number(params.tabId), { ref: params.ref, at: Date.now() });
+      return result;
+    }
     const run = async () => {
       const fast = await trustedFillFast(params).catch((error) => {
         // 语义错误必须让调用方看到；只有真正的环境问题才回退。
         if (error && ['E_INPUT_BUSY', 'E_NOT_ACTIONABLE', 'E_BAD_ARG', 'E_TARGET_NOT_FILLABLE', 'E_OPTION_NOT_FOUND', 'E_OPTION_AMBIGUOUS'].includes(error.code)) throw error;
         return null;
       });
-      if (fast) return fast;
-      return trustedFill(params, rawFill).catch((error) => {
+      if (fast) {
+        if (params.ref) recentFillFocus.set(Number(params.tabId), { ref: params.ref, at: Date.now() });
+        return fast;
+      }
+      const result = await trustedFill(params, rawFill).catch((error) => {
         if (error && error.code === 'E_INPUT_BUSY') throw error;
         return rawFill(params);
       });
+      if (params.ref) recentFillFocus.set(Number(params.tabId), { ref: params.ref, at: Date.now() });
+      return result;
     };
     return Number.isInteger(params.tabId) ? withForegroundTab(params.tabId, () => withOverlaysHidden(params.tabId, run)) : run();
   });
@@ -965,6 +1364,19 @@ export async function select(params = {}) {
 export const focus = pageAction('focus');
 export const scrollTo = pageAction('scroll-to');
 const rawRead = pageAction('read');
+/** 读类操作的文档身份护栏：读取前后主文档必须一致，否则这次采样不可信。 */
+async function withDocumentIdentity(tabId, fn) {
+  const before = await readDocumentIdentity(tabId).catch(() => null);
+  const result = await fn();
+  if (before) {
+    const after = await readDocumentIdentity(tabId).catch(() => null);
+    if (!sameDocumentIdentity(before, after)) {
+      throw bridgeError('E_CONTEXT_STALE', '读取期间主文档发生变化（导航或重渲染），本次 read/extract 结果已丢弃；请重新 observe');
+    }
+  }
+  return result;
+}
+
 export async function read(params = {}) {
   const tabId = requireTabId(params);
   if (params && params.ref) {
@@ -975,7 +1387,7 @@ export async function read(params = {}) {
       if (text != null) return { value: text, text, via: 'closed-shadow-ref' };
     }
   }
-  return rawRead(params);
+  return withDocumentIdentity(tabId, () => rawRead(params));
 }
 export const extract = pageAction('extract');
 const rawDrag = pageAction('drag');
@@ -994,12 +1406,12 @@ export const blur = pageAction('blur');
 /** extract：discover 候选表格/列表，或按 target id / selector 导出。 */
 export async function extractDiscover(params = {}) {
   const tabId = requireTabId(params);
-  return execPage(tabId, 'extract', { discover: true });
+  return withDocumentIdentity(tabId, () => execPage(tabId, 'extract', { discover: true }));
 }
 
 export async function extractList(params = {}) {
   const tabId = requireTabId(params);
-  return execPage(tabId, 'extract', {
+  return withDocumentIdentity(tabId, () => execPage(tabId, 'extract', {
     mode: 'list',
     target: params.target,
     selector: params.selector,
@@ -1008,27 +1420,34 @@ export async function extractList(params = {}) {
     fields: params.fields,
     maxRows: params.maxRows,
     maxBytes: params.maxBytes,
-  });
+  }));
 }
 
 export async function extractTable(params = {}) {
   const tabId = requireTabId(params);
-  return execPage(tabId, 'extract', {
+  return withDocumentIdentity(tabId, () => execPage(tabId, 'extract', {
     target: params.target,
     selector: params.selector,
     ref: params.ref,
     maxRows: params.maxRows,
     maxBytes: params.maxBytes,
-  });
+  }));
 }
 
-/** evaluate（主世界） */
+/** evaluate（主世界）；--unverified 跳过观察校验，结果标记 verified:false。 */
 export async function evaluate(params = {}) {
   const tabId = requireTabId(params);
   if (typeof params.expression !== 'string' || !params.expression.trim()) {
     throw bridgeError('E_BAD_ARG', 'evaluate 需要非空 expression');
   }
-  return evalInMain(tabId, params.expression);
+  // 会话标签页已挂 CDP：Runtime.evaluate 快路径（也天然绕过页面 CSP）。
+  // 未挂载（借用 tab / 预挂失败）时退回注入式 eval，语义一致。
+  let result = null;
+  if (isAttached(tabId)) {
+    result = await evalByCdp(tabId, params.expression).catch(() => null);
+  }
+  if (!result) result = await evalInMain(tabId, params.expression);
+  return params.unverified === true ? { ...result, verified: false } : result;
 }
 
 /** console */

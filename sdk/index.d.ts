@@ -91,6 +91,7 @@ export class Page {
   back(options?: ActionOptions): Promise<unknown>;
   forward(options?: ActionOptions): Promise<unknown>;
   click(target: string | TargetOptions, options?: ActionOptions): Promise<unknown>;
+  clickBackend(backendNodeId: number, options?: ActionOptions): Promise<unknown>;
   hover(target: string | TargetOptions, options?: ActionOptions): Promise<unknown>;
   fill(target: string | TargetOptions, value: string, options?: ActionOptions): Promise<unknown>;
   press(key: string, options?: ActionOptions & { target?: string | TargetOptions }): Promise<unknown>;
@@ -98,7 +99,7 @@ export class Page {
   focus(target: string | TargetOptions): Promise<unknown>;
   scrollTo(target: string | TargetOptions): Promise<unknown>;
   read(target?: string | TargetOptions): Promise<unknown>;
-  evaluate<T = unknown>(expression: string): Promise<{ value?: T }>;
+  evaluate<T = unknown>(expression: string, options?: { unverified?: boolean }): Promise<{ value?: T; verified?: boolean }>;
   observe(options?: ObserveOptions): Promise<Observation>;
   snapshot(): Promise<unknown>;
   waitForElement(target: string | TargetOptions, options?: { state?: string; timeoutMs?: number }): Promise<unknown>;

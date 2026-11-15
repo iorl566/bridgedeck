@@ -40,6 +40,12 @@ test('schema checks booleans and numbers', () => {
   assert.equal(validateMethodParams('drag', { modifiers: 15 }).length, 0);
 });
 
+test('schema validates unverified evaluate flag', () => {
+  assert.equal(validateMethodParams('evaluate', { expression: '1+1', unverified: true }).length, 0);
+  assert.equal(validateMethodParams('evaluate', { expression: '1+1', unverified: false }).length, 0);
+  assert.ok(validateMethodParams('evaluate', { expression: '1+1', unverified: 'yes' }).length > 0);
+});
+
 test('schema validates transfer.begin required fields and size', () => {
   assert.ok(validateMethodParams('transfer.begin', {}).length >= 2);
   assert.equal(validateMethodParams('transfer.begin', { name: 'a.bin', byteSize: 1 }).length, 0);

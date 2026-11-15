@@ -12,29 +12,54 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { SKILL_FILES, SKILL_VERSION } from './embedded-skill.mjs';
-import { verifyReleaseSignature } from '../lib/release-sign.mjs';
-import { buildTraceV3 } from '../lib/trace-v3.mjs';
-import { renderTraceHtml } from '../lib/trace-viewer.mjs';
-import { applyObservationPatch } from '../lib/observation-delta.mjs';
-import { buildDebugEvidence } from '../lib/debug-evidence.mjs';
-import { analyzeDebugCapture, filterDebugRequests } from '../lib/debug-analysis.mjs';
-import { buildDebugArchive } from '../lib/debug-archive.mjs';
-import { buildDebugJournal, formatJournalEvent } from '../lib/debug-journal.mjs';
-import { archiveSummary, createArchiveIndex } from '../lib/debug-archive-index.mjs';
-import { queryArchive } from '../lib/debug-archive.mjs';
-import { describeMethod, listMethods, renderFlagUsage, renderMethodHelp, schemaFlags } from '../lib/schema-info.mjs';
-import { updateArchiveIndex } from '../lib/debug-archive-store.mjs';
-import { RecipeStoreError, approveRecipe, assertRunnable, listRecipes, readRecipe, recipePath, saveRecipe, substituteParams } from '../lib/recipe-store.mjs';
-import { fetchManifest, fetchManifestWithFallback, DOMESTIC_MANIFEST_URL, GITHUB_MANIFEST_URL } from '../lib/update-source.mjs';
 import { isControllerInfo } from '../extension/src/lib/controller-info.js';
-import { readUpdateState, writeUpdateState } from '../lib/update-state.mjs';
-import { RELEASE_PUBLIC_KEY } from '../lib/release-public-key.mjs';
+
+/**
+ * 重模块按需加载：status/evaluate/read/screenshot/session 等热路径不再为 update/trace/debug/recipe
+ * 的代码付出启动时间（每个 import 图约 40ms）。命令处理函数在用到时 await 对应 loader。
+ */
+const lazy = (factory) => {
+  let promise = null;
+  return () => (promise ||= factory());
+};
+const loadSkillBundle = lazy(() => import('./embedded-skill.mjs'));
+const loadSchemaInfo = lazy(() => import('../lib/schema-info.mjs'));
+const loadTraceV3 = lazy(() => import('../lib/trace-v3.mjs'));
+const loadTraceViewer = lazy(() => import('../lib/trace-viewer.mjs'));
+const loadObservationDelta = lazy(() => import('../lib/observation-delta.mjs'));
+const loadDebugEvidence = lazy(() => import('../lib/debug-evidence.mjs'));
+const loadDebugAnalysis = lazy(() => import('../lib/debug-analysis.mjs'));
+const loadDebugArchive = lazy(() => import('../lib/debug-archive.mjs'));
+const loadDebugJournal = lazy(() => import('../lib/debug-journal.mjs'));
+const loadDebugArchiveIndex = lazy(() => import('../lib/debug-archive-index.mjs'));
+const loadDebugArchiveStore = lazy(() => import('../lib/debug-archive-store.mjs'));
+const loadDebug = lazy(() => Promise.all([
+  loadDebugEvidence(),
+  loadDebugAnalysis(),
+  loadDebugArchive(),
+  loadDebugJournal(),
+  loadDebugArchiveIndex(),
+  loadDebugArchiveStore(),
+]).then(([a, b, c, d, e, f]) => ({ ...a, ...b, ...c, ...d, ...e, ...f })));
+const loadRecipeStore = lazy(() => import('../lib/recipe-store.mjs'));
+const loadUpdate = lazy(() => Promise.all([
+  import('../lib/update-source.mjs'),
+  import('../lib/update-state.mjs'),
+  import('../lib/release-sign.mjs'),
+  import('../lib/release-public-key.mjs'),
+]).then(([source, state, sign, key]) => ({ ...source, ...state, ...sign, RELEASE_PUBLIC_KEY: key.RELEASE_PUBLIC_KEY })));
 
 const VERSION = (() => {
   try { return JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version || '0.1.2'; }
   catch { return '0.1.2'; }
 })();
+// 启动耗时诊断：BB_STARTUP_TRACE=1 时把关键阶段打到 stderr（不改变 stdout 的 JSON 输出）。
+const STARTUP_TRACE = process.env.BB_STARTUP_TRACE === '1';
+function traceStartup(label) {
+  if (!STARTUP_TRACE) return;
+  process.stderr.write('[startup] ' + label + ' ' + Math.round(process.uptime() * 1000) + 'ms\n');
+}
+traceStartup('module-body');
 const SERVICE = 'browser-bridge';
 const DEFAULT_PORT = 52900;
 const PORT_CANDIDATES = Array.from({ length: 10 }, (_, i) => DEFAULT_PORT + i);
@@ -97,7 +122,13 @@ const VALUE_FLAGS = new Set([
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
 for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force']) BOOL_FLAGS.add(name);
 for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before']) VALUE_FLAGS.add(name);
-for (const name of ['no-restart', 'yes', 'dry-run']) BOOL_FLAGS.add(name);
+for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts']) BOOL_FLAGS.add(name);
+VALUE_FLAGS.add('request-id');
+VALUE_FLAGS.add('until');
+VALUE_FLAGS.add('backend');
+VALUE_FLAGS.add('pipeline');
+BOOL_FLAGS.add('fallback-ax');
+BOOL_FLAGS.add('compare-ax');
 
 const REPEATABLE_FLAGS = new Set(['file', 'param']);
 
@@ -380,6 +411,14 @@ async function spawnDaemon(explicitPort) {
 
 async function ensureDaemon() {
   if (daemonInfo) return daemonInfo;
+  // 快路径：daemon.json 存在且 pid 存活时直接使用，省掉每次命令的 /health 往返。
+  // 连接失败（daemon 崩溃留下的残留文件）由 callRpc 清缓存后走完整探测。
+  const cached = readDaemonInfo();
+  if (cached && (cached.pid == null || isPidAlive(cached.pid))) {
+    daemonInfo = { port: cached.port, token: cached.token, pid: cached.pid, tls: cached.tls === true };
+    traceStartup('ensureDaemon:fast');
+    return daemonInfo;
+  }
   const found = await locateDaemon();
   if (found.info) {
     daemonInfo = found.info;
@@ -396,8 +435,23 @@ async function ensureDaemon() {
 }
 
 async function callRpc(method, params = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  traceStartup('callRpc:' + method + ':begin');
   const info = await ensureDaemon();
-  return postRpc(info, method, params, timeoutMs);
+  traceStartup('callRpc:' + method + ':daemon-ready');
+  let reply;
+  try {
+    reply = await postRpc(info, method, params, timeoutMs);
+  } catch (error) {
+    if (!error || error.code !== 'E_DAEMON') throw error;
+    // 残留 daemon.json 指向已崩溃的 daemon：清缓存、完整探测一次再重试。
+    daemonInfo = null;
+    const found = await locateDaemon();
+    if (!found.info) throw error;
+    daemonInfo = found.info;
+    reply = await postRpc(found.info, method, params, timeoutMs);
+  }
+  traceStartup('callRpc:' + method + ':reply');
+  return reply;
 }
 
 /** 优雅停止 daemon：内部 RPC daemon.stop → 等 /health 消失 → 清理 daemon.json。 */
@@ -969,7 +1023,8 @@ function verifyRelease(manifest, manifestPath) {
   };
 }
 
-function cmdUpdate(flags, pos) {
+async function cmdUpdate(flags, pos) {
+  const { readUpdateState, writeUpdateState, verifyReleaseSignature } = await loadUpdate();
   const sub = pos && pos[1] ? String(pos[1]) : (flags.check === true ? 'check' : '');
   if (sub && !['check', 'verify', 'stage', 'apply', 'rollback', 'fetch', 'state', 'auto', 'install'].includes(sub)) {
     throw new ArgError('update 只支持 check|verify|stage|apply|rollback|fetch|state|auto|install');
@@ -1047,7 +1102,7 @@ function cmdUpdate(flags, pos) {
     return 0;
   }
   const { artifacts, verified, result } = verifyRelease(manifest, manifestPath);
-  const signKey = releaseVerifyKey(manifest, flags);
+  const signKey = await releaseVerifyKey(manifest, flags);
   const signature = { present: Boolean(manifest.signature), valid: null };
   if (manifest.signature && signKey) signature.valid = verifyReleaseSignature(manifest, signKey);
   else if (!manifest.signature && signKey) signature.valid = false;
@@ -1101,11 +1156,14 @@ function cmdUpdate(flags, pos) {
   return verified ? 0 : 1;
 }
 
-function releaseVerifyKey(manifest, flags) {
+async function releaseVerifyKey(manifest, flags) {
   if (flags.key !== undefined) {
     return fs.readFileSync(path.resolve(process.cwd(), String(flags.key)), 'utf8').trim();
   }
-  if (manifest && manifest.signature && manifest.signature.alg === 'ed25519') return RELEASE_PUBLIC_KEY;
+  if (manifest && manifest.signature && manifest.signature.alg === 'ed25519') {
+    const { RELEASE_PUBLIC_KEY } = await loadUpdate();
+    return RELEASE_PUBLIC_KEY;
+  }
   return '';
 }
 
@@ -1158,6 +1216,7 @@ function cmdUpdateInstall(flags) {
 }
 
 async function cmdUpdateFetch(flags) {
+  const { fetchManifest, fetchManifestWithFallback, DOMESTIC_MANIFEST_URL, GITHUB_MANIFEST_URL, verifyReleaseSignature, writeUpdateState } = await loadUpdate();
   let source;
   let manifest;
   if (flags.source !== undefined) {
@@ -1175,7 +1234,7 @@ async function cmdUpdateFetch(flags) {
     throw new BridgeError('E_RELEASE_INVALID', '发布清单缺少 version/artifacts');
   }
   let signature = { present: Boolean(manifest.signature), valid: null };
-  const verifyKey = releaseVerifyKey(manifest, flags);
+  const verifyKey = await releaseVerifyKey(manifest, flags);
   if (verifyKey) {
     signature.valid = verifyReleaseSignature(manifest, verifyKey);
     if (!signature.valid) throw new BridgeError('E_RELEASE_INVALID', '远程发布清单签名无效');
@@ -1195,7 +1254,8 @@ async function cmdUpdateFetch(flags) {
   return 0;
 }
 
-function cmdUpdateApply(flags) {
+async function cmdUpdateApply(flags) {
+  const { writeUpdateState } = await loadUpdate();
   if (flags.staging === undefined) throw new ArgError('update apply 需要 --staging <dir>');
   if (flags.target === undefined) throw new ArgError('update apply 需要 --target <dir>');
   const stagedDir = path.resolve(process.cwd(), String(flags.staging));
@@ -1243,7 +1303,8 @@ function cmdUpdateApply(flags) {
   return 0;
 }
 
-function cmdUpdateRollback(flags) {
+async function cmdUpdateRollback(flags) {
+  const { writeUpdateState } = await loadUpdate();
   if (flags.backup === undefined) throw new ArgError('update rollback 需要 --backup <dir>');
   const backupDir = path.resolve(process.cwd(), String(flags.backup));
   const recordPath = path.join(backupDir, 'backup.json');
@@ -1355,11 +1416,37 @@ async function cmdSession(flags, pos) {
       const tabId = intFlag(flags, 'tab', { min: 1 });
       params.tab = tabId;
     }
-    const body = await callRpc('session.start', params, timeoutOf(flags));
+    // 可恢复启动：调用方生成 <expiry>:<id> 作为 requestId；同 token 重试返回既有会话。
+    const requestId = flags['request-id'] !== undefined ? String(flags['request-id']) : null;
+    if (requestId) params.requestId = requestId;
+    const body = await callRpc(requestId ? 'session.start_tracked' : 'session.start', params, timeoutOf(flags));
     if (!body.ok) return outputFailure(body);
     if (jsonMode) return outputJsonBody(body);
     const result = body.result || {};
     print(`session ${result.sessionId} 已创建（instance ${result.instanceId}, tab ${result.tabId}, window ${result.windowId}）`);
+    return 0;
+  }
+  if (sub === 'prepare' || sub === 'claim' || sub === 'cancel' || sub === 'request') {
+    const requestId = flags['request-id'] !== undefined ? String(flags['request-id']) : (pos[2] || '');
+    if (!requestId) throw new ArgError(`用法：bridge session ${sub} --request-id <token>`);
+    const methods = {
+      prepare: 'session.request_prepare',
+      claim: 'session.request_claim',
+      cancel: 'session.request_cancel',
+      request: 'session.request_status',
+    };
+    const params = { requestId };
+    if (sub === 'prepare') {
+      if (flags.browser !== undefined) params.browser = String(flags.browser);
+      if (flags['no-focus'] === true) params.noFocus = true;
+      if (flags.incognito === true) params.incognito = true;
+    }
+    const body = await callRpc(methods[sub], params, timeoutOf(flags));
+    if (!body.ok) return outputFailure(body);
+    if (jsonMode) return outputJsonBody(body);
+    const entry = (body.result && body.result.entry) || {};
+    print(`request ${requestId} state=${entry.state || 'unknown'}` +
+      (entry.result && entry.result.sessionId ? ` session=${entry.result.sessionId}` : ''));
     return 0;
   }
   if (sub === 'stop') {
@@ -1551,7 +1638,7 @@ async function cmdWindow(flags, pos) {
 
 const PAGE_COMMANDS = new Set([
   'navigate', 'reload', 'back', 'forward', 'navigate-back', 'navigate-forward', 'observe', 'snapshot',
-  'get-html', 'screenshot', 'click', 'hover', 'fill', 'press',
+  'get-html', 'screenshot', 'click', 'click-backend', 'hover', 'fill', 'press',
   'select', 'focus', 'scroll-to', 'evaluate',
   'wait-for-element', 'wait-for-navigation', 'wait-ms', 'console', 'actionable',
 ]);
@@ -1600,6 +1687,14 @@ async function cmdPage(command, flags, pos) {
       if (flags['debug-surfaces'] === true) params.debugSurfaces = true;
       if (flags.vom === true) params.vom = true;
       if (flags.ax === true) params.ax = true;
+      if (flags.facts === true) params.facts = true;
+      if (flags['fallback-ax'] === true) params.fallbackAx = true;
+      if (flags['compare-ax'] === true) params.compareAx = true;
+      if (flags.pipeline !== undefined) {
+        const pipeline = String(flags.pipeline);
+        if (pipeline !== 'page-lib' && pipeline !== 'ax') throw new Error('--pipeline 只支持 page-lib 或 ax');
+        params.pipeline = pipeline;
+      }
       if (flags.cursor !== undefined) params.cursor = String(flags.cursor);
       if (flags.delta === true || flags.baseline !== undefined) {
         const baseline = flags.baseline !== undefined ? String(flags.baseline) : '';
@@ -1610,7 +1705,7 @@ async function cmdPage(command, flags, pos) {
       if (!body.ok) return outputFailure(body);
       if (body.result && body.result.delta === true) {
         const baseline = String(params.baseline);
-        const merged = applyCachedObservation(baseline, body.result.patch);
+        const merged = await applyCachedObservation(baseline, body.result.patch);
         if (merged == null) {
           // 本地没有基线缓存：退回整页观察，避免凭空合并
           const fresh = await callRpc('observe', withControl(flags, {}), timeoutOf(flags));
@@ -1714,8 +1809,9 @@ async function cmdPage(command, flags, pos) {
     }
     case 'screenshot': {
       const out = flags.out;
-      const mode = flags.mode === undefined ? (flags.full === true ? 'auto' : 'visible') : String(flags.mode);
-      if (flags['full-page'] === true && mode === undefined) mode = 'auto';
+      const mode = flags.mode === undefined
+        ? (flags.full === true || flags['full-page'] === true ? 'auto' : 'visible')
+        : String(flags.mode);
       if (!['visible', 'auto', 'manual'].includes(mode)) throw new ArgError('--mode 需要 visible|auto|manual');
 
       if (flags.stitch === true) {
@@ -1790,6 +1886,16 @@ async function cmdPage(command, flags, pos) {
       print('已保存：' + written.target + '（' + (result.width || '?') + 'x' + (result.height || '?') + '，' + formatBytes(written.buffer.length) + '）');
       if (result.capture_id) print('capture_id: ' + result.capture_id + '（视觉坐标点击：bridge click --capture <id> --image-x X --image-y Y）');
       if (Array.isArray(result.visual_refs)) print('视觉引用：' + result.visual_refs.length + ' 个');
+      return 0;
+    }
+    case 'click-backend': {
+      if (flags.backend === undefined) throw new ArgError('click-backend 需要 --backend <backendNodeId>');
+      const backendId = intFlag(flags, 'backend', { min: 1 });
+      const body = await callRpc('click-backend', withControl(flags, { backendId }), timeoutOf(flags));
+      if (!body.ok) return outputFailure(body);
+      if (jsonMode) return outputJsonBody(body);
+      const result = body.result || {};
+      print('已点击 backend 节点 ' + backendId + '（' + result.x + ',' + result.y + '）');
       return 0;
     }
     case 'click':
@@ -1876,11 +1982,19 @@ async function cmdPage(command, flags, pos) {
     }
     case 'evaluate': {
       const expression = requirePos(pos, 1, '<expression>');
-      const body = await callRpc('evaluate', withControl(flags, { expression }), timeoutOf(flags));
+      const params = { expression };
+      if (flags.unverified === true) {
+        if (flags.expect !== undefined || flags['depends-on'] !== undefined || flags.observation !== undefined) {
+          throw new ArgError('--unverified 不能与 --expect/--depends-on/--observation 同时使用');
+        }
+        params.unverified = true;
+      }
+      const body = await callRpc('evaluate', withControl(flags, params), timeoutOf(flags));
       return renderPageBody(body, (result) => {
         if (typeof result.value === 'string') print(result.value);
         else print(JSON.stringify(result.value ?? null, null, 2));
         if (result.note) process.stderr.write(`(${result.note})\n`);
+        if (result.verified === false) process.stderr.write('(unverified：已跳过观察校验，结果未经页面观察核对)\n');
       });
     }
     case 'wait-for-element': {
@@ -2777,6 +2891,33 @@ async function cmdRequestHelp(flags, pos) {
   const params = withControl(flags, { reason: String(prompt), timeoutMs });
   if (flags.target !== undefined) params.target = String(flags.target);
   if (flags.title !== undefined) params.title = String(flags.title);
+  if (flags.until !== undefined) {
+    let criteria;
+    try {
+      criteria = JSON.parse(String(flags.until));
+    } catch {
+      throw new ArgError('--until 需要 JSON 数组');
+    }
+    if (!Array.isArray(criteria) || criteria.length === 0 || criteria.length > 10) {
+      throw new ArgError('--until 需要 1-10 条完成条件');
+    }
+    const normalized = criteria.map((item) => {
+      if (!item || typeof item !== 'object') throw new ArgError('--until 每条条件需要对象');
+      const kind = String(item.kind || item.type || '');
+      if (kind === 'selector_exists' || kind === 'selector_visible') {
+        const selector = String(item.selector || '');
+        if (!selector) throw new ArgError('--until 的 ' + kind + ' 需要 selector');
+        return { kind, selector };
+      }
+      if (kind === 'text_exists' || kind === 'url_contains') {
+        const text = String(item.text || '');
+        if (!text) throw new ArgError('--until 的 ' + kind + ' 需要 text');
+        return { kind, text };
+      }
+      throw new ArgError('--until 支持 selector_exists/selector_visible/text_exists/url_contains');
+    });
+    params.criteria = normalized;
+  }
   const body = await callRpc('request-help', params, timeoutMs + 5000);
   if (!body.ok) return outputFailure(body);
   if (jsonMode) return outputJsonBody(body);
@@ -3031,6 +3172,7 @@ async function cmdVideo(flags, pos) {
 }
 
 async function cmdRecord(flags, pos) {
+  const { buildTraceV3 } = await loadTraceV3();
   const sub = pos[1];
   const session = withControl(flags, {});
   if (sub === 'start') {
@@ -3235,7 +3377,8 @@ function filterDebugEntries(entries, flags) {
 }
 
 /** help <method>：由 schema 生成单方法帮助；未知方法返回 2。 */
-function cmdHelpTopic(topic) {
+async function cmdHelpTopic(topic) {
+  const { renderMethodHelp } = await loadSchemaInfo();
   const text = renderMethodHelp(topic);
   if (!text) {
     print('没有方法帮助：' + topic + '；用 bridge schema 查看全部方法');
@@ -3246,7 +3389,8 @@ function cmdHelpTopic(topic) {
 }
 
 /** schema：输出协议方法的 scope/effect/参数 schema（来自 lib 单一来源）。 */
-function cmdSchema(flags, pos) {
+async function cmdSchema(flags, pos) {
+  const { describeMethod, listMethods, schemaFlags } = await loadSchemaInfo();
   const method = pos[1] ? String(pos[1]) : '';
   if (method) {
     const info = describeMethod(method);
@@ -3271,7 +3415,8 @@ function cmdSchema(flags, pos) {
 }
 
 /** trace view：把 Trace v3 JSON 渲染成离线 HTML 查看器。 */
-function cmdTrace(flags, pos) {
+async function cmdTrace(flags, pos) {
+  const { renderTraceHtml } = await loadTraceViewer();
   const sub = pos[1] || 'view';
   if (sub !== 'view') throw new ArgError('用法：bridge trace view <trace.json> [--out <viewer.html>]');
   const file = pos[2] || (flags.file !== undefined ? String(flags.file) : '');
@@ -3333,6 +3478,7 @@ function cmdTrace(flags, pos) {
 }
 
 async function cmdDebug(flags, pos) {
+  const { archiveSummary, createArchiveIndex, buildDebugArchive, updateArchiveIndex, queryArchive, filterDebugRequests, buildDebugEvidence, analyzeDebugCapture, buildDebugJournal, formatJournalEvent } = await loadDebug();
   const sub = pos[1];
   const session = withControl(flags, {});
 
@@ -4183,7 +4329,8 @@ function saveObservationCache(id, text) {
 }
 
 /** 用本地基线应用增量补丁；没有基线时返回 null，调用方应回退整页观察。 */
-function applyCachedObservation(id, patch) {
+async function applyCachedObservation(id, patch) {
+  const { applyObservationPatch } = await loadObservationDelta();
   try {
     const cached = JSON.parse(fs.readFileSync(path.join(OBSERVATIONS_DIR, String(id) + '.json'), 'utf8'));
     if (!cached || typeof cached.text !== 'string') return null;
@@ -4215,7 +4362,8 @@ const SKILL_TARGETS = {
   'kimi-code': () => path.join(os.homedir(), '.kimi-code', 'skills', 'browser-bridge'),
 };
 
-function writeSkillFiles(targetDir) {
+async function writeSkillFiles(targetDir) {
+  const { SKILL_FILES } = await loadSkillBundle();
   const out = [];
   for (const [rel, content] of Object.entries(SKILL_FILES)) {
     const to = path.join(targetDir, rel);
@@ -4247,11 +4395,13 @@ function copySkillDir(source, targetDir) {
   return out;
 }
 
-function recipeFile(name) {
+async function recipeFile(name) {
+  const { recipePath } = await loadRecipeStore();
   return recipePath(RECIPE_DIR, name);
 }
 
 async function cmdRecipe(flags, pos) {
+  const { approveRecipe, assertRunnable, listRecipes, readRecipe, saveRecipe, substituteParams } = await loadRecipeStore();
   const sub = pos[1];
   if (sub === 'list') {
     const rows = listRecipes(RECIPE_DIR).map((item) => [
@@ -4304,7 +4454,7 @@ async function cmdRecipe(flags, pos) {
   }
   if (sub === 'rm') {
     const name = requirePos(pos, 2, '<name>');
-    const target = recipeFile(name);
+    const target = await recipeFile(name);
     if (!fs.existsSync(target)) throw new BridgeError('E_NOT_FOUND', 'recipe 不存在：' + target);
     fs.rmSync(target, { force: true });
     if (jsonMode) {
@@ -4608,7 +4758,8 @@ function configureMcp(harness) {
   return { harness, ...jsonMcpConfig(file) };
 }
 
-function skillManifest(tempDir, sourceKind) {
+async function skillManifest(tempDir, sourceKind) {
+  const { SKILL_VERSION } = await loadSkillBundle();
   const files = {};
   const walk = (dir) => {
     for (const name of fs.readdirSync(dir)) {
@@ -4623,14 +4774,14 @@ function skillManifest(tempDir, sourceKind) {
   return { name: 'BridgeDeck skill', version: SKILL_VERSION, source: sourceKind, installedAt: new Date().toISOString(), files };
 }
 
-function installSkillAtomic(targetDir, writeFn, sourceKind, force) {
+async function installSkillAtomic(targetDir, writeFn, sourceKind, force) {
   const parent = path.dirname(targetDir);
   fs.mkdirSync(parent, { recursive: true });
   const temp = fs.mkdtempSync(path.join(parent, '.bridge-skill-'));
   let backup = null;
   try {
-    writeFn(temp);
-    const manifest = skillManifest(temp, sourceKind);
+    await writeFn(temp);
+    const manifest = await skillManifest(temp, sourceKind);
     fs.writeFileSync(path.join(temp, '.bridge-skill.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
     if (fs.existsSync(targetDir)) {
       if (!force) return { skipped: true, manifest };
@@ -4651,6 +4802,7 @@ function installSkillAtomic(targetDir, writeFn, sourceKind, force) {
 }
 
 async function cmdInstallSkill(flags, pos) {
+  const { SKILL_VERSION } = await loadSkillBundle();
   const source = flags.source !== undefined ? path.resolve(process.cwd(), String(flags.source)) : SKILL_SOURCE;
   const useEmbedded = flags.embedded === true || !fs.existsSync(source);
   if (!useEmbedded && !fs.existsSync(source)) throw new BridgeError('E_INTERNAL', '找不到 skill 源：' + source);
@@ -4686,7 +4838,7 @@ async function cmdInstallSkill(flags, pos) {
       results.push({ harness: name, path: targetFile, status: 'skipped' });
       continue;
     }
-    const installed = installSkillAtomic(
+    const installed = await installSkillAtomic(
       targetDir,
       (tempDir) => (useEmbedded ? writeSkillFiles(tempDir) : copySkillDir(source, tempDir)),
       useEmbedded ? 'embedded' : 'filesystem',
@@ -4718,7 +4870,10 @@ function indent(text) {
   return text.split('\n').map((line) => `  ${line}`).join('\n');
 }
 
-function printHelp() {
+async function printHelp() {
+  const { renderFlagUsage } = await loadSchemaInfo();
+  const clickFlags = renderFlagUsage('click').join(' ');
+  const fillFlags = renderFlagUsage('fill').join(' ');
   print(`BridgeDeck CLI v${VERSION}（bridge）
 
 用法：
@@ -4726,7 +4881,7 @@ function printHelp() {
   bridge help [method]   带 method 时由协议 schema 生成该方法的参数帮助
 
 总览：
-  open [url]                       新建会话（可带 URL 直接导航），≈ session start + navigate
+  open [url] [--observe]             新建会话（可带 URL 直接导航）；--observe 同时返回观察（≈ bsk open 的 VOM）
   sync                             同步当前会话的控制上下文，≈ cooperate sync
   close [sessionId]                结束会话，≈ session stop
   ledger status                    查看预写意图账本（待确认/最近记录）
@@ -4759,7 +4914,8 @@ function printHelp() {
   daemon trust-local on|off                本机未配对连接是否允许（off=严格模式）
 
 会话：
-  session start [--browser <id|名字|edge|chrome>] [--tab <tabId>] [--no-focus] [--incognito]
+  session start [--browser <id|名字|edge|chrome>] [--tab <tabId>] [--no-focus] [--incognito] [--request-id <token>]
+  session prepare|claim|cancel|request --request-id <token>
                 [--agent-name <name>] [--project <name>] [--controller-color <#rrggbb>]
                 默认新建并聚焦独立 Agent Window；--no-focus 才在后台开窗
   session rebind <id> --tab <tabId> [--release-old]
@@ -4768,7 +4924,7 @@ function printHelp() {
 
 页面（省略 --session 且只有一个 session 时自动选用）：
   navigate <url> | reload | back|navigate-back | forward|navigate-forward
-  observe [--probe-hover] [--max-depth N] [--debug-surfaces] [--save-full <path>] [--max-tokens N] [--cursor <token>] [--frames] [--closed-shadow] [--vom] [--ax]
+  observe [--probe-hover] [--max-depth N] [--debug-surfaces] [--save-full <path>] [--max-tokens N] [--cursor <token>] [--frames] [--closed-shadow] [--vom] [--ax] [--facts] [--fallback-ax] [--compare-ax] [--pipeline page-lib|ax]
           [--delta --baseline <observationId>] [--out <path>]
                                    只读观察；文本原地变化时可用增量补丁，未命中基线自动回退整页
   snapshot
@@ -4782,11 +4938,12 @@ function printHelp() {
   screenshot --out <path> [--mode visible|auto|manual] [--scope viewport|document|follow|current] [--region x,y,w,h] [--overlap px]
              [--ref @eN | --selector css] [--annotate]
   screenshot --mode manual --stitch --out <path>
-  click <ref|selector> ${renderFlagUsage('click').join(' ')} | click --capture <id> --image-x X --image-y Y | click --closed-shadow-text <文本>
+  click <ref|selector> ${clickFlags} | click --capture <id> --image-x X --image-y Y | click --closed-shadow-text <文本>
+  click-backend --backend <backendNodeId>   点击 AX/DOMSnapshot 发现但没有 ref 的元素（closed shadow 等）
   动作通用：--context <id> --observation <id> --expect '<json>' --depends-on '<json>' --settle 300ms --wait-timeout 5s
   click --wait-navigation           点击后等 URL 变化且 document readyState=complete（最多 8s）
   hover | focus | scroll-to <ref|selector>
-  fill <ref|selector> ${renderFlagUsage('fill').join(' ')}
+  fill <ref|selector> ${fillFlags}
   press <key> [--ref <ref>]
   select <ref|selector> --value <value>
   drag <from> --to <to> | --dx N --dy N [--mode hold|click-move-click] [--hold 500ms] [--duration 800ms] [--modifiers ctrl+shift]
@@ -4794,7 +4951,7 @@ function printHelp() {
   blur [--ref @eN | --selector css]
   upload <ref|selector> --file <path> [--file <path> ...]
   download <ref|selector> [--out <path>] [--overwrite] | download --url <url>
-  evaluate <expression>
+  evaluate <expression> [--unverified]
   wait-for-element <selector|@ref> [--state visible] [--timeout 20s]   # 超时 satisfied=false，退出码 0
   wait-for-navigation [--wait-until load|domcontentloaded|networkidle|commit] [--timeout 30s]
   wait-ms <ms>
@@ -4830,7 +4987,7 @@ function printHelp() {
   emulate [--device iphone-14|pixel-7|ipad-mini|...] [--width N --height N] [--dpr 2] [--mobile] [--ua ...] [--touch|--no-touch]
           [--timezone Asia/Shanghai]
           [--locale zh-CN] [--geolocation <lat>,<lon>] [--reset]
-  request-help --reason <文本> [--timeout ms]
+  request-help --reason <text> [--timeout ms] [--until '<json criteria>']
 
 tab / window：
   tab list [--scope agent|user|all]
@@ -4884,7 +5041,7 @@ async function runCommand(flags, pos) {
       return cmdDaemon(flags, pos);
     case 'help':
       if (pos[1]) return cmdHelpTopic(String(pos[1]));
-      printHelp();
+      await printHelp();
       return 0;
     case 'logs':
       return cmdDaemonLog(flags);
@@ -4956,25 +5113,29 @@ async function runCommand(flags, pos) {
 }
 
 function finish(code) {
+  traceStartup('finish:' + code);
   process.exitCode = code;
   // 兜底：极少数情况下还有悬挂句柄（例如被中断的 socket），2s 后强制退出。
   const timer = setTimeout(() => process.exit(code), 2000);
   timer.unref();
 }
+if (STARTUP_TRACE) process.on('exit', (code) => traceStartup('exit:' + code));
 
 async function main(argv) {
+  traceStartup('main');
   if (argv.length === 1 && ['--version', '-v', 'version'].includes(argv[0])) {
     print(VERSION);
     return 0;
   }
   const { flags, pos } = parseArgs(argv);
+  traceStartup('args-parsed');
   jsonMode = flags.json === true;
   if (flags.help) {
-    printHelp();
+    await printHelp();
     return 0;
   }
   if (!pos.length) {
-    printHelp();
+    await printHelp();
     return 2;
   }
   // 零仪式生命周期别名：open / sync / close
@@ -5038,16 +5199,29 @@ async function cmdOpenAlias(flags, pos) {
   if (!started.ok) return outputFailure(started);
   const sessionId = (started.result || {}).sessionId;
   let title = '';
+  let observation = null;
   if (url) {
     const nav = await callRpc('navigate', { session: sessionId, url }, Math.max(timeoutOf(flags), 60000));
     if (!nav.ok) return outputFailure(nav);
     title = (nav.result || {}).title || '';
+    if (flags.observe === true) {
+      const params = { session: sessionId };
+      const maxTokens = Number(flags['max-tokens']);
+      if (Number.isInteger(maxTokens) && maxTokens > 0) params.maxTokens = maxTokens;
+      const obs = await callRpc('observe', params, Math.max(timeoutOf(flags), 30000));
+      if (!obs.ok) return outputFailure(obs);
+      observation = obs.result || null;
+    }
   }
   if (jsonMode) {
-    emitJson({ ok: true, result: { sessionId, url: url || null, title: title || null } });
+    emitJson({ ok: true, result: { sessionId, url: url || null, title: title || null, observation } });
     return 0;
   }
   print(`已打开会话 ${sessionId}` + (url ? `：${url}${title ? '（' + title + '）' : ''}` : ''));
+  if (observation) {
+    print(observation.observation || '');
+    print(`（refs=${observation.refs ?? 0}${observation.truncated ? '，已截断' : ''}）`);
+  }
   return 0;
 }
 
@@ -5064,7 +5238,7 @@ main(process.argv.slice(2))
       finish(1);
       return;
     }
-    if (err instanceof RecipeStoreError) {
+    if (err && err.name === 'RecipeStoreError') {
       outputBridgeError(new BridgeError(err.code, err.message));
       finish(1);
       return;

@@ -1,13 +1,14 @@
 // extension/src/debugger-idle.js —— 调试器空闲软分离的纯判定。
 //
-// 目标：后台/非活动标签页在最后一次 CDP 使用后保留 75s 再 detach，减少反复
-// attach 的抖动与“被调试”提示；但网络录制、视频、对话框、规则、仿真等长生命周期
-// feature 仍持有调试器时绝不分离，避免丢事件或丢状态。
+// 目标：CDP 会话按 tab attach 一次，最后一次使用后保留 75s 再 detach，减少反复
+// attach 的抖动与提示条闪烁；网络录制、视频、对话框、规则、会话等长生命周期
+// feature 持有调试器时绝不分离，避免丢事件或丢状态。
 
 export const DEFAULT_DEBUGGER_IDLE_MS = 75000;
 
 /** 这些 feature 依赖持续在线的 CDP，空闲时不能分离。 */
 export const LONG_LIVED_DEBUGGER_FEATURES = new Set([
+  'session',
   'dialog',
   'network',
   'record',
@@ -19,7 +20,6 @@ export const LONG_LIVED_DEBUGGER_FEATURES = new Set([
 /**
  * @param {{
  *   attached?: boolean,
- *   tabActive?: boolean,
  *   lastActivity?: number,
  *   now?: number,
  *   idleMs?: number,
@@ -29,8 +29,6 @@ export const LONG_LIVED_DEBUGGER_FEATURES = new Set([
  */
 export function shouldIdleDetach(state = {}) {
   if (state.attached !== true) return false;
-  // 只对非活动标签页做延迟分离；活动标签页仍由 release 立即 detach，避免提示条常驻。
-  if (state.tabActive !== false) return false;
   const lastActivity = Number(state.lastActivity);
   if (!Number.isFinite(lastActivity) || lastActivity <= 0) return false;
   const now = Number.isFinite(Number(state.now)) ? Number(state.now) : Date.now();

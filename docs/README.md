@@ -1,6 +1,6 @@
 # 文档
 
-BridgeDeck 的文档分两层：用户文档说明怎么用，内部验证记录说明实现与对照状态。
+BridgeDeck 的文档分两层：用户文档说明怎么用，验证记录说明已经实现并验证了什么。
 
 ## 用户文档
 
@@ -19,27 +19,22 @@ BridgeDeck 的文档分两层：用户文档说明怎么用，内部验证记录
 | [Windows 签名](windows-signing.md) | 自签、时间戳、安装器 |
 | [排障](troubleshooting.md) | 常见失败与排查顺序 |
 
-## 内部验证
+## 能力与验证
 
 | 文档 | 说明 |
 | --- | --- |
-| [交付闭环](CLOSURE.md) | 当前交付范围与验证结果 |
-| [镜像审计](SOURCE-PARITY.md) | 目录级行数覆盖 |
-| [逐文件清单](PARITY-MANIFEST.md) | 每个对照文件的行数差 |
-| [剩余差异](REMAINING-GAPS.md) | 仍然存在的行为/结构差异 |
-| [功能矩阵](FUNCTION-MATRIX.md) | CLI、MCP、插件工具覆盖 |
-| [UI 对照](UI-PARITY.md) | 弹窗结构与视觉对照 |
-| [阶段状态](STATUS.md) | 当前阶段与测试计数 |
-| [范围](SCOPE.md) | 交付边界 |
-| [对照总览](PARITY.md) | 协议、工具与验证的总览 |
-| [复刻矩阵](REPLICATION-MATRIX.md) | 文件级复刻关系 |
-| [代码学习](CODE-LEARNINGS.md) | 关键实现与踩坑记录 |
+| [功能矩阵](FUNCTION-MATRIX.md) | CLI、MCP、插件与 SDK 的能力覆盖 |
+| [当前状态](STATUS.md) | 测试计数、性能与运行环境 |
+| [9 站实测](SITE-BENCH-BRIDGEDECK-1.9.md) | 主流站点上的观察、脚本、截图与会话启动数据 |
+| [收官报告](FINAL-REPORT-2026-11-15.md) | 能力、性能、回归与后续方向的总结 |
+| [运行时决策](RUNTIME-DECISION.md) | CLI / MCP / 插件直连 / 原生 thin client 的取舍与实测 |
+| [剩余工作](REMAINING-GAPS.md) | 已知边界与后续计划 |
 | [商店文案](STORE-LISTING.md) | 扩展商店描述 |
 | [商店审核](STORE-REVIEW.md) | 审核材料与隐私说明 |
 
 ## 写作约定
 
+- 只写 BridgeDeck 自己实现了什么、如何验证，不写与其他产品的对比。
 - 标题只表达一个主题，正文先给结论再给细节。
 - 命令、路径、字段名用代码格式。
 - 状态表只写可验证事实，不写“应该”“大概”。
-- 用户文档不记录内部实现细节；内部验证文档不混入使用教程。

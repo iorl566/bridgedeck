@@ -18,8 +18,10 @@ const LOCAL_ONLY = new Set([
 ]);
 
 test('MCP 工具数量、命名与协议方法映射', () => {
-  assert.equal(TOOLS.length, 50);
+  assert.equal(TOOLS.length, 51);
   assert.equal(new Set(TOOLS.map((tool) => tool.name)).size, TOOLS.length);
+  const clickBackend = TOOLS.find((tool) => tool.name === 'browser_click_backend');
+  assert.ok(clickBackend && clickBackend.methods.includes('click-backend'), 'browser_click_backend 未映射 click-backend');
   for (const tool of TOOLS) {
     assert.match(tool.name, /^browser_[a-z_]+$/, tool.name);
     assert.ok(Array.isArray(tool.methods), tool.name + ' 缺少 methods');

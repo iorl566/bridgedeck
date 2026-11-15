@@ -1,5 +1,5 @@
 // src/protocol-version.js —— 协议版本解析/比较（与 daemon/lib 的规则保持一致）
-export const PROTOCOL_VERSION = '1.8';
+export const PROTOCOL_VERSION = '1.9';
 export const PROTOCOL_MAJOR = 1;
 
 export function parseProtocol(value) {

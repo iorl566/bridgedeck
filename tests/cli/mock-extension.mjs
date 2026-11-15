@@ -228,7 +228,9 @@ function dispatchCommand(method, params = {}) {
       return { dataUrl: SCREENSHOT_DATA_URL, width: 300, height: 200 };
     case 'evaluate': {
       const value = evaluateExpression(params.expression);
-      return { value: value === undefined ? null : value };
+      return params.unverified === true
+        ? { value: value === undefined ? null : value, verified: false }
+        : { value: value === undefined ? null : value };
     }
     case 'console':
       return { entries: [{ level: 'log', text: 'hello console', ts: Date.now() }] };
@@ -360,8 +362,8 @@ function handleMessage(conn, raw, isBinary) {
 function runConnection(conn) {
   const hello = {
     type: 'hello',
-    protocol: '1.8',
-    capabilities: ['observe', 'dialog'],
+    protocol: '1.9',
+    capabilities: ['observe', 'dialog', 'unverified', 'dom-read'],
     extVersion: EXT_VERSION,
     browser: opts.browser,
     browserVersion: BROWSER_VERSION,
