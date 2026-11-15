@@ -31,6 +31,9 @@ jobs:
       - name: Node version
         run: node --version
 
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
       - name: Unit tests
         shell: bash
         run: node --test tests/unit/*.test.mjs
