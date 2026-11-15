@@ -1,6 +1,6 @@
 # BridgeDeck 能力与性能报告（2026-11-15）
 
-> 范围：BridgeDeck 0.1.2（协议 1.9）的能力清单、9 站实测、运行时优化与回归状态。
+> 范围：BridgeDeck 0.1.3（协议 1.9）的能力清单、9 站实测、运行时优化与回归状态。
 > 数据源：本仓库测试、`.tmp-bench/out-bridge050g/`、`.tmp-bench/out-compare050b/`；环境为 Windows、Edge 157、未登录、逐站独立会话。
 
 ## 0. 结论
@@ -115,4 +115,4 @@ $env:BB_E2E_SYNC_DOCS='0'; node tools/e2e.mjs     # 141/143
 - [协议](PROTOCOL.md)
 - [运行时决策](RUNTIME-DECISION.md)
 - [9 站实测](SITE-BENCH-BRIDGEDECK-1.9.md)
-- [发布说明](releases/0.1.2.md)
+- [发布说明](releases/0.1.3.md)
