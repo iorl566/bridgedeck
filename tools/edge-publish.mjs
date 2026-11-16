@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // tools/edge-publish.mjs —— 通过 Microsoft Edge Add-ons API 上传并发布扩展。
 // 需要：EDGE_API_KEY、EDGE_CLIENT_ID、EDGE_PRODUCT_ID（Partner Center）。
-// 用法：EDGE_API_KEY=... EDGE_CLIENT_ID=... EDGE_PRODUCT_ID=... node tools/edge-publish.mjs [--package dist/BridgeDeck-extension-0.1.2.zip] [--notes "..."]
+// 用法：EDGE_API_KEY=... EDGE_CLIENT_ID=... EDGE_PRODUCT_ID=... node tools/edge-publish.mjs [--package dist/BridgeDeck-extension-0.1.2.zip] [--notes "..."] [--notes-file docs/releases/0.1.3.md] [--draft-only]
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,7 +27,11 @@ if (!/^[0-9a-f-]{36}$/i.test(productId)) {
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 const zip = path.resolve(ROOT, option('--package', path.join('dist', `BridgeDeck-extension-${pkg.version}.zip`)));
 if (!fs.existsSync(zip)) throw new Error('扩展包不存在：' + zip);
-const notes = option('--notes', 'BridgeDeck ' + pkg.version + '：修复弹窗连接设置默认展开、补充按步骤截图与 Trace 网络时间线。');
+const notesFile = option('--notes-file', '');
+const notes = notesFile
+  ? fs.readFileSync(path.resolve(ROOT, notesFile), 'utf8')
+  : option('--notes', 'BridgeDeck ' + pkg.version + '：修复弹窗连接设置默认展开、补充按步骤截图与 Trace 网络时间线。');
+const draftOnly = args.includes('--draft-only');
 const base = `https://api.addons.microsoftedge.microsoft.com/v1/products/${productId}`;
 const headers = {
   Authorization: `ApiKey ${apiKey}`,
@@ -75,6 +79,11 @@ for (let attempt = 0; attempt < 60; attempt += 1) {
 }
 if (!uploadStatus || uploadStatus.status !== 'Succeeded') {
   throw new Error('扩展包上传失败：' + JSON.stringify(uploadStatus));
+}
+
+if (draftOnly) {
+  console.log(JSON.stringify({ ok: true, productId, uploadId, draftOnly: true, status: uploadStatus.status }, null, 2));
+  process.exit(0);
 }
 
 console.log(JSON.stringify({ step: 'publish' }, null, 2));
