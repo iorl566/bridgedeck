@@ -1,6 +1,6 @@
 // dsh-plugin/lib/start-journal.mjs —— 插件侧的启动所有权日志。
 //
-// 目的（对齐 bsk 的 DSH start journal）：插件在 spawn CLI 之前先记录 token，
+// 目的：插件在 spawn CLI 之前先记录 token，
 // 进程崩溃/回复丢失后仍能凭 token 找回或清理已经创建的 Agent 窗口。
 // 与 daemon 的 session-starts.json 互补：daemon 管会话所有权，这里管“插件调用过什么”。
 import fs from 'node:fs';

@@ -49,17 +49,24 @@ node cli/bridge.mjs daemon trust-local off
 
 ## 协议域与兼容
 
-握手 transcript 使用协议域分隔常量，用于区分不同产品/版本的配对协议：
+握手使用两组固定域分隔常量：
 
-- 新配对：`bridgedeck-local-auth-v1`
-- 旧配对（升级前建立）：`legacy-local-auth-v1`
+- 客户端证明：`bridgedeck-auth-v1\n<challenge>`（扩展用 token 做 HMAC，daemon 校验）
+- 服务端证明：`bridgedeck-server-v1\n<challenge>`（daemon 用同一 token 做 HMAC，扩展在 `hello-ack` 里校验）
 
-兼容策略：
+扩展收到 `auth-challenge` 后会校验 `hello-ack.serverProof`；不匹配或缺失时断开连接并在弹窗显示“daemon 身份校验失败”。这保证扩展连的是掌握同一 token 的 daemon，而不是同端口的其它本地服务。
 
-1. 新配对写入新域名；旧凭据没有域名标记，按旧域名处理。
-2. 扩展校验服务端证明时先试主域名，失败再回退到另一域名，因此新旧服务端都能连上；
-   选定域名后，客户端证明与后续轮换证明都用同一个域名。
-3. 想迁移到新域名：撤销旧配对后重新执行 `daemon pair` 即可。
+## 轮换本机 token
+
+```powershell
+node cli/bridge.mjs daemon rotate
+```
+
+- 生成新的本机 token，旧配对链接立即失效；
+- 用旧 token 认证过的本机连接会被断开（返回 4003 `local token rotated`）；
+- 命令输出新的配对链接，按“生成链接”一节重新粘贴即可恢复。
+
+轮换不会影响远程配对码；需要时用 `pair revoke` 单独处理。
 
 ## 设备与配对码
 
@@ -68,6 +75,7 @@ bridge pair create [--ttl 10m] [--label x] [--replace]   # --replace 先作废�
 bridge pair devices                                        # 已连接的远程设备
 bridge pair list                                           # 有效配对码
 bridge pair revoke <code>                                  # 撤销配对码
+bridge daemon rotate                                       # 轮换本机 token
 ```
 
 ## 常见问题
@@ -78,3 +86,5 @@ bridge pair revoke <code>                                  # 撤销配对码
 | 保存后仍显示未配对 | 检查弹窗是否收到 `localAuth` 状态；刷新弹窗 |
 | 严格模式下连不上 | 先配对，或 `trust-local on` 恢复本机回退 |
 | 远端连接被拒 | 确认 token、WSS 地址与 daemon 的 TLS 状态 |
+| 弹窗提示“daemon 身份校验失败” | daemon 与本机 token 不一致：重新 `daemon pair`（或 `daemon rotate` 后重新粘贴） |
+| 轮换后立刻断开 | 预期行为：用新链接重新配对 |

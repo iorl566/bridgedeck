@@ -1,4 +1,6 @@
 // src/diagnostics.js —— 扩展自检：弹窗/设置页/图标是否真的打进包里
+import { axLeaseSnapshot } from './tools/observation.js';
+
 export async function uiDiagnostics() {
   const checkPage = async (pagePath, needles) => {
     try {
@@ -33,7 +35,7 @@ export async function uiDiagnostics() {
   }
   const pages = { popup, options, quick, record, debug: debugPage, longshot, ops, audit };
   const ok = Object.values(pages).every((page) => page.ok) && icons.every((icon) => icon.ok);
-  return { ok, popup, options, quick, record, debug: debugPage, longshot, ops, audit, icons, packageVersion: chrome.runtime.getManifest().version };
+  return { ok, popup, options, quick, record, debug: debugPage, longshot, ops, audit, icons, axLease: axLeaseSnapshot(), packageVersion: chrome.runtime.getManifest().version };
 }
 
 import { markSelfCreated } from './tabs.js';

@@ -239,6 +239,8 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `evaluate` | `{ tabId, expression, unverified? }` | `{ value }`（JSON 可序列化；不可序列化则 `null` + `note`）；`unverified:true` 时带 `verified:false` |
 | `console` | `{ tabId, since?: int }` | `{ entries: [ { level, text, ts } ] }` |
 
+> `console` 的主世界缓冲改为**按需注入**（协议 1.9 之后的行为变更）：第一次读取时才在页面上安装 console 钩子，因此只能拿到安装之后的条目；页面加载早期的日志请用 `debug` 采集（CDP `Runtime.consoleAPICalled` 会回放已缓存消息）。这样扩展默认不再改写页面的 `console`/`fetch`/`XHR`，避免被反爬检测器识别为自动化。
+
 `ref` 形如 `"@e3"`；`selector` 是 CSS 选择器。**两者必须恰好给一个**，都给或都不给 → `E_BAD_ARG`。
 
 `evaluate --unverified`（协议 1.9）：跳过观察/上下文一致性校验后执行表达式，控制权、暂停状态、
@@ -257,6 +259,111 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `E_NO_TAB` | tabId 不存在（tab 被用户关了） |
 | `E_UNKNOWN_METHOD` | 未知 method |
 | `E_INTERNAL` | 其它异常 |
+
+完整错误码清单（由 `tools/gen-error-codes.mjs` 从 `lib/error-codes.mjs` 生成，勿手改）：
+
+<!-- error-codes:begin -->
+| code | 含义 |
+| --- | --- |
+| `E_BAD_ARG` | 参数缺失/冲突（如 ref 与 selector 同时给） |
+| `E_NOT_FOUND` | ref/selector 找不到元素 |
+| `E_NOT_ACTIONABLE` | 目标存在但不可操作（不可见 / 禁用 / 尺寸为 0） |
+| `E_STALE_REF` | ref 指向的元素已不在文档里，需重新 observe |
+| `E_OPTION_NOT_FOUND` | select 的目标选项不存在 |
+| `E_OPTION_AMBIGUOUS` | select 的选项文本匹配到多个 |
+| `E_UNKNOWN_METHOD` | 未知 method |
+| `E_NO_SESSION` | 没有活动会话 |
+| `E_SESSION_BUSY` | 同一会话已有进行中的操作 |
+| `E_SESSION_PAUSED` | 会话已被人工接管（暂停） |
+| `E_SESSION_STOPPED` | 会话已结束 |
+| `E_QUEUE_FULL` | daemon 队列已满 |
+| `E_RATE_LIMITED` | 请求过于频繁 |
+| `E_CANCELLED` | 操作被取消 |
+| `E_REQUEST_CANCELLED` | 请求在排队阶段被取消 |
+| `E_INPUT_BUSY` | 输入通道被占用 |
+| `E_NO_TAB` | tabId 不存在（tab 被关闭） |
+| `E_NO_BROWSER` | 没有可用的浏览器实例 |
+| `E_START_PENDING` | 会话启动中，操作尚未就绪 |
+| `E_START_NOT_READY` | 会话尚未就绪，稍后重试 |
+| `E_OBSERVATION_STALE` | 观测结果已过期，需重新 observe |
+| `E_CURSOR_STALE` | 分页游标已过期 |
+| `E_CONTEXT_REQUIRED` | 该动作要求先提供上下文 |
+| `E_CONTEXT_STALE` | 上下文与当前页面不一致 |
+| `E_DEPENDS_FAILED` | 前置依赖步骤未成功 |
+| `E_EXPECT_FAILED` | expect 断言不匹配 |
+| `E_OBSERVATION_CHANGED` | 页面在观测后已变化（观测代数不符） |
+| `E_OCCLUDED` | 目标被遮挡（浮层/弹窗） |
+| `E_OBSCURED` | 视觉坐标落点被铺满视口的元素遮住 |
+| `E_TARGET_MISMATCH` | 视觉坐标落点不属于预期的候选目标 |
+| `E_CAPTURE_STALE` | 截图 capture 不存在或已过期 |
+| `E_BAD_MODE` | 动作模式取值不支持 |
+| `E_DIALOG_PENDING` | 有未处理的页面原生弹窗 |
+| `E_EXISTS` | 同名资源已存在 |
+| `E_CACHE_EMPTY` | 缓存为空 |
+| `E_TOO_LARGE` | 结果超过大小上限 |
+| `E_RESULT_TOO_LARGE` | 结果超过协议允许的大小 |
+| `E_JS_ERROR` | 页面内 JS 抛异常 |
+| `E_NAV_FAIL` | 导航失败 |
+| `E_TIMEOUT` | 等待类命令超时 |
+| `E_DEBUGGER_BUSY` | 调试器被其它会话占用 |
+| `E_UNSUPPORTED_CAPABILITY` | 当前版本不支持该能力 |
+| `E_UNSUPPORTED_REMOTE` | 远程连接不支持该能力 |
+| `E_PROTOCOL_UNSUPPORTED` | 协议版本不兼容 |
+| `E_AUTH` | 本机鉴权失败 |
+| `E_AUTH_BUSY` | 鉴权通道正被另一请求占用 |
+| `E_AUTH_CHALLENGE` | 鉴权挑战无效 |
+| `E_AUTH_EXPIRED` | 鉴权挑战已过期 |
+| `E_AUTH_FAILED` | 鉴权证明不匹配 |
+| `E_AUTH_PROOF` | 鉴权证明格式或签名字段无效 |
+| `E_AUTH_STATE` | 鉴权状态机不允许该操作 |
+| `E_PAIR_INVALID` | 配对码无效或已使用 |
+| `E_PAIR_REQUIRED` | 需要先完成本机配对 |
+| `E_PAUSED_MANUAL` | 会话因人工接管而暂停 |
+| `E_LEDGER_PENDING` | 有未确认的意图账本记录 |
+| `E_DAEMON` | daemon 不可用（未启动或连接失败，客户端侧码） |
+| `E_NO_DAEMON` | 连不上 daemon |
+| `E_DAEMON_TIMEOUT` | daemon 在限定时间内没有响应 |
+| `E_DISCONNECTED` | 连接已断开 |
+| `E_EXTENSION_GONE` | 浏览器扩展已断开 |
+| `E_LISTEN` | daemon 端口监听失败 |
+| `E_SPAWN` | 子进程启动失败 |
+| `E_ENV` | 运行环境不满足要求 |
+| `E_CONFIG_INVALID` | 配置项取值无效 |
+| `E_BAD_JSON` | 请求或文件不是合法 JSON |
+| `E_BAD_REQUEST` | 请求格式不合法 |
+| `E_INVALID_PARAMS` | 参数无效 |
+| `E_DIRECT_RPC_DISABLED` | 直连 RPC 已被关闭 |
+| `E_RPC` | RPC 调用失败 |
+| `E_OUTPUT` | 输出写入失败 |
+| `E_TARGET_NOT_FILLABLE` | 目标不可填写（不是输入框/可编辑区） |
+| `E_NOT_SELECT` | 目标不是 select 元素 |
+| `E_BROWSER` | 浏览器侧操作失败 |
+| `E_PAGE_ERROR` | 页面内执行出错 |
+| `E_OBSERVE_FAILED` | 观察采集失败 |
+| `E_FOLLOW_FAILED` | 跟随新标签页失败 |
+| `E_RELEASE_INVALID` | 发布信息校验失败 |
+| `E_UPDATE` | 更新流程失败 |
+| `E_MCP_CONFLICT` | MCP 服务端口/进程冲突 |
+| `E_APP_SSO_FAILED` | 应用单点登录失败 |
+| `E_TRANSFER_NOT_FOUND` | 传输任务不存在 |
+| `E_TRANSFER_STATE` | 传输任务状态不允许该操作 |
+| `E_BORROW_DENIED` | 借用标签页被拒绝 |
+| `E_BORROW_TIMEOUT` | 借用标签页超时 |
+| `E_HELP_DISABLED` | 人工协助不可用 |
+| `E_NO_DOWNLOAD` | 没有可用的下载 |
+| `E_DOWNLOAD_FAILED` | 下载失败 |
+| `E_NO_FILE_CHOOSER` | 没有可用的文件选择器 |
+| `E_TRANSFER_OFFSET` | 传输偏移不匹配 |
+| `E_TRANSFER_LIMIT` | 传输超过大小限制 |
+| `E_TRANSFER_INCOMPLETE` | 传输未完成 |
+| `E_INCOGNITO_UNAVAILABLE` | 无痕窗口不可用 |
+| `E_RECIPE_NOT_APPROVED` | 配方未获批 |
+| `E_RECIPE_CHANGED` | 配方内容已变更 |
+| `E_RECIPE_EXPIRED` | 配方已过期 |
+| `E_RECIPE_LOCKED` | 配方正在被另一个进程回放 |
+| `E_FORBIDDEN` | 当前策略禁止该操作 |
+| `E_INTERNAL` | 其它异常 |
+<!-- error-codes:end -->
 
 ### 5.4 `effect_state`
 
@@ -487,21 +594,52 @@ bridge settings [--json]` 与 `bridge settings set --label <名字> --borrow-con
 ### 12.2 `extract` — 表格/列表结构化导出
 
 `{ tabId, selector?, ref?, format?: "json"|"csv", maxRows?: 500 }` →
-`{ kind: "table"|"list", columns: [{ key, label }], rows: [ {...} ], rowCount, truncated, warnings: [...] }`
+`{ kind: "table"|"list", columns: [{ key, label }], rows: [ {...} ], rowCount, truncated, coverage, warnings: [...] }`
+
+`coverage` 说明本次抽取到底覆盖了多少（`datasetComplete` 只表示"页面自己声明了总数且确实读满"，不代表页面内容真的完整）：
+
+```json
+{ "scope": "loaded-dom", "returned": 20, "declared": 42,
+  "stopReason": "max-rows", "datasetComplete": "incomplete" }
+```
+
+- `declared`：取自 `aria-rowcount` / `aria-setsize`；页面没声明就是 `null`（不猜）。
+- `stopReason`：`end`（读到末尾）/ `max-rows`（行数上限）/ `max-bytes`（字节上限）。
+- `datasetComplete`：`complete`（声明数已读满）｜`incomplete`（被截断）｜`unknown`（无声明）。
+- 只覆盖已加载的 DOM：分页、无限滚动、canvas 渲染、closed shadow 里的内容都不在范围内。
 
 规则：
 1. 目标是 `table` 时按 thead 取列名；没有 thead 用首行 `th` 或首行 `td` 文本；列 key 为 `c1..cN`。
 2. 单元格带 `rowspan/colspan` 时在 `rows[i].__spans` 记录 `{ col: {rowspan, colspan} }`，不展开占位。
 3. 目标是 `ul/ol` 或带 `role=list` 时 `kind:"list"`，每项一行 `{ index, text }`；项内有 `a` 时附 `href`。
 4. 目标是其它元素且含 `table` 子节点时，取第一个 `table`。
-5. `maxRows` 默认 500、上限 5000；超出时 `truncated: true`。
-6. `format:"csv"` 时 CLI 直接落盘 `--out`，扩展只返回 json 结构（CSV 由 CLI 生成，避免扩展侧编码差异）。
+5. `maxRows` 默认 500、上限 5000；超出时 `truncated: true`，`coverage.stopReason = "max-rows"`。
+6. `format:"csv"` 时 CLI 直接落盘 `--out`，扩展只返回 json 结构（CSV 由 CLI 生成，避免扩展侧编码差异）；CSV 模式也会打印一行覆盖度。
+
+### 12.2.1 观测代数（`revision` / `expectRevision`）
+
+`observe`、`read`、`extract` 的结果都带 `revision`（当前文档的 DOM 代数）。动作方法可以带 `expectRevision: <整数>`，扩展在派发前比对：
+
+- 一致 → 正常执行；
+- 不一致 → `E_OBSERVATION_CHANGED`，**不派发任何输入**，并回报"观测代数 N，当前 M"。
+
+```powershell
+bridge observe --session <id> --json            # → { "revision": 16, "refs": 42, ... }
+bridge read "@e3" --session <id> --json         # → { "value": "...", "revision": 16 }
+bridge extract --session <id> --json            # → { "rows": [...], "revision": 16 }
+bridge click "a" --expect-revision 16 --session <id>   # 同一代数内，执行
+bridge click "a" --expect-revision 3  --session <id>   # → E_OBSERVATION_CHANGED
+```
+
+**读和写用同一个代数**，就能表达"我读到的值到现在没变过"：先 `read` 拿 `revision`，接着带 `--expect-revision` 去点/填，中间页面若重渲染过会被挡下——避免把基于旧内容做的判断作用到新页面上。
+
+用途：SPA 自动刷新、轮播、无限滚动这类页面，从观测到动作之间内容可能整体换掉，此时 ref 指向的语义已经变了。默认不开启（不带 `expectRevision` 就不校验），避免误伤无关的 DOM 变化。
 
 ### 12.3 交互补充
-
 | method | params | result | 说明 |
 | --- | --- | --- | --- |
 | `drag` | `{ tabId, from: ref\|selector, to: ref\|selector, mode?: "hold"\|"click-move-click", steps?: int }` | `{ ok: true }` | 按元素中心点坐标派发 pointerdown/move/up；`steps` 默认 8，范围 2–40 |
+| `drag`（视觉坐标） | `{ tabId?, capture: string, imageX: int, imageY: int, imageDx?: int, imageDy?: int, steps?, modifiers?, durationMs? }` | `{ ok: true, trusted: true, from, to }` | 起点取截图里的图片像素坐标，位移也用图片像素；扩展按 `capture.scale/scrollX/scrollY` 换算成页面坐标，**强制走 CDP 原生输入**（页面内合成事件对 canvas 类控件无效）。`capture` 来自 `screenshot --annotate` 或 `click --capture` |
 | `wheel` | `{ tabId, deltaY, deltaX?: 0, ref?/selector?, x?, y? }` | `{ ok: true, scrollY }` | 在目标中心（或页面坐标）派发 `wheel`；页面未滚动时退化为 `scrollBy` |
 | `blur` | `{ tabId, ref?, selector? }` | `{ ok: true }` | 无目标时 blur `document.activeElement` |
 | `upload` | `{ tabId, ref/selector, files: [{ name, mime, base64 }] }` | `{ ok: true, names }` | 页面侧用 `DataTransfer` 组装 `File` 后赋给 `input[type=file].files`，再派发 `input/change`；总字节上限 20MB |

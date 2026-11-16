@@ -44,6 +44,7 @@ export function createInputLeaseRegistry(options = {}) {
         tabId,
         owner: existing.owner,
         expiresInMs: Math.max(0, existing.expiresAt - at),
+        retry_after_ms: Math.max(50, existing.expiresAt - at),
       });
     }
     const ttl = Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : defaultTtlMs;

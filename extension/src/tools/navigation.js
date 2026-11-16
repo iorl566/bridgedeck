@@ -1,7 +1,8 @@
 // src/tools/navigation.js —— navigate / reload / back / forward。
 import { bridgeError } from '../errors.js';
 import { execPage } from '../inject.js';
-import { getTab, waitForLoad } from '../tabs.js';
+import { getTab, sleep, waitForLoad } from '../tabs.js';
+import { clearObservationCache } from './observation.js';
 import { log } from '../log.js';
 import { showTakeover } from '../takeover.js';
 import { clearFrameAliases } from './frames.js';
@@ -40,6 +41,7 @@ export async function navigate(params = {}) {
   const loaded = await waitForLoad(tabId, timeoutMs);
   if (!loaded) log(`tab ${tabId} 导航 ${timeoutMs}ms 内未完成加载，返回当前状态`);
   await resetRefsQuietly(tabId);
+  clearObservationCache(tabId);
   const current = await getTab(tabId);
   // 浮层是可见性提示，注入失败/延迟不影响导航结果；不阻塞导航返回。
   showTakeover(tabId, { name: 'BridgeDeck' }).catch(() => {});
@@ -57,19 +59,39 @@ export async function reload(params = {}) {
   }
   await waitForLoad(tabId, 15000).catch(() => null);
   await resetRefsQuietly(tabId);
+  clearObservationCache(tabId);
   return { ok: true };
 }
 
+async function waitForHistorySettled(tabId, beforeUrl, timeoutMs = 15000) {
+  // bfcache 恢复不会触发 load 事件；只等 waitForLoad 会白等到超时。
+  // 这里以"status=complete 且 URL 已变、没有在途导航"为准，正常加载与 bfcache 都能立即满足。
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const tab = await getTab(tabId).catch(() => null);
+    if (!tab) break;
+    if (tab.pendingUrl || tab.status === 'loading') {
+      await sleep(50);
+      continue;
+    }
+    if (tab.status === 'complete' && tab.url && (tab.url !== beforeUrl || beforeUrl === '')) return true;
+    await sleep(50);
+  }
+  return false;
+}
+
 async function goHistory(tabId, direction) {
-  await getTab(tabId);
+  const before = await getTab(tabId);
+  const beforeUrl = (before && before.url) || '';
   try {
     if (direction === 'back') await chrome.tabs.goBack(tabId);
     else await chrome.tabs.goForward(tabId);
   } catch (error) {
     throw bridgeError('E_NAV_FAIL', `历史${direction === 'back' ? '后退' : '前进'}失败: ${(error && error.message) || error}`);
   }
-  await waitForLoad(tabId, 15000).catch(() => null);
+  await waitForHistorySettled(tabId, beforeUrl, 15000);
   await resetRefsQuietly(tabId);
+  clearObservationCache(tabId);
   return { ok: true };
 }
 

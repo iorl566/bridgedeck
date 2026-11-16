@@ -10,7 +10,7 @@ BridgeDeck 0.1.3 的功能域、实现与验证证据。证据编号对应 `tool
 | 无 ref 元素 | `unmappedAx` + `click-backend`；AX 兜底观察；`--pipeline ax` 备用采集器 | 5e、5f、5h |
 | iframe | 同源主树；跨源 `observe --frames` + `@fNeM` | 20p、23p |
 | closed shadow | CDP pierce；`observe --closed-shadow` 分配 ref；按 ref 点击/读取 | 20u、20v |
-| 交互 | click/hover/fill/press/select/focus/blur/scroll-to/drag/wheel | 4、6、7、16、17、23c、23f |
+| 交互 | click/hover/fill/press/select/focus/blur/scroll-to/drag/wheel；拖拽支持视觉坐标（`--capture` + `--image-dx/dy`） | 4、6、7、16、17、23c、23f、[VISION-DRAG](VISION-DRAG.md) |
 | 可信输入 | `--trusted` 原生键鼠注入；遮挡校验（`E_OCCLUDED`/`--force`）；输入租约 | 20z、35b |
 | 上传 | input/选择器拦截/隐藏 input；`--mode drop` | 18、18b、18c |
 | 大文件 | >4MB transfer staging；>8MB CDP 赋值；下载 transfer 落盘 | 18d、18e、23g |
@@ -33,10 +33,13 @@ BridgeDeck 0.1.3 的功能域、实现与验证证据。证据编号对应 `tool
 | SDK | Node/Python，`/rpc` 直连 | SDK 8/8 + 8/8 |
 | 协议 | `protocol 1.9` + capabilities 门禁/降级/偏斜标注 | 20r |
 | 审批 | 内容哈希绑定 + 24h 有效期；篡改/过期拒绝 | 20s |
-| 反爬 | 指纹 + 可信点击挑战（本地靶场） | 20z |
+| 反爬 | 指纹 + 可信点击挑战（本地靶场）；四层实测见 [总报告](ANTI-BOT-REPORT.md)，靶场全量盘点见 [RANGES](ANTI-BOT-RANGES.md) | 20z、[layer1](ANTI-BOT-LAYER1-BENCH.md)、[layer2](ANTI-BOT-LAYER2-BENCH.md)、[国内](ANTI-BOT-LAYER3-DOMESTIC.md)、[靶场](ANTI-BOT-LAYER3-BENCH.md) |
 
 ## 结论
 
 - 观察、事实层、交互、上传下载、对话框、网络/规则、截图、提取、等待、协作、录制、审计、仿真、配对、MCP/插件/SDK 均已实现并有真实 Edge 验证。
 - 独有能力：观察事实层、`unmappedAx` + `click-backend`、AX 兜底、可恢复会话、`effect_state`、DSH 插件直连、插件/SDK。
-- 真实反爬站点在当前网络环境不可达，未纳入自动验证；本地靶场覆盖核心检测项。
+- 第一层静态检测站已实测并修复（见 [ANTI-BOT-LAYER1-BENCH](ANTI-BOT-LAYER1-BENCH.md)）：webdriver / canvas / WebGL / CDP attach 本就干净；原本 MAIN world 常驻注入导致的 `fetch`/`XHR`/`console` 非原生问题已改为按需注入 + 可还原，pixelscan / browserscan / fingerprint-scan 三项复测转绿。
+- 第二层动态挑战已实测（见 [ANTI-BOT-LAYER2-BENCH](ANTI-BOT-LAYER2-BENCH.md)）：Turnstile 测试 key 链路正确；真实 key 与 CF interstitial 需真人动作。当前 403 类拦截主要来自出口 IP 声誉，需住宅 IP 对照才能归因。
+- 国内平台已实测（见 [ANTI-BOT-LAYER3-DOMESTIC](ANTI-BOT-LAYER3-DOMESTIC.md)）：首页未登录放行、搜索全部走登录/风控导流、未出现滑块；京东风控经非浏览器对照证实与自动化指纹无关。
+- 靶场已全量盘点（见 [ANTI-BOT-RANGES](ANTI-BOT-RANGES.md)）：Spiderbuf 36 题全部枚举（C14/C02 通过、C04 行为门未通过）；Scrape Center 42 例全通过，其中 `antispider1`（WebDriver 检测）正常出数据、`antispider8`（无限 debugger）不触发——桥不启用 Debugger 域，这类反调试防的是人不是自动化。

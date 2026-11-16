@@ -19,9 +19,16 @@ import { buildAxNodes } from '../lib/ax-pipeline.js';
 import { intersectsViewport, summarizePipeline } from '../lib/pipeline-compare.js';
 import { shadowRefs } from './state.js';
 import { clearFrameAliases, setFrameAliases } from './frames.js';
+import { collectCdpFrames } from '../frame-cdp.js';
 import { closedShadowEntries } from './closed-shadow.js';
 import { boundedTimeout, requireTabId } from './shared.js';
 const observationCache = new Map();
+
+/** 导航/刷新会重建文档：丢掉旧的观察基线，避免下一次 delta 拿上一页文本做 diff。 */
+export function clearObservationCache(tabId) {
+  const id = Number(tabId);
+  if (Number.isInteger(id)) observationCache.delete(id);
+}
 // 连续 trusted fill 的聚焦状态缓存：同一标签页 1s 内复用，避免每次重复激活/可见性检查。
 
 function encodeCursor(value) {
@@ -112,9 +119,46 @@ function joinAxIntoNodes(nodes, axNodes, backendMap) {
 }
 
 /** AX 树：只读快照，用于和 DOM VOM 对照（--ax）。 */
+// Accessibility 域按 10s 租约开着：连续观察不重复 enable，空闲后主动 disable，
+// 避免 CDP 域常驻（租约到期即释放，而不是一直挂着）。
+const AX_LEASE_MS = 10_000;
+const axLeaseTimers = new Map();
+const axLeaseDeadlines = new Map();
+
+/** 当前 AX 域租约（诊断用）：tabId + 剩余毫秒。 */
+export function axLeaseSnapshot() {
+  const now = Date.now();
+  const out = [];
+  for (const [tabId, until] of axLeaseDeadlines) {
+    const remainingMs = Math.max(0, Number(until) - now);
+    if (remainingMs > 0) out.push({ tabId, remainingMs });
+    else axLeaseDeadlines.delete(tabId);
+  }
+  return out;
+}
+
+function armAxLease(tabId) {
+  const previous = axLeaseTimers.get(tabId);
+  if (previous) clearTimeout(previous);
+  axLeaseDeadlines.set(tabId, Date.now() + AX_LEASE_MS);
+  const timer = setTimeout(() => {
+    axLeaseTimers.delete(tabId);
+    axLeaseDeadlines.delete(tabId);
+    void cdpSend(tabId, 'Accessibility.disable').catch(() => {});
+  }, AX_LEASE_MS);
+  timer.unref?.();
+  axLeaseTimers.set(tabId, timer);
+}
+
 async function collectAxNodes(tabId, limit = 1000) {
   await acquire(tabId, 'ax');
   try {
+    const pending = axLeaseTimers.get(tabId);
+    if (pending) {
+      clearTimeout(pending);
+      axLeaseTimers.delete(tabId);
+      axLeaseDeadlines.delete(tabId);
+    }
     await cdpSend(tabId, 'Accessibility.enable').catch(() => {});
     const tree = await cdpSend(tabId, 'Accessibility.getFullAXTree', {});
     const nodes = [];
@@ -172,6 +216,7 @@ async function collectAxNodes(tabId, limit = 1000) {
     return nodes;
   } finally {
     await release(tabId, 'ax').catch(() => {});
+    armAxLease(tabId);
   }
 }
 
@@ -244,8 +289,24 @@ async function observeAxFallback(tabId, params, options = {}) {
   };
 }
 
-export async function observe(params = {}) {
-  if (params.vom === true && (params.cursor || Number(params.maxTokens) > 0)) {
+/**
+ * 视觉候选扫描（visual.scan）：列出当前视口里可作为"看图目标"的区域
+ * （canvas / 图片 / 自绘背景区域）。坐标随后由 screenshot --visual <index>
+ * 绑定到该区域，命中校验也能判断"点的是不是它"。
+ */
+export async function visualScan(params = {}) {
+  const tabId = requireTabId(params);
+  const result = await execPage(tabId, 'visual-scan', {});
+  const candidates = result && Array.isArray(result.candidates) ? result.candidates : [];
+  return {
+    ok: true,
+    candidates,
+    viewport: (result && result.viewport) || null,
+    hint: '用 screenshot --visual <index> 只拍该区域并绑定坐标；随后 click/drag --capture <id> --image-x/--image-y',
+  };
+}
+
+export async function observe(params = {}) {  if (params.vom === true && (params.cursor || Number(params.maxTokens) > 0)) {
     throw bridgeError('E_BAD_ARG', '--vom 不能与 --cursor/--max-tokens 同时使用');
   }
   if (params.fallbackAx === true && (params.vom === true || params.ax === true)) {
@@ -257,6 +318,12 @@ export async function observe(params = {}) {
   const observeTabId = Number.isInteger(params.tabId) ? params.tabId : null;
   if (observeTabId != null && (params.closedShadow || params.cursor || params.maxTokens)) clearFrameAliases(observeTabId);
   const tabId = requireTabId(params);
+  // 多 frame 页面的默认观察是合并文本；delta 必须用同一份合并文本做基线，
+  // 否则会拿主 frame 文本去 diff 合并文本，把其它 frame 整个删掉。
+  if (params.delta === true && params.force !== true && chrome.webNavigation && typeof chrome.webNavigation.getAllFrames === 'function') {
+    const frames = await chrome.webNavigation.getAllFrames({ tabId }).catch(() => null);
+    if (frames && frames.length > 1) return observeSmart(params);
+  }
   if (params.pipeline === 'ax') {
     const observed = await observeAxFallback(tabId, params, { buildNodes: true, pipeline: 'ax' });
     if (!observed) throw bridgeError('E_INTERNAL', 'AX 采集器不可用（页面无可访问的 AX 树）');
@@ -276,6 +343,9 @@ export async function observe(params = {}) {
         debugSurfaces: params.debugSurfaces === true,
         vom: params.vom === true,
         markVom: params.vom === true && (params.ax === true || params.facts === true),
+        force: params.force === true,
+        delta: params.delta === true,
+        baseline: params.baseline,
       });
     } catch (error) {
       if (params.fallback === false) throw error;
@@ -291,6 +361,36 @@ export async function observe(params = {}) {
     }
   }
   const pageLibMs = Date.now() - observeStartedAt;
+  const observeArgs = {
+    probeHover: params.probeHover === true,
+    maxDepth: params.maxDepth,
+    debugSurfaces: params.debugSurfaces === true,
+    vom: params.vom === true,
+    markVom: params.vom === true && (params.ax === true || params.facts === true),
+    force: params.force === true,
+    delta: params.delta === true,
+    baseline: params.baseline,
+  };
+  const earlyEligible = params.closedShadow !== true && params.vom !== true && params.ax !== true
+    && params.facts !== true && !params.maxTokens && params.cursor === undefined;
+  // 页面没变：不生成/传输全文。daemon 用缓存补文本；调用方拿到 unchanged 即可。
+  if (base && base.unchanged === true) {
+    if (earlyEligible) {
+      const prior = observationCache.get(tabId);
+      return {
+        observation: '',
+        unchanged: true,
+        observationId: prior ? prior.id : observationId(tabId),
+        refs: typeof base.refs === 'number' ? base.refs : 0,
+        url: base.url || (prior && prior.url) || '',
+        title: base.title || (prior && prior.title) || '',
+        ...(base.mutations ? { mutations: base.mutations } : {}),
+        ...(base.blocking ? { blocking: base.blocking } : {}),
+      };
+    }
+    // 需要全文的调用（closed-shadow / vom / ax / facts / 分页）不能复用空文本：强制重取。
+    base = await execPage(tabId, 'observe', { ...observeArgs, force: true });
+  }
   let observation = String(base.observation || '');
   let closedShadow = null;
   if (params.closedShadow === true) {
@@ -534,7 +634,7 @@ export async function observe(params = {}) {
     const requestDelta = params.delta === true && typeof params.baseline === 'string' && params.baseline;
     if (requestDelta && cache && cache.id === params.baseline) {
       const diff = diffObservation(cache.text, observation);
-      if (diff.kind === 'text' || diff.kind === 'same') {
+      if (diff.kind === 'text' || diff.kind === 'same' || diff.kind === 'structural-text') {
         const id = observationId(tabId);
         const nextCache = { ...cache, text: observation, at: Date.now(), id, url: base.url || cache.url, title: base.title || cache.title };
         observationCache.set(tabId, nextCache);
@@ -548,6 +648,8 @@ export async function observe(params = {}) {
           refs: nextCache.refs,
           url: nextCache.url,
           title: nextCache.title,
+          ...(base && base.mutations ? { mutations: base.mutations } : {}),
+          ...(base && base.incremental === true ? { incremental: true } : {}),
         };
       }
       baselineReason = diff.reason || 'structural';
@@ -558,6 +660,7 @@ export async function observe(params = {}) {
       url: base.url || '',
       title: base.title || '',
       blocking: base.blocking || null,
+      revision: typeof base.revision === 'number' ? base.revision : null,
       at: Date.now(),
       id: observationId(tabId),
     };
@@ -570,9 +673,12 @@ export async function observe(params = {}) {
     refs: cache.refs,
     observationId: cache.id,
     ...(baselineReason ? { baselineReason } : {}),
+    ...(base && base.mutations ? { mutations: base.mutations } : {}),
+    ...(base && base.incremental === true ? { incremental: true } : {}),
     url: cache.url,
     title: cache.title,
     blocking: cache.blocking || null,
+    ...(cache.revision != null ? { revision: cache.revision } : {}),
     offset,
     totalChars: cache.text.length,
     truncated: chunk.next != null,
@@ -609,25 +715,83 @@ export async function getHtml(params = {}) {
 
 /** 默认 observe：页面有 iframe 时把各 frame 一起观察，ref 统一为 @eN。 */
 export async function observeSmart(params = {}) {
-  const all = await observeFrames(params);
-  if (!all.frames || all.frames.length <= 1) {
-    const main = (all.frames && all.frames[0]) || { url: '', title: '', observation: '', refs: 0 };
-    return { url: main.url, title: main.title, observation: main.observation, refs: main.refs };
+  const tabId = requireTabId(params);
+  const all = await observeFrames({ ...params, smart: true });
+  const revision = typeof all.revision === 'number' ? all.revision : null;
+  const cache = observationCache.get(tabId);
+  const url = all.url || (cache && cache.url) || '';
+  const title = all.title || (cache && cache.title) || '';
+  if (all.unchanged === true) {
+    const id = cache ? cache.id : observationId(tabId);
+    return { url, title, observation: '', refs: all.refs || 0, unchanged: true, observationId: id, ...(all.mutations ? { mutations: all.mutations } : {}), ...(revision != null ? { revision } : {}) };
   }
-  const main = all.frames[0];
-  return { url: main.url, title: main.title, observation: all.text, refs: all.refs, frames: all.frames, aliases: all.aliases };
+  const single = !all.frames || all.frames.length <= 1;
+  const main = single ? ((all.frames && all.frames[0]) || { observation: '', refs: 0 }) : null;
+  const text = single ? String(main.observation || '') : String(all.text || '');
+  const refs = single ? (typeof main.refs === 'number' ? main.refs : 0) : (typeof all.refs === 'number' ? all.refs : 0);
+  // --delta：与 observe() 共用同一个 observationCache，保证两条路径的 observationId 一致。
+  if (params.delta === true && typeof params.baseline === 'string' && params.baseline && cache && cache.id === params.baseline) {
+    const diff = diffObservation(cache.text, text);
+    if (diff.kind === 'same' || diff.kind === 'text' || diff.kind === 'structural-text') {
+      const id = observationId(tabId);
+      observationCache.set(tabId, { text, refs, url, title, blocking: null, at: Date.now(), id });
+      return {
+        url,
+        title,
+        observation: diff.kind === 'same' ? '' : text,
+        delta: true,
+        observationId: id,
+        baseline: params.baseline,
+        patch: diff.patch,
+        changes: diff.changes,
+        refs,
+        ...(all.mutations ? { mutations: all.mutations } : {}),
+        ...(all.cdpFallback ? { cdpFallback: true, cdpFrames: all.cdpFrames } : {}),
+        ...(revision != null ? { revision } : {}),
+      };
+    }
+  }
+  const id = observationId(tabId);
+  observationCache.set(tabId, { text, refs, url, title, blocking: null, at: Date.now(), id });
+  return {
+    url,
+    title,
+    observation: text,
+    refs,
+    observationId: id,
+    ...(single ? {} : { frames: all.frames, aliases: all.aliases }),
+    ...(all.mutations ? { mutations: all.mutations } : {}),
+    ...(all.cdpFallback ? { cdpFallback: true, cdpFrames: all.cdpFrames } : {}),
+    ...(revision != null ? { revision } : {}),
+  };
 }
 
 /** observe-frames：所有 frame（含跨源）分别观察，ref 统一为 @eN，并记录 frame 映射。 */
 export async function observeFrames(params = {}) {
   const tabId = requireTabId(params);
-  const list = await execPageAllFrames(tabId, 'observe', { probeHover: params.probeHover === true, maxDepth: params.maxDepth, debugSurfaces: params.debugSurfaces === true });
+  const allowUnchanged = params.smart === true && params.force !== true;
+  const listArgs = { probeHover: params.probeHover === true, maxDepth: params.maxDepth, debugSurfaces: params.debugSurfaces === true, force: params.force === true };
+  const list = await execPageAllFrames(tabId, 'observe', listArgs);
+  // 单 frame 页面没变：交回 unchanged，让 daemon 用缓存补文本（别把空文本当成新观察）。
+  if (allowUnchanged && list.length === 1 && list[0].result && list[0].result.unchanged === true) {
+    return {
+      frames: [{ frameId: list[0].frameId, url: list[0].result.url || '', title: list[0].result.title || '', refs: list[0].result.refs || 0, observation: '' }],
+      text: '',
+      refs: list[0].result.refs || 0,
+      aliases: [],
+      unchanged: true,
+      ...(list[0].result.mutations ? { mutations: list[0].result.mutations } : {}),
+      url: list[0].result.url || '',
+      title: list[0].result.title || '',
+    };
+  }
   const graph = await ensureFrameGraph(tabId).catch(() => []);
   const graphById = new Map(graph.map((item) => [item.frameId, item]));
   const metaList = await execPageAllFrames(tabId, 'frame-meta', {}).catch(() => []);
   const metaById = new Map(metaList.filter((item) => item && item.result).map((item) => [item.frameId, item.result]));
   const frames = [];
   const aliases = [];
+  const mutationTotals = { text: 0, added: 0, removed: 0, attributes: 0, total: 0, layout: false, interaction: false };
   let aliasSeq = 0;
   for (const item of list) {
     if (item.error || !item.result) {
@@ -636,7 +800,20 @@ export async function observeFrames(params = {}) {
       frames.push({ frameId: item.frameId, parentFrameId: meta.parentFrameId, url: meta.url || '', title: '', refs: 0, hidden: visibility.hidden === true, hiddenReason: visibility.reason || null, observation: '（该 frame 不可观察：' + (item.error || 'no result') + '）', error: item.error || 'no result' });
       continue;
     }
-    const result = item.result;
+    let result = item.result;
+    if (allowUnchanged && result.unchanged === true) {
+      // 多 frame 页面里个别 frame 没变：单独强制重取该 frame，保证合并文本完整。
+      const refreshed = await execPage(tabId, 'observe', { ...listArgs, force: true }, item.frameId).catch(() => null);
+      if (refreshed) result = refreshed;
+    }
+    if (result.mutations) {
+      mutationTotals.text += Number(result.mutations.text) || 0;
+      mutationTotals.added += Number(result.mutations.added) || 0;
+      mutationTotals.removed += Number(result.mutations.removed) || 0;
+      mutationTotals.attributes += Number(result.mutations.attributes) || 0;
+      mutationTotals.layout = mutationTotals.layout || result.mutations.layout === true;
+      mutationTotals.interaction = mutationTotals.interaction || result.mutations.interaction === true;
+    }
     const meta = graphById.get(item.frameId) || {};
     const visibility = metaById.get(item.frameId) || {};
     const observation = String(result.observation || '').replace(/\[@e(\d+)\]/g, (match, n) => {
@@ -658,7 +835,38 @@ export async function observeFrames(params = {}) {
       observation,
     });
   }
-  frames.sort((x, y) => x.frameId - y.frameId);
+  frames.sort((x, y) => {
+    const a = Number(x.frameId);
+    const b = Number(y.frameId);
+    if (Number.isFinite(a) && Number.isFinite(b)) return a - b;
+    return String(x.frameId).localeCompare(String(y.frameId));
+  });
+  // 注入失败（跨源/沙箱/受限）的 frame 用 CDP 兜底采集；--cdp-frames 可强制用于诊断。
+  let cdpFallback = false;
+  let cdpFrameCount = 0;
+  if (params.cdpFrames === true || list.some((item) => item && item.error)) {
+    const observedUrls = new Set(frames.map((frame) => frame.url).filter(Boolean));
+    const collected = await collectCdpFrames(tabId, { maxNodes: params.cdpMaxNodes }).catch(() => []);
+    for (const frame of collected) {
+      if (!frame || !frame.text) continue;
+      if (params.cdpFrames !== true && observedUrls.has(frame.url)) continue;
+      if (frames.some((item) => item.cdp === true && item.url === frame.url)) continue;
+      frames.push({
+        frameId: frame.frameId,
+        parentFrameId: null,
+        url: frame.url,
+        title: '',
+        refs: 0,
+        hidden: false,
+        hiddenReason: null,
+        observation: frame.text,
+        cdp: true,
+        cdpSessionId: frame.sessionId || null,
+      });
+      cdpFallback = true;
+      cdpFrameCount += 1;
+    }
+  }
   // 跨源 frame 的 frameElement 不可见：用父 frame 的 iframe 元素可见性补标。
   for (const frame of frames) {
     if (frame.hidden === true) continue;
@@ -677,6 +885,17 @@ export async function observeFrames(params = {}) {
   for (const entry of aliases) aliasMap.set(entry.ref, { frameId: entry.frameId, localRef: entry.localRef });
   setFrameAliases(tabId, aliasMap);
   const text = frames.map((frame) => 'frame ' + frame.frameId + ' ' + frame.url + '\n' + frame.observation).join('\n\n');
-  return { frames, text, refs: frames.reduce((sum, frame) => sum + frame.refs, 0), aliases, hiddenFrames: frames.filter((frame) => frame.hidden === true).length };
+  const mainRevision = typeof list[0]?.result?.revision === 'number' ? list[0].result.revision : null;
+  mutationTotals.total = mutationTotals.text + mutationTotals.added + mutationTotals.removed + mutationTotals.attributes;
+  return {
+    frames,
+    text,
+    refs: frames.reduce((sum, frame) => sum + frame.refs, 0),
+    aliases,
+    hiddenFrames: frames.filter((frame) => frame.hidden === true).length,
+    ...(mutationTotals.total || mutationTotals.layout || mutationTotals.interaction ? { mutations: mutationTotals } : {}),
+    ...(cdpFallback ? { cdpFallback: true, cdpFrames: cdpFrameCount } : {}),
+    ...(mainRevision != null ? { revision: mainRevision } : {}),
+  };
 }
 

@@ -72,8 +72,11 @@
     };
     const onInput = (event) => {
       if (!event || event.isTrusted !== true) return;
+      // 标记用单调时钟（performance.now）；兼容旧版 epoch 标记。
       const marker = Number(document.documentElement.getAttribute('data-bb-agent-input') || 0);
-      if (marker && Date.now() - marker < 10000) return;
+      const nowMono = performance.now();
+      const agentRecent = marker > 0 && (marker > 1e11 ? Date.now() - marker < 10000 : (nowMono >= marker && nowMono - marker < 10000));
+      if (agentRecent) return;
       lastAt = Date.now();
       schedule();
     };

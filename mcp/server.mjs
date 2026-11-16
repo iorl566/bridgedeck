@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { readUpdateState } from '../lib/update-state.mjs';
 import { mcpInputSchema } from '../lib/mcp-schemas.mjs';
 import { resolveSessionByScope } from '../lib/session-scope.mjs';
+import { recoveryHint } from '../lib/error-codes.mjs';
 
 const execFileAsync = promisify(execFile);
 const CLI_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'cli', 'bridge.mjs');
@@ -903,10 +904,11 @@ async function handle(request) {
       const result = await tool.run((params && params.arguments) || {});
       ok(id, { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], isError: false });
     } catch (error) {
-      ok(id, {
-        content: [{ type: 'text', text: ((error && error.code) || 'E_INTERNAL') + ': ' + ((error && error.message) || error) }],
-        isError: true,
-      });
+      const code = (error && error.code) || 'E_INTERNAL';
+      const advice = recoveryHint(code);
+      const text = code + ': ' + ((error && error.message) || error)
+        + (advice.hint ? '\n下一步（' + advice.retry + '）：' + advice.hint : '');
+      ok(id, { content: [{ type: 'text', text }], isError: true });
     }
     return;
   }

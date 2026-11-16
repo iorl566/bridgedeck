@@ -25,6 +25,7 @@ import { cancelCommand, isCommandCancelled, registerCommand, unregisterCommand }
 import { createDeadline } from './command-deadline.js';
 import { beginCommand, endCommand } from './command-context.js';
 import { installFrameGraphInvalidation } from './frame-graph.js';
+import { hasHooks } from './page-hooks.js';
 import { setHumanState } from './human-state.js';
 
 const RECONNECT_ALARM = 'bb-reconnect';
@@ -51,7 +52,9 @@ async function handleCommand(message) {
   const mode = message && message.method ? String(message.method) : '';
   const modeWatched = modeTab != null && (typeof PAGE_ACTION_METHODS !== 'undefined' && (PAGE_ACTION_METHODS.has(mode) || ['observe','observe-frames','snapshot','get-html','read','extract','extract.discover','extract.table','cooperate.sync'].includes(mode)));
   if (modeWatched) handleCommandMode(modeTab, mode, 'begin');
-  const tagCommand = modeTab != null && typeof PAGE_ACTION_METHODS !== 'undefined' && PAGE_ACTION_METHODS.has(mode) && !pendingDialog(modeTab);
+  // 只有主世界钩子（fetch/XHR 补丁）生效时才需要写命令 id 属性；
+  // 否则这行只是在页面 <html> 上留一个可被读到的自动化标记。
+  const tagCommand = modeTab != null && typeof PAGE_ACTION_METHODS !== 'undefined' && PAGE_ACTION_METHODS.has(mode) && !pendingDialog(modeTab) && hasHooks(modeTab);
   if (tagCommand) {
     beginCommand(modeTab, commandId);
     await setPageCommandId(modeTab, commandId);
@@ -274,6 +277,15 @@ const MESSAGE_HANDLERS = {
     getClient().sendJson({ type: 'event', event: 'takeover.pause', params: { tabId, paused: message.paused === true } });
     setTakeoverState(tabId, { paused: message.paused === true });
     return { ok: true, paused: message.paused === true };
+  },
+  'bb.takeover.minimized': async (message, sender) => {
+    const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : null;
+    if (tabId == null) return { ok: false, error: '没有标签页上下文' };
+    const minimized = message.minimized === true;
+    setTakeoverState(tabId, { minimized });
+    // 立即按新状态重渲染；导航时浮层重建也会读到这份状态。
+    try { await showTakeover(tabId, getTakeoverState(tabId)); } catch { /* 页面可能已关闭 */ }
+    return { ok: true, minimized };
   },
   'bb.state': () => popupState(getClient()),
   'bb.audit.list': (message) => listAudit(message || {}),

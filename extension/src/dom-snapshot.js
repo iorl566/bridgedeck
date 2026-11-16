@@ -2,12 +2,11 @@
 //
 // 用 Chrome 原生 DOMSnapshot.captureSnapshot 一次拿到：每个节点的几何（bounds）、
 // 指定的计算样式与 isClickable，再按 backendNodeId 映射到 AX 节点 / VOM 节点。
-// 与 bsk 的 DOMSnapshot 管线同源，但当前只做“几何/可见性/可点击”增量，
-// 不替换既有 page-lib VOM 遍历。
+// 只做“几何/可见性/可点击”增量，不替换既有 page-lib VOM 遍历。
 
 import { acquire, release, send as cdpSend } from './debugger.js';
 
-/** 与 bsk BASIC_SNAPSHOT 对齐的一小组高价值样式。 */
+/** 事实采集用的一小组高价值样式（够判断可见性与可点击，不追求全量）。 */
 export const FACTS_STYLES = [
   'display',
   'visibility',

@@ -2,7 +2,7 @@
 export { goBack, goForward, navigate, reload } from './tools/navigation.js';
 export { clearFrameAliases, resolveFrameAlias } from './tools/frames.js';
 export { cancelWait, waitForElement, waitForNavigationCmd, waitMs } from './tools/waits.js';
-export { getHtml, observe, observeFrames, observeSmart, snapshot } from './tools/observation.js';
+export { getHtml, observe, observeFrames, observeSmart, snapshot, visualScan } from './tools/observation.js';
 export { consoleEntries, evaluate, extract, extractDiscover, extractList, extractTable, read } from './tools/read.js';
 export { shadowClick, shadowRead } from './tools/shadow.js';
 export { upload } from './tools/file-transfer.js';

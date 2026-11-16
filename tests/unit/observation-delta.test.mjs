@@ -19,10 +19,27 @@ test('没有变化 → same，补丁为空', () => {
   assert.equal(diff.patch.length, 0);
 });
 
-test('行数变化 → structural，要求回退整页', () => {
-  const diff = diffObservation(base.join('\n'), base.slice(0, 2).join('\n'));
+test('行数变化但 ref 未换 → structural-text，可本地合并（删行）', () => {
+  const next = base.slice(0, 2);
+  const diff = diffObservation(base.join('\n'), next.join('\n'));
+  assert.equal(diff.kind, 'structural-text');
+  assert.deepEqual(diff.ops, [{ op: 'remove', line: 2, count: 1 }]);
+  assert.equal(applyObservationPatch(base.join('\n'), diff.patch), next.join('\n'));
+});
+
+test('行数变化但 ref 未换 → structural-text，可本地合并（加行）', () => {
+  const next = [...base, '- [@e4] text "New"'];
+  const diff = diffObservation(base.join('\n'), next.join('\n'));
+  assert.equal(diff.kind, 'structural-text');
+  assert.deepEqual(diff.ops, [{ op: 'insert', line: 3, lines: ['- [@e4] text "New"'] }]);
+  assert.equal(applyObservationPatch(base.join('\n'), diff.patch), next.join('\n'));
+});
+
+test('行数变化且 ref 换了 → structural，要求回退整页', () => {
+  const next = [...base.slice(0, 2), '- [@e9] text "Different"'];
+  const diff = diffObservation(base.join('\n'), next.join('\n'));
   assert.equal(diff.kind, 'structural');
-  assert.equal(diff.reason, 'line-count');
+  assert.equal(diff.reason, 'refs');
 });
 
 test('ref 序列变化 → structural，避免张冠李戴', () => {

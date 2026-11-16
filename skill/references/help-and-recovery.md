@@ -43,6 +43,10 @@ bridge request-help --reason '请在页面上完成登录，然后继续' --targ
 | `E_NO_FILE_CHOOSER` / `E_NO_DOWNLOAD` / `E_DOWNLOAD_FAILED` | 上传/下载未按预期发生，见 [files](files.md) |
 | `E_EXISTS` | 目标文件已存在，确认后加 `--overwrite` |
 | `E_RECIPE_NOT_APPROVED` / `E_RECIPE_CHANGED` / `E_RECIPE_EXPIRED` | 配方未审批、步骤被改或审批过期，重新审批 |
+| `E_RECIPE_LOCKED` | 另一个进程正在回放同一 recipe：等它结束（或删掉 `<name>.lock`）后重试 |
+| `E_OBSERVATION_CHANGED` | 读 `data.observed_changes`/`data.expected/current` 了解变了多少，重新 observe 后再动作 |
+| `E_TARGET_MISMATCH` + `reason=virtual_row_recycled` | 虚拟滚动列表把行节点复用给了别的数据，重新 observe 取新 ref |
+| `E_INPUT_BUSY` | 按 `data.retry_after_ms` 等待后重试 |
 
 ## 恢复顺序
 

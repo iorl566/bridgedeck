@@ -1,6 +1,6 @@
 // src/dispatch.js —— 命令分发：方法表 + 同一 tabId 串行
 import { bridgeError, toWireError } from './errors.js';
-import { cancelWait, observe, observeSmart, observeFrames, resolveFrameAlias, shadowClick, shadowRead, snapshot, getHtml, click, clickBackend, hover, fill, actionable, press, select, focus, scrollTo, evaluate, consoleEntries, navigate, reload, goBack, goForward, waitMs, waitForElement, waitForNavigationCmd, read, extract, extractDiscover, extractList, extractTable, drag, wheel, blur, upload } from './actions.js';
+import { cancelWait, observe, observeSmart, observeFrames, resolveFrameAlias, shadowClick, shadowRead, snapshot, getHtml, click, clickBackend, hover, fill, actionable, press, select, focus, scrollTo, evaluate, consoleEntries, navigate, reload, goBack, goForward, waitMs, waitForElement, waitForNavigationCmd, read, extract, extractDiscover, extractList, extractTable, drag, wheel, blur, upload, visualScan } from './actions.js';
 import { normalizeParams } from './generated/protocol.js';
 import { ensureAgent, newAgentWindow, windowClose, sleep, tabList, tabNew, tabClose, tabSelect, tabMove, windowList, windowFocus, windowResize, tabBorrow, tabReturn, requestHelp, controlHint } from './tabs.js';
 import { settingsGet, settingsSet } from './settings.js';
@@ -17,7 +17,7 @@ import { debugCapabilities, debugCurrent, debugDelete, debugHistory, debugHistor
 import { discardVideo, fetchVideo, listVideos, recoverVideo, startVideo, stopVideo, videoPrune, videoState, videoStatus } from './video.js';
 import { emulate, forgetEmulateTab } from './emulate.js';
 import { networkDetail, networkList, networkReplay, networkStart, networkStop, forgetNetworkTab } from './network.js';
-import { detach } from './debugger.js';
+import { detach, simulateExternalDetach } from './debugger.js';
 import { uiDiagnostics, uiOpen } from './diagnostics.js';
 import { execPage } from './inject.js';
 import { log } from './log.js';
@@ -47,7 +47,9 @@ export const HANDLERS = {
   'wait-for-navigation': waitForNavigationCmd,
   'wait-for-element': waitForElement,
   actionable,
-  observe: (params = {}) => (params && (params.closedShadow || params.cursor || params.maxTokens || params.vom || params.ax || params.facts || params.fallbackAx || params.compareAx || params.pipeline || params.delta)) ? observe(params) : observeSmart(params),
+  observe: (params = {}) => (params && params.visualOnly === true)
+    ? visualScan(params)
+    : (params && (params.closedShadow || params.cursor || params.maxTokens || params.vom || params.ax || params.facts || params.fallbackAx || params.compareAx || params.pipeline || params.delta)) ? observe(params) : observeSmart(params),
   snapshot,
   'get-html': getHtml,
   screenshot: takeScreenshot,
@@ -112,6 +114,7 @@ export const HANDLERS = {
   'network.detail': networkDetail,
   'network.replay': networkReplay,
   'debugger.detach': debuggerDetach,
+  'debugger.simulate-detach': debuggerSimulateDetach,
   'debug.start': debugStart,
   'debug.stop': debugStop,
   'debug.current': debugCurrent,
@@ -150,6 +153,14 @@ async function debuggerDetach(params = {}) {
   return { ok: true };
 }
 
+/** 诊断用：模拟 DevTools 接管（不写 intentional 标记），验证重挂恢复持有者与焦点仿真。 */
+async function debuggerSimulateDetach(params = {}) {
+  const tabId = Number(params.tabId);
+  if (!Number.isInteger(tabId)) throw bridgeError('E_BAD_ARG', 'debugger.simulate-detach 需要 tabId');
+  await simulateExternalDetach(tabId);
+  return { ok: true, tabId };
+}
+
 // plan / step 会再调用 runSerialized，本身不能被 tab 串行链包住（否则同 tab 自锁到超时）。
 // 另外：动作被原生弹窗挂起时，对话框决策与只读命令必须能立即执行，不能排在阻塞动作后面。
 const UNSERIALIZED_METHODS = new Set([
@@ -168,6 +179,34 @@ const UNSERIALIZED_METHODS = new Set([
 /** 每个 tab 最近一次 observe 的行集合，供 step 计算「变化了几行」。 */
 const observationCache = new Map();
 
+/** 动作后同步观察一次：plan/step 共用，返回变化行数供 CLI 直接展示。 */
+async function observeAfterAction(tabId) {
+  if (!Number.isInteger(tabId)) return null;
+  try {
+    // plan/step 的同步观察要全文，不走 unchanged（否则返回空文本）。
+    const observation = await execPage(tabId, 'observe', { probeHover: false, force: true });
+    const lines = String(observation.observation || '').split('\n');
+    const current = new Set(lines);
+    const previous = observationCache.get(tabId);
+    let changed = current.size;
+    if (previous) {
+      changed = 0;
+      for (const line of current) {
+        if (!previous.has(line)) changed += 1;
+      }
+    }
+    observationCache.set(tabId, current);
+    return {
+      text: observation.observation,
+      refs: observation.refs,
+      changed,
+      url: observation.url,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function plan(params = {}) {
   const steps = Array.isArray(params.steps) ? params.steps : null;
   if (!steps) throw bridgeError('E_BAD_ARG', 'plan 需要 steps 数组');
@@ -177,8 +216,22 @@ async function plan(params = {}) {
   let failedAt = null;
   for (let index = 0; index < steps.length; index += 1) {
     const step = steps[index] && typeof steps[index] === 'object' ? steps[index] : {};
-    const method = step.method;
-    const stepParams = step.params && typeof step.params === 'object' ? { ...step.params } : {};
+    // 三种写法都接受：{method,params}；{action:"fill",ref,value}（技能文档旧写法）；
+    // {action:{method,params}}。统一整理后再执行，避免"照文档写就报错"。
+    let method = typeof step.method === 'string' ? step.method : '';
+    let stepParams = step.params && typeof step.params === 'object' ? { ...step.params } : {};
+    if (typeof step.action === 'string' && step.action) {
+      if (!method) method = step.action;
+      const flat = { ...step };
+      delete flat.action;
+      delete flat.method;
+      delete flat.params;
+      stepParams = { ...flat, ...stepParams };
+    } else if (step.action && typeof step.action === 'object') {
+      if (!method && typeof step.action.method === 'string') method = step.action.method;
+      const nested = step.action.params && typeof step.action.params === 'object' ? step.action.params : {};
+      stepParams = { ...nested, ...stepParams };
+    }
     if (stepParams.tabId == null && params.tabId != null) stepParams.tabId = params.tabId;
     for (const key of ['context', 'observation', 'expect']) {
       if (stepParams[key] == null && params[key] != null) stepParams[key] = params[key];
@@ -195,10 +248,13 @@ async function plan(params = {}) {
       }
     }
   }
+  // 一次调用就返回同步状态：省掉调用方"plan 完再 observe"的一次往返。
+  const observation = await observeAfterAction(Number.isInteger(params.tabId) ? params.tabId : null);
   return {
     steps: results,
     completed: results.filter((item) => item.ok).length,
     failedAt,
+    ...(observation ? { observation } : {}),
   };
 }
 
@@ -214,28 +270,8 @@ async function step(params = {}) {
   }
   const tabId = Number.isInteger(actionParams.tabId) ? actionParams.tabId : null;
   const result = await runSerialized(action.method, actionParams);
-  if (tabId == null) return { action: result, observation: null };
-  const observation = await execPage(tabId, 'observe', { probeHover: false });
-  const lines = String(observation.observation || '').split('\n');
-  const current = new Set(lines);
-  const previous = observationCache.get(tabId);
-  let changed = current.size;
-  if (previous) {
-    changed = 0;
-    for (const line of current) {
-      if (!previous.has(line)) changed += 1;
-    }
-  }
-  observationCache.set(tabId, current);
-  return {
-    action: result,
-    observation: {
-      text: observation.observation,
-      refs: observation.refs,
-      changed,
-      url: observation.url,
-    },
-  };
+  const observation = await observeAfterAction(tabId);
+  return { action: result, observation };
 }
 
 // key: tabId -> 该 tab 上最后一个命令的 Promise
@@ -282,7 +318,13 @@ async function dispatchCommand(method, params) {
             isDepends ? 'E_DEPENDS_FAILED' : 'E_EXPECT_FAILED',
             (isDepends ? '依赖校验失败：' : '动作前校验失败：') + (mismatch.target || '?') + ' ' + (mismatch.field || '') +
               ' 期望 ' + JSON.stringify(mismatch.expected) + '，实际 ' + JSON.stringify(mismatch.actual),
-            { mismatch, conditions, kind: isDepends ? 'depends-on' : 'expect', dispatched: false },
+            { mismatch, conditions, kind: isDepends ? 'depends-on' : 'expect', dispatched: false, phase: 'precondition',
+              retry_after_ms: 0,
+              observed_changes: {
+                checked: conditions.length,
+                mismatched: 1,
+                examples: [{ target: mismatch.target || null, field: mismatch.field || null, expected: mismatch.expected, actual: mismatch.actual }],
+              } },
           );
         }
       }

@@ -28,6 +28,16 @@ export function getCapture(id) {
   return capture;
 }
 
+/**
+ * 取走 capture（单次消费）：坐标只允许用同一张图派发一次动作。
+ * 重复用同一张图点击/拖拽，在页面已经变化时会把动作打到错误位置，而且很难从结果里发现。
+ */
+export function consumeCapture(id) {
+  const capture = getCapture(id);
+  if (capture) captures.delete(String(id));
+  return capture;
+}
+
 function rememberCapture(capture) {
   captures.set(capture.id, capture);
   pruneCaptures(captures, { ttlMs: CAPTURE_TTL_MS, max: CAPTURE_MAX });
@@ -72,21 +82,172 @@ async function annotateShot(dataUrl, refs, scale) {
   return blobToDataUrl(output);
 }
 
-/** 按截图坐标点击（Canvas/视觉引用）。 */
-export async function clickByImage(params = {}) {
-  const tabId = Number(params.tabId);
-  const capture = getCapture(params.capture);
+/**
+ * 把截图像素坐标换算成页面坐标（含滚动与缩放）。
+ * 视觉定位的统一入口：clickByImage / dragByImage 都走这里，保证两处换算一致。
+ * @param {string} captureId
+ * @param {number|undefined} tabId 给了就校验 capture 归属
+ * @param {number} imageX
+ * @param {number} imageY
+ * @param {{ consume?: boolean }} [options] consume=true 时取走 capture（单次消费）
+ * @returns {{ capture: object, x: number, y: number, scale: number }}
+ */
+export function resolveCapturePoint(captureId, tabId, imageX, imageY, options = {}) {
+  const capture = options.consume === true ? consumeCapture(captureId) : getCapture(captureId);
   if (!capture) throw bridgeError('E_CAPTURE_STALE', 'capture 不存在或已过期，请重新截图');
   if (Number.isInteger(tabId) && capture.tabId !== tabId) {
     throw bridgeError('E_BAD_ARG', 'capture 属于另一个标签页');
   }
-  const imageX = Number(params.imageX);
-  const imageY = Number(params.imageY);
   if (!Number.isFinite(imageX) || !Number.isFinite(imageY)) {
     throw bridgeError('E_BAD_ARG', '需要 imageX/imageY');
   }
-  const x = capture.scrollX + imageX / capture.scale;
-  const y = capture.scrollY + imageY / capture.scale;
+  const scale = capture.scale || 1;
+  if (capture.candidateIndex != null && capture.region) {
+    // 视觉候选 capture：坐标相对区域图，归一化回页面坐标。
+    return {
+      capture,
+      scale,
+      x: capture.region.x + (imageX / Math.max(1, capture.width)) * capture.region.width,
+      y: capture.region.y + (imageY / Math.max(1, capture.height)) * capture.region.height,
+    };
+  }
+  return {
+    capture,
+    scale,
+    x: capture.scrollX + imageX / scale,
+    y: capture.scrollY + imageY / scale,
+  };
+}
+
+/**
+ * 在截图上叠加坐标网格，并把图片像素坐标直接标在图上。
+ * 目的：让"看图取坐标"有据可依，而不是凭感觉估。
+ */
+async function gridShot(dataUrl, scale, step) {
+  const blob = await (await fetch(dataUrl)).blob();
+  const bitmap = await createImageBitmap(blob);
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const gap = Math.max(10, Math.round(Number(step) || 50));
+  ctx.font = 'bold 11px Segoe UI, sans-serif';
+  ctx.textBaseline = 'top';
+  for (let x = 0; x < canvas.width; x += gap) {
+    const major = x % (gap * 2) === 0;
+    ctx.strokeStyle = major ? 'rgba(220,38,38,0.55)' : 'rgba(220,38,38,0.22)';
+    ctx.lineWidth = major ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, 0);
+    ctx.lineTo(x + 0.5, canvas.height);
+    ctx.stroke();
+    if (major) {
+      ctx.fillStyle = 'rgba(220,38,38,0.9)';
+      ctx.fillText(String(x), x + 2, 2);
+    }
+  }
+  for (let y = 0; y < canvas.height; y += gap) {
+    const major = y % (gap * 2) === 0;
+    ctx.strokeStyle = major ? 'rgba(37,99,235,0.55)' : 'rgba(37,99,235,0.22)';
+    ctx.lineWidth = major ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.moveTo(0, y + 0.5);
+    ctx.lineTo(canvas.width, y + 0.5);
+    ctx.stroke();
+    if (major) {
+      ctx.fillStyle = 'rgba(37,99,235,0.95)';
+      ctx.fillText(String(y), 2, y + 1);
+    }
+  }
+  const output = await canvas.convertToBlob({ type: 'image/png' });
+  return blobToDataUrl(output);
+}
+
+/**
+ * 返回图像的一维差分剖面：沿 axis 求相邻像素亮度差的累计。
+ * 不判断"那是什么"，只给出"哪里变化最剧烈"的位置与强度，
+ * 由调用方（模型或脚本）自己决定要不要用、怎么用。
+ */
+async function profileShot(dataUrl, axis) {
+  const blob = await (await fetch(dataUrl)).blob();
+  const bitmap = await createImageBitmap(blob);
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const { width, height } = canvas;
+  const data = ctx.getImageData(0, 0, width, height).data;
+  const gray = (x, y) => {
+    const i = (y * width + x) * 4;
+    return 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+  };
+  const along = axis === 'y' ? height : width;
+  const across = axis === 'y' ? width : height;
+  const scores = new Float64Array(along);
+  for (let a = 1; a < along; a += 1) {
+    let sum = 0;
+    for (let b = 0; b < across; b += 1) {
+      const prev = axis === 'y' ? gray(b, a - 1) : gray(a - 1, b);
+      const cur = axis === 'y' ? gray(b, a) : gray(a, b);
+      sum += Math.abs(cur - prev);
+    }
+    scores[a] = sum / across;
+  }
+  const peaks = [];
+  for (let a = 0; a < along; a += 1) {
+    const prev = a > 0 ? scores[a - 1] : 0;
+    const next = a < along - 1 ? scores[a + 1] : 0;
+    if (scores[a] > prev && scores[a] >= next) peaks.push({ pos: a, score: Math.round(scores[a] * 100) / 100 });
+  }
+  peaks.sort((a, b) => b.score - a.score);
+  return { axis, width, height, peaks: peaks.slice(0, 12) };
+}
+
+/**
+ * 视觉命中校验：派发前确认"这个页面坐标下面真的是可操作的东西"。
+ * 把"点被浮层吃掉/页面已变"从"事后看结果"变成"派发前就失败"，
+ * 并把落点元素带进错误里，方便定位。
+ * @param {number} tabId
+ * @param {number} x 页面坐标（CSS px）
+ * @param {number} y 页面坐标（CSS px）
+ * @returns {Promise<object>} 命中简报
+ */
+export async function verifyVisualHit(tabId, x, y, expectedIndex) {
+  let hit = null;
+  try {
+    const args = { x, y };
+    if (Number.isFinite(Number(expectedIndex))) args.index = Number(expectedIndex);
+    hit = await execPage(tabId, 'hit-at', args);
+  } catch (error) {
+    throw bridgeError('E_INTERNAL', '命中校验不可用（页面能力库 ' + ((error && error.message) || error) + '）；视觉坐标动作拒绝盲发');
+  }
+  if (!hit.hit) {
+    throw bridgeError('E_NOT_ACTIONABLE', '坐标 (' + Math.round(x) + ',' + Math.round(y) + ') 下面没有元素');
+  }
+  if (hit.anchored) {
+    throw bridgeError('E_NOT_ACTIONABLE', '坐标落在文档根元素上（页面可能还没渲染完）');
+  }
+  if (hit.pointerEvents === 'none') {
+    throw bridgeError('E_NOT_ACTIONABLE', '落点 <' + hit.tag + '> 设置了 pointer-events:none，动作不会生效');
+  }
+  if (hit.inert) {
+    throw bridgeError('E_NOT_ACTIONABLE', '落点在 inert 子树内，动作不会生效');
+  }
+  if (hit.coversViewport && !hit.ownOverlay) {
+    throw bridgeError('E_OBSCURED', '落点被铺满视口的元素遮住：<' + hit.tag + (hit.id ? '#' + hit.id : '') + '>');
+  }
+  if (hit.matches === false) {
+    throw bridgeError('E_TARGET_MISMATCH', '落点不是预期的视觉候选 #' + Number(expectedIndex)
+      + '（实际是 <' + hit.tag + (hit.id ? '#' + hit.id : '') + '>）');
+  }
+  return hit;
+}
+
+/** 按截图坐标点击（Canvas/视觉引用）。 */
+export async function clickByImage(params = {}) {
+  const tabId = Number(params.tabId);
+  const { capture, x, y } = resolveCapturePoint(params.capture, Number.isInteger(tabId) ? tabId : undefined, Number(params.imageX), Number(params.imageY), { consume: true });
+  const hit = await verifyVisualHit(capture.tabId, x, y, capture.candidateIndex);
   try {
     await acquire(capture.tabId, 'image-click');
     try {
@@ -96,7 +257,14 @@ export async function clickByImage(params = {}) {
     } finally {
       await release(capture.tabId, 'image-click').catch(() => {});
     }
-    return { ok: true, x: Math.round(x), y: Math.round(y), via: 'cdp', capture: capture.id };
+    return {
+      ok: true,
+      x: Math.round(x),
+      y: Math.round(y),
+      via: 'cdp',
+      capture: capture.id,
+      hit: hit ? { tag: hit.tag, id: hit.id, cls: hit.cls } : undefined,
+    };
   } catch (error) {
     const result = await execPage(capture.tabId, 'click-point', { x, y });
     return { ok: true, x: Math.round(x), y: Math.round(y), via: 'page', tag: result && result.tag, capture: capture.id };
@@ -292,14 +460,15 @@ async function captureSingle(tab) {
 }
 
 /** 按视口 CSS 像素区域截图（Canvas/任意像素区域）。 */
-async function captureRegion(tab, region) {
+async function captureRegion(tab, region, scale) {
   const x = Math.max(0, Number(region.x) || 0);
   const y = Math.max(0, Number(region.y) || 0);
   const width = Math.max(1, Number(region.width) || 1);
   const height = Math.max(1, Number(region.height) || 1);
+  const zoom = Math.min(8, Math.max(1, Number(scale) || 1));
   const result = await withTimeout(cdpSend(tab.id, 'Page.captureScreenshot', {
     format: 'png',
-    clip: { x, y, width, height, scale: 1 },
+    clip: { x, y, width, height, scale: zoom },
     captureBeyondViewport: true,
   }), 10000, 'Page.captureScreenshot region');
   if (!result || typeof result.data !== 'string' || !result.data) throw bridgeError('E_INTERNAL', '区域截图没有返回数据');
@@ -314,12 +483,40 @@ async function captureViaCdp(tab, params) {
   const dbg = await withTimeout(acquire(tabId, 'screenshot'), 5000, 'debugger.attach');
   try {
     let options = { format: 'png' };
-    if (params.region && typeof params.region === 'object') {
+    let visualRegion = null;
+    if (params.visualIndex != null) {
+      // 视觉候选截图：只拍候选区域，自动放大到够看，并把坐标语义改成"区域相对"。
+      const scan = await execPage(tabId, 'visual-scan', {}).catch(() => null);
+      const candidate = scan && Array.isArray(scan.candidates)
+        ? scan.candidates.find((item) => item.index === Number(params.visualIndex))
+        : null;
+      if (!candidate) {
+        throw bridgeError('E_NOT_FOUND', '视觉候选 #' + params.visualIndex + ' 不存在；先 observe --visual 或重新扫描');
+      }
+      const scrollX = (scan.viewport && scan.viewport.scrollX) || 0;
+      const scrollY = (scan.viewport && scan.viewport.scrollY) || 0;
+      const width = Math.max(1, candidate.rect.width);
+      const height = Math.max(1, candidate.rect.height);
+      const zoom = Math.min(4, Math.max(1, Math.ceil(360 / Math.max(width, 1))));
+      visualRegion = { candidate, scrollX, scrollY };
+      options = {
+        format: 'png',
+        captureBeyondViewport: true,
+        clip: {
+          x: candidate.rect.x + scrollX,
+          y: candidate.rect.y + scrollY,
+          width,
+          height,
+          scale: zoom,
+        },
+      };
+    } else if (params.region && typeof params.region === 'object') {
       const x = Math.max(0, Number(params.region.x) || 0);
       const y = Math.max(0, Number(params.region.y) || 0);
       const width = Math.max(1, Number(params.region.width) || 1);
       const height = Math.max(1, Number(params.region.height) || 1);
-      options = { format: 'png', captureBeyondViewport: true, clip: { x, y, width, height, scale: 1 } };
+      const zoom = Math.min(8, Math.max(1, Number(params.scale) || 1));
+      options = { format: 'png', captureBeyondViewport: true, clip: { x, y, width, height, scale: zoom } };
     } else if (params.fullPage === true) {
       const metrics = await execPage(tabId, 'page-metrics', {});
       const width = Math.max(1, Math.round(metrics.scrollWidth || metrics.innerWidth));
@@ -379,11 +576,74 @@ async function captureViaCdp(tab, params) {
     }
     let dataUrl = 'data:image/png;base64,' + result.data;
     const size = pngSize(dataUrl);
-    if (params.annotate === true && params.fullPage !== true && !params.ref && !params.selector) {
+    if (visualRegion) {
+      // 候选截图：坐标语义是"区域相对"，由 resolveCapturePoint 归一化回页面坐标。
+      const captureId = uuid();
+      rememberCapture({
+        id: captureId,
+        tabId,
+        scale: 1,
+        scrollX: visualRegion.scrollX,
+        scrollY: visualRegion.scrollY,
+        width: size.width,
+        height: size.height,
+        region: visualRegion.candidate.rect,
+        candidateIndex: visualRegion.candidate.index,
+        candidate: {
+          tag: visualRegion.candidate.tag,
+          id: visualRegion.candidate.id,
+          cls: visualRegion.candidate.cls,
+          kind: visualRegion.candidate.kind,
+        },
+        at: Date.now(),
+        url: '',
+      });
+      return {
+        dataUrl,
+        width: size.width,
+        height: size.height,
+        via: 'cdp',
+        capture_id: captureId,
+        capture_mode: 'visual-region',
+        visual: {
+          index: visualRegion.candidate.index,
+          kind: visualRegion.candidate.kind,
+          tag: visualRegion.candidate.tag,
+          id: visualRegion.candidate.id,
+          cls: visualRegion.candidate.cls,
+          rect: visualRegion.candidate.rect,
+        },
+      };
+    }
+    const wantsOverlay = params.annotate === true || params.grid === true || params.profile != null;
+    if (wantsOverlay && params.fullPage !== true && !params.ref && !params.selector) {
       const visual = await execPage(tabId, 'visual-refs', {}).catch(() => null);
       if (visual && Array.isArray(visual.refs) && visual.innerWidth > 0) {
         const scale = size.width / visual.innerWidth;
-        dataUrl = await annotateShot(dataUrl, visual.refs, scale);
+        let profile = null;
+        if (params.profile != null) {
+          profile = await profileShot(dataUrl, params.profile === 'y' ? 'y' : 'x').catch(() => null);
+        }
+        if (params.annotate === true) dataUrl = await annotateShot(dataUrl, visual.refs, scale);
+        if (params.grid === true) dataUrl = await gridShot(dataUrl, scale, params.gridStep);
+        // 截图之后再量一次几何，变化了就不给可用的 capture。
+        // 否则"看图时页面已经滚了/改了"，坐标会打到错误位置而且很难发现。
+        const after = await execPage(tabId, 'visual-refs', {}).catch(() => null);
+        const geometryStable = Boolean(after)
+          && after.innerWidth === visual.innerWidth
+          && Math.abs((after.scrollX || 0) - (visual.scrollX || 0)) < 1
+          && Math.abs((after.scrollY || 0) - (visual.scrollY || 0)) < 1;
+        if (!geometryStable) {
+          log('截图期间页面几何变化，capture 作废 tab=' + tabId);
+          return {
+            dataUrl,
+            width: size.width,
+            height: size.height,
+            via: 'cdp',
+            capture_skipped: 'geometry-changed',
+            profile: profile || undefined,
+          };
+        }
         const captureId = uuid();
         rememberCapture({
           id: captureId,
@@ -403,7 +663,8 @@ async function captureViaCdp(tab, params) {
           height: size.height,
           via: 'cdp',
           capture_id: captureId,
-          visual_refs: visual.refs.map((item) => ({
+          profile: profile || undefined,
+          visual_refs: params.annotate === true ? visual.refs.map((item) => ({
             ref: item.ref,
             role: item.role,
             name: item.name,
@@ -413,7 +674,7 @@ async function captureViaCdp(tab, params) {
             y: Math.round(item.y * scale),
             width: Math.round(item.width * scale),
             height: Math.round(item.height * scale),
-          })),
+          })) : undefined,
         };
       }
     }
@@ -479,7 +740,7 @@ async function takeScreenshotRaw(input = {}) {
   }
 
   try {
-    if (params.region && typeof params.region === 'object') return await captureRegion(tab, params.region);
+    if (params.region && typeof params.region === 'object') return await captureRegion(tab, params.region, params.scale);
     if (params.ref || params.selector) return await captureElement(tab, params);
     if (params.fullPage === true) return await captureFullPage(tab, params);
     return await captureSingle(tab);

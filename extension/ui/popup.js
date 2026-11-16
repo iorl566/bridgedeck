@@ -44,6 +44,8 @@ function render(next) {
     } else {
       authBadge.classList.add('hidden');
     }
+    const warn = $('connWarn');
+    if (warn) warn.classList.toggle('hidden', !(connected && auth && auth.state === 'unpaired'));
   }
   $('stateDot').className = 'dot' + (connected ? ' on' : connectionEnabled ? ' warn' : '');
   const connState = state.connectionState || '';

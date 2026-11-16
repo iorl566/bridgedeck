@@ -13,6 +13,8 @@ import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { isControllerInfo } from '../extension/src/lib/controller-info.js';
+import { recoveryHint } from '../lib/error-codes.mjs';
+import { pruneObservationCache } from '../lib/observation-cache.mjs';
 
 /**
  * 重模块按需加载：status/evaluate/read/screenshot/session 等热路径不再为 update/trace/debug/recipe
@@ -104,7 +106,7 @@ function sleep(ms) {
 
 const BOOL_FLAGS = new Set([
   'json', 'no-focus', 'probe-hover', 'full', 'keep', 'help', 'tail',
-  'all', 'mobile', 'reset', 'queue', 'bodies', 'accept', 'dismiss', 'force', 'list', 'stitch', 'no-clear', 'overwrite', 'annotate', 'screenshot', 'incognito', 'with-requests', 'frames', 'release-old', 'by', 'confirm-human', 'closed-shadow', 'trusted', 'window', 'focus', 'enable', 'disable', 'download', 'apply', 'prune', 'wait-navigation', 'screenshots', 'include-agent',
+  'all', 'mobile', 'reset', 'queue', 'bodies', 'accept', 'dismiss', 'force', 'list', 'stitch', 'no-clear', 'overwrite', 'annotate', 'grid', 'screenshot', 'incognito', 'with-requests', 'frames', 'release-old', 'by', 'confirm-human', 'closed-shadow', 'trusted', 'window', 'focus', 'enable', 'disable', 'download', 'apply', 'prune', 'wait-navigation', 'screenshots', 'include-agent',
 ]);
 const VALUE_FLAGS = new Set([
   'session', 'port', 'timeout', 'out', 'value', 'ref', 'selector',
@@ -116,15 +118,15 @@ const VALUE_FLAGS = new Set([
   'url', 'grep', 'offset', 'tab', 'save-full', 'page', 'query', 'fields-json', 'dx', 'dy', 'hold', 'duration',
   'from-offset-x', 'from-offset-y', 'to-offset-x', 'to-offset-y', 'target', 'text', 'overlap', 'to-window', 'max',
   'context', 'expect', 'observation', 'policy', 'name', 'part', 'output', 'quality',
-  'max-tokens', 'cursor', 'match-text', 'context-lines', 'find', 'start-line', 'line-count', 'debug',
-  'capture', 'image-x', 'image-y', 'settle', 'depends-on', 'rule', 'rule-file', 'window-ms', 'ms', 'scope', 'ttl', 'label', 'host', 'daemon-url', 'daemon-token', 'operation-id', 'closed-shadow-text', 'until-visible', 'wait-timeout-ms', 'wait-timeout', 'session-scope', 'agent-name', 'project', 'controller-color',
+  'max-tokens', 'cursor', 'match-text', 'context-lines', 'find', 'start-line', 'line-count', 'debug', 'expect-revision',
+  'capture', 'image-x', 'image-y', 'image-dx', 'image-dy', 'grid-step', 'profile', 'region-scale', 'visual', 'points', 'plan', 'settle', 'depends-on', 'rule', 'rule-file', 'window-ms', 'ms', 'scope', 'ttl', 'label', 'host', 'daemon-url', 'daemon-token', 'operation-id', 'closed-shadow-text', 'until-visible', 'wait-timeout-ms', 'wait-timeout', 'session-scope', 'agent-name', 'project', 'controller-color',
 ]);
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
 for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force']) BOOL_FLAGS.add(name);
 for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before']) VALUE_FLAGS.add(name);
-for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts']) BOOL_FLAGS.add(name);
+for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'quiet', 'verbose', 'diagnostics', 'cdp-frames']) BOOL_FLAGS.add(name);
 VALUE_FLAGS.add('request-id');
-VALUE_FLAGS.add('until');
+VALUE_FLAGS.add('steps-file');VALUE_FLAGS.add('until');
 VALUE_FLAGS.add('backend');
 VALUE_FLAGS.add('pipeline');
 BOOL_FLAGS.add('fallback-ax');
@@ -237,6 +239,8 @@ function timeoutOf(flags) {
 // ---------------------------------------------------------------------------
 
 let jsonMode = false;
+let quietMode = false;
+let verboseMode = false;
 let requestedPort = null;
 let daemonInfo = null;
 
@@ -438,6 +442,7 @@ async function ensureDaemon() {
 
 async function callRpc(method, params = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   traceStartup('callRpc:' + method + ':begin');
+  const startedAt = Date.now();
   const info = await ensureDaemon();
   traceStartup('callRpc:' + method + ':daemon-ready');
   let reply;
@@ -453,6 +458,7 @@ async function callRpc(method, params = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
     reply = await postRpc(found.info, method, params, timeoutMs);
   }
   traceStartup('callRpc:' + method + ':reply');
+  if (verboseMode && !jsonMode) process.stderr.write('[rpc] ' + method + ' ' + (Date.now() - startedAt) + 'ms\n');
   return reply;
 }
 
@@ -503,6 +509,7 @@ function emitJson(value) {
 }
 
 function print(text) {
+  if (quietMode) return;
   process.stdout.write(`${text}\n`);
 }
 
@@ -528,6 +535,8 @@ function outputFailure(body) {
     emitJson(body);
   } else {
     process.stderr.write(`错误 ${error.code}: ${error.message}\n`);
+    const advice = recoveryHint(error.code);
+    if (advice.hint) process.stderr.write(`  下一步（${advice.retry}）：${advice.hint}\n`);
   }
   return 1;
 }
@@ -537,6 +546,8 @@ function outputBridgeError(err) {
     emitJson({ ok: false, error: { code: err.code || 'E_INTERNAL', message: err.message } });
   } else {
     process.stderr.write(`错误 ${err.code || 'E_INTERNAL'}: ${err.message}\n`);
+    const advice = recoveryHint(err.code || 'E_INTERNAL');
+    if (advice.hint) process.stderr.write(`  下一步（${advice.retry}）：${advice.hint}\n`);
   }
 }
 
@@ -953,10 +964,20 @@ async function cmdDaemon(flags, pos) {
     print(value === 'off' ? '本机严格模式已开启：未配对连接会被拒绝' : '本机未配对连接已允许');
     return 0;
   }
+  if (sub === 'rotate') {
+    const body = await callRpc('pair.rotate', {}, timeoutOf(flags));
+    if (!body.ok) return outputFailure(body);
+    if (jsonMode) return outputJsonBody(body);
+    const result = body.result || {};
+    print('本机配对 token 已轮换；旧配对链接与本机旧连接已失效。');
+    print('新配对链接：' + result.link);
+    print('（在扩展“连接设置 → 配对链接”粘贴以恢复）');
+    return 0;
+  }
   if (sub === 'log') {
     return cmdDaemonLog(flags);
   }
-  throw new ArgError('用法：bridge daemon start|stop|status|log|pair|devices|revoke|trust-local on|off [--tail]');
+  throw new ArgError('用法：bridge daemon start|stop|status|log|pair|devices|revoke|rotate|trust-local on|off [--tail]');
 }
 
 /** 原子写：临时文件 + rename，权限尽量收紧到 0600。 */
@@ -1358,6 +1379,7 @@ function cmdDaemonLog(flags) {
   const exists = fs.existsSync(LOG_PATH);
   const size = exists ? fs.statSync(LOG_PATH).size : 0;
   const tailWanted = flags.tail !== undefined ? (typeof flags.tail === 'number' ? flags.tail : 50) : 0;
+  if (flags.follow === true) return followLog(tailWanted);
   let lines = [];
   if (exists && tailWanted > 0) lines = tailFile(LOG_PATH, tailWanted);
   if (jsonMode) {
@@ -1371,6 +1393,36 @@ function cmdDaemonLog(flags) {
   if (tailWanted > 0) print(lines.join('\n'));
   else print(`日志文件：${LOG_PATH}（${formatBytes(size)}）`);
   return 0;
+}
+
+/** 持续跟踪 daemon 日志：先按 --tail 打一段，再等新增字节；Ctrl+C 结束。 */
+async function followLog(tailWanted) {
+  if (!fs.existsSync(LOG_PATH)) {
+    print('日志文件不存在：' + LOG_PATH);
+    return 0;
+  }
+  if (tailWanted > 0) process.stdout.write(tailFile(LOG_PATH, tailWanted).join('\n') + '\n');
+  let offset = fs.statSync(LOG_PATH).size;
+  process.stderr.write('（持续跟踪 ' + LOG_PATH + '，Ctrl+C 结束）\n');
+  return await new Promise((resolve) => {
+    const timer = setInterval(() => {
+      try {
+        const size = fs.statSync(LOG_PATH).size;
+        if (size < offset) offset = 0; // 日志轮转
+        if (size === offset) return;
+        const length = size - offset;
+        const buffer = Buffer.alloc(length);
+        const fd = fs.openSync(LOG_PATH, 'r');
+        try { fs.readSync(fd, buffer, 0, length, offset); } finally { fs.closeSync(fd); }
+        offset = size;
+        process.stdout.write(buffer.toString('utf8'));
+      } catch { /* 文件被删除/轮转中，下一轮再试 */ }
+    }, 400);
+    process.once('SIGINT', () => {
+      clearInterval(timer);
+      resolve(0);
+    });
+  });
 }
 
 function tailFile(file, count) {
@@ -1405,6 +1457,8 @@ async function cmdSession(flags, pos) {
     const params = { noFocus: flags['no-focus'] === true };
     if (flags.incognito === true) params.incognito = true;
     if (flags.browser !== undefined) params.browser = String(flags.browser);
+    if (flags.scope !== undefined) params.scope = String(flags.scope);
+    else if (process.env.BB_SESSION_SCOPE && process.env.BB_SESSION_SCOPE.trim()) params.scope = process.env.BB_SESSION_SCOPE.trim();
     if (flags['agent-name'] !== undefined) {
       const controller = { name: String(flags['agent-name']) };
       if (flags.project !== undefined) controller.project = String(flags.project);
@@ -1643,6 +1697,7 @@ const PAGE_COMMANDS = new Set([
   'get-html', 'screenshot', 'click', 'click-backend', 'hover', 'fill', 'press',
   'select', 'focus', 'scroll-to', 'evaluate',
   'wait-for-element', 'wait-for-navigation', 'wait-ms', 'console', 'actionable',
+  'visuals', 'visual-drag', 'visual-click', 'visual-gesture',
 ]);
 
 async function cmdPage(command, flags, pos) {
@@ -1692,6 +1747,8 @@ async function cmdPage(command, flags, pos) {
       if (flags.facts === true) params.facts = true;
       if (flags['fallback-ax'] === true) params.fallbackAx = true;
       if (flags['compare-ax'] === true) params.compareAx = true;
+      if (flags['cdp-frames'] === true) params.cdpFrames = true;
+      if (flags.force === true) params.force = true;
       if (flags.pipeline !== undefined) {
         const pipeline = String(flags.pipeline);
         if (pipeline !== 'page-lib' && pipeline !== 'ax') throw new Error('--pipeline 只支持 page-lib 或 ax');
@@ -1705,8 +1762,40 @@ async function cmdPage(command, flags, pos) {
       }
       const body = await callRpc('observe', params, timeoutOf(flags));
       if (!body.ok) return outputFailure(body);
+      if (body.result) {
+        if (!body.result.observationId) body.result.observationId = 'ob_' + crypto.randomBytes(6).toString('hex');
+        // --delta：本地拿基线文本做行级 diff（扩展只回全文/unchanged，diff 在 CLI 侧算）。
+        if (params.delta === true && params.baseline && typeof body.result.observation === 'string') {
+          const baselineText = readCachedObservation(params.baseline);
+          if (baselineText) {
+            const { diffObservation } = await loadObservationDelta();
+            const diff = diffObservation(baselineText, body.result.observation);
+            if (diff.kind === 'same') {
+              body.result.unchanged = true;
+              body.result.changes = 0;
+              body.result.patch = [];
+            } else if (diff.kind === 'text' || diff.kind === 'structural-text') {
+              body.result.delta = true;
+              body.result.changes = diff.changes;
+              body.result.patch = diff.ops || diff.patch;
+            }
+          }
+        }
+      }
+      if (body.result && body.result.unchanged === true) {
+        saveObservationCache(body.result.observationId, String(body.result.observation || ''));
+        if (flags.out !== undefined) {
+          writeFileAtomic(path.resolve(process.cwd(), String(flags.out)), String(body.result.observation || ''), 0o600);
+        }
+        if (jsonMode) {
+          emitJson(body);
+          return 0;
+        }
+        print(`unchanged: 与基线 ${params.baseline || '(上一版)'} 一致，未重复输出（${String(body.result.observation || '').length} 字符）`);
+        return 0;
+      }
       if (body.result && body.result.delta === true) {
-        const baseline = String(params.baseline);
+        const baseline = String(body.result.baseline || params.baseline || '');
         const merged = await applyCachedObservation(baseline, body.result.patch);
         if (merged == null) {
           // 本地没有基线缓存：退回整页观察，避免凭空合并
@@ -1721,7 +1810,15 @@ async function cmdPage(command, flags, pos) {
           }
           print(`delta: ${body.result.changes} 行变化（基线 ${baseline}）`);
           for (const entry of body.result.patch || []) {
-            print(`  L${Number(entry.line) + 1}: ${String(entry.value).slice(0, 200)}`);
+            const line = Number(entry.line);
+            if (entry.op === 'remove') {
+              print(`  - L${line + 1} 删除 ${Number(entry.count) || 0} 行`);
+            } else if (entry.op === 'insert') {
+              const inserted = Array.isArray(entry.lines) ? entry.lines : [];
+              print(`  + L${line + 1} 插入 ${inserted.length} 行：${String(inserted[0] ?? '').slice(0, 160)}`);
+            } else {
+              print(`  L${line + 1}: ${String(entry.value).slice(0, 200)}`);
+            }
           }
           if (flags.out !== undefined) {
             const file = path.resolve(process.cwd(), String(flags.out));
@@ -1752,7 +1849,10 @@ async function cmdPage(command, flags, pos) {
         result.observation || '',
       ];
       if (typeof result.refs === 'number') lines.push('', `refs: ${result.refs}`);
-      if (result.observationId) lines.push(`observation: ${result.observationId}（用于 --delta --baseline）`);
+      if (result.observationId) lines.push(`observation: ${result.observationId}${result.observationAlias ? ' (' + result.observationAlias + ')' : ''}（用于 --delta --baseline / --observation）`);
+      if (result.mutations && (result.mutations.total || result.mutations.interaction)) {
+        lines.push(`mutations: text ${result.mutations.text || 0} / added ${result.mutations.added || 0} / removed ${result.mutations.removed || 0} / attr ${result.mutations.attributes || 0}${result.mutations.layout ? ' / layout' : ''}${result.mutations.interaction ? ' / interaction' : ''}`);
+      }
       if (result.baselineReason) lines.push(`baseline: 结构性变化（${result.baselineReason}），已返回整页`);
       if (Array.isArray(result.nodes)) lines.push(`vom nodes: ${result.nodes.length}（--json 查看结构化字段）`);
       if (Array.isArray(result.axNodes)) lines.push(`ax nodes: ${result.axNodes.length}（--json 查看 AX 字段）`);
@@ -1760,6 +1860,135 @@ async function cmdPage(command, flags, pos) {
       if (result.savedTo) lines.push(`已保存完整观察：${result.savedTo}`);
       if (result.cursor) lines.push('', '@more ' + result.cursor);
       print(lines.join('\n'));
+      return 0;
+    }
+    case 'visuals': {
+      const body = await callRpc('observe', withControl(flags, { visualOnly: true }), timeoutOf(flags));
+      if (!body.ok) return outputFailure(body);
+      if (jsonMode) return outputJsonBody(body);
+      const result = body.result || {};
+      const list = Array.isArray(result.candidates) ? result.candidates : [];
+      if (!list.length) {
+        print('当前视口没有可用视觉候选（canvas / 图片 / 自绘区域）');
+        return 0;
+      }
+      print('视觉候选 ' + list.length + ' 个（页面坐标）：');
+      for (const item of list) {
+        const rect = item.rect || {};
+        print('  v' + item.index + '  <' + item.tag + (item.id ? '#' + item.id : '') + '>'
+          + (item.cls ? '.' + String(item.cls).split(' ')[0] : '')
+          + '  ' + (item.kind || '') + '  ' + rect.x + ',' + rect.y + ' ' + rect.width + 'x' + rect.height);
+      }
+      print('下一步：bridge screenshot --visual <index> --out crop.png --session <id>');
+      return 0;
+    }
+    // 一步到位的视觉拖拽：截候选区域 → 用区域坐标派发 → 命中校验自动带上候选序号。
+    // 不缓存 capture（内部一次用完即弃），调用方不用在两条命令之间传 capture_id。
+    // 多段手势：一次调用里按顺序做「区域点击 / 区域拖拽 / 等待」。
+    // 用于需要多点（点选类）或多把手（双滑块类）的控件——单次拖拽覆盖不到这些形态。
+    case 'visual-gesture': {
+      let plan = null;
+      if (flags.plan !== undefined) {
+        const value = String(flags.plan).trim();
+        if (value.startsWith('{') || value.startsWith('[')) {
+          try { plan = JSON.parse(value); } catch (error) { throw new ArgError('--plan 内联 JSON 不合法：' + error.message); }
+        } else {
+          const raw = fs.readFileSync(path.resolve(process.cwd(), value), 'utf8');
+          try { plan = JSON.parse(raw); } catch (error) { throw new ArgError('--plan 文件不是合法 JSON：' + error.message); }
+        }
+      } else if (flags.points !== undefined) {
+        // 简写：--points "x1,y1;x2,y2;..." + --visual N，等价于对该区域依次点击
+        if (flags.visual === undefined) throw new ArgError('--points 需要配合 --visual <index>');
+        plan = {
+          steps: String(flags.points).split(';').filter((s) => s.trim()).map((pair) => {
+            const [x, y] = pair.split(',').map((v) => Number(v.trim()));
+            if (!Number.isFinite(x) || !Number.isFinite(y)) throw new ArgError('--points 每段格式为 x,y：' + pair);
+            return { type: 'click', visual: Number(flags.visual), x, y };
+          }),
+        };
+      } else {
+        throw new ArgError('visual-gesture 需要 --plan <file|json> 或 --points "x,y;x,y" --visual N');
+      }
+      const steps = Array.isArray(plan) ? plan : plan && Array.isArray(plan.steps) ? plan.steps : null;
+      if (!steps || !steps.length) throw new ArgError('手势计划里没有 steps');
+      if (steps.length > 12) throw new ArgError('手势计划最多 12 步');
+      const done = [];
+      for (const step of steps) {
+        const type = step.type === 'drag' ? 'drag' : step.type === 'wait' ? 'wait' : 'click';
+        if (type === 'wait') {
+          await sleep(Math.max(0, Math.min(5000, Number(step.ms) || 200)));
+          done.push({ type: 'wait', ms: Number(step.ms) || 200 });
+          continue;
+        }
+        const index = Number(step.visual);
+        if (!Number.isInteger(index) || index < 1) throw new ArgError('每步需要 visual 序号');
+        const shot = await callRpc('screenshot', withControl(flags, { visualIndex: index }), timeoutOf(flags));
+        if (!shot.ok) return outputFailure(shot);
+        const captureId = shot.result && shot.result.capture_id;
+        if (!captureId) throw new ArgError('候选 v' + index + ' 截图没有生成 capture（' + ((shot.result && shot.result.capture_skipped) || '未知原因') + '）');
+        const params = withControl(flags, { capture: captureId, imageX: Number(step.x), imageY: Number(step.y) });
+        if (type === 'drag') {
+          params.imageDx = Number(step.dx) || 0;
+          params.imageDy = Number(step.dy) || 0;
+          const hold = parseDurationMs(step.hold, 0);
+          if (hold) params.holdMs = hold;
+          params.durationMs = parseDurationMs(step.duration, 0);
+          if (step.steps !== undefined) params.steps = Number(step.steps);
+        }
+        const body = await callRpc(type === 'drag' ? 'drag' : 'click-point', params, timeoutOf(flags));
+        if (!body.ok) return outputFailure(body);
+        done.push({ type, visual: index, ok: true, hit: body.result && body.result.hit ? body.result.hit : undefined });
+        const gap = Math.max(0, Math.min(3000, Number(step.gap) || 120));
+        if (gap) await sleep(gap);
+      }
+      if (jsonMode) return outputJsonBody({ ok: true, result: { steps: done } });
+      print('手势完成：' + done.map((d) => d.type + (d.visual ? '#' + d.visual : '')).join(' → '));
+      return 0;
+    }
+    case 'visual-drag':
+    case 'visual-click': {
+      const isDrag = command === 'visual-drag';
+      if (flags.visual === undefined) throw new ArgError(command + ' 需要 --visual <index>（先用 bridge visuals 取序号）');
+      const index = Number(flags.visual);
+      if (!Number.isInteger(index) || index < 1) throw new ArgError('--visual 需要 ≥1 的整数');
+      if (flags['image-x'] === undefined || flags['image-y'] === undefined) {
+        throw new ArgError(command + ' 需要 --image-x 与 --image-y（区域图内坐标）');
+      }
+      const shotParams = withControl(flags, { visualIndex: index });
+      const shot = await callRpc('screenshot', shotParams, timeoutOf(flags));
+      if (!shot.ok) return outputFailure(shot);
+      const captureId = shot.result && shot.result.capture_id;
+      if (!captureId) {
+        throw new ArgError('候选区域截图没有生成 capture（' + ((shot.result && shot.result.capture_skipped) || '未知原因') + '）');
+      }
+      let previewPath = null;
+      if (flags.out !== undefined && shot.result && shot.result.dataUrl) {
+        previewPath = writeDataUrl(flags.out, shot.result.dataUrl).target;
+      }
+      const dragParams = withControl(flags, {
+        capture: captureId,
+        imageX: Number(flags['image-x']),
+        imageY: Number(flags['image-y']),
+      });
+      if (isDrag) {
+        dragParams.imageDx = flags['image-dx'] !== undefined ? Number(flags['image-dx']) : 0;
+        dragParams.imageDy = flags['image-dy'] !== undefined ? Number(flags['image-dy']) : 0;
+        dragParams.durationMs = parseDurationMs(flags.duration, 0);
+        const steps = intFlag(flags, 'steps', { min: 2 });
+        if (steps !== undefined) dragParams.steps = steps;
+      }
+      const body = await callRpc(isDrag ? 'drag' : 'click-point', dragParams, timeoutOf(flags));
+      if (!body.ok) return outputFailure(body);
+      if (jsonMode) {
+        emitJson({ ok: true, result: { ...(body.result || {}), visual: shot.result && shot.result.visual, preview: previewPath || undefined } });
+        return 0;
+      }
+      const result = body.result || {};
+      print((isDrag ? '区域拖拽完成' : '区域点击完成')
+        + '：候选 v' + index
+        + (result.from ? ' 从 ' + Math.round(result.from.x) + ',' + Math.round(result.from.y) + ' 到 ' + Math.round(result.to.x) + ',' + Math.round(result.to.y) : '')
+        + (result.hit ? '，命中 <' + result.hit.tag + (result.hit.id ? '#' + result.hit.id : '') + '>' : ''));
+      if (previewPath) print('区域预览：' + previewPath);
       return 0;
     }
     case 'snapshot': {
@@ -1846,6 +2075,28 @@ async function cmdPage(command, flags, pos) {
       if (!out) throw new ArgError('screenshot 需要 --out <path>');
       const params = withControl(flags, { fullPage: mode === 'auto' });
       if (flags.annotate === true) params.annotate = true;
+      if (flags.grid === true) params.grid = true;
+      if (flags['grid-step'] !== undefined) {
+        const step = Number(flags['grid-step']);
+        if (!Number.isFinite(step) || step < 10 || step > 200) throw new ArgError('--grid-step 需要 10–200 的整数');
+        params.gridStep = Math.round(step);
+        params.grid = true;
+      }
+      if (flags.profile !== undefined) {
+        const axis = String(flags.profile).toLowerCase();
+        if (!['x', 'y'].includes(axis)) throw new ArgError('--profile 只能是 x 或 y');
+        params.profile = axis;
+      }
+      if (flags['region-scale'] !== undefined) {
+        const zoom = Number(flags['region-scale']);
+        if (!Number.isFinite(zoom) || zoom < 1 || zoom > 8) throw new ArgError('--region-scale 需要 1–8');
+        params.scale = zoom;
+      }
+      if (flags.visual !== undefined) {
+        const index = Number(flags.visual);
+        if (!Number.isInteger(index) || index < 1) throw new ArgError('--visual 需要 ≥1 的整数（视觉候选序号）');
+        params.visualIndex = index;
+      }
       if (flags.overlap !== undefined) {
         const overlap = Number(flags.overlap);
         if (!Number.isFinite(overlap) || overlap < 0) throw new ArgError('--overlap 需要非负数');
@@ -1881,13 +2132,29 @@ async function cmdPage(command, flags, pos) {
           bytes: written.buffer.length,
         };
         if (result.capture_id) summary.capture_id = result.capture_id;
+        if (result.captureAlias) summary.captureAlias = result.captureAlias;
+        if (result.capture_mode) summary.capture_mode = result.capture_mode;
+        if (result.visual) summary.visual = result.visual;
+        if (result.capture_skipped) summary.capture_skipped = result.capture_skipped;
         if (Array.isArray(result.visual_refs)) summary.visual_refs = result.visual_refs;
+        if (result.profile) summary.profile = result.profile;
         emitJson({ ok: true, result: summary });
         return 0;
       }
       print('已保存：' + written.target + '（' + (result.width || '?') + 'x' + (result.height || '?') + '，' + formatBytes(written.buffer.length) + '）');
-      if (result.capture_id) print('capture_id: ' + result.capture_id + '（视觉坐标点击：bridge click --capture <id> --image-x X --image-y Y）');
+      if (result.capture_id) print('capture_id: ' + result.capture_id + (result.captureAlias ? ' (' + result.captureAlias + ')' : '') + '（视觉坐标点击：bridge click --capture <id|别名> --image-x X --image-y Y）');
+      if (result.capture_mode === 'visual-region' && result.visual) {
+        print('区域 capture：候选 v' + result.visual.index + ' <' + result.visual.tag
+          + (result.visual.id ? '#' + result.visual.id : '') + '>，图片 ' + (result.width || '?') + 'x' + (result.height || '?')
+          + '（坐标相对该图，0..宽/高）');
+      }
+      if (result.capture_skipped) print('capture 未生成：' + result.capture_skipped + '（页面在截图期间变化，图片仅供参考）');
       if (Array.isArray(result.visual_refs)) print('视觉引用：' + result.visual_refs.length + ' 个');
+      if (result.profile) {
+        const peaks = Array.isArray(result.profile.peaks) ? result.profile.peaks : [];
+        print('差分剖面（' + result.profile.axis + ' 轴，' + (result.profile.width || '?') + 'x' + (result.profile.height || '?') + '）峰值：'
+          + (peaks.slice(0, 6).map((item) => item.pos + '@' + item.score).join(', ') || '无'));
+      }
       return 0;
     }
     case 'click-backend': {
@@ -1933,6 +2200,11 @@ async function cmdPage(command, flags, pos) {
       const params = withControl(flags, { ...target });
       if (flags.trusted === true) params.trusted = true;
       if (flags.force === true) params.force = true;
+      if (flags['expect-revision'] !== undefined) {
+        const revision = Number(flags['expect-revision']);
+        if (!Number.isInteger(revision) || revision < 0) throw new ArgError('--expect-revision 需要 ≥0 的整数（取自 observe 的 revision）');
+        params.expectRevision = revision;
+      }
       let followBefore = null;
       const followSession = flags.session || flags['session-id'];
       if (flags.follow === true) {
@@ -1986,7 +2258,12 @@ async function cmdPage(command, flags, pos) {
       if (flags.trusted === true) params.trusted = true;
       if (flags.force === true) params.force = true;
       const body = await callRpc('fill', withControl(flags, params), timeoutOf(flags));
-      return renderPageBody(body, () => print('ok'));
+      return renderPageBody(body, (result) => {
+        const bits = [];
+        if (result.actual_value !== undefined) bits.push('实际值=' + result.actual_value + (result.actual_value_truncated === true ? '…' : ''));
+        if (result.formatted === true) bits.push('页面已格式化');
+        print(bits.length ? 'ok（' + bits.join('，') + '）' : 'ok');
+      });
     }
     case 'press': {
       const key = requirePos(pos, 1, '<key>');
@@ -2081,8 +2358,8 @@ async function cmdPage(command, flags, pos) {
 }
 
 /**
- * 给页面命令补上 session：--session > --session-scope > BB_SESSION > daemon 单会话默认。
- * --session-scope 交给 daemon 按 controller.name/project 解析唯一会话。
+ * 给页面命令补上 session：--session > --session-scope > BB_SESSION > BB_SESSION_SCOPE > daemon 单会话默认。
+ * --session-scope 交给 daemon 按 caller scope / controller.name/project 解析唯一会话。
  */
 function withSession(flags, params) {
   if (flags.session !== undefined) {
@@ -2091,6 +2368,8 @@ function withSession(flags, params) {
     params.sessionScope = String(flags['session-scope']);
   } else if (process.env.BB_SESSION && process.env.BB_SESSION.trim()) {
     params.session = process.env.BB_SESSION.trim();
+  } else if (process.env.BB_SESSION_SCOPE && process.env.BB_SESSION_SCOPE.trim()) {
+    params.sessionScope = process.env.BB_SESSION_SCOPE.trim();
   }
   return params;
 }
@@ -2302,6 +2581,11 @@ async function cmdRead(flags, pos) {
     return 0;
   }
   const params = withControl(flags, {});
+  if (flags['expect-revision'] !== undefined) {
+    const revision = Number(flags['expect-revision']);
+    if (!Number.isInteger(revision) || revision < 0) throw new ArgError('--expect-revision 需要 ≥0 的整数（取自 observe/read 的 revision）');
+    params.expectRevision = revision;
+  }
   if (flags.all === true) {
     params.all = true;
   } else {
@@ -2341,6 +2625,17 @@ async function cmdRead(flags, pos) {
   });
 }
 
+/** 覆盖度一句话：读了多少、页面声明多少、为什么停。 */
+function formatCoverage(coverage) {
+  if (!coverage || typeof coverage !== 'object') return '';
+  const parts = ['返回 ' + (coverage.returned != null ? coverage.returned : '?') + ' 行'];
+  if (coverage.declared != null) parts.push('页面声明 ' + coverage.declared + ' 行');
+  else parts.push('页面未声明总数');
+  if (coverage.stopReason) parts.push('停止原因 ' + coverage.stopReason);
+  if (coverage.datasetComplete) parts.push('完整性 ' + coverage.datasetComplete);
+  return parts.join('，');
+}
+
 async function cmdExtract(flags, pos) {
   const sub = pos[1];
   const maxRows = intFlag(flags, 'max-rows', { min: 1 });
@@ -2349,6 +2644,11 @@ async function cmdExtract(flags, pos) {
   if (maxRows !== undefined) base.maxRows = maxRows;
   const maxBytes = intFlag(flags, 'max-bytes', { min: 1 });
   if (maxBytes !== undefined) base.maxBytes = maxBytes;
+  if (flags['expect-revision'] !== undefined) {
+    const revision = Number(flags['expect-revision']);
+    if (!Number.isInteger(revision) || revision < 0) throw new ArgError('--expect-revision 需要 ≥0 的整数（取自 observe 的 revision）');
+    base.expectRevision = revision;
+  }
 
   if (sub === 'discover') {
     const body = await callRpc('extract.discover', base, timeoutOf(flags));
@@ -2411,10 +2711,11 @@ async function cmdExtract(flags, pos) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, '\ufeff' + toCsv(result, flags['csv-safe'] === true), 'utf8');
     if (jsonMode) {
-      emitJson({ ok: true, result: { path: file, rowCount: result.rowCount || 0, truncated: result.truncated === true } });
+      emitJson({ ok: true, result: { path: file, rowCount: result.rowCount || 0, truncated: result.truncated === true, coverage: result.coverage } });
       return 0;
     }
     print('已导出 ' + (result.rowCount || 0) + ' 行 → ' + file + (result.truncated ? '（已截断）' : ''));
+    if (result.coverage) print('覆盖度：' + formatCoverage(result.coverage));
     return 0;
   }
   if (jsonMode) {
@@ -2427,19 +2728,41 @@ async function cmdExtract(flags, pos) {
     rows: result.rows,
     rowCount: result.rowCount,
     truncated: result.truncated,
+    coverage: result.coverage,
     warnings: result.warnings,
   }, null, 2));
   return 0;
 }
 
 async function cmdDrag(flags, pos) {
-  const from = requirePos(pos, 1, '<from>');
-  const params = withControl(flags, { from: targetOf(from) });
+  const imageCapture = flags.capture !== undefined;
+  const from = pos && pos[1] ? requirePos(pos, 1, '<from>') : undefined;
+  if (!imageCapture && !from) {
+    throw new ArgError('drag 需要 <from>，或改用 --capture 配 --image-x/--image-y（视觉坐标拖拽）');
+  }
+  const params = withControl(flags, {});
+  if (from) params.from = targetOf(from);
   if (flags.to !== undefined) params.to = targetOf(flags.to);
   if (flags.dx !== undefined) params.dx = Number(flags.dx);
   if (flags.dy !== undefined) params.dy = Number(flags.dy);
-  if (flags.to === undefined && flags.dx === undefined && flags.dy === undefined) {
-    throw new ArgError('drag 需要 --to <ref|selector> 或 --dx/--dy');
+
+  // 视觉坐标拖拽：起点用截图里的像素坐标，位移也用图片像素（--image-dx/--image-dy）。
+  // 换算成页面坐标由扩展侧完成（含滚动与缩放），模型只需要"看图 → 报坐标"。
+  if (imageCapture) {
+    if (flags['image-x'] === undefined || flags['image-y'] === undefined) {
+      throw new ArgError('drag --capture 需要同时给 --image-x 与 --image-y');
+    }
+    params.capture = String(flags.capture);
+    params.imageX = Number(flags['image-x']);
+    params.imageY = Number(flags['image-y']);
+    if (flags['image-dx'] !== undefined) params.imageDx = Number(flags['image-dx']);
+    if (flags['image-dy'] !== undefined) params.imageDy = Number(flags['image-dy']);
+  }
+
+  const hasMove = flags.to !== undefined || flags.dx !== undefined || flags.dy !== undefined
+    || flags['image-dx'] !== undefined || flags['image-dy'] !== undefined;
+  if (!hasMove) {
+    throw new ArgError('drag 需要 --to <ref|selector>、--dx/--dy，或 --image-dx/--image-dy');
   }
   if (flags.mode !== undefined) params.mode = String(flags.mode);
   if (flags.modifiers !== undefined) params.modifiers = parseModifiers(flags.modifiers);
@@ -2648,6 +2971,22 @@ function parseOnOff(value, name) {
 
 async function cmdUi(flags, pos) {
   const page = flags.page === undefined ? 'popup' : String(flags.page);
+  if (flags.diagnostics === true) {
+    const body = await callRpc('diagnostics.ui', {}, timeoutOf(flags));
+    if (!body.ok) return outputFailure(body);
+    if (jsonMode) return outputJsonBody(body);
+    const result = body.result || {};
+    print('extension v' + (result.packageVersion || '?') + (result.ok ? '（自检通过）' : '（自检有问题）'));
+    for (const name of ['popup', 'options', 'quick', 'record', 'debug', 'longshot', 'ops', 'audit']) {
+      const item = result[name];
+      if (!item) continue;
+      const extra = Array.isArray(item.missing) && item.missing.length ? ' missing: ' + item.missing.join(',') : '';
+      print(`  ${item.ok ? '[ok]' : '[!!]'} ${name} ${item.bytes || 0}B${extra}`);
+    }
+    const leases = Array.isArray(result.axLease) ? result.axLease : [];
+    print('AX 租约：' + (leases.length ? leases.map((item) => `tab ${item.tabId} ${Math.round(item.remainingMs / 1000)}s`).join(', ') : '(无)'));
+    return 0;
+  }
   const params = { page };
   if (flags.query !== undefined) params.query = String(flags.query);
   const body = await callRpc('ui.open', params, timeoutOf(flags));
@@ -2796,8 +3135,12 @@ async function waitUntilVisible(flags, selector) {
 }
 
 async function cmdPlan(flags, pos) {
-  const raw = flags.steps !== undefined ? String(flags.steps) : null;
-  if (!raw) throw new ArgError('plan 需要 --steps \'[{"method":"click","params":{"selector":"#a"}}]\'');
+  const raw = flags['steps-file'] !== undefined
+    ? (() => {
+      try { return fs.readFileSync(path.resolve(process.cwd(), String(flags['steps-file'])), 'utf8'); } catch (error) { throw new ArgError('读取 --steps-file 失败：' + error.message); }
+    })()
+    : (flags.steps !== undefined ? String(flags.steps) : null);
+  if (!raw) throw new ArgError('plan 需要 --steps \'[{"method":"click","params":{"selector":"#a"}}]\' 或 --steps-file <json>（也接受 {"action":"click","selector":"#a"}）');
   let steps;
   try {
     steps = JSON.parse(raw);
@@ -2812,14 +3155,14 @@ async function cmdPlan(flags, pos) {
   if (untilVisible && body.result && body.result.failedAt == null) {
     body.result.untilVisible = await waitUntilVisible(flags, untilVisible);
   }
-  if (flags['save-full'] !== undefined && body.result && body.result.failedAt == null) {
+  if (flags['save-full'] !== undefined && body.result) {
     const file = path.resolve(process.cwd(), String(flags['save-full']));
-    const observation = await callRpc('observe', withControl(flags, {}), timeoutOf(flags));
-    if (observation.ok && observation.result) {
-      writeFileAtomic(file, String(observation.result.observation || ''), 0o600);
+    const observation = body.result.observation;
+    if (observation && typeof observation.text === 'string') {
+      writeFileAtomic(file, String(observation.text), 0o600);
       body.result.savedTo = file;
     } else {
-      body.result.saveError = observation.error || { code: 'E_OBSERVE_FAILED', message: 'plan 后观察失败' };
+      body.result.saveError = { code: 'E_OBSERVE_FAILED', message: 'plan 后的同步观察不可用' };
     }
   }
   if (jsonMode) return outputJsonBody(body);
@@ -2832,6 +3175,9 @@ async function cmdPlan(flags, pos) {
   ]);
   print(renderTable(['#', 'method', 'result', 'error'], rows));
   print('完成 ' + (result.completed || 0) + '/' + steps.length + (result.failedAt != null ? '，第 ' + result.failedAt + ' 步失败' : ''));
+  if (result.observation) {
+    print('观察：变化 ' + result.observation.changed + ' 行，refs ' + result.observation.refs);
+  }
   if (result.untilVisible) {
     print('until-visible ' + result.untilVisible.selector + '：' + (result.untilVisible.satisfied ? '已可见' : '等待超时'));
   }
@@ -4378,11 +4724,17 @@ const RECIPE_DIR = path.join(HOME_DIR, 'recipes');
 const OBSERVATIONS_DIR = path.join(HOME_DIR, 'observations');
 
 /** 保存整页观察的本地基线，供后续 --delta 合并使用。 */
+let lastObservationPrune = 0;
 function saveObservationCache(id, text) {
   if (!id || typeof text !== 'string' || !text.length) return;
   try {
     fs.mkdirSync(OBSERVATIONS_DIR, { recursive: true });
     fs.writeFileSync(path.join(OBSERVATIONS_DIR, String(id) + '.json'), JSON.stringify({ id: String(id), text, at: Date.now() }), { mode: 0o600 });
+    // 每 10 分钟最多清理一次，避免每次 observe 都扫目录。
+    if (Date.now() - lastObservationPrune > 10 * 60 * 1000) {
+      lastObservationPrune = Date.now();
+      pruneObservationCache(OBSERVATIONS_DIR);
+    }
   } catch { /* 缓存失败不影响主流程 */ }
 }
 
@@ -4393,6 +4745,16 @@ async function applyCachedObservation(id, patch) {
     const cached = JSON.parse(fs.readFileSync(path.join(OBSERVATIONS_DIR, String(id) + '.json'), 'utf8'));
     if (!cached || typeof cached.text !== 'string') return null;
     return applyObservationPatch(cached.text, patch);
+  } catch {
+    return null;
+  }
+}
+
+/** 读取本地基线文本；没有则返回 null。 */
+function readCachedObservation(id) {
+  try {
+    const cached = JSON.parse(fs.readFileSync(path.join(OBSERVATIONS_DIR, String(id) + '.json'), 'utf8'));
+    return cached && typeof cached.text === 'string' ? cached.text : null;
   } catch {
     return null;
   }
@@ -4459,7 +4821,7 @@ async function recipeFile(name) {
 }
 
 async function cmdRecipe(flags, pos) {
-  const { approveRecipe, assertRunnable, listRecipes, readRecipe, saveRecipe, substituteParams } = await loadRecipeStore();
+  const { acquireRecipeLock, approveRecipe, assertRunnable, listRecipes, readRecipe, releaseRecipeLock, saveRecipe, substituteParams, writeRunMarker } = await loadRecipeStore();
   const sub = pos[1];
   if (sub === 'list') {
     const rows = listRecipes(RECIPE_DIR).map((item) => [
@@ -4553,12 +4915,32 @@ async function cmdRecipe(flags, pos) {
       values[String(pair).slice(0, index)] = String(pair).slice(index + 1);
     }
     const steps = substituteParams(recipe.steps, values);
-    const body = await callRpc('plan', withControl(flags, { steps }), Math.max(timeoutOf(flags), 180000));
-    if (!body.ok) return outputFailure(body);
-    if (jsonMode) return outputJsonBody(body);
-    const result = body.result || {};
-    print('recipe ' + name + '：完成 ' + (result.completed || 0) + '/' + steps.length + (result.failedAt != null ? '，第 ' + result.failedAt + ' 步失败' : ''));
-    return result.failedAt != null ? 1 : 0;
+    // 独占锁 + run 标记：并发回放互斥，中断后留痕（锁过期也保留上一次的状态）。
+    const lock = acquireRecipeLock(RECIPE_DIR, name);
+    try {
+      writeRunMarker(RECIPE_DIR, name, { status: 'running', steps: steps.length });
+      const body = await callRpc('plan', withControl(flags, { steps }), Math.max(timeoutOf(flags), 180000));
+      if (!body.ok) {
+        writeRunMarker(RECIPE_DIR, name, { status: 'failed', error: body.error && body.error.code ? body.error.code : 'E_INTERNAL', steps: steps.length });
+        return outputFailure(body);
+      }
+      const result = body.result || {};
+      const completed = result.failedAt == null;
+      writeRunMarker(RECIPE_DIR, name, {
+        status: completed ? 'done' : 'failed',
+        completed: result.completed || 0,
+        failedAt: result.failedAt == null ? null : result.failedAt,
+        steps: steps.length,
+      });
+      if (jsonMode) return outputJsonBody(body);
+      print('recipe ' + name + '：完成 ' + (result.completed || 0) + '/' + steps.length + (result.failedAt != null ? '，第 ' + result.failedAt + ' 步失败' : ''));
+      return completed ? 0 : 1;
+    } catch (error) {
+      writeRunMarker(RECIPE_DIR, name, { status: 'failed', error: (error && error.code) || 'E_INTERNAL', steps: steps.length });
+      throw error;
+    } finally {
+      releaseRecipeLock(lock);
+    }
   }
   throw new ArgError('用法：bridge recipe list|show|draft|save|approve|run|rm');
 }
@@ -4939,7 +5321,7 @@ async function printHelp() {
   bridge help [method]   带 method 时由协议 schema 生成该方法的参数帮助
 
 总览：
-  open [url] [--observe]             新建会话（可带 URL 直接导航）；--observe 同时返回观察（≈ bsk open 的 VOM）
+  open [url] [--observe]             新建会话（可带 URL 直接导航）；--observe 同时返回观察结果
   sync                             同步当前会话的控制上下文，≈ cooperate sync
   close [sessionId]                结束会话，≈ session stop
   ledger status                    查看预写意图账本（待确认/最近记录）
@@ -4951,7 +5333,7 @@ async function printHelp() {
   browsers                         已连接浏览器实例（含实例名）
   doctor                           环境自检
   settings [--json]                查看扩展设置
-  ui [--page popup|options|quick|record|debug|longshot|ops|audit] [--query k=v]
+  ui [--page popup|options|quick|record|debug|longshot|ops|audit] [--query k=v] [--diagnostics]
                                   在浏览器里打开扩展页面
   settings set [--label <名字>] [--allow-help on|off] [--control-hint on|off]
                [--page-guard on|off] [--long-shot auto|manual]
@@ -4961,13 +5343,14 @@ async function printHelp() {
   audit export --out <file> [--since 24h] [--format jsonl|json]
   audit prune --older-than 30d | --before <日期> [--dry-run]
   audit clear --yes
-  install-skill [--harness <name>] [--dir <path>] [--force] [--list] [--embedded] [--mcp]
+  install-skill [--harness <name>] [--dir <path>] [--force] [--list] [--all] [--source <dir>] [--embedded] [--mcp]
                                   --mcp 同时写入 Codex/Cursor/Claude 的 MCP 客户端配置
   update check|verify|stage|fetch|state|auto [--manifest <path>] [--source <url>] [--out <path>] [--key <file>] [--force] [--download] [--apply --target <dir>]
                                   校验/暂存 dist/release.json（不自动替换当前安装）
   update install --from <zip|tar.gz> [--manifest <release.json>] [--dest <dir>] [--port <n>] [--no-restart] | --rollback <备份目录>
                                   装新 → 试跑 → 原端口重启；失败自动回滚到上一版本
-  daemon start|stop|restart|status|log [--tail [N]]
+  daemon start|stop|restart|status|log [--tail [N]] | logs [--tail N] [--follow]
+  daemon pair [--replace <browserId>] | devices | revoke <code>|--all | rotate | trust-local on|off
   daemon pair [--replace <browserId>]      生成本机配对链接（5 分钟）
   daemon trust-local on|off                本机未配对连接是否允许（off=严格模式）
 
@@ -4982,11 +5365,11 @@ async function printHelp() {
 
 页面（省略 --session 且只有一个 session 时自动选用）：
   navigate <url> | reload | back|navigate-back | forward|navigate-forward
-  observe [--probe-hover] [--max-depth N] [--debug-surfaces] [--save-full <path>] [--max-tokens N] [--cursor <token>] [--frames] [--closed-shadow] [--vom] [--ax] [--facts] [--fallback-ax] [--compare-ax] [--pipeline page-lib|ax]
+  observe [--probe-hover] [--max-depth N] [--debug-surfaces] [--cdp-frames] [--save-full <path>] [--max-tokens N] [--cursor <token>] [--frames] [--closed-shadow] [--vom] [--ax] [--facts] [--fallback-ax] [--compare-ax] [--pipeline page-lib|ax]
           [--delta --baseline <observationId>] [--out <path>]
                                    只读观察；文本原地变化时可用增量补丁，未命中基线自动回退整页
   snapshot
-  get-html [--ref @eN | --selector css]
+  get-html [--ref @eN | --selector css] [--out <file>]
   view [--grep <文本>] [--offset N] [--limit N]
   view <file> [--find <文本>] [--start-line N] [--line-count N]
   read [--ref @eN | --selector css] [--all] [--fields-json '<...>'] [--closed-shadow-text <文本>]
@@ -4995,6 +5378,11 @@ async function printHelp() {
                [--max-rows N] [--format json|csv] [--csv-safe] [--out <path>]
   screenshot --out <path> [--mode visible|auto|manual] [--scope viewport|document|follow|current] [--region x,y,w,h] [--overlap px]
              [--ref @eN | --selector css] [--annotate]
+             [--grid [--grid-step 50]] [--profile x|y]   坐标网格 / 差分剖面（帮助"看图取坐标"）
+  visuals                                       列出视觉候选（canvas / 图片 / 自绘区域）
+  visual-drag --visual N --image-x X --image-y Y --image-dx N [--image-dy N] [--out p.png]
+  visual-click --visual N --image-x X --image-y Y   一步式区域动作（截图→派发→命中校验）
+  visual-gesture --visual N --points "x,y;x,y" | --plan f.json   多段手势（点选序列 / 多把手 / 长按）
   screenshot --mode manual --stitch --out <path>
   click <ref|selector> ${clickFlags} | click --capture <id> --image-x X --image-y Y | click --closed-shadow-text <文本>
   click-backend --backend <backendNodeId>   点击 AX/DOMSnapshot 发现但没有 ref 的元素（closed shadow 等）
@@ -5005,6 +5393,7 @@ async function printHelp() {
   press <key> [--ref <ref>]
   select <ref|selector> --value <value>
   drag <from> --to <to> | --dx N --dy N [--mode hold|click-move-click] [--hold 500ms] [--duration 800ms] [--modifiers ctrl+shift]
+  drag --capture <id> --image-x X --image-y Y --image-dx N --image-dy N   视觉坐标拖拽（截图像素，强制原生输入）
   wheel --delta-y <n> [--delta-x <n>] [--ref @eN | --selector css]
   blur [--ref @eN | --selector css]
   upload <ref|selector> --file <path> [--file <path> ...]
@@ -5055,7 +5444,7 @@ tab / window：
   window list | window focus <windowId> | window ensure | window resize --width <n> --height <n>
 
 流程：
-  plan --steps '[{"method":"fill","params":{"ref":"@e1","value":"x"}},{"method":"click","params":{"ref":"@e2"}}]' [--until-visible <selector>] [--wait-timeout-ms N] [--save-full <path>]
+  plan --steps '[{"method":"fill","params":{"ref":"@e1","value":"x"}},{"method":"click","params":{"ref":"@e2"}}]' | --steps-file <json> [--until-visible <selector>] [--wait-timeout-ms N] [--save-full <path>]
   step <method> [参数...] [--until-visible <selector>] [--wait-timeout-ms N] [--save-full <path>]
   recipe list | show <name> | draft|save <name> --file <json>
   recipe approve <name> --confirm-human [--by x]
@@ -5068,6 +5457,8 @@ tab / window：
   --session-scope <名字>  按 controller name/project 选唯一会话；优先级低于 --session
   BB_SESSION=<id> 环境变量兜底；未给 --session/--session-scope 时生效
   --json           stdout 输出单行 JSON（{"ok":true,"result":...} / {"ok":false,"error":{...}}）
+  --quiet          抑制人类可读输出（JSON/错误不受影响）
+  --verbose        把每次 RPC 的耗时打到 stderr
   --port <n>       daemon 未运行时自动拉起所用端口（默认 BB_PORT → 52900）
   --timeout <ms|20s|2m>   RPC 超时（默认 60000）
   -h, --help       显示本帮助
@@ -5188,6 +5579,8 @@ async function main(argv) {
   const { flags, pos } = parseArgs(argv);
   traceStartup('args-parsed');
   jsonMode = flags.json === true;
+  quietMode = flags.quiet === true;
+  verboseMode = flags.verbose === true;
   if (flags.help) {
     await printHelp();
     return 0;
@@ -5246,6 +5639,8 @@ async function cmdOpenAlias(flags, pos) {
   const params = { noFocus: flags['no-focus'] === true };
   if (flags.incognito === true) params.incognito = true;
   if (flags.browser !== undefined) params.browser = String(flags.browser);
+  if (flags.scope !== undefined) params.scope = String(flags.scope);
+  else if (process.env.BB_SESSION_SCOPE && process.env.BB_SESSION_SCOPE.trim()) params.scope = process.env.BB_SESSION_SCOPE.trim();
   if (flags['agent-name'] !== undefined) {
     const controller = { name: String(flags['agent-name']) };
     if (flags.project !== undefined) controller.project = String(flags.project);

@@ -6,7 +6,7 @@
   'use strict';
 
   const KEY = '__BB_PAGE__';
-  const LIB_VERSION = 35;
+  const LIB_VERSION = 49;
   if (globalThis[KEY] && globalThis[KEY].version >= LIB_VERSION) return;
 
   const NAME_MAX = 80;
@@ -90,7 +90,163 @@
     refs: new Map(),
     elRefs: new WeakMap(),
     seq: 0,
+    lastObservation: null,
+    rowAnchors: new Map(),
+    // mutation log：上一次 observe 之后的 DOM/属性/布局变化，用于 unchanged 快路径与增量补丁。
+    mutation: { raw: [], layoutDirty: false, interactionDirty: false, started: false, docs: new WeakSet(), loadBound: false },
   };
+
+  // 视觉候选表：index -> element。随文档重建而清空，命中校验按 index 判断"是不是它"。
+  const visualState = { candidates: new Map() };
+  function getVisualState() {
+    return visualState;
+  }
+
+  // 观测代数：DOM 每次变更递增。observe 返回当时的代数，动作可带 expectRevision 要求"同一代数内"。
+  const revisionState = { value: 0 };
+  function bumpRevision() {
+    revisionState.value += 1;
+  }
+  try {
+    new MutationObserver(bumpRevision).observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      characterData: true,
+    });
+  } catch {
+    // 观察器不可用时代数恒为 0，expectRevision 只接受 0
+  }
+  function currentRevision() {
+    return revisionState.value;
+  }
+
+  // <mutation-summary>
+  function summarizeMutations(records, flags = {}) {
+    const counts = { text: 0, added: 0, removed: 0, attributes: 0 };
+    for (const record of Array.isArray(records) ? records : []) {
+      if (!record) continue;
+      if (record.type === 'characterData') counts.text += 1;
+      else if (record.type === 'childList') {
+        counts.added += Number(record.added) || 0;
+        counts.removed += Number(record.removed) || 0;
+      } else if (record.type === 'attribute') counts.attributes += 1;
+    }
+    const total = counts.text + counts.added + counts.removed + counts.attributes;
+    return {
+      ...counts,
+      total,
+      structural: counts.added > 0 || counts.removed > 0,
+      layout: flags.layout === true,
+      interaction: flags.interaction === true,
+    };
+  }
+
+  function shouldFastUnchanged(snapshot) {
+    return !!snapshot && snapshot.total === 0 && snapshot.layout !== true && snapshot.interaction !== true;
+  }
+
+  function canIncremental(snapshot, records) {
+    return !!snapshot && snapshot.total > 0 && snapshot.structural === false && snapshot.attributes === 0
+      && Array.isArray(records) && records.length > 0 && records.every((record) => record && record.type === 'characterData');
+  }
+  // </mutation-summary>
+
+  function handleMutationRecords(records) {
+    const mutation = state.mutation;
+    for (const record of records) {
+      // 忽略桥自己注入的浮层（documentElement 下），否则每次浮层出现都会被当成结构变化。
+      if (record.target && record.target.nodeType === 1 && record.target.closest && record.target.closest('#__bb_takeover_host')) continue;
+      if (record.type === 'childList') {
+        const addedNodes = record.addedNodes ? Array.from(record.addedNodes) : [];
+        const removedNodes = record.removedNodes ? Array.from(record.removedNodes) : [];
+        const touchesOverlay = addedNodes.concat(removedNodes).some((node) => node && node.nodeType === 1 && (node.id === '__bb_takeover_host' || (node.closest && node.closest('#__bb_takeover_host'))));
+        if (touchesOverlay) continue;
+        if (mutation.raw.length < 200) mutation.raw.push({ type: 'childList', target: record.target, added: addedNodes.length, removed: removedNodes.length });
+      } else if (record.type === 'characterData') {
+        if (mutation.raw.length < 200) mutation.raw.push({ type: 'characterData', target: record.target });
+      } else if (record.type === 'attributes') {
+        const name = String(record.attributeName || '');
+        // VOM 自己的标记属性不算页面变化。
+        if (name.startsWith('data-bb-')) continue;
+        if (mutation.raw.length < 200) mutation.raw.push({ type: 'attribute', target: record.target, name });
+      }
+    }
+  }
+
+  function attachMutationObservers() {
+    const mutation = state.mutation;
+    const attachDoc = (doc, depth) => {
+      if (!doc || depth > 4 || mutation.docs.has(doc)) return;
+      mutation.docs.add(doc);
+      try {
+        new MutationObserver(handleMutationRecords).observe(doc, { subtree: true, childList: true, characterData: true, attributes: true });
+      } catch {
+        // 观察器不可用时退回逐次重建
+      }
+      for (const type of ['input', 'change', 'focusin', 'paste', 'drop']) {
+        try {
+          doc.addEventListener(type, () => { mutation.interactionDirty = true; }, true);
+        } catch {
+          // 某些文档不允许监听
+        }
+      }
+      // 滚动/缩放会改变元素的可见性和位置；window 与 document 都挂。
+      const win = doc.defaultView;
+      for (const target of [win, doc]) {
+        if (!target) continue;
+        for (const type of ['scroll', 'resize']) {
+          try {
+            target.addEventListener(type, () => { mutation.layoutDirty = true; }, { capture: true, passive: true });
+          } catch {
+            // 忽略
+          }
+        }
+      }
+      // 同源 iframe 的文档也要观察，否则 iframe 内部变化不会进入 mutation log。
+      let frames = [];
+      try { frames = Array.from(doc.querySelectorAll('iframe')); } catch { frames = []; }
+      for (const frame of frames) {
+        try {
+          if (frame.contentDocument) attachDoc(frame.contentDocument, depth + 1);
+        } catch {
+          // 跨源 iframe 不可访问
+        }
+      }
+    };
+    attachDoc(document, 0);
+    if (!mutation.loadBound) {
+      mutation.loadBound = true;
+      try {
+        document.addEventListener('load', (event) => {
+          if (event.target && event.target.tagName === 'IFRAME') attachMutationObservers();
+        }, true);
+      } catch {
+        // 忽略
+      }
+    }
+  }
+
+  function ensureMutationTracker() {
+    const mutation = state.mutation;
+    if (mutation.started) {
+      attachMutationObservers();
+      return;
+    }
+    mutation.started = true;
+    attachMutationObservers();
+  }
+
+  function takeMutations() {
+    const mutation = state.mutation;
+    const records = mutation.raw.slice();
+    const snapshot = summarizeMutations(records, { layout: mutation.layoutDirty, interaction: mutation.interactionDirty });
+    snapshot.records = records;
+    mutation.raw = [];
+    mutation.layoutDirty = false;
+    mutation.interactionDirty = false;
+    return snapshot;
+  }
 
   const formerPasswordFields = new WeakSet();
   const sensitiveTokens = /(^|\s)(current-password|new-password|one-time-code|cc-[a-z0-9-]+)(\s|$)/i;
@@ -115,12 +271,22 @@
   }
 
   // 稳定 ref：同一个元素在多次 observe 之间复用同一个编号
+  function rowAnchorFor(el) {
+    const row = el && el.closest ? el.closest('tr,[role="row"]') : null;
+    if (!row) return null;
+    const text = normalizeText(row.textContent || '').slice(0, 200);
+    return text ? { text, tag: row.tagName } : null;
+  }
+
   function refFor(el) {
     const existing = state.elRefs.get(el);
     if (existing && state.refs.get(existing) === el) return existing;
     state.seq += 1;
     state.refs.set(state.seq, el);
     state.elRefs.set(el, state.seq);
+    // 虚拟滚动列表会复用行节点：记下 ref 所在行的业务文本，动作前比对。
+    const anchor = rowAnchorFor(el);
+    if (anchor) state.rowAnchors.set(state.seq, anchor);
     return state.seq;
   }
 
@@ -143,10 +309,23 @@
     return `"${String(value).replace(/"/g, "'")}"`;
   }
 
-  function pageError(code, message) {
+  function pageError(code, message, data) {
     const error = new Error(message);
     error.code = code;
+    if (data && typeof data === 'object') error.data = data;
     throw error;
+  }
+
+  /** Agent 输入标记：用单调时钟（performance.now）而不是墙钟，睡眠/改系统时间不会误判人工接管。 */
+  function markAgentInput() {
+    try { document.documentElement.setAttribute('data-bb-agent-input', String(performance.now())); } catch { /* 忽略 */ }
+  }
+
+  function agentInputRecent(nowEpoch = Date.now(), nowMono = performance.now()) {
+    const raw = Number(document.documentElement.getAttribute('data-bb-agent-input') || 0);
+    if (!raw) return false;
+    if (raw > 1e11) return nowEpoch - raw < 10000; // 兼容旧版 epoch 标记
+    return nowMono >= raw && nowMono - raw < 10000;
   }
 
   function isVisible(el) {
@@ -256,7 +435,53 @@
     return '';
   }
 
-  function statusFlags(el, role) {
+  const FIELD_ROLES = new Set(['textbox', 'searchbox', 'spinbutton', 'combobox']);
+
+  /** 裸输入控件的前置静态标题（"[field: 邮箱]"）：只在没有无障碍名/placeholder 时兜底。 */
+  function boundFieldLabel(el, role, ctx) {
+    if (el.tagName === 'SELECT' || el.tagName === 'BUTTON' || el.tagName === 'A') return '';
+    if (!FIELD_ROLES.has(role) && el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return '';
+    // 自绘控件自带文字（如 role=combobox 的 div）时不要再去绑前置标题。
+    if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && normalizeText(el.textContent || '')) return '';
+    if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || el.getAttribute('aria-describedby')) return '';
+    if (el.getAttribute('placeholder') || el.getAttribute('title') || el.getAttribute('name')) return '';
+    if (typeof el.labels !== 'undefined' && el.labels && el.labels.length) return '';
+    const captionOf = (node) => {
+      if (!node || node.nodeType !== 1) return '';
+      if (ctx.consumedCaptions.has(node)) return '';
+      if (/^(INPUT|SELECT|TEXTAREA|BUTTON|A|IMG|VIDEO|CANVAS|IFRAME)$/i.test(node.tagName)) return '';
+      // 整行表单一类的容器（内含控件）不是标题，别把 options 文本绑进来。
+      if (node.querySelector && node.querySelector('input,select,textarea,button,[role="button"],[role="combobox"]')) return '';
+      const style = getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') return '';
+      const text = normalizeText(node.textContent || '');
+      if (!text || text.length > 40) return '';
+      return text;
+    };
+    let previous = el.previousElementSibling;
+    let guard = 0;
+    while (previous && guard < 3) {
+      const text = captionOf(previous);
+      if (text) {
+        ctx.consumedCaptions.add(previous);
+        return text;
+      }
+      previous = previous.previousElementSibling;
+      guard += 1;
+    }
+    // 有的表单把标题放在父级的前一个兄弟里。
+    const parent = el.parentElement;
+    if (parent && parent.previousElementSibling) {
+      const text = captionOf(parent.previousElementSibling);
+      if (text) {
+        ctx.consumedCaptions.add(parent.previousElementSibling);
+        return text;
+      }
+    }
+    return '';
+  }
+
+  function statusFlags(el, role, ctx, name) {
     const flags = [];
     if (role === 'heading') {
       const tagLevel = /^H([1-6])$/.exec(el.tagName);
@@ -296,6 +521,16 @@
         return value && value !== label ? `${value}="${label}"${marked}` : `"${label}"${marked}`;
       });
       if (choices.length) flags.push(`[options: ${choices.join(' | ')}]`);
+    }
+    // 自绘下拉不是 <select>：select 命令选不了，明确告诉调用方要点开。
+    if (role === 'combobox' && el.tagName !== 'SELECT') {
+      const open = normalizeText(el.getAttribute('aria-expanded') || '').toLowerCase() === 'true';
+      flags.push(open ? '[custom-dropdown: expanded]' : '[custom-dropdown: click to open]');
+    }
+    // 裸输入框没有名字时，把前置静态标题绑上（"[field: 邮箱]"）。
+    if (!name && ctx) {
+      const fieldLabel = boundFieldLabel(el, role, ctx);
+      if (fieldLabel) flags.push('[field: "' + fieldLabel.replace(/"/g, "'") + '"]');
     }
     if ((roleName === 'option' || roleName === 'tab' || roleName === 'listitem' || roleName === 'treeitem') && el.className) {
       if (/(^|\s)(selected|is-selected|active)(\s|$)/.test(String(el.className))) flags.push('[selected:class]');
@@ -378,14 +613,18 @@
       }
     }
     const lines = [];
+    const lineMap = [];
+    const mark = (node, depth) => { lineMap.push({ node, depth, index: lines.length - 1 }); };
     const title = normalizeText(document.title || '');
-    lines.push(title ? `- document ${quoteName(truncate(title, NAME_MAX))}` : '- document');
+    if (!options.only) {
+      lines.push(title ? `- document ${quoteName(truncate(title, NAME_MAX))}` : '- document');
+    }
     const maxDepth = Number(options.maxDepth);
     const ctx = {
       lines, withRefs, probeHover, refs: 0, nodes: options.collectNodes ? [] : null, paintSeq: 0,
       markVom: !!options.markVom, vomSeq: 0,
       maxDepth: Number.isFinite(maxDepth) && maxDepth > 0 ? maxDepth : 0, truncated: false,
-      surfaces: { iframes: 0, shadows: 0 },
+      surfaces: { iframes: 0, shadows: 0 }, consumedCaptions: new Set(),
     };
 
     // 提示注入剥离：隐藏不可交互的"视觉不可见"子树（opacity/字号/尺寸/离屏），保留可交互控件。
@@ -400,6 +639,34 @@
     if (el.getAttribute('aria-labelledby') || el.getAttribute('aria-describedby')) return true;
     return false;
   }
+  // sr-only / visually-hidden 是给读屏和 aria 用的，不能当注入剥掉。
+  function isSrOnly(el) {
+    const cls = String(el.className || '');
+    return /(^|\s)(sr-only|visually-hidden|screen-reader-text|a11y-hidden|sr_only)(\s|$)/i.test(cls);
+  }
+  function hasDirectText(el) {
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3 && node.textContent && node.textContent.trim()) return true;
+    }
+    return false;
+  }
+  function gradientClipText(style) {
+    const clip = String(style.webkitBackgroundClip || style.backgroundClip || '').toLowerCase();
+    return clip === 'text' && /gradient|url\(/i.test(String(style.backgroundImage || ''));
+  }
+  function hasInnerScroll(node) {
+    let el = node;
+    let depth = 0;
+    while (el && el.nodeType === 1 && depth < 8) {
+      const style = getComputedStyle(el);
+      const overflow = style.overflowX + style.overflowY;
+      if (/(auto|scroll)/.test(overflow)
+        && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)) return true;
+      el = el.parentElement;
+      depth += 1;
+    }
+    return false;
+  }
   function stealthHidden(el) {
     const style = getComputedStyle(el);
     const opacity = Number(style.opacity);
@@ -407,10 +674,28 @@
     const fontSize = Number.parseFloat(style.fontSize || '0');
     if (Number.isFinite(fontSize) && fontSize > 0 && fontSize <= 1.5) return true;
     const rect = el.getBoundingClientRect();
-    if (rect.width < 2 && rect.height < 2) return true;
+    // sr-only 常见做法是 1px 裁切；这类节点保留，否则会丢掉 accessible name 的文本来源。
+    if (rect.width < 2 && rect.height < 2 && !isSrOnly(el)) return true;
     const margin = 5000;
     if (rect.right < -margin || rect.bottom < -margin) return true;
     if (rect.left > (window.innerWidth || 0) + margin || rect.top > (window.innerHeight || 0) + margin) return true;
+    // text-indent 把字挪出可视区：有内层滚动容器的真实长行不算。
+    const textIndent = Number.parseFloat(String(style.textIndent || '0'));
+    if (Number.isFinite(textIndent) && textIndent <= -1000 && !hasInnerScroll(el.parentElement)) return true;
+    // 零对比度 / 完全透明文字：只对直接含文本、非 sr-only、非渐变裁剪标题的节点做，
+    // 避免把每个容器都拉去做取色。取色复用 AX 探针的 canvas 归一化，天然覆盖 oklch/color-mix。
+    if (hasDirectText(el) && !isSrOnly(el) && !gradientClipText(style)) {
+      let foreground = null;
+      try { foreground = parseCssColor(style.color); } catch { foreground = null; }
+      if (foreground && foreground.a < 0.05) return true;
+      if (foreground) {
+        try {
+          const background = effectiveBackgroundColor(el);
+          const solid = compositeColor(foreground, background);
+          if (contrastRatio(solid, background) <= 1.05) return true;
+        } catch { /* 取色失败时保留，宁可多留 */ }
+      }
+    }
     return false;
   }
   function walk(el, depth) {
@@ -425,6 +710,7 @@
         const cols = gridHeaderCells(el).map(function (cell) { return normalizeText(cell.textContent || ''); }).filter(Boolean);
         const gridLine = '  '.repeat(depth) + '- grid' + (cols.length ? ' ' + quoteName(truncate(cols.join(' | '), NAME_MAX)) : '');
         lines.push(gridLine);
+        mark(el, depth);
         const entries = gridRowEntries(el).slice(0, 200);
         const small = entries.length <= 8 && cols.length <= 8;
         if (small) {
@@ -439,24 +725,76 @@
                 line += ' [@e' + refId + ']';
               }
               lines.push(line);
+              mark(cell, depth + 1);
             }
           }
         }
         // 只读大表折叠：超过 40 行且行内没有可交互元素时，只保留前 40 行并标注剩余数量。
         const readOnlyRows = entries.length > 40 && !entries.some((entry) => entry.row.querySelector && entry.row.querySelector('a,button,input,select,textarea,[role="button"],[role="link"],[tabindex]'));
+        const rowInteractive = (row) => !!(row && row.querySelector && row.querySelector('a,button,input,select,textarea,[role="button"],[role="link"],[tabindex],[contenteditable="true"]'));
+        const rowText = (entry) => entry.cells.map(function (cell) { return normalizeText(cell.textContent || ''); }).filter(Boolean).join(' | ');
         let emittedRows = 0;
-        for (const entry of entries) {
-          const text = entry.cells.map(function (cell) { return normalizeText(cell.textContent || ''); }).filter(Boolean).join(' | ');
-          if (!text) continue;
-          if (readOnlyRows && emittedRows >= 40) break;
-          emittedRows += 1;
-          let line = '  '.repeat(depth + 1) + '- row ' + quoteName(truncate(text, NAME_MAX));
-          if (ctx.withRefs) {
-            const refId = refFor(entry.row);
-            ctx.refs += 1;
-            line += ' [@e' + refId + ']';
+        if (entries.length > 12) {
+          // 连续 ≥3 条纯只读行压成一行管道分隔文本；可交互行保持逐行 + ref。
+          let index = 0;
+          while (index < entries.length) {
+            const text = rowText(entries[index]);
+            if (!text) { index += 1; continue; }
+            if (rowInteractive(entries[index].row)) {
+              let line = '  '.repeat(depth + 1) + '- row ' + quoteName(truncate(text, NAME_MAX));
+              if (ctx.withRefs) {
+                const refId = refFor(entries[index].row);
+                ctx.refs += 1;
+                line += ' [@e' + refId + ']';
+              }
+              lines.push(line);
+              mark(entries[index].row, depth + 1);
+              emittedRows += 1;
+              index += 1;
+              continue;
+            }
+            let end = index;
+            while (end < entries.length && rowText(entries[end]) && !rowInteractive(entries[end].row)) end += 1;
+            const run = end - index;
+            if (run >= 3) {
+              const compact = entries.slice(index, end).map(rowText).filter(Boolean).join(' | ');
+              lines.push('  '.repeat(depth + 1) + '- rows ' + (index + 1) + '–' + end + '（只读）: ' + quoteName(truncate(compact, NAME_MAX * 2)));
+              mark(el, depth + 1);
+              emittedRows += run;
+              index = end;
+              continue;
+            }
+            // 短 run 仍逐行输出，保留行 ref。
+            for (let cursor = index; cursor < end; cursor += 1) {
+              const singleText = rowText(entries[cursor]);
+              if (!singleText) continue;
+              let line = '  '.repeat(depth + 1) + '- row ' + quoteName(truncate(singleText, NAME_MAX));
+              if (ctx.withRefs) {
+                const refId = refFor(entries[cursor].row);
+                ctx.refs += 1;
+                line += ' [@e' + refId + ']';
+              }
+              lines.push(line);
+              mark(entries[cursor].row, depth + 1);
+              emittedRows += 1;
+            }
+            index = end;
           }
-          lines.push(line);
+        } else {
+          for (const entry of entries) {
+            const text = rowText(entry);
+            if (!text) continue;
+            if (readOnlyRows && emittedRows >= 40) break;
+            emittedRows += 1;
+            let line = '  '.repeat(depth + 1) + '- row ' + quoteName(truncate(text, NAME_MAX));
+            if (ctx.withRefs) {
+              const refId = refFor(entry.row);
+              ctx.refs += 1;
+              line += ' [@e' + refId + ']';
+            }
+            lines.push(line);
+            mark(entry.row, depth + 1);
+          }
         }
         if (readOnlyRows && emittedRows < entries.length) {
           lines.push('  '.repeat(depth + 1) + '- …（只读表格，其余 ' + (entries.length - emittedRows) + ' 行已折叠）');
@@ -477,6 +815,7 @@
               line += ' [@e' + refId + ']';
             }
             lines.push(line);
+            mark(el, depth);
           }
           return;
         }
@@ -485,6 +824,7 @@
       let emitted = false;
       if (role && SEMANTIC_ROLES.has(role)) {
         lines.push(formatNode(el, role, depth, ctx));
+        mark(el, depth);
         emitted = true;
         if (tag === 'IFRAME') {
         // 同源 iframe：继续遍历内部文档；跨源时只能保留占位。
@@ -513,6 +853,7 @@
           ctx.refs += 1;
           line += ' [@e' + refId + ']';
           lines.push(line);
+          mark(row, depth + 1);
         }
       }
       const childDepth = emitted ? depth + 1 : depth;
@@ -526,12 +867,16 @@
       }
     }
 
+    if (options.only) {
+      walk(options.only.node, options.only.depth);
+      return { lines, refs: ctx.refs, nodes: ctx.nodes || [], lineMap };
+    }
     if (document.body) {
       for (const child of document.body.children) walk(child, 1);
     }
     if (ctx.truncated) lines.push('- …（已按 --max-depth ' + ctx.maxDepth + ' 截断更深层）');
     if (options.debugSurfaces) lines.push('- surfaces iframes=' + ctx.surfaces.iframes + ' open-shadow=' + ctx.surfaces.shadows);
-    return { lines, refs: ctx.refs, nodes: ctx.nodes || [] };
+    return { lines, refs: ctx.refs, nodes: ctx.nodes || [], lineMap };
   }
 
   /** VOM：被遮挡时可读的遮挡者摘要（只用于诊断，不参与动作）。 */
@@ -589,6 +934,119 @@
     if (hit.contains && hit.contains(el)) return { state: 'ancestor', by: null };
     if (hit.shadowRoot && hit.shadowRoot.contains && hit.shadowRoot.contains(el)) return { state: 'ancestor', by: null };
     return { state: 'blocked', by: nodeBrief(hit), byOwnOverlay: isOwnOverlayNode(hit) };
+  }
+
+  /**
+   * 视觉候选扫描：把 canvas / 图片 / 自绘区域列成可引用的目标。
+   * 先有"区域"这个对象，再谈坐标；坐标永远相对某个候选，
+   * 命中校验也才有"是不是它"可判。只报告几何与类型，不判断内容是什么。
+   */
+  function visualScan() {
+    const out = [];
+    const seen = new Set();
+    const state = getVisualState();
+    state.candidates.clear();
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    const push = (el, kind) => {
+      if (!el || seen.has(el) || out.length >= 40) return;
+      if (el === document.documentElement || el === document.body) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 24 || rect.height < 24) return;
+      if (rect.bottom <= 0 || rect.right <= 0 || rect.top >= vh || rect.left >= vw) return;
+      const style = getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none') return;
+      if (Number(style.opacity) === 0) return;
+      // 只保留"真的能被点到"的候选：同一份 DOM 里常有多份模板/隐藏副本，
+      // 它们矩形看着正常，但该点上最上层的元素不是它，按它算坐标会打到空气。
+      const cx = Math.min(vw - 1, Math.max(0, rect.left + rect.width / 2));
+      const cy = Math.min(vh - 1, Math.max(0, rect.top + rect.height / 2));
+      let top = null;
+      try {
+        top = document.elementFromPoint(cx, cy);
+      } catch {
+        top = null;
+      }
+      if (!top) return;
+      const hitSelf = top === el
+        || (el.contains && el.contains(top))
+        || (top.contains && top.contains(el));
+      if (!hitSelf) return;
+      seen.add(el);
+      const index = out.length + 1;
+      state.candidates.set(index, el);
+      out.push({
+        index,
+        kind,
+        tag: el.tagName.toLowerCase(),
+        id: String(el.id || ''),
+        cls: String(el.getAttribute('class') || '').slice(0, 60),
+        rect: {
+          x: Math.round(rect.x),
+          y: Math.round(rect.y),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        },
+      });
+    };
+    for (const el of document.querySelectorAll('canvas')) push(el, 'canvas');
+    for (const el of document.querySelectorAll('img, [role=img]')) push(el, 'image');
+    for (const el of document.querySelectorAll('svg')) push(el, 'vector');
+    // 自绘区域：有背景图、自身几乎没有文本、面积够大（canvas 类控件的常见形态）
+    for (const el of document.querySelectorAll('div,section,li')) {
+      if (out.length >= 40) break;
+      if (seen.has(el)) continue;
+      const style = getComputedStyle(el);
+      if (!style.backgroundImage || style.backgroundImage === 'none') continue;
+      if ((el.textContent || '').trim().length > 24) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 120 || rect.height < 80) continue;
+      push(el, 'region');
+    }
+    return { candidates: out, viewport: { width: vw, height: vh, scrollX: Math.round(window.scrollX), scrollY: Math.round(window.scrollY) } };
+  }
+
+  /**
+   * 视觉坐标命中校验：这个页面坐标下面到底是什么？
+   * 用于"看图派发动作"之前——坐标是模型给的，必须先确认落点不是浮层/遮罩/空白。
+   * 给了 index 时额外判断"落点是不是那个视觉候选"（自身/后代/祖先都算命中）。
+   */
+  function hitAt(args) {
+    const x = Number(args && args.x);
+    const y = Number(args && args.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return pageError('E_BAD_ARG', 'hitAt 需要 x/y');
+    const el = document.elementFromPoint(x, y);
+    if (!el) return { hit: false, reason: 'none' };
+    const style = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    let inert = false;
+    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+      if (node.inert) { inert = true; break; }
+    }
+    const expectedIndex = Number(args && args.index);
+    let matches = null;
+    if (Number.isFinite(expectedIndex)) {
+      const target = getVisualState().candidates.get(expectedIndex);
+      matches = Boolean(target)
+        && (target === el || (target.contains && target.contains(el)) || (el.contains && el.contains(target)));
+    }
+    return {
+      hit: true,
+      x,
+      y,
+      tag: el.tagName.toLowerCase(),
+      id: String(el.id || ''),
+      cls: String(el.className || '').slice(0, 80),
+      rect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+      pointerEvents: style.pointerEvents,
+      inert,
+      ownOverlay: isOwnOverlayNode(el),
+      coversViewport: vw > 0 && vh > 0 && rect.width * rect.height > vw * vh * 0.8,
+      anchored: el === document.documentElement || el === document.body,
+      matches,
+    };
   }
 
   /** 扩展自己的浮层（__bb_*）不算页面遮挡：动作前会临时隐藏，脚本动作也应能穿透。 */
@@ -650,7 +1108,7 @@
 
   /**
    * 动作前统一可操作性判定：可见、可用、可编辑、能接收指针事件。
-   * 与 Playwright/BrowserSkill 的 actionability 对齐；--force 只绕过遮挡类检查。
+   * --force 只绕过遮挡类检查，不放宽"存在/可见/可用"这些硬条件。
    */
   function actionFacts(el, args, kind) {
     const rect = el.getBoundingClientRect();
@@ -696,6 +1154,7 @@
    * waitTimeoutMs: 0 关闭等待与稳定采样，退回单次判定。
    */
   async function ensureActionable(el, args, kind) {
+    assertRowAnchor(el, args);
     const rawWait = args.waitTimeoutMs;
     const waitMs = rawWait === 0
       ? 0
@@ -971,7 +1430,7 @@
     if (role === 'link' && el.href && /^https?:/i.test(el.href)) {
       line += ' → ' + truncate(el.href.replace(/^https?:\/\//i, ''), 90);
     }
-    line += statusFlags(el, role)
+    line += statusFlags(el, role, ctx, name)
       .map((flag) => ` ${flag}`)
       .join('');
     if (ctx.probeHover && interactive) {
@@ -1017,15 +1476,99 @@
     return null;
   }
 
+  /** 用 mutation log 只重渲染被改文本的最近祖先子树；失败返回 null（调用方回退整页重建）。 */
+  function incrementalObservation(previous, records) {
+    if (!previous || !previous.text || !Array.isArray(previous.lineMap) || !previous.lineMap.length) return null;
+    const lines = previous.text.split('\n');
+    const entryByNode = new Map();
+    for (const entry of previous.lineMap) {
+      if (entry && entry.node && !entryByNode.has(entry.node)) entryByNode.set(entry.node, entry);
+    }
+    const jobs = new Map();
+    for (const record of records) {
+      if (!record || record.type !== 'characterData') return null;
+      let node = record.target && record.target.nodeType === 3 ? record.target.parentElement : record.target;
+      let hit = null;
+      while (node) {
+        if (entryByNode.has(node)) { hit = node; break; }
+        node = node.parentElement;
+      }
+      if (!hit) return null;
+      jobs.set(hit, entryByNode.get(hit));
+    }
+    if (!jobs.size) return null;
+    const entries = [...jobs.entries()].map(([node, entry]) => ({ node, ...entry }));
+    // 同一子树里的多个改动只重渲染最外层祖先。
+    const top = entries.filter((job) => !entries.some((other) => other !== job && other.node.contains(job.node)));
+    const sortedMap = previous.lineMap.slice().sort((a, b) => a.index - b.index);
+    for (const job of top.sort((a, b) => b.index - a.index)) {
+      let end = lines.length;
+      for (const entry of sortedMap) {
+        if (entry.index > job.index && entry.depth <= job.depth) { end = entry.index; break; }
+      }
+      if (end <= job.index) return null;
+      const sub = buildObservation({ withRefs: true, only: { node: job.node, depth: job.depth } });
+      if (!sub.lines.length) return null;
+      lines.splice(job.index, end - job.index, ...sub.lines);
+    }
+    return lines.join('\n');
+  }
+
   function observe(args) {
+    ensureMutationTracker();
+    const mutations = takeMutations();
+    const url = location.href;
+    const previous = state.lastObservation;
+    const wantsFull = args.force === true || args.delta === true || args.baseline !== undefined;
+    const plain = !args.probeHover && args.maxDepth == null && !args.debugSurfaces && !args.vom && !args.markVom && !args.facts;
+    // 无 mutation、无输入交互且参数与上次一致：直接返回 unchanged，不重建 VOM。
+    if (!wantsFull && plain && previous && previous.plain === true && previous.url === url
+      && shouldFastUnchanged(mutations)) {
+      return {
+        url,
+        title: document.title || '',
+        unchanged: true,
+        refs: previous.refs || 0,
+        nodes: [],
+        blocking: detectBlockingLayer(),
+        revision: currentRevision(),
+        mutations,
+      };
+    }
+    // mutation-log 快补丁：只有文本节点变化时，只重渲染最近祖先子树。
+    if (args.delta === true && args.force !== true && plain && previous && previous.plain === true
+      && previous.url === url && canIncremental(mutations, mutations.records)) {
+      const patched = incrementalObservation(previous, mutations.records);
+      if (patched != null) {
+        const refs = (patched.match(/\[@e\d+\]/g) || []).length;
+        const revision = currentRevision();
+        state.lastObservation = { url, text: patched, refs, revision, plain: true, lineMap: null };
+        return {
+          url,
+          title: document.title || '',
+          observation: patched,
+          refs,
+          nodes: [],
+          blocking: detectBlockingLayer(),
+          revision,
+          mutations,
+          incremental: true,
+        };
+      }
+    }
     const built = buildObservation({ withRefs: true, probeHover: !!args.probeHover, maxDepth: args.maxDepth, debugSurfaces: !!args.debugSurfaces, collectNodes: !!args.vom, markVom: !!args.markVom });
+    const text = built.lines.join('\n');
+    const unchanged = !wantsFull && previous && previous.url === url && previous.text === text;
+    state.lastObservation = { url, text, refs: built.refs, revision: currentRevision(), plain, lineMap: built.lineMap };
     return {
-      url: location.href,
+      url,
       title: document.title || '',
-      observation: built.lines.join('\n'),
+      ...(unchanged ? { unchanged: true } : { observation: text }),
       refs: built.refs,
       nodes: built.nodes || [],
       blocking: detectBlockingLayer(),
+      revision: currentRevision(),
+      mutations,
     };
   }
 
@@ -1037,6 +1580,7 @@
   function resetRefs() {
     state.refs.clear();
     state.elRefs = new WeakMap();
+    state.rowAnchors.clear();
     state.seq = 0;
     return { ok: true };
   }
@@ -1107,7 +1651,7 @@
     const el = resolveElement(args);
     scrollIntoView(el);
     await ensureActionable(el, args, 'click');
-    try { document.documentElement.setAttribute('data-bb-agent-input', String(Date.now())); } catch { /* 忽略 */ }
+    markAgentInput();
     try {
       if (typeof el.focus === 'function') el.focus({ preventScroll: true });
     } catch {
@@ -1138,7 +1682,7 @@
     const el = resolveElement(args);
     scrollIntoView(el);
     await ensureActionable(el, args, 'hover');
-    try { document.documentElement.setAttribute('data-bb-agent-input', String(Date.now())); } catch { /* 忽略 */ }
+    markAgentInput();
     const common = { bubbles: true, cancelable: true, view: window };
     el.dispatchEvent(new MouseEvent('pointerover', common));
     el.dispatchEvent(new MouseEvent('mouseover', common));
@@ -1282,12 +1826,30 @@
     };
     const lower = main.toLowerCase();
     const key = aliases[lower] || main;
+    // US 布局标点的物理 code：快捷键常检查 event.code，不能把 '/' 直接当 code。
+    const punctuation = {
+      '`': 'Backquote', '~': 'Backquote',
+      '-': 'Minus', '_': 'Minus',
+      '=': 'Equal', '+': 'Equal',
+      '[': 'BracketLeft', '{': 'BracketLeft',
+      ']': 'BracketRight', '}': 'BracketRight',
+      '\\': 'Backslash', '|': 'Backslash',
+      ';': 'Semicolon', ':': 'Semicolon',
+      "'": 'Quote', '"': 'Quote',
+      ',': 'Comma', '<': 'Comma',
+      '.': 'Period', '>': 'Period',
+      '/': 'Slash', '?': 'Slash',
+    };
+    const shiftedPunctuation = '~_+{}|:"<>?';
     let code = '';
     if (/^[a-z]$/i.test(key)) code = `Key${key.toUpperCase()}`;
     else if (/^\d$/.test(key)) code = `Digit${key}`;
     else if (key === ' ') code = 'Space';
     else if (/^F([1-9]|1[0-2])$/i.test(key)) code = key.toUpperCase();
-    else code = key;
+    else if (punctuation[key]) {
+      code = punctuation[key];
+      if (shiftedPunctuation.includes(key)) modifiers.shiftKey = true;
+    } else code = key;
     return { key, code, modifiers };
   }
 
@@ -1345,7 +1907,7 @@
       try { if (typeof el.select === 'function') el.select(); } catch { /* 忽略 */ }
       return { ok: true, textLike: true, occluded: true, reason: 'occluded' };
     }
-    try { document.documentElement.setAttribute('data-bb-agent-input', String(Date.now())); } catch { /* 忽略 */ }
+    markAgentInput();
     try { el.focus({ preventScroll: false }); } catch { /* 忽略 */ }
     try { if (typeof el.select === 'function') el.select(); } catch { /* 忽略 */ }
     return { ok: true, textLike: true, tag: tag, type: type, hadValue: String(el.value == null ? '' : el.value).length > 0 };
@@ -1359,9 +1921,26 @@
     return { ok: true, sensitive: sensitive, value: sensitive ? null : actual, formatted: actual !== expected, matches: actual === expected };
   }
 
+  function assertRowAnchor(el, args) {
+    if (!args || typeof args.ref !== 'string') return;
+    const match = /^@?e(\d+)$/.exec(args.ref);
+    if (!match) return;
+    const anchor = state.rowAnchors.get(Number(match[1]));
+    if (!anchor) return;
+    const current = rowAnchorFor(el);
+    if (!current || current.text !== anchor.text) {
+      pageError('E_TARGET_MISMATCH', '目标所在行已被重新渲染（虚拟列表行回收），ref 不再指向原来那一行；请重新 observe', {
+        reason: 'virtual_row_recycled',
+        expected: anchor.text.slice(0, 120),
+        actual: current ? current.text.slice(0, 120) : null,
+      });
+    }
+  }
+
   function actionability(args) {
     const el = resolveElement(args);
     if (!el) pageError('E_NOT_FOUND', '页面没有可操作元素');
+    assertRowAnchor(el, args);
     const facts = actionFacts(el, args, 'actionable');
     return {
       ok: facts.ok,
@@ -1374,27 +1953,46 @@
   async function actionSelect(args) {
     const el = resolveElement(args);
     if (el.tagName !== 'SELECT') pageError('E_BAD_ARG', 'select 只支持 <select> 元素');
-    if (el.disabled === true) pageError('E_BAD_ARG', '控件已禁用，无法选择');
     if (typeof args.value !== 'string') pageError('E_BAD_ARG', 'select 需要字符串 value');
-    scrollIntoView(el);
-    await ensureActionable(el, args, 'select');
+    if (el.disabled === true) {
+      pageError('E_BAD_ARG', '控件已禁用，无法选择', { phase: 'precondition', dispatched: false, available: [] });
+    }
     const wanted = args.value;
     const options = Array.from(el.options);
+    const available = options.slice(0, 12).map((item) => normalizeText(item.textContent));
+    // 先校验再滚动/聚焦：选不到目标时页面没被改动，调用方可以安全重试而不用 resolve 账本。
     let chosen = options.find((item) => item.value === wanted);
     if (!chosen) {
-      const byLabel = options.filter((item) => normalizeText(item.textContent) === wanted);
+      let byLabel = options.filter((item) => normalizeText(item.textContent) === wanted);
+      if (!byLabel.length) {
+        const lower = wanted.toLowerCase();
+        byLabel = options.filter((item) => normalizeText(item.textContent).toLowerCase() === lower);
+      }
+      if (!byLabel.length) {
+        byLabel = options.filter((item) => normalizeText(item.getAttribute('label') || '') === wanted
+          || normalizeText(item.getAttribute('label') || '').toLowerCase() === wanted.toLowerCase());
+      }
       if (byLabel.length > 1) {
-        pageError('E_OPTION_AMBIGUOUS', `“${wanted}” 匹配 ${byLabel.length} 个选项，请改用 value：` + byLabel.slice(0, 12).map((item) => item.value).join(' / '));
+        pageError('E_OPTION_AMBIGUOUS', `“${wanted}” 匹配 ${byLabel.length} 个选项，请改用 value：` + byLabel.slice(0, 12).map((item) => item.value).join(' / '), {
+          phase: 'precondition', dispatched: false, count: byLabel.length, available, values: byLabel.slice(0, 12).map((item) => item.value),
+        });
       }
       if (byLabel.length === 0) {
-        pageError('E_OPTION_NOT_FOUND', `找不到“${wanted}”；可选：` + options.slice(0, 12).map((item) => normalizeText(item.textContent)).join(' / '));
+        pageError('E_OPTION_NOT_FOUND', `找不到“${wanted}”；可选：` + available.join(' / '), { phase: 'precondition', dispatched: false, available });
       }
       chosen = byLabel[0];
     }
+    scrollIntoView(el);
+    await ensureActionable(el, args, 'select');
     el.value = chosen.value;
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
-    return { ok: true, value: chosen.value, label: normalizeText(chosen.textContent) };
+    return {
+      ok: true,
+      value: chosen.value,
+      label: normalizeText(chosen.textContent),
+      selected: Array.from(el.selectedOptions || []).map((item) => ({ value: item.value, label: normalizeText(item.textContent) })),
+    };
   }
 
   function actionFocus(args) {
@@ -1962,7 +2560,8 @@
     }
     const warnings = [];
     if (!headerRows.length) warnings.push('未找到表头，列名用 cN 代替');
-    return {
+    const declared = declaredRowCount(table, 'table');
+    return withCoverage({
       kind: 'table',
       columns: columns,
       rows: rows,
@@ -1972,7 +2571,7 @@
       complete: !truncated && warnings.length === 0,
       truncated: truncated,
       warnings: warnings,
-    };
+    }, declared == null ? null : Math.max(0, declared - headerRows.length));
   }
 
   function listExtract(root, maxRows) {
@@ -1993,7 +2592,7 @@
       if (link) row.href = link.href;
       rows.push(row);
     }
-    return {
+    return withCoverage({
       kind: 'list',
       columns: [{ key: 'index', label: '#' }, { key: 'text', label: 'text' }],
       rows: rows,
@@ -2002,7 +2601,7 @@
       complete: !truncated,
       truncated: truncated,
       warnings: [],
-    };
+    }, declaredRowCount(root, 'list'));
   }
 
   function listExtractFields(root, args) {
@@ -2039,7 +2638,7 @@
       }
       rows.push(row);
     }
-    return { kind: 'list', columns: columns, rows: rows, rowCount: rows.length, totalRows: items.length, complete: !truncated, truncated: truncated, warnings: [] };
+    return withCoverage({ kind: 'list', columns: columns, rows: rows, rowCount: rows.length, totalRows: items.length, complete: !truncated, truncated: truncated, warnings: [] }, declaredRowCount(root, 'list'));
   }
 
   function isGridNode(node) {
@@ -2118,7 +2717,7 @@
       orderedCols.forEach(function (colId, i) { out['c' + (i + 1)] = bucket[colId] === undefined ? '' : bucket[colId]; });
       outRows.push(out);
     }
-    return {
+    return withCoverage({
       kind: 'table',
       columns: columns,
       rows: outRows,
@@ -2128,7 +2727,7 @@
       complete: !truncated && headerCells.length > 0,
       truncated: truncated,
       warnings: headerCells.length ? [] : ['未找到列头，列名用 cN 代替'],
-    };
+    }, declaredRowCount(node, 'grid'));
   }
 
   function discoverTargets() {
@@ -2171,12 +2770,63 @@
     return Math.min(Math.max(Number.isFinite(rawMax) && rawMax > 0 ? Math.round(rawMax) : 500, 1), 5000);
   }
 
+  /** 读取页面自己声明的行数（ARIA），没有声明就返回 null——不猜。 */
+  function declaredRowCount(root, kind) {
+    if (!root || !root.getAttribute) return null;
+    const read = (value) => {
+      if (value == null || value === '') return null;
+      const n = Number(value);
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    };
+    const direct = read(root.getAttribute('aria-rowcount'));
+    if (direct != null) return direct;
+    if (kind === 'list') {
+      const item = root.querySelector ? root.querySelector('[aria-setsize]') : null;
+      const size = item ? read(item.getAttribute('aria-setsize')) : null;
+      if (size != null) return size;
+    }
+    const rowgroup = root.querySelector ? root.querySelector('[aria-rowcount]') : null;
+    return rowgroup ? read(rowgroup.getAttribute('aria-rowcount')) : null;
+  }
+
+  /**
+   * 给提取结果补一层覆盖度说明：本次只覆盖已加载的 DOM，
+   * 声明行数取自页面 ARIA，停止原因区分"到末尾 / 行数上限 / 字节上限"。
+   * datasetComplete 只有在"页面有声明且确实读满"时才给 complete，其余一律 unknown/incomplete。
+   */
+  function withCoverage(result, declared) {
+    if (!result || typeof result !== 'object') return result;
+    const returned = Array.isArray(result.rows) ? result.rows.length : 0;
+    const declaredRows = Number.isFinite(declared) ? declared : null;
+    const stopReason = result.stopReason || (result.truncated === true ? 'max-rows' : 'end');
+    let datasetComplete = 'unknown';
+    if (result.truncated === true) datasetComplete = 'incomplete';
+    else if (declaredRows != null && returned >= declaredRows) datasetComplete = 'complete';
+    result.declaredRows = declaredRows;
+    result.coverage = {
+      scope: 'loaded-dom',
+      returned: returned,
+      declared: declaredRows,
+      stopReason: stopReason,
+      datasetComplete: datasetComplete,
+    };
+    return result;
+  }
+
+  /** 给读取类结果标注当前 DOM 代数，调用方可据此在后续动作里要求同一代。 */
+  function withRevision(result) {
+    if (!result || typeof result !== 'object') return result;
+    if (result.revision == null) result.revision = currentRevision();
+    return result;
+  }
+
   function capExtractBytes(result, maxBytes) {
     const budget = Number(maxBytes);
     if (!Number.isFinite(budget) || budget <= 0) return result;
     if (JSON.stringify(result).length <= budget) return result;
     result.truncated = true;
     result.complete = false;
+    result.stopReason = 'max-bytes';
     if (Array.isArray(result.rows)) {
       while (result.rows.length > 0 && JSON.stringify(result).length > budget) result.rows.pop();
     }
@@ -2317,7 +2967,6 @@
     const holdMs = Math.min(Math.max(Number(args.holdMs) || 0, 0), 5000);
     const durationMs = Math.min(Math.max(Number(args.durationMs) || 0, 0), 5000);
     const hoverEl = toEl || eventTargetAt(b.x, b.y, fromEl);
-    if (holdMs > 0) await sleepMs(holdMs);
 
     const draggable = fromEl.draggable === true || fromEl.getAttribute('draggable') === 'true';
     if (draggable && toEl) return nativeDragSequence(fromEl, toEl, a, b, mods);
@@ -2339,6 +2988,10 @@
       if (durationMs > 0) await sleepMs(durationMs);
       return { ok: true, mode: mode, points: steps };
     }
+
+    // 长按语义：按下之后保持按住，再开始移动。之前把 sleep 放在 pointerdown 之前，
+    // 实际效果只是"先等一会儿再按下"，控件收不到任何长按时长。
+    if (holdMs > 0) await sleepMs(holdMs);
 
     for (let i = 1; i <= steps; i += 1) {
       const t = i / steps;
@@ -2496,6 +3149,19 @@
   async function handle(name, args) {
     const input = args && typeof args === 'object' ? args : {};
     try {
+      // 观测代数守卫：调用方给了 expectRevision 就要求动作与观测在同一代 DOM 上发生。
+      if (input.expectRevision != null) {
+        const expected = Number(input.expectRevision);
+        const current = currentRevision();
+        if (!Number.isFinite(expected) || current !== expected) {
+          pageError('E_OBSERVATION_CHANGED', '页面在观测后已变化（观测代数 ' + (Number.isFinite(expected) ? expected : '无效')
+            + '，当前 ' + current + '）；重新 observe 后再操作', {
+            expected: Number.isFinite(expected) ? expected : null,
+            current,
+            observed_changes: { revision_delta: Number.isFinite(expected) ? current - expected : null },
+          });
+        }
+      }
       switch (name) {
         case 'observe':
           return ok(observe(input));
@@ -2530,9 +3196,9 @@
         case 'auto-scroll':
           return ok(await actionAutoScroll());
         case 'read':
-          return ok(actionRead(input));
+          return ok(withRevision(actionRead(input)));
         case 'extract':
-          return ok(capExtractBytes(actionExtract(input), input.maxBytes));
+          return ok(withRevision(capExtractBytes(actionExtract(input), input.maxBytes)));
         case 'drag':
           return ok(await actionDrag(input));
         case 'wheel':
@@ -2571,6 +3237,10 @@
           return ok(frameMeta());
         case 'visual-refs':
           return ok(visualRefs());
+        case 'visual-scan':
+          return ok(visualScan());
+        case 'hit-at':
+          return ok(hitAt(input));
         case 'click-point':
           return ok(await clickPoint(input));
         case 'upload-probe':
@@ -2582,7 +3252,7 @@
       }
     } catch (error) {
       if (error && typeof error.code === 'string' && error.code.startsWith('E_')) {
-        return { ok: false, error: { code: error.code, message: error.message } };
+        return { ok: false, error: { code: error.code, message: error.message, ...(error.data && typeof error.data === 'object' ? { data: error.data } : {}) } };
       }
       return {
         ok: false,
@@ -2602,8 +3272,7 @@
         if (!event || event.isTrusted !== true) return;
         const now = Date.now();
         // 与 content/human-watch.js 共用同一抑制标记：Agent 的可信输入不应被当成人工接管。
-        const marker = Number(document.documentElement.getAttribute('data-bb-agent-input') || 0);
-        if (marker && now - marker < 10000) return;
+        if (agentInputRecent(now)) return;
         if (now - lastAt < 500) return;
         lastAt = now;
         send('bb.human.input');
@@ -2618,6 +3287,8 @@
   globalThis[KEY] = {    version: LIB_VERSION,
     handle,
     isVisible,
+    hitAt,
+    visualScan,
     resetRefs,
   };
 })();

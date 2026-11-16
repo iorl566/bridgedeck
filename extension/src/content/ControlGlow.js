@@ -14,14 +14,14 @@ export function ControlGlow() {
     null,
     React.createElement('style', null, `
       @keyframes bb-breathe {
-        0%, 100% { opacity: 0; }
+        0%, 100% { opacity: .15; }
         50% { opacity: 1; }
       }
       .bb-control-glow-pulse {
-        animation: bb-breathe 3s ease-in-out 2;
+        animation: bb-breathe 3s ease-in-out infinite;
       }
       @media (prefers-reduced-motion: reduce) {
-        .bb-control-glow-pulse { animation: none; }
+        .bb-control-glow-pulse { animation: none; opacity: .35; }
       }
     `),
     React.createElement(

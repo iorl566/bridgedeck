@@ -1,14 +1,21 @@
 // injected/main-console.js
 // 在页面主世界（MAIN world）拦截 console，把条目缓冲到 globalThis.__BB_MAIN_LOG__。
-// 只在主文档、document_start 注入；导航后随文档重建，缓冲自然清空。
-// 隔离世界（ISOLATED）读不到主世界的变量，所以 console 命令用 world:'MAIN' 注入读取。
+//
+// 重要：这份脚本不再由 manifest 静态注册（那会让扩展在用户浏览的每个页面
+// 都留下被 patch 的 console/fetch/XHR，被像素扫描、rebrowser 一类检测器直接
+// 识别为自动化）。现在只由 src/page-hooks.js 在真正需要时按需注入，命令结束
+// 或页面卸载后由 injected/main-console-restore.js 还原原生函数。
+//
+// 还原契约：patch 期间把还原函数挂到 globalThis.__BB_RESTORE_HOOKS__，
+// restore 脚本调用它即可回到原生实现（幂等，重复调用安全）。
 (() => {
   'use strict';
-  if (globalThis.__BB_MAIN_LOG__ && typeof globalThis.__BB_MAIN_LOG__.push === 'function') return;
+  if (globalThis.__BB_RESTORE_HOOKS__) return; // 已安装
 
   const MAX_ENTRIES = 2000;
   const MAX_TEXT = 2000;
   const entries = [];
+  const restorers = [];
 
   function stringify(value) {
     if (value === null) return 'null';
@@ -54,7 +61,7 @@
 
   for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
     const original = console[level];
-    console[level] = function patchedConsole(...args) {
+    const patched = function patchedConsole(...args) {
       try {
         push(level, args);
       } catch {
@@ -62,10 +69,13 @@
       }
       return typeof original === 'function' ? original.apply(console, args) : undefined;
     };
+    console[level] = patched;
+    restorers.push(() => {
+      if (console[level] === patched) console[level] = original;
+    });
   }
 
-  // 未捕获异常也进同一缓冲（「网站调试」的「异常」来源）
-  globalThis.addEventListener('error', (event) => {
+  const onError = (event) => {
     try {
       const message = event.message || (event.error && event.error.message) || 'Uncaught error';
       const where = event.filename ? ' (' + event.filename + ':' + event.lineno + ')' : '';
@@ -73,55 +83,80 @@
     } catch {
       // 忽略
     }
-  }, true);
-  globalThis.addEventListener('unhandledrejection', (event) => {
+  };
+  const onRejection = (event) => {
     try {
       push('error', ['Unhandled rejection: ' + stringify(event.reason)]);
     } catch {
       // 忽略
     }
+  };
+  globalThis.addEventListener('error', onError, true);
+  globalThis.addEventListener('unhandledrejection', onRejection);
+  restorers.push(() => {
+    globalThis.removeEventListener('error', onError, true);
+    globalThis.removeEventListener('unhandledrejection', onRejection);
   });
 
-  // 命令归因：页面发出的同源 fetch/XHR 带上 x-bridge-command 头，供 webRequest 精确关联。
-  if (!globalThis.__BB_COMMAND_TAG__) {
-    globalThis.__BB_COMMAND_TAG__ = true;
-    const commandId = () => {
-      try { return document.documentElement.getAttribute('data-bb-command-id') || ''; } catch { return ''; }
+  // 命令归因：页面发出的同源 fetch/XHR 带上 x-bridge-command 头，供 CDP 的
+  // 请求头精确关联。仅在钩子生效期间存在。
+  const originalFetch = globalThis.fetch;
+  let originalXhrOpen = null;
+  let originalXhrSend = null;
+  if (typeof originalFetch === 'function') {
+    const taggedFetch = function taggedFetch(input, init) {
+      const id = commandId();
+      if (!id) return originalFetch.call(this, input, init);
+      try {
+        const headers = new Headers((init && init.headers) || (input && input.headers) || undefined);
+        headers.set('x-bridge-command', id);
+        return originalFetch.call(this, input, { ...(init || {}), headers });
+      } catch {
+        return originalFetch.call(this, input, init);
+      }
     };
-    const sameOrigin = (url) => {
-      try { return new URL(url, location.href).origin === location.origin; } catch { return false; }
+    globalThis.fetch = taggedFetch;
+    restorers.push(() => {
+      if (globalThis.fetch === taggedFetch) globalThis.fetch = originalFetch;
+    });
+  }
+  const XHR = globalThis.XMLHttpRequest;
+  if (XHR && XHR.prototype) {
+    originalXhrOpen = XHR.prototype.open;
+    originalXhrSend = XHR.prototype.send;
+    const taggedOpen = function taggedOpen(method, url, ...rest) {
+      this.__bbCommandUrl = String(url || '');
+      return originalXhrOpen.call(this, method, url, ...rest);
     };
-    const originalFetch = globalThis.fetch;
-    if (typeof originalFetch === 'function') {
-      globalThis.fetch = function taggedFetch(input, init) {
-        const id = commandId();
-        if (!id) return originalFetch.call(this, input, init);
-        try {
-          const headers = new Headers((init && init.headers) || (input && input.headers) || undefined);
-          headers.set('x-bridge-command', id);
-          return originalFetch.call(this, input, { ...(init || {}), headers });
-        } catch {
-          return originalFetch.call(this, input, init);
-        }
-      };
-    }
-    const XHR = globalThis.XMLHttpRequest;
-    if (XHR && XHR.prototype) {
-      const originalOpen = XHR.prototype.open;
-      const originalSend = XHR.prototype.send;
-      XHR.prototype.open = function taggedOpen(method, url, ...rest) {
-        this.__bbCommandUrl = String(url || '');
-        return originalOpen.call(this, method, url, ...rest);
-      };
-      XHR.prototype.send = function taggedSend(...args) {
-        const id = commandId();
-        if (id) {
-          try { this.setRequestHeader('x-bridge-command', id); } catch { /* 忽略 */ }
-        }
-        return originalSend.apply(this, args);
-      };
-    }
+    const taggedSend = function taggedSend(...args) {
+      const id = commandId();
+      if (id) {
+        try { this.setRequestHeader('x-bridge-command', id); } catch { /* 忽略 */ }
+      }
+      return originalXhrSend.apply(this, args);
+    };
+    XHR.prototype.open = taggedOpen;
+    XHR.prototype.send = taggedSend;
+    restorers.push(() => {
+      if (XHR.prototype.open === taggedOpen) XHR.prototype.open = originalXhrOpen;
+      if (XHR.prototype.send === taggedSend) XHR.prototype.send = originalXhrSend;
+    });
+  }
+
+  function commandId() {
+    try { return document.documentElement.getAttribute('data-bb-command-id') || ''; } catch { return ''; }
   }
 
   globalThis.__BB_MAIN_LOG__ = entries;
+  globalThis.__BB_COMMAND_TAG__ = true;
+  globalThis.__BB_RESTORE_HOOKS__ = () => {
+    for (let i = restorers.length - 1; i >= 0; i -= 1) {
+      try { restorers[i](); } catch { /* 忽略 */ }
+    }
+    restorers.length = 0;
+    try { delete globalThis.__BB_MAIN_LOG__; } catch { globalThis.__BB_MAIN_LOG__ = undefined; }
+    try { delete globalThis.__BB_COMMAND_TAG__; } catch { globalThis.__BB_COMMAND_TAG__ = undefined; }
+    try { delete globalThis.__BB_RESTORE_HOOKS__; } catch { globalThis.__BB_RESTORE_HOOKS__ = undefined; }
+    try { document.documentElement.removeAttribute('data-bb-command-id'); } catch { /* 忽略 */ }
+  };
 })();

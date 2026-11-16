@@ -1,0 +1,470 @@
+﻿{
+    "suite":  "yuanrenxue",
+    "at":  "2026-11-16T18:31:57.9730619+08:00",
+    "session":  "vzbf",
+    "total":  27,
+    "pass":  1,
+    "fail":  0,
+    "skip":  26,
+    "cases":  [
+                  {
+                      "n":  1,
+                      "title":  "js混淆源码乱码",
+                      "path":  "/match/1",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第一题 js混淆源码乱码 - 猿人学）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  2,
+                      "title":  "js混淆 动态cookie 1",
+                      "path":  "/match/2",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第二题js 混淆 动态cookie ）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  3,
+                      "title":  "访问逻辑 推心置腹",
+                      "path":  "/match/3",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第三题 访问逻辑 推心置腹 - 猿人）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  4,
+                      "title":  "雪碧图、样式干扰",
+                      "path":  "/match/4",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  1,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第四题 雪碧图、样式干扰 - 猿人学）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  5,
+                      "title":  "js混淆 乱码增强",
+                      "path":  "/match/5",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第五题 js混淆 乱码增强 - 猿人）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  6,
+                      "title":  "js混淆 回溯",
+                      "path":  "/match/6",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第六题 js混淆 回溯 - 猿人学爬）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  7,
+                      "title":  "动态字体，随风漂移",
+                      "path":  "/match/7",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第七题 动态字体，随风漂移 - 猿人）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  8,
+                      "title":  "验证码 图文点选",
+                      "path":  "/match/8",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第八题 验证码 图文点选 - 猿人学）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  9,
+                      "title":  "js混淆 动态cookie 2",
+                      "path":  "/match/9",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第九题 js混淆 动态cookie ）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  10,
+                      "title":  "js混淆 重放攻击对抗",
+                      "path":  "/match/10",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  2,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第十题 js混淆 重放攻击对抗 - ）",
+                                     "标题匹配",
+                                     "未见数据（2 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  11,
+                      "title":  "一叶障目 控制台检测",
+                      "path":  "/match/11",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第十一题 一叶障目 控制台检测 - ）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  12,
+                      "title":  "js混淆源码乱码",
+                      "path":  "/match/12",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第十二题 js混淆源码乱码 - 猿人）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  13,
+                      "title":  "入门级cookie",
+                      "path":  "/match/13",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第十三题 入门级cookie - 猿）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  14,
+                      "title":  "备而后动-勿使有变",
+                      "path":  "/match/14",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第十四题 备而后动-勿使有变 - 猿）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  15,
+                      "title":  "备周则意怠 常见则不疑",
+                      "path":  "/match/15",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第十五题 备周则意怠 常见则不疑 -）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  16,
+                      "title":  "js逆向 window蜜罐",
+                      "path":  "/match/16",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第十六题 js逆向 window蜜罐）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  17,
+                      "title":  "天杀的Http2.0",
+                      "path":  "/match/17",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第十八题 天杀的Http2.0 - ）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  18,
+                      "title":  "jsvmp 洞察先机",
+                      "path":  "/match/18",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第十八题 jsvmp 洞察先机 - ）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  19,
+                      "title":  "乌拉乌拉乌拉",
+                      "path":  "/match/19",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第十九题 乌拉乌拉乌拉 - 猿人学爬）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  20,
+                      "title":  "2022新年挑战",
+                      "path":  "/match/20",
+                      "state":  "pass",
+                      "entry":  "pass",
+                      "structure":  "pass",
+                      "data":  "pass",
+                      "cards":  0,
+                      "nums":  5,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第二十题 2022新年挑战 - 猿人）",
+                                     "标题匹配",
+                                     "数据信号 5 个数字"
+                                 ]
+                  },
+                  {
+                      "n":  21,
+                      "title":  "守心 简单的指令",
+                      "path":  "/match/21",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=第二十一题 守心 简单的指令 - 猿）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  "g1",
+                      "title":  "新手试炼 1",
+                      "path":  "/match/guide1",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=新手试炼1：观气寻诀 - 猿人学爬虫）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  "g2",
+                      "title":  "新手试炼 2",
+                      "path":  "/match/guide2",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=新手试炼2：引气入体 - 猿人学爬虫）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  "g3",
+                      "title":  "新手试炼 3",
+                      "path":  "/match/guide3",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=新手试炼3：点亮灵根 - 猿人学爬虫）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  "g4",
+                      "title":  "新手试炼 4",
+                      "path":  "/match/guide4",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=新手试炼4：练气锻体 - 猿人学爬虫）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  "g5",
+                      "title":  "新手试炼 5",
+                      "path":  "/match/guide5",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=新手试炼5：强化修为 - 猿人学爬虫）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  },
+                  {
+                      "n":  "g6",
+                      "title":  "新手试炼 6",
+                      "path":  "/match/guide6",
+                      "state":  "skip",
+                      "entry":  "pass",
+                      "structure":  "skip",
+                      "data":  "skip",
+                      "cards":  0,
+                      "nums":  1,
+                      "loggedOut":  false,
+                      "checks":  [
+                                     "入口 ok（title=新手试炼6：练气初成 - 猿人学爬虫）",
+                                     "标题匹配",
+                                     "未见数据（1 个数字，需通过单项挑战）"
+                                 ]
+                  }
+              ]
+}

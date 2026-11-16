@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { IntentLedger, isMutating, isUnknownOutcome } from '../../lib/intent-ledger.mjs';
+import { IntentLedger, hasNoEffect, isMutating, isUnknownOutcome } from '../../lib/intent-ledger.mjs';
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'bb-ledger-'));
@@ -71,11 +71,19 @@ test('isUnknownOutcome 识别超时与断连', () => {
 });
 
 test('派发前失败的错误不算 unknown，不冻结标签页', () => {
-  for (const code of ['E_BAD_ARG', 'E_INVALID_PARAMS', 'E_NOT_FOUND', 'E_TARGET_NOT_FILLABLE', 'E_NOT_ACTIONABLE', 'E_OPTION_NOT_FOUND', 'E_OPTION_AMBIGUOUS', 'E_NOT_SELECT']) {
+  for (const code of ['E_BAD_ARG', 'E_INVALID_PARAMS', 'E_NOT_FOUND', 'E_TARGET_NOT_FILLABLE', 'E_NOT_ACTIONABLE', 'E_OPTION_NOT_FOUND', 'E_OPTION_AMBIGUOUS', 'E_NOT_SELECT', 'E_TARGET_MISMATCH']) {
     assert.equal(isUnknownOutcome({ code }), false, code);
   }
   assert.equal(isUnknownOutcome({ code: 'E_INTERNAL', effectState: 'none' }), false);
   assert.equal(isUnknownOutcome({ code: 'E_INTERNAL', dispatched: false }), false);
+  // daemon 把这两个字段放在 error.data 里；漏判会让"确定未派发"的超时冻结标签页。
+  assert.equal(isUnknownOutcome({ code: 'E_TIMEOUT', data: { dispatched: false } }), false);
+  assert.equal(isUnknownOutcome({ code: 'E_TIMEOUT', data: { effect_state: 'none' } }), false);
   assert.equal(isUnknownOutcome({ code: 'E_INTERNAL' }), false);
   assert.equal(isUnknownOutcome({ code: 'E_INTERNAL', message: 'timeout' }), true);
+  // hasNoEffect：precondition 失败（含选项/目标/行回收）可证明页面没变
+  assert.equal(hasNoEffect({ code: 'E_NOT_FOUND' }), true);
+  assert.equal(hasNoEffect({ code: 'E_OPTION_AMBIGUOUS' }), true);
+  assert.equal(hasNoEffect({ code: 'E_TARGET_MISMATCH' }), true);
+  assert.equal(hasNoEffect({ code: 'E_TIMEOUT' }), false);
 });

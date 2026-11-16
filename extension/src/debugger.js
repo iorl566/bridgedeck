@@ -1,4 +1,4 @@
-// src/debugger.js —— CDP 会话驱动（对齐 BrowserSkill 的 attach-once 模型）
+// src/debugger.js —— CDP 会话驱动（每个 tab 只 attach 一次，动作结束进入空闲软分离）
 //
 // 设计要点：
 // * 每个 tab 只 attach 一次；动作结束不立即 detach，而是进入 75s 空闲软分离窗口。
@@ -17,6 +17,10 @@ const lastActivity = new Map(); // tabId -> 最近一次 attach/acquire/send/rel
 const idleTimers = new Map(); // tabId -> setTimeout
 const emulatedTabs = new Set(); // 已启用焦点仿真的 tab
 const detachEpoch = new Map(); // tabId -> 强制分离代数，用于取消迟到的 arm
+// 软分离/外部 detach 后待恢复的持有者与焦点仿真：下次 attach 时对账恢复。
+const pendingUsers = new Map(); // tabId -> Set<feature>
+const pendingEmulated = new Set(); // tabId
+const intentionalDetach = new Set(); // tabId（显式 detach 不参与恢复）
 
 function bumpEpoch(tabId) {
   detachEpoch.set(tabId, (detachEpoch.get(tabId) || 0) + 1);
@@ -78,6 +82,14 @@ if (debuggerApi && debuggerApi.onDetach) {
   debuggerApi.onDetach.addListener((source, reason) => {
     const state = states.get(source.tabId);
     if (!state) return;
+    if (intentionalDetach.has(source.tabId)) {
+      intentionalDetach.delete(source.tabId);
+    } else {
+      // 外部分离（DevTools 接管、渲染进程重建、浏览器侧回收）：保存持有者，重挂时恢复。
+      const held = users.get(source.tabId);
+      if (held && held.size) pendingUsers.set(source.tabId, new Set(held));
+      if (emulatedTabs.has(source.tabId)) pendingEmulated.add(source.tabId);
+    }
     states.delete(source.tabId);
     users.delete(source.tabId);
     emulatedTabs.delete(source.tabId);
@@ -116,6 +128,23 @@ export async function attach(tabId) {
     const state = { tabId, handlers: new Map(), onDetach: null };
     states.set(tabId, state);
     touch(tabId);
+    // 对账：上次软分离/外部分离时保存的持有者与焦点仿真，在重挂后恢复。
+    const held = pendingUsers.get(tabId);
+    if (held && held.size) {
+      users.set(tabId, new Set(held));
+      pendingUsers.delete(tabId);
+      log('debugger 重挂后恢复持有者 tab=' + tabId + ' features=' + [...held].join(','));
+    }
+    if (pendingEmulated.has(tabId)) {
+      pendingEmulated.delete(tabId);
+      try {
+        await chrome.debugger.sendCommand({ tabId }, 'Emulation.setFocusEmulationEnabled', { enabled: true });
+        emulatedTabs.add(tabId);
+        log('debugger 重挂后恢复焦点仿真 tab=' + tabId);
+      } catch (restoreError) {
+        log('重挂后恢复焦点仿真失败 tab=' + tabId + '：' + ((restoreError && restoreError.message) || restoreError));
+      }
+    }
     log('debugger 已挂载 tab=' + tabId);
     return state;
   })();
@@ -171,9 +200,35 @@ export function onEvent(state, method, handler) {
   };
 }
 
-export function send(tabId, method, params) {
+const NOT_ATTACHED_RE = /debugger is not attached|not attached to the tab/i;
+
+export async function send(tabId, method, params) {
   touch(tabId);
-  return runCdpCommand({ tabId }, method, () => chrome.debugger.sendCommand({ tabId }, method, params || {}));
+  const call = () => runCdpCommand({ tabId }, method, () => chrome.debugger.sendCommand({ tabId }, method, params || {}));
+  try {
+    return await call();
+  } catch (error) {
+    if (!NOT_ATTACHED_RE.test(String((error && error.message) || error))) throw error;
+    // 本地还记着"已挂载"，浏览器侧却已经分离（service worker 休眠后状态丢失、
+    // 渲染进程重建、错误页接管等）。丢掉陈旧状态、重新 attach，再试一次。
+    log('debugger 状态陈旧（' + method + '），重新挂载 tab=' + tabId);
+    const held = users.get(tabId);
+    if (held && held.size) pendingUsers.set(tabId, new Set(held));
+    if (emulatedTabs.has(tabId)) pendingEmulated.add(tabId);
+    states.delete(tabId);
+    users.delete(tabId);
+    emulatedTabs.delete(tabId);
+    await attach(tabId);
+    return call();
+  }
+}
+
+/** 向子 target（OOPIF 等 flatten session）发命令。 */
+export async function sendToTarget(tabId, sessionId, method, params) {
+  if (!sessionId) return send(tabId, method, params);
+  touch(tabId);
+  const target = { tabId, sessionId };
+  return runCdpCommand(target, method, () => chrome.debugger.sendCommand(target, method, params || {}));
 }
 
 /**
@@ -210,8 +265,24 @@ export function isTabArmed(tabId) {
   return emulatedTabs.has(id) && states.has(id);
 }
 
+/** 诊断：模拟 DevTools/浏览器侧接管导致的 detach（不写 intentional 标记），用于验证重挂对账。 */
+export async function simulateExternalDetach(tabId) {
+  const id = Number(tabId);
+  if (!Number.isInteger(id) || !states.has(id)) {
+    throw bridgeError('E_BAD_ARG', '当前标签页没有挂载 debugger');
+  }
+  await chrome.debugger.detach({ tabId: id });
+  return { ok: true };
+}
+
 export async function detach(tabId) {
   bumpEpoch(tabId);
+  // 显式分离不参与"重挂恢复"：清掉待恢复项，并标记本次 onDetach 是预期的。
+  intentionalDetach.add(tabId);
+  pendingUsers.delete(tabId);
+  pendingEmulated.delete(tabId);
+  const clearIntent = setTimeout(() => intentionalDetach.delete(tabId), 1000);
+  clearIntent.unref?.();
   const attaching = attachInFlight.get(tabId);
   if (attaching) {
     await attaching.catch(() => {});
@@ -252,6 +323,8 @@ export function detachAll() {
   users.clear();
   lastActivity.clear();
   emulatedTabs.clear();
+  pendingUsers.clear();
+  pendingEmulated.clear();
 }
 
 /** 空闲 sweeper：service worker 被挂起后补扫，会话租约与长任务不分离。 */

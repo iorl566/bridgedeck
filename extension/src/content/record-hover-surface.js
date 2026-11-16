@@ -37,7 +37,7 @@ const HOVER_SURFACE_SIGNATURE_TEXT_LIMIT = 512;
 
 /**
  * Resolve the optional test/host environment into concrete globals so the
- * default (browser) path behaves exactly like the reference implementation:
+ * default (browser) path behaves the same:
  * parent walks stop at the body/root element and visibility requires a real
  * host element.
  *

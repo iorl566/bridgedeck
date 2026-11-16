@@ -7,12 +7,25 @@
 | 优先级 | 来源 | 说明 |
 | --- | --- | --- |
 | 1 | `--session <id>` | 显式 sessionId，永远优先 |
-| 2 | `--session-scope <名字>` | 按 `controller.name` / `controller.project` / `sessionId` 匹配唯一会话 |
+| 2 | `--session-scope <名字>` | 按 caller scope / `controller.name` / `controller.project` / `sessionId` 匹配唯一会话 |
 | 3 | `BB_SESSION=<id>` | 环境变量兜底（CLI 与 MCP 都支持） |
-| 4 | daemon 单会话默认 | 只有一个 session 时自动选用 |
-| 5 | 报错 | 多个 session 且没有指定时返回 `E_NO_SESSION` |
+| 4 | `BB_SESSION_SCOPE=<名字>` | CLI 环境变量兜底，等价于 `--session-scope` |
+| 5 | daemon 单会话默认 | 只有一个 session 时自动选用 |
+| 6 | 报错 | 多个 session 且没有指定时返回 `E_NO_SESSION` |
 
 `--session` 与 `--session-scope` 同时给时，`--session` 胜出。
+
+## caller scope（会话创建时绑定）
+
+`session start` / `open` 可以带 `--scope <名字>`（或环境变量 `BB_SESSION_SCOPE`），把这次会话绑定到调用方的 scope：
+
+```powershell
+bridge session start --scope research --agent-name "研究 Agent" --no-focus
+bridge open https://example.com --scope forms
+bridge session list --json     # 每条会话带 scope 字段
+```
+
+之后 `bridge observe --session-scope research`、`bridge click ... --session-scope forms` 或 `BB_SESSION_SCOPE=research bridge observe` 都能按 scope 选中该会话。scope 只是选择规则，**不是安全边界**；多 Agent 并发时它消除“到底操作了哪个会话”的歧义。
 
 ## 用法
 

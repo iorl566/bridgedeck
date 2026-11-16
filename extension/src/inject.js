@@ -4,10 +4,11 @@
 import { bridgeError, mapChromeError } from './errors.js';
 import { log } from './log.js';
 import { acquire, release, send as cdpSend } from './debugger.js';
+import { ensureHooks } from './page-hooks.js';
 
 const MAIN_FRAME = 0;
 /** 页面能力库版本；必须与 injected/page-lib.js 的 LIB_VERSION 同步。 */
-const PAGE_LIB_VERSION = 35;
+const PAGE_LIB_VERSION = 49;
 
 /** 注入函数：调用页面侧能力库 __BB_PAGE__。 */
 export function pageCallFunc(name, args, requiredVersion) {
@@ -143,7 +144,7 @@ export async function execPage(tabId, name, args, frameId = 0) {
   }
   if (raw.ok === false) {
     const code = raw.error && raw.error.code ? raw.error.code : 'E_INTERNAL';
-    throw bridgeError(code, (raw.error && raw.error.message) || '页面侧执行失败');
+    throw bridgeError(code, (raw.error && raw.error.message) || '页面侧执行失败', raw.error ? raw.error.data : undefined);
   }
   return raw.result;
 }
@@ -198,12 +199,15 @@ export async function evalByCdp(tabId, expression) {
   }
 }
 
-/** 读取主世界 console 缓冲。 */
+/** 读取主世界 console 缓冲；钩子按需注入（默认不 patch 页面原生函数）。 */
 export async function readConsole(tabId, since, limit) {
+  // 首次读取时才注入：注入后只能拿到注入之后的条目，页面加载早期的日志
+  // 由 debug 采集的 CDP 管线（Runtime.consoleAPICalled）覆盖。
+  const hooked = await ensureHooks(tabId);
   const raw = await runInjection(tabId, 'MAIN', consoleMainFunc, [since, limit]);
   if (!raw || typeof raw !== 'object') throw bridgeError('E_INTERNAL', '读取 console 无返回');
   if (raw.ok === false) throw bridgeError(raw.error.code, raw.error.message);
-  return raw.result;
+  return hooked ? raw.result : { ...raw.result, hooked: false };
 }
 
 /** 在所有 frame（含跨源 OOPIF）执行 page-lib 方法。 */

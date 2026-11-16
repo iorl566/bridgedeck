@@ -1,4 +1,4 @@
-// src/redact.js —— 网络/调试证据脱敏（参考实现的红action 思路，独立实现）
+// src/redact.js —— 网络/调试证据脱敏（独立实现）
 const SECRET_HEADERS = new Set([
   'authorization', 'proxy-authorization', 'cookie', 'set-cookie',
   'x-api-key', 'x-auth-token', 'x-csrf-token', 'x-xsrf-token',

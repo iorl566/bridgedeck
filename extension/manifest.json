@@ -39,17 +39,7 @@
                                 "all_frames":  false,
                                 "world":  "ISOLATED"
                             },
-                            {
-                                "matches":  [
-                                                "\u003call_urls\u003e"
-                                            ],
-                                "js":  [
-                                           "injected/main-console.js"
-                                       ],
-                                "run_at":  "document_start",
-                                "all_frames":  false,
-                                "world":  "MAIN"
-                            },
+
                             {
                                 "matches":  [
                                                 "\u003call_urls\u003e"

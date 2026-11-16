@@ -1,4 +1,4 @@
-// src/document-identity.js —— 读类操作的文档身份（对齐 bsk read 的证据边界）。
+// src/document-identity.js —— 读类操作的文档身份（读取前后必须同一文档，否则采样作废）。
 //
 // 目的：read/extract 返回的是“当前 DOM 的一次采样”。如果读取期间主文档被替换
 //（SPA 重渲染、导航、about:blank→真实页），返回的数据可能混合新旧文档，必须失败

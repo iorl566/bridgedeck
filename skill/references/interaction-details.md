@@ -23,8 +23,9 @@
 ## 键盘与表单
 
 - `press Enter` 默认发给当前焦点；`--ref @eN` 先聚焦目标。
-- `fill` 默认清空再输入；需要追加用 `--no-clear`。
-- `select` 传 option 的 value；没有 value 时用可见文本。
+- 标点快捷键（`Ctrl+/`、`Ctrl+[` 等）会映射到 US 物理键位（`event.code=Slash/BracketLeft`），不只看 `key`。
+- `fill` 默认清空再输入；需要追加用 `--no-clear`。返回 `actual_value`（敏感字段不返回，只回 `formatted:true`）与 `formatted`——值被页面改写时以 `actual_value` 为准。
+- `select` 先按 option 的 `value` 匹配，再按可见文本/label（大小写不敏感）；同名多个选项报 `E_OPTION_AMBIGUOUS`，找不到报 `E_OPTION_NOT_FOUND`，错误 `data.available` 带候选（最多 12 个）。
 - 复选框/单选框用 click，不要用 fill。
 - `focus`/`blur` 用于触发校验或收起下拉。
 

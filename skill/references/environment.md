@@ -7,9 +7,11 @@ bridge doctor
 bridge status --json
 bridge browsers --json
 bridge daemon status
+bridge ui --diagnostics          # 扩展页面/图标自检 + 当前 AX 域租约
 ```
 
 - `doctor` 逐项查 node、`BB_HOME` 可写、`daemon.json`、daemon `/health`、token、已连接浏览器、扩展 UI 能否加载；有 `fail` 按提示处理，别先删文件。
+- `ui --diagnostics` 让扩展检查 popup/options/quick 等页面与图标是否真的打进包，并列出 AX 域租约（`observe --ax` 后约 10s 自动释放）。
 - `status --json` 给 service/version/protocol/pid/port/uptime + browsers + sessions；`browsers --json` 每个实例带 instanceId、label、浏览器/扩展版本、protocol 与 capabilities。
 - 先读错误码：`E_AUTH`（token 对不上）、`E_DAEMON`（连不上或未就绪）、`E_NO_BROWSER`、`E_PROTOCOL_UNSUPPORTED`。
 
@@ -37,6 +39,7 @@ bridge logs --tail 50
 
 ```sh
 bridge daemon pair                       # 生成 5 分钟有效的本机配对链接
+bridge daemon rotate                     # 轮换本机 token：旧链接/旧连接立即失效，输出新链接
 bridge daemon trust-local off            # 拒绝本机未配对连接（严格模式）
 bridge pair create [--ttl 10m] [--label 名称] [--host <ip>]
 bridge pair list
@@ -46,6 +49,7 @@ bridge pair revoke <code>
 
 - daemon 默认只监听回环；远程场景设 `BB_BIND=0.0.0.0`（或具体网卡地址），并在扩展设置里填 daemon URL 与 token。
 - 非回环连接必须带配对 token，否则 `E_PAIR_REQUIRED`；`pair revoke` 会立即断开使用该 token 的实例。
+- 配对使用双向证明：daemon 在 `hello-ack` 里回 `serverProof`（用同一 token 签 challenge），扩展校验失败会显示“daemon 身份校验失败”并断开。
 - 扩展设置：`bridge settings set --daemon-url ws://host:52900/ws --daemon-token <token>`，写入后立即重连。
 - 不要把配对链接/token 写进日志、截图或共享报告；`daemon devices` 可看已配对设备。
 

@@ -106,7 +106,7 @@ export function listCredentials() {
     deviceId: credential.deviceId,
     gen: credential.gen,
     role: credential.role,
-    authDomain: credential.authDomain || 'legacy',
+    authDomain: credential.authDomain || 'bridgedeck',
   }));
 }
 

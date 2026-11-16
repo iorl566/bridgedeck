@@ -1,4 +1,4 @@
-import { AUTH_DOMAIN, LEGACY_AUTH_DOMAIN, prove, randomBytes, transcript, verify } from './local-auth-crypto.js';
+import { prove, randomBytes, transcript, verify } from './local-auth-crypto.js';
 import { MAX_AUTH_CREDENTIALS, parseAuthJson, parseAuthMessage, parseChallenge } from './local-auth-protocol.js';
 import { readLocalState } from './local-credentials.js';
 
@@ -98,15 +98,11 @@ export async function authenticateLocal(socket, signal, credentials, instanceId,
     let credential = credentials.find((c) => c.daemonId === challenge.daemon_id && c.deviceId === challenge.device_id && (c.gen === challenge.gen || c.pending?.gen === challenge.gen));
     if (!credential) throw new LocalAuthError({ state: 'server_unverified' });
     const key = credential.pending?.gen === challenge.gen ? credential.pending.key : credential.key;
-    // 协议域兼容：新配对默认新域名；旧配对（无 authDomain 字段）或老服务端回退旧域名。
-    const primaryDomain = credential.authDomain === 'bridgedeck' ? AUTH_DOMAIN : LEGACY_AUTH_DOMAIN;
-    const domains = primaryDomain === AUTH_DOMAIN ? [AUTH_DOMAIN, LEGACY_AUTH_DOMAIN] : [LEGACY_AUTH_DOMAIN, AUTH_DOMAIN];
-    let t = null;
-    for (const domain of domains) {
-      const candidate = transcript({ ...challenge, instance_id: instanceId, origin, client_nonce: nonce }, domain);
-      if (await verify(key, 'server', candidate, challenge.server_proof)) { t = candidate; break; }
+    // 协议域固定：证明只在当前域名下校验；旧域名签发的配对凭证需要重新配对。
+    const t = transcript({ ...challenge, instance_id: instanceId, origin, client_nonce: nonce });
+    if (!(await verify(key, 'server', t, challenge.server_proof))) {
+      throw new LocalAuthError({ state: 'server_unverified' });
     }
-    if (!t) throw new LocalAuthError({ state: 'server_unverified' });
     channel.send({ type: 'local.auth.prove', v: 1, client_proof: await prove(key, 'client', t) });
     const ready = parseAuthMessage(await channel.next());
     if (ready.type === 'local.auth.rejected') throw new LocalAuthError({ state: ready.reason, browserId: ready.browser_id });

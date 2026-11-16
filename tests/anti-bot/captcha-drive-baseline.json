@@ -1,0 +1,294 @@
+{
+  "suite": "captcha-drive",
+  "mergedAt": "2026-11-16T11:44:52.593Z",
+  "runs": 3,
+  "minAttempts": 3,
+  "channelVerified": 5,
+  "neverReacted": 1,
+  "mixed": 0,
+  "files": [
+    ".tmp-bench\\captcha-drive\\run-1\\matrix.json",
+    ".tmp-bench\\captcha-drive\\run-2\\matrix.json",
+    ".tmp-bench\\captcha-drive\\run-3\\matrix.json"
+  ],
+  "cases": [
+    {
+      "id": "slide_puzzle_challenge",
+      "title": "滑动拼图",
+      "gesture": "drag",
+      "attempts": [
+        {
+          "run": 1,
+          "verdict": "rejected",
+          "detail": "handle:#sliderMoveBtn",
+          "feedback": "验证失败|请重试",
+          "trust": "",
+          "signals": [
+            "toast-fail",
+            "bg-changed"
+          ]
+        },
+        {
+          "run": 2,
+          "verdict": "rejected",
+          "detail": "handle:#sliderMoveBtn",
+          "feedback": "验证失败|请重试",
+          "trust": "",
+          "signals": [
+            "toast-fail",
+            "bg-changed"
+          ]
+        },
+        {
+          "run": 3,
+          "verdict": "rejected",
+          "detail": "handle:#sliderMoveBtn",
+          "feedback": "验证失败|请重试",
+          "trust": "",
+          "signals": [
+            "toast-fail",
+            "bg-changed"
+          ]
+        }
+      ],
+      "verdicts": [
+        "rejected",
+        "rejected",
+        "rejected"
+      ],
+      "rejectedOnce": true,
+      "stableNoFeedback": false,
+      "finalVerdict": "channel-verified",
+      "noWidget": 0
+    },
+    {
+      "id": "slide_scratch_challenge",
+      "title": "滑动刮刮乐",
+      "gesture": "drag",
+      "attempts": [
+        {
+          "run": 1,
+          "verdict": "rejected",
+          "detail": "handle:#sliderMoveBtn",
+          "feedback": "验证失败|请重试",
+          "trust": "",
+          "signals": [
+            "toast-fail",
+            "bg-changed"
+          ]
+        },
+        {
+          "run": 2,
+          "verdict": "rejected",
+          "detail": "handle:#sliderMoveBtn",
+          "feedback": "验证失败|请重试",
+          "trust": "",
+          "signals": [
+            "toast-fail",
+            "bg-changed"
+          ]
+        },
+        {
+          "run": 3,
+          "verdict": "rejected",
+          "detail": "handle:#sliderMoveBtn",
+          "feedback": "验证失败|请重试",
+          "trust": "",
+          "signals": [
+            "toast-fail",
+            "bg-changed"
+          ]
+        }
+      ],
+      "verdicts": [
+        "rejected",
+        "rejected",
+        "rejected"
+      ],
+      "rejectedOnce": true,
+      "stableNoFeedback": false,
+      "finalVerdict": "channel-verified",
+      "noWidget": 0
+    },
+    {
+      "id": "slide_cylinder_challenge",
+      "title": "圆柱验证码",
+      "gesture": "drag",
+      "attempts": [
+        {
+          "run": 1,
+          "verdict": "rejected",
+          "detail": "handle:#slider-btn",
+          "feedback": "验证失败",
+          "trust": "",
+          "signals": [
+            "toast-fail"
+          ]
+        },
+        {
+          "run": 2,
+          "verdict": "advanced",
+          "detail": "handle:#slider-btn",
+          "feedback": "验证成功",
+          "trust": "",
+          "signals": [
+            "toast-ok",
+            "page-advanced",
+            "collected-advanced"
+          ]
+        },
+        {
+          "run": 3,
+          "verdict": "rejected",
+          "detail": "handle:#slider-btn",
+          "feedback": "验证失败",
+          "trust": "",
+          "signals": [
+            "toast-fail"
+          ]
+        }
+      ],
+      "verdicts": [
+        "rejected",
+        "advanced",
+        "rejected"
+      ],
+      "rejectedOnce": true,
+      "stableNoFeedback": false,
+      "finalVerdict": "channel-verified",
+      "noWidget": 0
+    },
+    {
+      "id": "press_rotate_challenge",
+      "title": "按压旋转",
+      "gesture": "hold",
+      "attempts": [
+        {
+          "run": 1,
+          "verdict": "rejected",
+          "detail": "hold:.press-btn@800ms",
+          "feedback": "验证失败|请重试",
+          "trust": "trusted",
+          "signals": [
+            "toast-fail"
+          ]
+        },
+        {
+          "run": 2,
+          "verdict": "rejected",
+          "detail": "hold:.press-btn@800ms",
+          "feedback": "验证失败|请重试",
+          "trust": "trusted",
+          "signals": [
+            "toast-fail"
+          ]
+        },
+        {
+          "run": 3,
+          "verdict": "rejected",
+          "detail": "hold:.press-btn@800ms",
+          "feedback": "验证失败|请重试",
+          "trust": "trusted",
+          "signals": [
+            "toast-fail"
+          ]
+        }
+      ],
+      "verdicts": [
+        "rejected",
+        "rejected",
+        "rejected"
+      ],
+      "rejectedOnce": true,
+      "stableNoFeedback": false,
+      "finalVerdict": "channel-verified",
+      "noWidget": 0
+    },
+    {
+      "id": "click_stitch_challenge",
+      "title": "点击拼图",
+      "gesture": "points",
+      "attempts": [
+        {
+          "run": 1,
+          "verdict": "rejected",
+          "detail": "points:2+confirm",
+          "feedback": "验证失败|请重试",
+          "trust": "",
+          "signals": [
+            "toast-fail"
+          ]
+        },
+        {
+          "run": 2,
+          "verdict": "rejected",
+          "detail": "points:2+confirm",
+          "feedback": "验证失败|请重试",
+          "trust": "",
+          "signals": [
+            "toast-fail"
+          ]
+        },
+        {
+          "run": 3,
+          "verdict": "rejected",
+          "detail": "points:2+confirm",
+          "feedback": "验证失败|请重试",
+          "trust": "",
+          "signals": [
+            "toast-fail"
+          ]
+        }
+      ],
+      "verdicts": [
+        "rejected",
+        "rejected",
+        "rejected"
+      ],
+      "rejectedOnce": true,
+      "stableNoFeedback": false,
+      "finalVerdict": "channel-verified",
+      "noWidget": 0
+    },
+    {
+      "id": "cap6_challenge",
+      "title": "双滑块",
+      "gesture": "dual",
+      "attempts": [
+        {
+          "run": 1,
+          "verdict": "no-feedback",
+          "detail": "dual:#slider-btn-1+#slider-btn-2",
+          "feedback": "",
+          "trust": "",
+          "signals": []
+        },
+        {
+          "run": 2,
+          "verdict": "no-feedback",
+          "detail": "dual:#slider-btn-1+#slider-btn-2",
+          "feedback": "",
+          "trust": "",
+          "signals": []
+        },
+        {
+          "run": 3,
+          "verdict": "no-feedback",
+          "detail": "dual:#slider-btn-1+#slider-btn-2",
+          "feedback": "",
+          "trust": "",
+          "signals": []
+        }
+      ],
+      "verdicts": [
+        "no-feedback",
+        "no-feedback",
+        "no-feedback"
+      ],
+      "rejectedOnce": false,
+      "stableNoFeedback": true,
+      "finalVerdict": "never-reacted",
+      "noWidget": 0
+    }
+  ]
+}

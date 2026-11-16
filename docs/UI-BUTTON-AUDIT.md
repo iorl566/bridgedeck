@@ -46,12 +46,12 @@ node tools/ui-button-audit.mjs
 
 有未绑定按钮时退出码为 1。
 
-## 与 BSK 0.5.0 的逻辑对齐
+## 交互一致性约定
 
-- 功能入口卡片 → 内嵌视图，返回键按“主界面 → 功能列表 → 功能子页”回退，和 BSK 的 `setView` 一致；
-- 信息图标使用 `aria-describedby` + hover/focus tooltip，不执行动作，和 BSK `SettingInfo` 一致；
-- 设置开关保存期间禁用，失败时在弹窗显示错误，和 BSK `InteractionSettings` 的 `loaded/saving` 逻辑一致；
-- 当前调试任务点击后打开调试页并带上 `tabId`，和 BSK `CurrentTasks` 打开 debug 页一致；
+- 功能入口卡片 → 内嵌视图，返回键按“主界面 → 功能列表 → 功能子页”逐级回退；
+- 信息图标使用 `aria-describedby` + hover/focus tooltip，只解释不执行动作；
+- 设置开关保存期间禁用，失败时在弹窗显示错误；
+- 当前调试任务点击后打开调试页并带上 `tabId`；
 - 会话进行中禁用“修改浏览器名称”，避免点击无反应。
 
 ## 运行时覆盖

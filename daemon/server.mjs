@@ -18,7 +18,7 @@ import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { attachWsServer } from '../lib/ws.mjs';
-import { isAllowedWhilePaused, shouldRejectRemoteTransfer } from '../lib/protocol.mjs';
+import { isAllowedWhilePaused, shouldRejectRemoteTransfer, compareProtocol } from '../lib/protocol.mjs';
 import { validateMethodParams } from '../lib/schemas.mjs';
 import { enforceOperationLimit } from '../lib/limits.mjs';
 import { createAuthGuard } from '../lib/auth-guard.mjs';
@@ -34,10 +34,14 @@ import { readUpdateState, writeUpdateState } from '../lib/update-state.mjs';
 import { verifyReleaseSignature } from '../lib/release-sign.mjs';
 import { RELEASE_PUBLIC_KEY } from '../lib/release-public-key.mjs';
 import { isControllerInfo } from '../extension/src/lib/controller-info.js';
-import { IntentLedger, isUnknownOutcome } from '../lib/intent-ledger.mjs';
+import { IntentLedger, isUnknownOutcome, hasNoEffect } from '../lib/intent-ledger.mjs';
+import { AliasRegistry } from '../lib/alias-registry.mjs';
 import { createStartJournal, normalizeStartToken } from '../lib/start-journal.mjs';
 import { LOCAL_METHODS, SESSION_METHODS, EXT_METHODS, SESSION_QUEUE_BYPASS, isMutating } from '../lib/methods.mjs';
 import { resolveSessionByScope } from '../lib/session-scope.mjs';
+import { FEATURE_RECOVERY, featureShortfall, featuresForCall } from '../lib/protocol-features.mjs';
+import { serverProof as makeServerProof } from '../lib/local-proof.mjs';
+import { normalizePlanSteps } from '../lib/plan-steps.mjs';
 
 const VERSION = (() => {
   try { return JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version || '0.1.2'; }
@@ -76,6 +80,7 @@ function protocolLabel(value) {
   return parsed ? parsed.major + '.' + parsed.minor : '0';
 }
 const DAEMON_CAPABILITIES = ['observe', 'frames', 'dialog', 'screenshot', 'network', 'rules', 'video', 'recording', 'pairing', 'tls', 'unverified', 'dom-read'];
+const aliases = new AliasRegistry();
 const DEFAULT_PORT = 52900;
 const PORT_CANDIDATES = Array.from({ length: 10 }, (_, i) => DEFAULT_PORT + i);
 const PING_INTERVAL_MS = 15_000; // 每 15s 发一次 ping
@@ -544,6 +549,26 @@ function pairRevoke(params = {}) {
   return { ok: true, revoked: existed, code, kicked };
 }
 
+/** 轮换本机配对 token：旧链接立即失效，用旧 token 认证的本机连接断开。 */
+function pairRotate() {
+  const previous = localTrust.token;
+  localTrust.token = crypto.randomBytes(24).toString('hex');
+  localTrust.pairedAt = Date.now();
+  localTrust.pendingUntil = 0;
+  saveLocalTrust();
+  let kicked = 0;
+  for (const instance of [...instances.values()]) {
+    if (instance.remote === true) continue;
+    if (instance.pairToken && instance.pairToken === previous) {
+      kicked += 1;
+      try { instance.conn.close(4003, 'local token rotated'); } catch { /* 忽略 */ }
+      dropInstance(instance, '本机 token 已轮换');
+    }
+  }
+  log('本机配对 token 已轮换，断开旧连接 ' + kicked + ' 个');
+  return { ok: true, rotated: true, kicked, link: wsUrlFor('') + '#' + localTrust.token };
+}
+
 function loadLocalTrust() {
   try {
     const raw = JSON.parse(fs.readFileSync(LOCAL_TRUST_PATH, 'utf8'));
@@ -644,7 +669,7 @@ function normalizeHello(hello) {
 }
 
 /** 处理 hello：生成/沿用 instanceId，回 hello-ack，登记实例。 */
-function registerInstance(conn, hello) {
+function registerInstance(conn, hello, extra = {}) {
   const meta = normalizeHello(hello);
   const hint = typeof hello.instanceId === 'string' && /^[0-9a-f]{8}$/i.test(hello.instanceId)
     ? hello.instanceId.toLowerCase()
@@ -693,6 +718,7 @@ function registerInstance(conn, hello) {
     protocol: PROTOCOL_VERSION,
     capabilities: DAEMON_CAPABILITIES,
     localAuth: { state: instance.localVerified ? 'verified' : 'unpaired', strict: localTrust.strict === true },
+    ...(extra.serverProof ? { serverProof: extra.serverProof } : {}),
   });
   log(`扩展已连接 instance=${instance.instanceId} browser=${instance.browser} v${instance.browserVersion} ext=${instance.extVersion}`);
   instance.pairToken = typeof hello.pairToken === 'string' ? hello.pairToken : '';
@@ -897,6 +923,7 @@ function onExtensionConnection(conn, req) {
     let msg = decoded.value;
     if (!instance) {
       let authCompleted = false;
+      let serverProof = '';
       if (msg.type === 'auth-response') {
         const result = authSession.verify(msg.challenge, msg.proof);
         if (!result.ok) {
@@ -909,6 +936,8 @@ function onExtensionConnection(conn, req) {
         }
         msg = result.hello;
         authCompleted = true;
+        // 双向证明：daemon 也用同一密钥对挑战签名，扩展据此确认"连的是真 daemon"。
+        serverProof = makeServerProof(result.secret, result.challenge);
       }
       if (msg.type !== 'hello') {
         log('忽略握手前的扩展消息');
@@ -962,7 +991,7 @@ function onExtensionConnection(conn, req) {
       }
       msg.localVerified = localVerified;
       try {
-        instance = registerInstance(conn, msg);
+        instance = registerInstance(conn, msg, { serverProof });
       } catch (error) {
         log('注册浏览器实例失败：' + ((error && error.stack) || error));
         if (isRemote) authGuard.fail(peerKey);
@@ -1181,6 +1210,7 @@ async function prepareRoute(method, rawParams) {
     const instance = instances.get(session.instanceId);
     if (!instance) throw new BridgeError('E_NO_BROWSER', '会话所属浏览器实例已断开');
     if (params.tabId === undefined || params.tabId === null) params.tabId = session.tabId;
+    applyAliasParams(params, session);
     return { instance, session, params };
   }
 
@@ -1205,7 +1235,23 @@ async function prepareRoute(method, rawParams) {
   if (session && method === 'tab.new' && params.windowId === undefined) {
     params.windowId = session.windowId;
   }
+  applyAliasParams(params, session);
   return { instance, session, params };
+}
+
+/** 把 --observation o2 / --baseline o1 / --capture c1 换成真实 id。 */
+function applyAliasParams(params, session) {
+  if (!session || !params) return;
+  const mapping = [['observation', 'observation'], ['baseline', 'observation'], ['capture', 'capture']];
+  for (const [key, kind] of mapping) {
+    const value = params[key];
+    if (typeof value !== 'string' || !/^[oc]\d+$/.test(value)) continue;
+    const resolved = aliases.resolve(session.sessionId, kind, value);
+    if (resolved) {
+      params[key] = resolved;
+      log('alias ' + value + ' → ' + resolved + '（' + key + '）');
+    }
+  }
 }
 
 const METHOD_CAPABILITY = {
@@ -1231,6 +1277,20 @@ function requireCapability(instance, method) {
   // observe-frames 可以降级为主文档 observe
   if (method === 'observe-frames' && needed === 'frames') return;
   throw new BridgeError('E_UNSUPPORTED_CAPABILITY', `浏览器实例不支持 ${needed} 能力（method ${method}）`);
+}
+
+/** 新参数（unverified/expect/plan 等）在旧扩展上会静默失效：派发前按特性表拦住。 */
+function requireFeatures(instance, method, params) {
+  const features = featuresForCall(method, params);
+  if (!features.length) return;
+  const missing = featureShortfall(instance, features, compareProtocol);
+  if (!missing.length) return;
+  const detail = missing.map((item) => `${item.feature}（需要 ${item.required}，当前 ${item.actual}）`).join('、');
+  throw new BridgeError('E_UNSUPPORTED_CAPABILITY', `浏览器扩展协议版本过低，缺少特性：${detail}。${FEATURE_RECOVERY}`, {
+    missing,
+    method,
+    features,
+  });
 }
 
 
@@ -1276,7 +1336,7 @@ async function routeExtension(route, method, timeoutMs) {
   if (method === 'observe-frames' && !hasCapability(route.instance, 'frames')) {
     effectiveMethod = 'observe';
   }
-  const result = route.session && !SESSION_QUEUE_BYPASS.has(method)
+  let result = route.session && !SESSION_QUEUE_BYPASS.has(method)
     ? await sessionQueue.enqueue(route.session.sessionId, () => sendCommand(route.instance, effectiveMethod, route.params, timeoutMs))
     : await sendCommand(route.instance, effectiveMethod, route.params, timeoutMs);
   if (effectiveMethod !== method && result && typeof result === 'object') {
@@ -1294,6 +1354,17 @@ async function routeExtension(route, method, timeoutMs) {
   if (route.session && ['navigate', 'reload', 'navigate-back', 'navigate-forward'].includes(method)) {
     sendCommand(route.instance, 'control-hint', { tabId: route.session.tabId, enabled: true }, 3000).catch(() => {});
   }
+  // 页面没变时扩展只回 unchanged（不带全文）：用 daemon 缓存补回文本，省一次大传输。
+  if (method === 'observe' && route.session && result && result.unchanged === true) {
+    const cached = route.session.observation;
+    if (cached && typeof cached.text === 'string') {
+      result.observation = cached.text;
+      result.cachedFrom = cached.at;
+    } else {
+      // 缓存缺失（daemon 重启/会话重建）：强制重取一次全文。
+      result = await sendCommand(route.instance, 'observe', { ...route.params, force: true }, timeoutMs);
+    }
+  }
   // observe 结果留在 daemon 里，view 可以直接分段检索，不必重新采集页面。
   if (method === 'observe' && route.session && result && typeof result.observation === 'string') {
     route.session.observation = {
@@ -1303,6 +1374,17 @@ async function routeExtension(route, method, timeoutMs) {
       title: typeof result.title === 'string' ? result.title : route.session.title || '',
       at: Date.now(),
     };
+  }
+  // 短别名：观察/截图结果带回 oN / cN，后续可用 --observation o2 / --capture c1 引用。
+  if (route.session && result && typeof result === 'object') {
+    if (method === 'observe') {
+      if (!result.observationId) result.observationId = 'ob_' + crypto.randomBytes(6).toString('hex');
+      const alias = aliases.register(route.session.sessionId, 'observation', result.observationId);
+      if (alias) result.observationAlias = alias;
+    } else if (method === 'screenshot' && result.capture_id) {
+      const alias = aliases.register(route.session.sessionId, 'capture', result.capture_id);
+      if (alias) result.captureAlias = alias;
+    }
   }
   return result;
 }
@@ -1458,7 +1540,7 @@ function startRequestMeta(params) {
   };
 }
 
-/** 预登记：不创建任何窗口，只占住 token（bsk 的 prepare 语义）。 */
+/** 预登记：不创建任何窗口，只占住 token（prepare 语义）。 */
 async function prepareStartRequest(params) {
   const requestId = normalizeRequestToken(params.requestId);
   const existing = startJournal.get(requestId);
@@ -1513,6 +1595,10 @@ async function startSession(params, timeoutMs) {  const traceStart = Date.now();
   const controller = params.controller;
   if (controller !== undefined && !isControllerInfo(controller)) {
     throw new BridgeError('E_BAD_ARG', 'session.start 的 controller 需要 name（1-80 字符），可选 project（1-120 字符）与 #rrggbb 颜色');
+  }
+  const callerScope = params.scope === undefined || params.scope === null ? '' : String(params.scope).trim().slice(0, 80);
+  if (params.scope !== undefined && params.scope !== null && !callerScope) {
+    throw new BridgeError('E_BAD_ARG', 'session.start 的 scope 不能为空字符串');
   }
   // 可恢复启动：token 幂等。同一个 requestId 重试返回既有会话；进行中的同一 token 拒绝并给出状态。
   let requestToken = null;
@@ -1583,6 +1669,7 @@ async function startSession(params, timeoutMs) {  const traceStart = Date.now();
     borrowed,
     incognito: params.incognito === true,
     controller,
+    scope: callerScope,
   }));
   saveSessions();
   log(`session ${sessionId} 创建 instance=${instance.instanceId} tab=${tabId}${borrowed ? '（借用）' : ''}`);
@@ -1674,6 +1761,7 @@ async function pauseSession(params, timeoutMs) {
 
 async function stopSession(params, timeoutMs) {
   const session = resolveSession(params.session !== undefined ? params.session : params.sessionId);
+  aliases.clear(session.sessionId);
   if (sessionState.requestStop(session.sessionId) === false) {
     return { ok: true, alreadyStopping: true, borrowed: session.borrowed === true };
   }
@@ -1943,11 +2031,12 @@ function isExtensionRouted(method) {
  */
 async function dispatchExtension(method, params, timeoutMs) {
   const route = await prepareRoute(method, params);
+  requireFeatures(route.instance, method, route.params);
   verifyDecision(route, method);
   return submitRouted(route, method, params, timeoutMs);
 }
 
-/** 给失败结果补 effect_state：未派发=none，其余无法证明时=unknown（对齐 bsk 的保守语义）。 */
+/** 给失败结果补 effect_state：未派发=none，其余无法证明时=unknown（保守语义）。 */
 function withEffectState(error, effectState) {
   if (!error || typeof error !== 'object') return error;
   const data = { ...(error.data && typeof error.data === 'object' ? error.data : {}) };
@@ -1972,13 +2061,16 @@ async function submitRouted(route, method, params, timeoutMs) {
     intentLedger.finish(intent, 'done');
     return annotateEffectSuccess(result, method);
   } catch (error) {
+    // 先判"是否确定未派发"，再结算：否则 E_TIMEOUT 一类会把未派发的操作记成 unknown 并冻结标签页。
+    const notDispatched = error && (error.code === 'E_TARGET_MISMATCH' || hasNoEffect(error));
+    if (isMutating(method)) withEffectState(error, notDispatched ? 'none' : 'unknown');
+    const noEffect = notDispatched === true || (error && (
+      error.effectState === 'none' || error.effect_state === 'none'
+      || (error.data && (error.data.effect_state === 'none' || error.data.effectState === 'none'))
+    ));
     // evaluate 是诊断/读取通道：超时也视为已结算，避免只读命令把标签页冻结。
-    const settleUnknown = isUnknownOutcome(error) && method !== 'evaluate';
+    const settleUnknown = noEffect !== true && isUnknownOutcome(error) && method !== 'evaluate';
     intentLedger.finish(intent, settleUnknown ? 'unknown' : 'failed');
-    if (isMutating(method)) {
-      const notDispatched = error && error.data && error.data.dispatched === false;
-      withEffectState(error, notDispatched ? 'none' : 'unknown');
-    }
     throw error;
   }
 }
@@ -2032,18 +2124,83 @@ async function dispatch(method, params, timeoutMs) {
     if (method === 'cooperate.sync' && target && target.tabId != null) intentLedger.reconcile(target.tabId);
     return annotateEffectSuccess(result, method);
   } catch (error) {
+    const notDispatched = error && (error.code === 'E_BAD_ARG' || error.code === 'E_TARGET_MISMATCH' || hasNoEffect(error));    if (isMutating(method)) withEffectState(error, notDispatched ? 'none' : 'unknown');
+    const noEffect = notDispatched === true || (error && (
+      error.effectState === 'none' || error.effect_state === 'none'
+      || (error.data && (error.data.effect_state === 'none' || error.data.effectState === 'none'))
+    ));
     // evaluate 是诊断/读取通道：超时也视为已结算，避免只读命令把标签页冻结。
-    const settleUnknown = isUnknownOutcome(error) && method !== 'evaluate';
+    const settleUnknown = noEffect !== true && isUnknownOutcome(error) && method !== 'evaluate';
     intentLedger.finish(intent, settleUnknown ? 'unknown' : 'failed');
-    if (isMutating(method)) {
-      const notDispatched = error && (error.code === 'E_BAD_ARG' || (error.data && error.data.dispatched === false));
-      withEffectState(error, notDispatched ? 'none' : 'unknown');
-    }
     throw error;
   }
 }
 
+/** 把步骤异常转成协议错误对象（plan 用；不抛出，交由调用方决定是否停）。 */
+function wireStepError(error) {
+  if (!error) return { code: 'E_INTERNAL', message: '未知错误' };
+  const code = typeof error.code === 'string' && error.code.startsWith('E_') ? error.code : 'E_INTERNAL';
+  return { code, message: String(error.message || code), ...(error.data && typeof error.data === 'object' ? { data: error.data } : {}) };
+}
+
+/**
+ * plan：逐步骤经由正常派发路径执行。
+ * 这样每一步都有自己的账本记录与结算（首步失败即停、不重试），
+ * 结束后再同步观察一次并带回结果。
+ */
+async function runPlan(params, timeoutMs) {
+  const steps = Array.isArray(params && params.steps) ? params.steps : null;
+  if (!steps || !steps.length) throw new BridgeError('E_BAD_ARG', 'plan 需要非空 steps 数组');
+  if (steps.length > 50) throw new BridgeError('E_BAD_ARG', 'plan 单次最多 50 步');
+  const results = [];
+  let failedAt = null;
+  for (let index = 0; index < steps.length; index += 1) {
+    const step = steps[index] && typeof steps[index] === 'object' ? steps[index] : {};
+    if (step.method === 'plan') throw new BridgeError('E_BAD_ARG', 'plan 不能嵌套 plan');
+    const stepParams = step.params && typeof step.params === 'object' ? { ...step.params } : {};
+    if (stepParams.tabId == null && params.tabId != null) stepParams.tabId = params.tabId;
+    for (const key of ['context', 'observation', 'expect']) {
+      if (stepParams[key] == null && params[key] != null) stepParams[key] = params[key];
+    }
+    if (stepParams.session === undefined && params.session !== undefined) stepParams.session = params.session;
+    if (stepParams.sessionId === undefined && params.sessionId !== undefined) stepParams.sessionId = params.sessionId;
+    try {
+      const result = await dispatchInner(step.method, stepParams, timeoutMs);
+      results.push({ index, method: step.method, ok: true, result });
+    } catch (error) {
+      results.push({ index, method: step.method, ok: false, error: wireStepError(error) });
+      if (params.continueOnError !== true) {
+        failedAt = index;
+        break;
+      }
+    }
+  }
+  let observation = null;
+  try {
+    const base = {};
+    if (params.tabId != null) base.tabId = params.tabId;
+    if (params.session !== undefined) base.session = params.session;
+    if (params.sessionId !== undefined) base.sessionId = params.sessionId;
+    const obs = await dispatchExtension('observe', { ...base, force: true, probeHover: false }, timeoutMs);
+    if (obs && typeof obs.observation === 'string') {
+      observation = { text: obs.observation, refs: obs.refs, url: obs.url };
+    }
+  } catch {
+    // 页面可能已关闭/导航失败：plan 结果仍然有效，不因观察失败覆盖。
+  }
+  return {
+    steps: results,
+    completed: results.filter((item) => item.ok).length,
+    failedAt,
+    ...(observation ? { observation } : {}),
+  };
+}
+
 async function dispatchInner(method, params, timeoutMs) {
+  // plan 的兼容写法（{action,...}）先归一再过 schema。
+  if (method === 'plan' && params && Array.isArray(params.steps)) {
+    params = { ...params, steps: normalizePlanSteps(params.steps) };
+  }
   const schemaErrors = validateMethodParams(method, params);
   if (schemaErrors.length) {
     throw new BridgeError('E_BAD_ARG', `参数校验失败（${method}）：` + schemaErrors.join('；'), { errors: schemaErrors });
@@ -2099,6 +2256,8 @@ async function dispatchInner(method, params, timeoutMs) {
       return pairRedeem(params);
     case 'pair.revoke':
       return pairRevoke(params);
+    case 'pair.rotate':
+      return pairRotate();
     case 'settings.get':
       return dispatchExtension('settings.get', params, timeoutMs);
     case 'settings.set':
@@ -2135,6 +2294,8 @@ async function dispatchInner(method, params, timeoutMs) {
       const result = await dispatchExtension('operation.await', params, timeoutMs);
       return enforceOperationLimit(result);
     }
+    case 'plan':
+      return runPlan(params, timeoutMs);
     default:
       if (EXT_METHODS.has(method)) return dispatchExtension(method, params, timeoutMs);
       throw new BridgeError('E_UNKNOWN_METHOD', `unknown method: ${method}`);

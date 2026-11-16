@@ -1,4 +1,4 @@
-﻿// src/errors.js —— 扩展侧错误码（见 PROTOCOL.md §5.3）
+// src/errors.js —— 扩展侧错误码（见 PROTOCOL.md §5.3）
 import { warn } from './log.js';
 
 const KNOWN_CODES = new Set([
@@ -39,6 +39,10 @@ const KNOWN_CODES = new Set([
   'E_CANCELLED',
   'E_SESSION_PAUSED',
   'E_FORBIDDEN',
+  'E_OBSERVATION_CHANGED',
+  'E_OBSCURED',
+  'E_TARGET_MISMATCH',
+  'E_CAPTURE_STALE',
 ]);
 
 /** 构造带错误码的 Error。 */

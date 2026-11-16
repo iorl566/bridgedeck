@@ -127,6 +127,15 @@ function installTakeover(info, lang, version) {
       primary.dataset.paused = paused ? '1' : '0';
     }
     root.querySelector('.status-icon').classList.toggle('paused', paused);
+    const glow = root.querySelector('.glow');
+    if (glow) glow.classList.toggle('paused', paused);
+    // 最小化状态按会话保存在 background；重渲染/导航后仍然生效（不再依赖 sessionStorage）。
+    const minimized = info.minimized === true;
+    const card = root.querySelector('.card');
+    const miniButton = root.querySelector('[data-mini]');
+    if (card) card.style.display = minimized ? 'none' : '';
+    if (glow) glow.style.display = minimized ? 'none' : '';
+    if (miniButton) miniButton.style.display = minimized ? 'inline-flex' : 'none';
   };
 
   if (existing && existing.shadowRoot) {
@@ -140,8 +149,9 @@ function installTakeover(info, lang, version) {
   const style = document.createElement('style');
   style.textContent = [
     '.glow{position:fixed;inset:0;z-index:2147483646;box-shadow:inset 0 0 20px 4px rgba(47,111,237,.25);pointer-events:none}',
-    '.glow::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 40px 8px rgba(47,111,237,.5);opacity:0;animation:bbp 3s ease-in-out 2;pointer-events:none}',
-    '@keyframes bbp{0%,100%{opacity:0}50%{opacity:1}}',
+    '.glow::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 40px 8px rgba(47,111,237,.5);opacity:0;animation:bbp 3s ease-in-out infinite;pointer-events:none}',
+    '@keyframes bbp{0%,100%{opacity:.15}50%{opacity:1}}',
+    '.glow.paused::after{animation:none;opacity:0}',
     '@media (prefers-reduced-motion: reduce){.glow::after{animation:none;opacity:0}}',
     '.card{position:fixed;right:18px;bottom:18px;box-sizing:border-box;width:280px;max-width:calc(100vw - 28px);padding:14px;border:1px solid #dbe4f5;border-radius:16px;background:#f7f9fc;color:#1c2230;box-shadow:0 10px 28px rgba(28,34,48,.14),0 2px 6px rgba(28,34,48,.08);font:12.5px/1.5 system-ui,sans-serif;pointer-events:auto}',
     '.head{display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:grab;user-select:none}',
@@ -188,11 +198,11 @@ function installTakeover(info, lang, version) {
     card.style.display = on ? 'none' : '';
     shadow.querySelector('.glow').style.display = on ? 'none' : '';
     mini.style.display = on ? 'inline-flex' : 'none';
-    try { sessionStorage.setItem('__bb_takeover_state.min', on ? '1' : '0'); } catch { /* 忽略 */ }
+    // 交给 background 按标签页/会话保存：跨状态刷新与导航保留。
+    try { chrome.runtime.sendMessage({ type: 'bb.takeover.minimized', minimized: on }); } catch { /* 忽略 */ }
   };
   shadow.querySelector('[data-act="min"]').addEventListener('click', () => setMini(true));
   mini.addEventListener('click', () => setMini(false));
-  try { if (sessionStorage.getItem('__bb_takeover_state.min') === '1') setMini(true); } catch { /* 忽略 */ }
   const primary = shadow.querySelector('[data-act="pause"]');
   primary.addEventListener('click', () => {
     const next = primary.dataset.paused !== '1';
@@ -317,6 +327,7 @@ export async function showTakeover(tabId, info = {}) {
         // 漏传会让浮层永远显示默认的 "BridgeDeck"。
         controller: info.controller && typeof info.controller === 'object' ? info.controller : null,
         mode: info.mode || null,
+        minimized: info.minimized === true,
       }, lang, (takeoverVersions.get(tabId) || 0) + 1],
     });
   } catch (error) {

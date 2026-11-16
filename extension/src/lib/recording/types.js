@@ -1,5 +1,5 @@
 /**
- * Type-only module in the reference implementation. Runtime code consumes the
+ * Type-only module. Runtime code consumes the
  * same object shapes without importing this file, so the mirror stays empty by
  * design. Draft, target, annotation and navigation shapes are documented in
  * CODE-LEARNINGS.md.

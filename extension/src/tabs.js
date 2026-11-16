@@ -149,6 +149,8 @@ export function waitForNavigation(tabId, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let timer = null;
+    let sawStart = false;
+    let startUrl = '';
     const cleanup = () => {
       chrome.tabs.onUpdated.removeListener(onUpdated);
       chrome.tabs.onRemoved.removeListener(onRemoved);
@@ -168,8 +170,13 @@ export function waitForNavigation(tabId, timeoutMs = 30000) {
     };
     const onUpdated = (id, info, tab) => {
       if (id !== tabId) return;
-      if (info.url) finish(info.url);
-      else if (info.status === 'complete' && tab && tab.url) finish(tab.url);
+      // 导航已经开始（loading 或 pendingUrl）：旧页面即使还是 complete 也不能算到达。
+      if (info.status === 'loading' || (tab && tab.pendingUrl)) sawStart = true;
+      if (info.url) {
+        if (sawStart || info.url !== startUrl) finish(info.url);
+      } else if (info.status === 'complete' && tab && tab.url && !tab.pendingUrl && (sawStart || tab.url !== startUrl)) {
+        finish(tab.url);
+      }
     };
     const onRemoved = (id) => {
       if (id === tabId) fail(bridgeError('E_NO_TAB', 'tab 在等待导航期间被关闭'));
@@ -177,15 +184,21 @@ export function waitForNavigation(tabId, timeoutMs = 30000) {
     timer = setTimeout(() => fail(bridgeError('E_TIMEOUT', `等待导航超时（${timeoutMs}ms）`)), timeoutMs);
     chrome.tabs.onUpdated.addListener(onUpdated);
     chrome.tabs.onRemoved.addListener(onRemoved);
-    // 命令到达前页面可能已经完成导航：先读一次状态，若已经 complete 则短暂等待
-    // 新导航事件（避免 SPA 立刻跳走），没有新事件就按当前 URL 结束。
+    // 命令到达前页面可能已经完成导航：先读一次状态。只有"没有在途导航"时，
+    // 才在短暂宽限后按当前 URL 结束；pendingUrl/loading 说明导航还在路上，必须等后继文档。
     chrome.tabs
       .get(tabId)
       .then((tab) => {
-        log('wait-for-navigation 起始 url', tab && tab.url);
-        if (tab && tab.status === 'complete' && tab.url) {
-          setTimeout(() => finish(tab.url), 100);
-        }
+        startUrl = (tab && tab.url) || '';
+        log('wait-for-navigation 起始 url', startUrl, 'pending', tab && tab.pendingUrl);
+        if (!tab || tab.pendingUrl || tab.status === 'loading') return;
+        setTimeout(() => {
+          if (settled) return;
+          chrome.tabs.get(tabId).then((now) => {
+            if (!now || now.pendingUrl || now.status === 'loading') return;
+            if (!sawStart) finish(now.url || startUrl);
+          }).catch(() => {});
+        }, 100);
       })
       .catch(() => fail(bridgeError('E_NO_TAB', `tabId ${tabId} 不存在或已关闭`)));
   });
@@ -917,7 +930,7 @@ export async function requestHelp(params = {}) {
   const timeoutMs = Math.min(Math.max(Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : 180000, 5000), 600000);
   const requestId = crypto.randomUUID();
   const pending = waitHumanDecision(requestId, timeoutMs, () => ({ action: 'timeout' }));
-  // 完成条件（bsk completion_criteria）：人工完成页面操作后自动交还，不必再点卡片按钮。
+  // 完成条件：人工完成页面操作后自动交还，不必再点卡片按钮。
   const criteria = (Array.isArray(params.criteria) ? params.criteria : [])
     .filter((item) => item && typeof item === 'object')
     .slice(0, 10)

@@ -11,10 +11,11 @@
 一次 sync 后已决定的多步操作可以合并：
 
 ```sh
-bridge plan --session SID --context ID --steps '[{"action":"fill","ref":"@e3","value":"x"},{"action":"click","ref":"@e5","expect":[{"target":"@e5","field":"text","equals":"保存"}]}]'
+bridge plan --session SID --context ID --steps '[{"method":"fill","params":{"ref":"@e3","value":"x"}},{"method":"click","params":{"ref":"@e5","expect":[{"target":"@e5","field":"text","equals":"保存"}]}}]'
 ```
 
-- 每步仍是普通动作，受同样校验；某步失败会停止并返回已完成步骤。
+- 每步仍是普通动作，受同样校验；某步失败会停止并返回已完成步骤与当时的同步观察（`observation`）。
+- 也接受简写 `{"action":"fill","ref":"@e3","value":"x"}`（参数平铺）与 `{"action":{"method":"fill","params":{...}}}`；新代码用 `method`/`params`。
 - 适合表单字段、筛选条件等相互独立的操作；依赖上一步结果、严格策略或不可逆操作分开调用。
 - 不要跨导航把旧 ref 放进 plan。
 

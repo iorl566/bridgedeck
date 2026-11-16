@@ -48,6 +48,7 @@ export class BridgeSocket {
     this.instanceId = null;
     this.daemonVersion = null;
     this.localAuth = null;
+    this.authChallenge = '';
     this.lastError = null;
     this.helloDone = false;
     this.pairToken = '';
@@ -323,30 +324,30 @@ export class BridgeSocket {
           finish(new Error('daemon 要求认证，但本地没有 token'));
           return;
         }
-        hmacHex(this.pairToken, 'bridgedeck-auth-v1\n' + String(message.challenge || ''))
+        this.authChallenge = String(message.challenge || '');
+        hmacHex(this.pairToken, 'bridgedeck-auth-v1\n' + this.authChallenge)
           .then((proof) => this.sendJson({ type: 'auth-response', challenge: message.challenge, proof }))
           .catch((error) => finish(new Error('challenge-response 失败：' + ((error && error.message) || error))));
         return;
       }
       case 'hello-ack': {
-        this.helloDone = true;
-        this.daemonVersion = message.daemonVersion || null;
-        this.protocol = message.protocol || null;
-        this.protocolSkew = protocolSkew(message.protocol);
-        this.retryCount = 0;
-        this.connectedAt = Date.now();
-        this.lastPort = this.port;
-        chrome.storage.session.set({ 'bb.lastPort': this.port }).catch(() => {});
-        this.setState(this.protocolSkew ? 'version_skew' : 'connected');
-        this.localAuth = message.localAuth && typeof message.localAuth === 'object' ? message.localAuth : null;
-        this.lastError = null;
-        if (message.instanceId) {
-          this.instanceId = message.instanceId;
-          chrome.storage.local.set({ 'bb.instanceId': message.instanceId }).catch(() => {});
+        const challenge = this.authChallenge;
+        const expected = String(message.serverProof || '');
+        if (challenge && this.pairToken) {
+          // 双向证明：daemon 必须能用同一 token 对挑战签名，否则可能是冒充的本地服务。
+          hmacHex(this.pairToken, 'bridgedeck-server-v1\n' + challenge).then((proof) => {
+            if (!expected || proof !== expected) {
+              this.lastError = 'daemon 身份校验失败（server-proof 不匹配）';
+              log(this.lastError);
+              try { if (this.socket) this.socket.close(4003, 'server proof failed'); } catch { /* 忽略 */ }
+              finish(new Error(this.lastError));
+              return;
+            }
+            this.completeHello(message, finish);
+          }).catch((error) => finish(new Error('daemon 身份校验异常：' + ((error && error.message) || error))));
+          return;
         }
-        if (this.handshakeTimer) { clearTimeout(this.handshakeTimer); this.handshakeTimer = null; }
-        log('握手完成 instance=' + (message.instanceId || '?') + ' daemon=' + (message.daemonVersion || '?') + ' protocol=' + (message.protocol || '?'));
-        finish();
+        this.completeHello(message, finish);
         return;
       }
       case 'hello-error': {
@@ -381,5 +382,28 @@ export class BridgeSocket {
       default:
         return;
     }
+  }
+
+  /** hello-ack 通过校验后的收尾（双向证明通过才会走到这里）。 */
+  completeHello(message, finish) {
+    this.helloDone = true;
+    this.daemonVersion = message.daemonVersion || null;
+    this.protocol = message.protocol || null;
+    this.protocolSkew = protocolSkew(message.protocol);
+    this.retryCount = 0;
+    this.connectedAt = Date.now();
+    this.lastPort = this.port;
+    this.authChallenge = '';
+    chrome.storage.session.set({ 'bb.lastPort': this.port }).catch(() => {});
+    this.setState(this.protocolSkew ? 'version_skew' : 'connected');
+    this.localAuth = message.localAuth && typeof message.localAuth === 'object' ? message.localAuth : null;
+    this.lastError = null;
+    if (message.instanceId) {
+      this.instanceId = message.instanceId;
+      chrome.storage.local.set({ 'bb.instanceId': message.instanceId }).catch(() => {});
+    }
+    if (this.handshakeTimer) { clearTimeout(this.handshakeTimer); this.handshakeTimer = null; }
+    log('握手完成 instance=' + (message.instanceId || '?') + ' daemon=' + (message.daemonVersion || '?') + ' protocol=' + (message.protocol || '?'));
+    finish();
   }
 }

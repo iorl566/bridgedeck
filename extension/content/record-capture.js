@@ -193,7 +193,9 @@
     state.seq += 1;
     const seq = state.seq;
     const agentAt = Number(document.documentElement.getAttribute('data-bb-agent-input') || 0);
-    const actor = agentAt > 0 && Date.now() - agentAt < 10000 ? 'agent' : 'human';
+    // 标记可能是 performance.now（新）或 Date.now（旧），两种都认。
+    const agentRecent = agentAt > 0 && (agentAt > 1e11 ? Date.now() - agentAt < 10000 : (performance.now() >= agentAt && performance.now() - agentAt < 10000));
+    const actor = agentRecent ? 'agent' : 'human';
     send(Object.assign({ kind, seq, ts: Date.now(), actor, url: location.href }, payload));
     if (kind !== 'state') scheduleState(seq);
   };

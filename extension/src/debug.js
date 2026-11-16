@@ -2,6 +2,7 @@
 import { consoleEntries } from './actions.js';
 import { execPage } from './inject.js';
 import { networkDetail, networkList, networkStart, networkStop } from './network.js';
+import { ensureHooks, releaseHooks } from './page-hooks.js';
 import { log } from './log.js';
 
 const HISTORY_KEY = 'bb.debug.history';
@@ -33,6 +34,9 @@ export async function debugStart(params = {}) {
     throw new Error('标签页不存在或已关闭');
   }
   await networkStart({ tabId, bodies: params.bodies === true });
+  // 调试采集是显式"我在观察这个页面"的模式：此时才安装主世界钩子
+  // （console 缓冲 + 请求命令归因），平时浏览不留痕。
+  await ensureHooks(tabId).catch(() => {});
   activeSessions.set(tabId, {
     tabId,
     url: String(tab.url || ''),
@@ -147,6 +151,7 @@ export async function debugStop(params = {}) {
   if (!session) return { ok: false, error: '该标签页没有进行中的调试采集' };
   const data = await collect(tabId);
   await networkStop({ tabId }).catch(() => {});
+  await releaseHooks(tabId).catch(() => {});
   activeSessions.delete(tabId);
   const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
   const record = {

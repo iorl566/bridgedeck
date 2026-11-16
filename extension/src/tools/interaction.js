@@ -10,6 +10,8 @@ import { pageAction } from './page-action.js';
 import { requireTabId } from './shared.js';
 import { shadowRefClick } from './shadow.js';
 import { inputFocusCache, recentFillFocus, shadowRefs } from './state.js';
+import { resolveCapturePoint, verifyVisualHit } from '../screenshot.js';
+import { log } from '../log.js';
 const rawClick = pageAction('click');
 const rawHover = pageAction('hover');
 
@@ -137,14 +139,20 @@ async function trustedOrFallback(kind, params, fallback) {
 async function trustedDrag(params, fallback) {
   const tabId = requireTabId(params);
   await ensureInputFocus(tabId);
-  const fromPoint = await execPage(tabId, 'point', params.from).catch(() => null);
-  if (!fromPoint) return fallback(params);
+  let start;
+  if (params.fromPoint && Number.isFinite(params.fromPoint.x) && Number.isFinite(params.fromPoint.y)) {
+    // 视觉坐标拖拽：起点已经由 resolveCapturePoint 换算好，不需要再查元素。
+    start = { x: params.fromPoint.x, y: params.fromPoint.y };
+  } else {
+    const fromPoint = await execPage(tabId, 'point', params.from).catch(() => null);
+    if (!fromPoint) return fallback(params);
+    start = {
+      x: fromPoint.x + (Number(params.fromOffsetX) || 0),
+      y: fromPoint.y + (Number(params.fromOffsetY) || 0),
+    };
+  }
   let toPoint = null;
   if (params.to) toPoint = await execPage(tabId, 'point', params.to).catch(() => null);
-  const start = {
-    x: fromPoint.x + (Number(params.fromOffsetX) || 0),
-    y: fromPoint.y + (Number(params.fromOffsetY) || 0),
-  };
   const end = toPoint
     ? { x: toPoint.x + (Number(params.toOffsetX) || 0), y: toPoint.y + (Number(params.toOffsetY) || 0) }
     : { x: start.x + (Number(params.dx) || 0), y: start.y + (Number(params.dy) || 0) };
@@ -171,7 +179,7 @@ async function trustedDrag(params, fallback) {
         if (pause > 0) await sleep(pause);
       }
       await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: end.x, y: end.y, button: 'left', buttons: 0, clickCount: 1, modifiers });
-      return { ok: true, trusted: true, from: start, to: end };
+      return { ok: true, trusted: true, from: start, to: end, hit: params.hitAt || undefined };
     } finally {
       void cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
       await release(tabId, 'input').catch(() => {});
@@ -273,6 +281,28 @@ const KEY_CODES = {
   Space: { key: ' ', code: 'Space', vk: 32, text: ' ' },
 };
 
+// US 布局标点的物理键码：快捷键处理器常检查 event.code（Ctrl+/、Ctrl+[ 等），
+// 只给 key 不够。Shifted 符号映射到基础键位并自动补 shift 修饰。
+const PUNCTUATION = {
+  '`': ['Backquote', 192], '~': ['Backquote', 192, true],
+  '-': ['Minus', 189], '_': ['Minus', 189, true],
+  '=': ['Equal', 187], '+': ['Equal', 187, true],
+  '[': ['BracketLeft', 219], '{': ['BracketLeft', 219, true],
+  ']': ['BracketRight', 221], '}': ['BracketRight', 221, true],
+  '\\': ['Backslash', 220], '|': ['Backslash', 220, true],
+  ';': ['Semicolon', 186], ':': ['Semicolon', 186, true],
+  "'": ['Quote', 222], '"': ['Quote', 222, true],
+  ',': ['Comma', 188], '<': ['Comma', 188, true],
+  '.': ['Period', 190], '>': ['Period', 190, true],
+  '/': ['Slash', 191], '?': ['Slash', 191, true],
+};
+
+function punctuationInfo(ch) {
+  const entry = PUNCTUATION[ch];
+  if (!entry) return null;
+  return { key: ch, code: entry[0], vk: entry[1], shift: entry[2] === true };
+}
+
 function parseKeySpec(spec) {
   const parts = String(spec || '').split('+').map((item) => item.trim()).filter(Boolean);
   if (!parts.length) throw bridgeError('E_BAD_ARG', 'press 需要 key');
@@ -290,12 +320,16 @@ function parseKeySpec(spec) {
     const ch = keyName;
     const upper = ch.toUpperCase();
     const isDigit = /[0-9]/.test(ch);
-    info = {
-      key: ch,
-      code: isDigit ? 'Digit' + ch : (/[a-zA-Z]/.test(ch) ? 'Key' + upper : ''),
-      vk: isDigit ? ch.charCodeAt(0) : (upper.charCodeAt(0) || 0),
-      text: ch,
-    };
+    const punct = punctuationInfo(ch);
+    info = punct
+      ? { key: punct.key, code: punct.code, vk: punct.vk, text: punct.shift ? undefined : ch }
+      : {
+        key: ch,
+        code: isDigit ? 'Digit' + ch : (/[a-zA-Z]/.test(ch) ? 'Key' + upper : ''),
+        vk: isDigit ? ch.charCodeAt(0) : (upper.charCodeAt(0) || 0),
+        text: ch,
+      };
+    if (punct && punct.shift) modifiers |= 8;
   }
   if (!info) throw bridgeError('E_BAD_ARG', '不支持的按键：' + spec);
   return { ...info, modifiers };
@@ -342,6 +376,22 @@ async function trustedClickPoint(tabId, point) {
  * 3–4 步 fast path：页面内聚焦并选中 → CDP insertText → 页面内校验。
  * 省掉鼠标点击、Ctrl+A、焦点仿真与置前；不适合的控件返回 null 走原 trustedFill。
  */
+/** fill 校验结果的对外字段：敏感字段只回 formatted，其余回 actual_value（截断 200）。 */
+function fillVerifyFields(verified) {
+  if (!verified) return {};
+  if (verified.sensitive === true) return { formatted: verified.formatted === true };
+  const actualText = verified.value != null ? String(verified.value) : '';
+  return {
+    actual_value: actualText.slice(0, 200),
+    ...(actualText.length > 200 ? { actual_value_truncated: true } : {}),
+    formatted: verified.formatted === true,
+  };
+}
+
+function fillVerifyTargets(params) {
+  return params.ref ? { ref: params.ref } : (params.selector ? { selector: params.selector } : {});
+}
+
 async function trustedFillFast(params) {
   const tabId = requireTabId(params);
   const target = params.ref ? { ref: params.ref } : (params.selector ? { selector: params.selector } : null);
@@ -377,9 +427,7 @@ async function trustedFillFast(params) {
     ok: true,
     trusted: true,
     fast: true,
-    ...(verified ? {
-      ...(verified.sensitive === true ? { formatted: verified.formatted === true } : { actualValue: verified.value, formatted: verified.formatted === true }),
-    } : {}),
+    ...fillVerifyFields(verified),
   };
 }
 
@@ -413,7 +461,6 @@ async function trustedFill(params, fallback) {
         await trustedKey(tabId, 'End');
       }
       await cdpSend(tabId, 'Input.insertText', { text: String(params.value === undefined ? '' : params.value) });
-      return { ok: true, trusted: true };
     } finally {
       void cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
       await release(tabId, 'input').catch(() => {});
@@ -421,6 +468,16 @@ async function trustedFill(params, fallback) {
   } finally {
     releaseInputLease(tabId, lease.token);
   }
+  const fillTarget = fillVerifyTargets(params);
+  const verified = await execPage(tabId, 'fill-verify', {
+    ...fillTarget,
+    expected: String(params.value === undefined ? '' : params.value),
+  }).catch(() => null);
+  return {
+    ok: true,
+    trusted: true,
+    ...fillVerifyFields(verified),
+  };
 }
 
 async function trustedPress(params, fallback) {
@@ -462,6 +519,14 @@ export async function fill(params = {}) {
     if (!params || params.trusted !== true) {
       const result = await rawFill(params);
       if (params && params.ref) recentFillFocus.set(Number(params.tabId), { ref: params.ref, at: Date.now() });
+      // 合成路径也回填校验结果：agent 不能只看 "ok" 就以为值真的写进去了。
+      if (params && Number.isInteger(params.tabId)) {
+        const verified = await execPage(params.tabId, 'fill-verify', {
+          ...fillVerifyTargets(params),
+          expected: String(params.value === undefined ? '' : params.value),
+        }).catch(() => null);
+        return { ...result, ...fillVerifyFields(verified) };
+      }
       return result;
     }
     const run = async () => {
@@ -512,12 +577,54 @@ export const focus = pageAction('focus');
 export const scrollTo = pageAction('scroll-to');
 const rawDrag = pageAction('drag');
 export async function drag(params = {}) {
-  if (!params || params.trusted !== true) return rawDrag(params);
-  const run = () => trustedDrag(params, rawDrag).catch((error) => {
+  const effective = await withImageDrag(params);
+  if (!effective || effective.trusted !== true) return rawDrag(effective);
+  const run = () => trustedDrag(effective, rawDrag).catch((error) => {
     if (error && error.code === 'E_INPUT_BUSY') throw error;
-    return rawDrag(params);
+    // 视觉坐标拖拽没有页面内等价物：起点是像素坐标，页面库拿不到元素。
+    if (effective.capture != null) throw error;
+    return rawDrag(effective);
   });
-  return Number.isInteger(params.tabId) ? withForegroundTab(params.tabId, () => withOverlaysHidden(params.tabId, run)) : run();
+  return Number.isInteger(effective.tabId) ? withForegroundTab(effective.tabId, () => withOverlaysHidden(effective.tabId, run)) : run();
+}
+
+/**
+ * 视觉坐标拖拽：把截图像素坐标换成页面坐标，并强制走可信输入。
+ * 页面内合成事件对 canvas 验证码一类控件无效，所以这里不做回退——
+ * 坐标拖拽只有 CDP 这一条路，失败就让调用方看到真实错误。
+ */
+async function withImageDrag(params) {
+  if (!params || params.capture == null) return params;
+  const imageX = Number(params.imageX);
+  const imageY = Number(params.imageY);
+  if (!Number.isFinite(imageX) || !Number.isFinite(imageY)) {
+    throw bridgeError('E_BAD_ARG', '视觉坐标拖拽需要 imageX/imageY');
+  }
+  const tabId = Number(params.tabId);
+  const resolved = resolveCapturePoint(
+    String(params.capture),
+    Number.isInteger(tabId) ? tabId : undefined,
+    imageX,
+    imageY,
+    { consume: true },
+  );
+  const scale = resolved.scale || 1;
+  const dx = Number.isFinite(Number(params.imageDx)) ? Number(params.imageDx) / scale : Number(params.dx) || 0;
+  const dy = Number.isFinite(Number(params.imageDy)) ? Number(params.imageDy) / scale : Number(params.dy) || 0;
+  if (!dx && !dy) throw bridgeError('E_BAD_ARG', '视觉坐标拖拽需要 imageDx/imageDy（图片像素位移）');
+  // 派发前确认落点：坐标是外部给的，先看下面到底是什么（浮层/遮罩/空白都要拦）。
+  const hit = await verifyVisualHit(resolved.capture.tabId, resolved.x, resolved.y, resolved.capture.candidateIndex);
+  return {
+    ...params,
+    tabId: resolved.capture.tabId,
+    from: undefined,
+    to: undefined,
+    fromPoint: { x: resolved.x, y: resolved.y },
+    hitAt: hit ? { tag: hit.tag, id: hit.id, cls: hit.cls } : undefined,
+    dx,
+    dy,
+    trusted: true,
+  };
 }
 export const wheel = pageAction('wheel');
 export const blur = pageAction('blur');

@@ -31,9 +31,8 @@ export function fields(parts) {
   return result;
 }
 
-/** 协议域分隔：新配对使用新域名；旧配对保留旧域名以兼容老服务端。 */
+/** 协议域分隔：本地配对的证明只在这个域名下有效。 */
 export const AUTH_DOMAIN = 'bridgedeck-local-auth-v1';
-export const LEGACY_AUTH_DOMAIN = 'bsk-local-auth-v1';
 
 export function transcript(value, domain = AUTH_DOMAIN) {
   return fields([

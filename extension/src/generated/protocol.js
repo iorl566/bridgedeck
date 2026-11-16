@@ -113,6 +113,7 @@ export const METHOD_EFFECT = {
   "debug.pin": "browser_mutation",
   "debug.pinned": "control_plane",
   "debugger.detach": "browser_mutation",
+  "debugger.simulate-detach": "browser_mutation",
   "screenshot.manual.start": "browser_mutation",
   "screenshot.manual.frame": "browser_mutation",
   "screenshot.manual.save": "browser_mutation",
@@ -175,6 +176,7 @@ export const METHODS = [
   "debug.start",
   "debug.stop",
   "debugger.detach",
+  "debugger.simulate-detach",
   "diagnostics.ui",
   "dialog.accept",
   "dialog.arm",
@@ -301,6 +303,7 @@ export const MUTATING_METHODS = new Set([
   "debug.start",
   "debug.stop",
   "debugger.detach",
+  "debugger.simulate-detach",
   "dialog.accept",
   "dialog.arm",
   "dialog.disarm",
@@ -372,6 +375,7 @@ export const LOCAL_METHODS = new Set([
   "pair.list",
   "pair.redeem",
   "pair.revoke",
+  "pair.rotate",
   "session.list",
   "session.pause",
   "session.rebind",
@@ -492,6 +496,7 @@ export const SESSION_METHODS = new Set([
 export const INSTANCE_METHODS = new Set([
   "control-hint",
   "debugger.detach",
+  "debugger.simulate-detach",
   "diagnostics.ui",
   "tab.close",
   "tab.list",
@@ -536,6 +541,7 @@ export const EXT_METHODS = new Set([
   "debug.start",
   "debug.stop",
   "debugger.detach",
+  "debugger.simulate-detach",
   "diagnostics.ui",
   "dialog.accept",
   "dialog.arm",
@@ -620,12 +626,15 @@ export const METHOD_SCHEMA_KEYS = {
     "required": [],
     "properties": [
       "ax",
+      "baseline",
       "closedShadow",
       "compareAx",
       "cursor",
       "debugSurfaces",
+      "delta",
       "facts",
       "fallbackAx",
+      "force",
       "maxDepth",
       "maxTokens",
       "pipeline",
@@ -793,6 +802,11 @@ export const METHOD_SCHEMA_KEYS = {
   "drag": {
     "required": [],
     "properties": [
+      "capture",
+      "imageDx",
+      "imageDy",
+      "imageX",
+      "imageY",
       "modifiers",
       "steps",
       "waitTimeoutMs"
@@ -912,13 +926,18 @@ export const METHOD_SCHEMA_KEYS = {
       "annotate",
       "format",
       "fullPage",
+      "grid",
+      "gridStep",
+      "profile",
       "ref",
       "region",
+      "scale",
       "scope",
       "selector",
       "session",
       "sessionId",
-      "tabId"
+      "tabId",
+      "visualIndex"
     ]
   },
   "record.start": {
@@ -1023,6 +1042,7 @@ export const METHOD_SCHEMA_KEYS = {
   "actionable": {
     "required": [],
     "properties": [
+      "expectRevision",
       "ref",
       "selector",
       "session",
@@ -1033,6 +1053,7 @@ export const METHOD_SCHEMA_KEYS = {
   "blur": {
     "required": [],
     "properties": [
+      "expectRevision",
       "ref",
       "selector",
       "session",
@@ -1043,6 +1064,7 @@ export const METHOD_SCHEMA_KEYS = {
   "focus": {
     "required": [],
     "properties": [
+      "expectRevision",
       "ref",
       "selector",
       "session",
@@ -1053,6 +1075,7 @@ export const METHOD_SCHEMA_KEYS = {
   "get-html": {
     "required": [],
     "properties": [
+      "expectRevision",
       "ref",
       "selector",
       "session",
@@ -1063,6 +1086,7 @@ export const METHOD_SCHEMA_KEYS = {
   "scroll-to": {
     "required": [],
     "properties": [
+      "expectRevision",
       "ref",
       "selector",
       "session",
@@ -1073,6 +1097,7 @@ export const METHOD_SCHEMA_KEYS = {
   "shadow.read": {
     "required": [],
     "properties": [
+      "expectRevision",
       "ref",
       "selector",
       "session",
@@ -1083,6 +1108,7 @@ export const METHOD_SCHEMA_KEYS = {
   "shadow.click": {
     "required": [],
     "properties": [
+      "expectRevision",
       "ref",
       "selector",
       "session",
@@ -1094,6 +1120,7 @@ export const METHOD_SCHEMA_KEYS = {
   "upload": {
     "required": [],
     "properties": [
+      "expectRevision",
       "files",
       "paths",
       "ref",
@@ -1106,6 +1133,7 @@ export const METHOD_SCHEMA_KEYS = {
   "download": {
     "required": [],
     "properties": [
+      "expectRevision",
       "out",
       "ref",
       "selector",
@@ -1722,6 +1750,14 @@ export const METHOD_SCHEMA_KEYS = {
       "sessionId",
       "tabId"
     ]
+  },
+  "debugger.simulate-detach": {
+    "required": [],
+    "properties": [
+      "session",
+      "sessionId",
+      "tabId"
+    ]
   }
 };
 export const PARAM_ALIASES = {
@@ -1795,6 +1831,10 @@ export const PARAM_ALIASES = {
     "delta_y": "deltaY"
   },
   "drag": {
+    "image_dx": "imageDx",
+    "image_dy": "imageDy",
+    "image_x": "imageX",
+    "image_y": "imageY",
     "wait_timeout_ms": "waitTimeoutMs"
   },
   "transfer.begin": {
@@ -1844,8 +1884,10 @@ export const PARAM_ALIASES = {
   },
   "screenshot": {
     "full_page": "fullPage",
+    "grid_step": "gridStep",
     "session_id": "sessionId",
-    "tab_id": "tabId"
+    "tab_id": "tabId",
+    "visual_index": "visualIndex"
   },
   "record.start": {
     "include_agent": "includeAgent",
@@ -1897,38 +1939,47 @@ export const PARAM_ALIASES = {
     "tab_id": "tabId"
   },
   "actionable": {
+    "expect_revision": "expectRevision",
     "session_id": "sessionId",
     "tab_id": "tabId"
   },
   "blur": {
+    "expect_revision": "expectRevision",
     "session_id": "sessionId",
     "tab_id": "tabId"
   },
   "focus": {
+    "expect_revision": "expectRevision",
     "session_id": "sessionId",
     "tab_id": "tabId"
   },
   "get-html": {
+    "expect_revision": "expectRevision",
     "session_id": "sessionId",
     "tab_id": "tabId"
   },
   "scroll-to": {
+    "expect_revision": "expectRevision",
     "session_id": "sessionId",
     "tab_id": "tabId"
   },
   "shadow.read": {
+    "expect_revision": "expectRevision",
     "session_id": "sessionId",
     "tab_id": "tabId"
   },
   "shadow.click": {
+    "expect_revision": "expectRevision",
     "session_id": "sessionId",
     "tab_id": "tabId"
   },
   "upload": {
+    "expect_revision": "expectRevision",
     "session_id": "sessionId",
     "tab_id": "tabId"
   },
   "download": {
+    "expect_revision": "expectRevision",
     "session_id": "sessionId",
     "tab_id": "tabId"
   },
@@ -2219,6 +2270,10 @@ export const PARAM_ALIASES = {
     "tab_id": "tabId"
   },
   "debugger.detach": {
+    "session_id": "sessionId",
+    "tab_id": "tabId"
+  },
+  "debugger.simulate-detach": {
     "session_id": "sessionId",
     "tab_id": "tabId"
   }
