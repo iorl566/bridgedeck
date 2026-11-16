@@ -32,7 +32,7 @@ WHAT YOU CAN DO
 • Keep a record — optional operation audit, task history, and evidence stored locally.
 
 BUILT FOR AGENTS
-BridgeDeck exposes one CLI, an MCP server (49 tools) and a DeepSeek Harness plugin. Any agent that can run shell commands can use it; nothing is tied to a specific model.
+BridgeDeck exposes one CLI, an MCP server (51 tools) and a DeepSeek Harness plugin. Any agent that can run shell commands can use it; nothing is tied to a specific model.
 
 LOCAL AND PRIVATE BY DEFAULT
 • Connects to a local daemon on 127.0.0.1 by default; no cloud service and no telemetry.
