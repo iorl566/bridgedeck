@@ -1,6 +1,7 @@
 // src/dispatch.js —— 命令分发：方法表 + 同一 tabId 串行
 import { bridgeError, toWireError } from './errors.js';
 import { cancelWait, observe, observeSmart, observeFrames, resolveFrameAlias, shadowClick, shadowRead, snapshot, getHtml, click, clickBackend, hover, fill, actionable, press, select, focus, scrollTo, evaluate, consoleEntries, navigate, reload, goBack, goForward, waitMs, waitForElement, waitForNavigationCmd, read, extract, extractDiscover, extractList, extractTable, drag, wheel, blur, upload } from './actions.js';
+import { normalizeParams } from './generated/protocol.js';
 import { ensureAgent, newAgentWindow, windowClose, sleep, tabList, tabNew, tabClose, tabSelect, tabMove, windowList, windowFocus, windowResize, tabBorrow, tabReturn, requestHelp, controlHint } from './tabs.js';
 import { settingsGet, settingsSet } from './settings.js';
 import { clickByImage, takeScreenshot } from './screenshot.js';
@@ -88,7 +89,7 @@ export const HANDLERS = {
   'video.fetch': fetchVideo,
   'video.discard': discardVideo,
   'video.prune': videoPrune,
-  'record.start': (params) => startRecording({ tabId: params.tabId, screenshots: params.screenshots === true }),
+  'record.start': (params) => startRecording({ tabId: params.tabId, screenshots: params.screenshots === true, includeAgent: params.includeAgent === true }),
   'record.stop': (params) => stopRecording({ tabId: params.tabId }),
   'record.status': () => activeRecordings(),
   'record.list': () => listRecordings(),
@@ -248,7 +249,7 @@ async function dispatchCommand(method, params) {
   if (!handler) {
     throw bridgeError('E_UNKNOWN_METHOD', `未知方法: ${method}`);
   }
-  const input = params || {};
+  const input = normalizeParams(method, params || {});
   if (typeof input.ref === 'string') {
     const aliased = /^@e\d+$/.test(input.ref) ? resolveFrameAlias(input.tabId, input.ref) : null;
     if (aliased) {

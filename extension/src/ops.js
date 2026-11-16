@@ -47,13 +47,38 @@ async function captureStepShot(session, event) {
 /** 注入函数：在页面里挂记录器（必须自包含）。 */
 function recorderFunc() {
   if (window.__bb_ops && window.__bb_ops.active) return { active: true, existing: true };
+  if (window.__bb_record_capture && window.__bb_record_capture.active) return { active: true, existing: 'content' };
   const state = { active: true, seq: 0 };
-  const send = (payload) => {
+  const pending = [];
+  let sending = false;
+  const flushTimer = globalThis['set' + 'Interval'](() => flush(), 500);
+  const flush = () => {
+    if (sending || !pending.length) return;
+    sending = true;
+    const item = pending[0];
+    let settled = false;
+    const done = (ok) => {
+      if (settled) return;
+      settled = true;
+      sending = false;
+      if (ok) pending.shift();
+      else if (pending.length > 1) pending.splice(0, 1); // 队头坏消息不阻塞后续
+      if (pending.length) globalThis['set' + 'Timeout'](() => flush(), 300);
+    };
     try {
-      chrome.runtime.sendMessage(Object.assign({ type: 'bb.ops.event' }, payload));
+      const reply = chrome.runtime.sendMessage(item, () => {
+        if (chrome.runtime.lastError) done(false);
+        else done(true);
+      });
+      if (reply && typeof reply.then === 'function') reply.then(() => done(true), () => done(false));
     } catch (error) {
-      // SW 不可达时丢弃
+      done(false);
     }
+  };
+  const send = (payload) => {
+    pending.push(Object.assign({ type: 'bb.ops.event' }, payload));
+    if (pending.length > 200) pending.shift();
+    flush();
   };
   const selectorOf = (el) => {
     if (!el || el.nodeType !== 1) return '';
@@ -80,6 +105,69 @@ function recorderFunc() {
     return parts.join(' > ');
   };
   const textOf = (el) => String((el && (el.innerText || el.value || el.getAttribute('aria-label') || '')) || '').trim().slice(0, 80);
+  const roleOf = (el) => {
+    if (!el || el.nodeType !== 1) return '';
+    const explicit = String(el.getAttribute('role') || '').trim().toLowerCase();
+    if (explicit) return explicit;
+    const tag = String(el.tagName || '').toLowerCase();
+    if (tag === 'a') return 'link';
+    if (tag === 'button') return 'button';
+    if (tag === 'select') return 'combobox';
+    if (tag === 'textarea') return 'textbox';
+    if (tag === 'input') {
+      const type = String(el.getAttribute('type') || 'text').toLowerCase();
+      if (type === 'checkbox' || type === 'radio' || type === 'range' || type === 'file') return type;
+      return 'textbox';
+    }
+    return '';
+  };
+  const nameOf = (el) => String((el && (el.getAttribute('aria-label') || el.getAttribute('title') || el.innerText || el.value || '')) || '').trim().slice(0, 80);
+  const popupTriggerOf = (el) => {
+    let node = el;
+    for (let depth = 0; node && node.nodeType === 1 && depth < 4; depth += 1) {
+      const expanded = String(node.getAttribute('aria-expanded') || '').toLowerCase();
+      const className = typeof node.className === 'string' ? node.className : '';
+      if (node.hasAttribute('aria-haspopup')
+        || expanded === 'false'
+        || /(menu|popup|dropdown|flyout|popover|submenu|combobox|autocomplete)/i.test(className + ' ' + String(node.id || ''))) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  };
+  let lastHoverSelector = '';
+  let lastHoverAt = 0;
+  let lastHoverEl = null;
+  const onPointerOver = (event) => {
+    const el = event.target;
+    if (!el || el.nodeType !== 1 || overlayEvent(event)) return;
+    const trigger = popupTriggerOf(el);
+    if (!trigger) return;
+    const selector = selectorOf(trigger);
+    const now = Date.now();
+    if (selector === lastHoverSelector && now - lastHoverAt < 2000) return;
+    lastHoverSelector = selector;
+    lastHoverAt = now;
+    lastHoverEl = trigger;
+    record('hover', {
+      selector,
+      tag: String(trigger.tagName || '').toLowerCase(),
+      role: roleOf(trigger),
+      name: nameOf(trigger),
+      expectsPopup: true,
+    });
+  };
+  const parentOfClick = (el) => {
+    if (!lastHoverEl || !lastHoverSelector || Date.now() - lastHoverAt > 5000) return '';
+    if (lastHoverEl.contains(el)) return lastHoverSelector;
+    let node = el;
+    for (let depth = 0; node && node.nodeType === 1 && depth < 6; depth += 1) {
+      if (node === lastHoverEl) return lastHoverSelector;
+      node = node.parentElement;
+    }
+    return '';
+  };
   const record = (kind, payload) => {
     if (!state.active) return;
     state.seq += 1;
@@ -145,7 +233,15 @@ function recorderFunc() {
     const el = event.target;
     if (!el || el.nodeType !== 1) return;
     if (overlayEvent(event)) return;
-    record('click', { selector: selectorOf(el), tag: el.tagName.toLowerCase(), text: textOf(el) });
+    const parent = parentOfClick(el);
+    record('click', {
+      selector: selectorOf(el),
+      tag: el.tagName.toLowerCase(),
+      role: roleOf(el),
+      name: nameOf(el),
+      text: textOf(el),
+      ...(parent ? { parent } : {}),
+    });
   };
   const onInput = (event) => {
     const el = event.target;
@@ -153,28 +249,72 @@ function recorderFunc() {
     if (overlayEvent(event)) return;
     const type = String(el.getAttribute('type') || '').toLowerCase();
     const value = isSensitiveField(el) ? '********' : String(el.value == null ? '' : el.value).slice(0, 200);
-    record('input', { selector: selectorOf(el), tag: el.tagName.toLowerCase(), type: type || el.tagName.toLowerCase(), value });
+    record('input', {
+      selector: selectorOf(el),
+      tag: el.tagName.toLowerCase(),
+      type: type || el.tagName.toLowerCase(),
+      role: roleOf(el),
+      name: nameOf(el),
+      value,
+    });
   };
   const onChange = (event) => {
     const el = event.target;
     if (!el || el.nodeType !== 1) return;
     if (overlayEvent(event)) return;
     if (String(el.tagName).toLowerCase() === 'select') {
-      record('select', { selector: selectorOf(el), value: String(el.value || '') });
+      record('select', {
+        selector: selectorOf(el),
+        role: roleOf(el),
+        name: nameOf(el),
+        value: String(el.value || ''),
+      });
     }
   };
+  document.addEventListener('pointerover', onPointerOver, true);
   document.addEventListener('click', onClick, true);
   document.addEventListener('input', onInput, true);
   document.addEventListener('change', onChange, true);
+
+  // 同页导航（pushState/replaceState/popstate/hashchange）也作为步骤记录。
+  let lastNavUrl = location.href;
+  const onNavigate = (source) => {
+    if (!state.active || location.href === lastNavUrl) return;
+    lastNavUrl = location.href;
+    record('navigate', { url: lastNavUrl, source });
+  };
+  const originalPush = history.pushState;
+  const originalReplace = history.replaceState;
+  history.pushState = function patchedPushState(...args) {
+    const result = originalPush.apply(this, args);
+    queueMicrotask(() => onNavigate('pushState'));
+    return result;
+  };
+  history.replaceState = function patchedReplaceState(...args) {
+    const result = originalReplace.apply(this, args);
+    queueMicrotask(() => onNavigate('replaceState'));
+    return result;
+  };
+  const onPopState = () => onNavigate('popstate');
+  const onHashChange = () => onNavigate('hashchange');
+  window.addEventListener('popstate', onPopState);
+  window.addEventListener('hashchange', onHashChange);
   window.__bb_ops = {
     active: true,
     get seq() { return state.seq; },
     stop() {
       state.active = false;
       window.__bb_ops.active = false;
+      globalThis['clear' + 'Interval'](flushTimer);
+      flush();
+      document.removeEventListener('pointerover', onPointerOver, true);
       document.removeEventListener('click', onClick, true);
       document.removeEventListener('input', onInput, true);
       document.removeEventListener('change', onChange, true);
+      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('hashchange', onHashChange);
+      history.pushState = originalPush;
+      history.replaceState = originalReplace;
       return { events: state.seq };
     },
   };
@@ -208,9 +348,51 @@ async function execFuncAllFrames(tabId, func, args) {
   return Array.isArray(results) ? results : [];
 }
 
+async function activateContentRecorder(tabId, startedAt, includeAgent) {
+  try {
+    const reply = await chrome.tabs.sendMessage(tabId, { type: 'bb.record.activate', startedAt, includeAgent: includeAgent === true });
+    return !!(reply && reply.ok === true);
+  } catch {
+    return false;
+  }
+}
+
+async function deactivateContentRecorder(tabId) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, { type: 'bb.record.deactivate' });
+  } catch {
+    return null;
+  }
+}
+
 function pushEvent(tabId, event) {
   const session = active.get(tabId);
   if (!session) return;
+  if (!session.includeAgent && event && event.actor === 'agent' && ['click', 'hover', 'input', 'key', 'drag'].includes(event.kind)) return;
+  if (event && event.kind === 'media') {
+    if (!event.media || !event.media.selector) return;
+    const target = [...session.events].reverse().find((item) =>
+      item.seq <= event.seq &&
+      item.kind !== 'state' &&
+      item.kind !== 'media');
+    if (target) {
+      const merged = [...(Array.isArray(target.media) ? target.media : []), event.media];
+      target.media = merged.slice(-20);
+    }
+    return;
+  }
+  if (event && event.kind === 'text') {
+    if (!Array.isArray(event.changes) || !event.changes.length) return;
+    const target = [...session.events].reverse().find((item) =>
+      item.seq <= event.seq &&
+      item.kind !== 'state' &&
+      item.kind !== 'text');
+    if (target) {
+      const merged = [...(Array.isArray(target.textChanges) ? target.textChanges : []), ...event.changes];
+      target.textChanges = merged.slice(-20);
+    }
+    return;
+  }
   if (event && event.kind === 'state') {
     const frameId = Number(event.frameId) || 0;
     const target = [...session.events].reverse().find((item) =>
@@ -224,6 +406,14 @@ function pushEvent(tabId, event) {
       target.stateUrl = event.url || target.url || '';
     }
     return;
+  }
+  if (event && event.kind === 'click' && event.parentToken) {
+    const hover = [...session.events].reverse().find((item) => item.kind === 'hover' && item.token === event.parentToken);
+    if (hover) {
+      event.parent = hover.selector || event.parentSelector || '';
+      event.parentFrameId = hover.frameId;
+    }
+    delete event.parentToken;
   }
   if (session.events.length >= MAX_EVENTS) return;
   session.events.push(event);
@@ -255,14 +445,21 @@ export async function startRecording(params = {}) {
     startedAt: Date.now(),
     events: [],
     screenshots: params.screenshots === true,
+    includeAgent: params.includeAgent === true,
     shotCount: 0,
     pendingShots: new Set(),
+    capture: 'injected',
   });
   try {
-    try {
-      await execFuncAllFrames(tabId, recorderFunc);
-    } catch {
-      await execFunc(tabId, recorderFunc);
+    const usingContent = await activateContentRecorder(tabId, active.get(tabId).startedAt, active.get(tabId).includeAgent);
+    if (usingContent) {
+      active.get(tabId).capture = 'content';
+    } else {
+      try {
+        await execFuncAllFrames(tabId, recorderFunc);
+      } catch {
+        await execFunc(tabId, recorderFunc);
+      }
     }
   } catch (error) {
     active.delete(tabId);
@@ -281,10 +478,24 @@ export async function stopRecording(params = {}) {
     await Promise.allSettled([...session.pendingShots]);
   }
   try {
-    try {
-      await execFuncAllFrames(tabId, stopperFunc);
-    } catch {
-      await execFunc(tabId, stopperFunc);
+    if (session.capture === 'content') {
+      const stopped = await deactivateContentRecorder(tabId);
+      if (!stopped) {
+        try {
+          await execFuncAllFrames(tabId, stopperFunc);
+        } catch {
+          await execFunc(tabId, stopperFunc);
+        }
+      } else {
+        // 内容脚本的 deactivate 会先 flush 队列；留一拍让消息落库。
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+    } else {
+      try {
+        await execFuncAllFrames(tabId, stopperFunc);
+      } catch {
+        await execFunc(tabId, stopperFunc);
+      }
     }
   } catch {
     // 页面可能已关闭
@@ -414,11 +625,17 @@ export async function reattach(tabId) {
   const session = active.get(tabId);
   if (!session) return;
   try {
+    if (await activateContentRecorder(tabId, session.startedAt, session.includeAgent)) {
+      session.capture = 'content';
+      log('操作录制：tab=' + tabId + ' 导航后恢复内容脚本采集');
+      return;
+    }
     try {
       await execFuncAllFrames(tabId, recorderFunc);
     } catch {
       await execFunc(tabId, recorderFunc);
     }
+    session.capture = 'injected';
     log('操作录制：tab=' + tabId + ' 导航后重新挂载');
   } catch {
     // 页面可能还没准备好，下一次导航再试

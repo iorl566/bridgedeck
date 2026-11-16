@@ -120,7 +120,21 @@
 
     <h2>跨源 iframe</h2>
     <iframe id="x-frame" src="http://127.0.0.1:__XFRAME_PORT__/frame-x.html" title="跨源框架" style="width:360px;height:90px;border:1px solid #ccd"></iframe>
+    <div id="xframe-menu" role="menu" hidden style="position:fixed;left:40px;top:120px;z-index:9999;background:#fff;border:1px solid #ccd;border-radius:8px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.15)">
+      <button id="xframe-menu-item" role="menuitem" type="button">跨域菜单项</button>
+    </div>
     <p>跨域结果：<strong id="xframe-out">none</strong></p>
+    <video id="media-demo" muted playsinline style="width:180px;height:80px;background:#000"></video>
+    <script>
+      window.addEventListener('message', (event) => {
+        if (event && event.data && event.data.type === 'xframe-open-menu') {
+          document.getElementById('xframe-menu').hidden = false;
+        }
+      });
+      document.getElementById('xframe-menu-item').addEventListener('click', () => {
+        document.getElementById('xframe-out').textContent = 'xframe-menu-clicked';
+      });
+    </script>
 
     <h2>子资源</h2>
     <script>

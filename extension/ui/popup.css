@@ -26,7 +26,7 @@
   }
 }
 * { box-sizing: border-box; }
-html, body { height: auto; margin: 0; min-width: 300px; overflow-x: hidden; }
+html, body { height: auto; margin: 0; min-width: 280px; overflow-x: hidden; }
 body {
   font: 13px/1.5 system-ui, "PingFang SC", "Noto Sans CJK SC", sans-serif;
   background: var(--bg);
@@ -43,6 +43,7 @@ body {
   width: 28px; height: 28px; border-radius: 8px; padding: 0;
 }
 .icon-btn:hover { background: var(--card); color: var(--fg); }
+.icon-btn:disabled { opacity: .35; cursor: default; }
 .icon-btn svg { width: 16px; height: 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -174,3 +175,16 @@ details.settings[open] summary::before { transform: rotate(90deg); }
 .recent-item code { font-size: 11px; }
 .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); font-size: 12.5px; }
 .panel-preview { display: block; max-width: 100%; border-radius: 8px; margin-top: 10px; }
+
+/* 弹窗滚动与交互兜底 */
+:root { color-scheme: light dark; }
+.popup::-webkit-scrollbar { width: 8px; }
+.popup::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+button:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 360px) {
+  .popup { width: 100vw; padding: 10px; }
+  .recent-item { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

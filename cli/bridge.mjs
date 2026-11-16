@@ -104,7 +104,7 @@ function sleep(ms) {
 
 const BOOL_FLAGS = new Set([
   'json', 'no-focus', 'probe-hover', 'full', 'keep', 'help', 'tail',
-  'all', 'mobile', 'reset', 'queue', 'bodies', 'accept', 'dismiss', 'force', 'list', 'stitch', 'no-clear', 'overwrite', 'annotate', 'screenshot', 'incognito', 'with-requests', 'frames', 'release-old', 'by', 'confirm-human', 'closed-shadow', 'trusted', 'window', 'focus', 'enable', 'disable', 'download', 'apply', 'prune', 'wait-navigation', 'screenshots',
+  'all', 'mobile', 'reset', 'queue', 'bodies', 'accept', 'dismiss', 'force', 'list', 'stitch', 'no-clear', 'overwrite', 'annotate', 'screenshot', 'incognito', 'with-requests', 'frames', 'release-old', 'by', 'confirm-human', 'closed-shadow', 'trusted', 'window', 'focus', 'enable', 'disable', 'download', 'apply', 'prune', 'wait-navigation', 'screenshots', 'include-agent',
 ]);
 const VALUE_FLAGS = new Set([
   'session', 'port', 'timeout', 'out', 'value', 'ref', 'selector',
@@ -3178,6 +3178,7 @@ async function cmdRecord(flags, pos) {
   if (sub === 'start') {
     const params = { ...session };
     if (flags.screenshots === true) params.screenshots = true;
+    if (flags['include-agent'] === true) params.includeAgent = true;
     const body = await callRpc('record.start', params, timeoutOf(flags));
     if (!body.ok) return outputFailure(body);
     if (jsonMode) return outputJsonBody(body);
@@ -4968,7 +4969,7 @@ async function printHelp() {
   pair create [--ttl 10m] [--label x] [--host ip] [--replace] | devices | list | redeem <code> | revoke <code>
   video start [--duration 60s] [--quality standard|high] | status <id> | stop <id> | recover
   video save <id> --out <path> [--overwrite] | list | discard <id> | prune [--ttl 24h]
-  record start [--screenshots] | stop | status | list | export [id] [--out <dir>] [--screenshot]
+  record start [--screenshots] [--include-agent] | stop | status | list | export [id] [--out <dir>] [--screenshot]
   trace view <trace.json> [--debug <archive.json>] [--out <viewer.html>]   把 Trace v3 渲染成离线 HTML 查看器
   schema [method]   列出方法/作用域/effect/参数 schema（单一来源）
   debug start [--name <t>] [--bodies] | stop | status | export --output <file> | query --file <json> --filter <text>

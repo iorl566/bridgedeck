@@ -25,6 +25,7 @@ import { cancelCommand, isCommandCancelled, registerCommand, unregisterCommand }
 import { createDeadline } from './command-deadline.js';
 import { beginCommand, endCommand } from './command-context.js';
 import { installFrameGraphInvalidation } from './frame-graph.js';
+import { setHumanState } from './human-state.js';
 
 const RECONNECT_ALARM = 'bb-reconnect';
 const ALARM_PERIOD_MINUTES = 0.5; // 30s；Chrome 120+ 允许的最小周期
@@ -342,6 +343,12 @@ const MESSAGE_HANDLERS = {
     return stopRecording({ tabId });
   },
   'bb.record.list': () => listRecordings(),
+  'bb.record.status': (message, sender) => {
+    const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : null;
+    if (tabId == null) return { active: false };
+    const hit = (activeRecordings().active || []).find((item) => item.tabId === tabId);
+    return hit ? { active: true, startedAt: hit.startedAt } : { active: false };
+  },
   'bb.longshot.capture': async () => {
     const result = await capture('auto', { preview: false });
     try { await chrome.storage.session.set({ 'bb.longshot.last': { dataUrl: result.dataUrl, width: result.width, height: result.height, ts: Date.now() } }); } catch { /* 忽略 */ }
@@ -440,6 +447,18 @@ const MESSAGE_HANDLERS = {
       return { ok: false, error: String((error && error.message) || error) };
     }
   },
+  'bb.human.activity': (message, sender) => {
+    const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : null;
+    if (tabId == null) return { ok: false };
+    setHumanState(tabId, {
+      ...(message && message.state && typeof message.state === 'object' ? message.state : {}),
+      frameId: sender && Number.isInteger(sender.frameId) ? sender.frameId : 0,
+      at: Number(message && message.at) || Date.now(),
+    });
+    return { ok: true };
+  },
+  'bb.borrow.request': (message) => notifyActionRequest('borrow', message),
+  'bb.help.request': (message) => notifyActionRequest('help', message),
   'bb.notifications': async (message) => {
     const stored = await chrome.storage.local.get('bb.notifications').catch(() => ({}));
     if (message && message.clear === true) {
@@ -451,13 +470,100 @@ const MESSAGE_HANDLERS = {
   },
 };
 
-/** 追加一条扩展内通知（弹窗铃铛里看）。 */
+const ACTION_NOTIFICATIONS = new Map(); // notificationId -> { kind, requestId, tabId }
+const NOTIFICATION_ICON = 'icons/icon128.png';
+
+function systemNotification(id, options) {
+  if (!chrome.notifications || typeof chrome.notifications.create !== 'function') return;
+  try {
+    const result = chrome.notifications.create(id, {
+      type: 'basic',
+      iconUrl: NOTIFICATION_ICON,
+      title: 'BridgeDeck',
+      priority: 2,
+      ...options,
+    });
+    if (result && typeof result.catch === 'function') result.catch(() => {});
+  } catch {
+    // 通知失败不影响命令
+  }
+}
+
+async function notifyActionRequest(kind, message) {
+  const tabId = Number(message && message.tabId);
+  const requestId = String((message && message.requestId) || '');
+  if (!Number.isInteger(tabId) || !requestId) return { ok: false };
+  const id = 'bb-' + kind + '-' + requestId;
+  let tabTitle = '';
+  try { const tab = await chrome.tabs.get(tabId); tabTitle = tab.title || tab.url || ''; } catch { /* 标签页可能已关闭 */ }
+  ACTION_NOTIFICATIONS.set(id, { kind, requestId, tabId });
+  systemNotification(id, {
+    title: kind === 'borrow' ? 'BridgeDeck · 借用标签页' : 'BridgeDeck · 需要协助',
+    message: kind === 'borrow'
+      ? 'Agent 想在标签页「' + String(tabTitle).slice(0, 80) + '」上操作，是否允许？'
+      : 'Agent 请求你在标签页「' + String(tabTitle).slice(0, 80) + '」上协助完成一步。',
+    buttons: kind === 'borrow' ? [{ title: '拒绝' }, { title: '允许' }] : [{ title: '跳过' }, { title: '完成' }],
+    requireInteraction: true,
+  });
+  return { ok: true, notificationId: id };
+}
+
+async function clearHumanOverlay(tabId, kind) {
+  if (!Number.isInteger(tabId)) return;
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [0] },
+      func: (which) => {
+        const ids = which === 'help'
+          ? ['__bb_help_host', '__bb_help_highlight']
+          : ['__bb_borrow_modal'];
+        for (const id of ids) {
+          const node = document.getElementById(id);
+          if (node) node.remove();
+        }
+      },
+      args: [kind],
+    });
+  } catch {
+    // 页面可能已关闭/受限
+  }
+}
+
+function installNotificationActions() {
+  if (!chrome.notifications) return;
+  chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+    const entry = ACTION_NOTIFICATIONS.get(notificationId);
+    if (!entry) return;
+    ACTION_NOTIFICATIONS.delete(notificationId);
+    chrome.notifications.clear(notificationId).catch(() => {});
+    if (entry.kind === 'help') {
+      resolveHumanDecision({ requestId: entry.requestId, action: buttonIndex === 1 ? 'done' : 'skip' });
+    } else {
+      resolveHumanDecision({ requestId: entry.requestId, allow: buttonIndex === 1 });
+    }
+    clearHumanOverlay(entry.tabId, entry.kind).catch(() => {});
+  });
+  chrome.notifications.onClicked.addListener((notificationId) => {
+    const entry = ACTION_NOTIFICATIONS.get(notificationId);
+    if (entry) {
+      ACTION_NOTIFICATIONS.delete(notificationId);
+      chrome.notifications.clear(notificationId).catch(() => {});
+      chrome.tabs.update(entry.tabId, { active: true }).catch(() => {});
+      chrome.tabs.get(entry.tabId).then((tab) => chrome.windows.update(tab.windowId, { focused: true })).catch(() => {});
+      return;
+    }
+    if (typeof chrome.action.openPopup === 'function') chrome.action.openPopup().catch(() => {});
+  });
+}
+/** 追加一条扩展内通知（弹窗铃铛里看），同时发系统通知。 */
 export async function pushNotification(level, text) {
   try {
     const stored = await chrome.storage.local.get('bb.notifications');
     const list = Array.isArray(stored && stored['bb.notifications']) ? stored['bb.notifications'] : [];
-    list.unshift({ id: crypto.randomUUID(), at: Date.now(), level: level || 'info', text: String(text || '') });
+    const item = { id: crypto.randomUUID(), at: Date.now(), level: level || 'info', text: String(text || '') };
+    list.unshift(item);
     await chrome.storage.local.set({ 'bb.notifications': list.slice(0, 50) });
+    systemNotification('bb-info-' + item.id, { message: item.text, priority: level === 'error' ? 2 : 1 });
   } catch {
     // 通知只是锦上添花，失败忽略
   }
@@ -627,6 +733,18 @@ function installSettingsSync() {
  * 因此这里刻意不 await 任何异步操作，storage 读取放到后面。
  */
 function registerListeners() {
+  installNotificationActions();
+  if (chrome.idle && typeof chrome.idle.onStateChanged?.addListener === 'function') {
+    try { chrome.idle.setDetectionInterval(60); } catch { /* 环境不支持时忽略 */ }
+    chrome.idle.onStateChanged.addListener((state) => {
+      if (state !== 'active') return;
+      if (currentSettings && currentSettings.connectionEnabled === false) return;
+      const socket = getClient();
+      if (socket.isOpen()) return;
+      log('系统空闲恢复，尝试重连 daemon');
+      socket.ensureConnected();
+    });
+  }
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== RECONNECT_ALARM) return;
     if (currentSettings && currentSettings.connectionEnabled === false) return;

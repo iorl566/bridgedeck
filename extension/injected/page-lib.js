@@ -1087,6 +1087,7 @@
     const el = resolveElement(args);
     scrollIntoView(el);
     await ensureActionable(el, args, 'click');
+    try { document.documentElement.setAttribute('data-bb-agent-input', String(Date.now())); } catch { /* 忽略 */ }
     try {
       if (typeof el.focus === 'function') el.focus({ preventScroll: true });
     } catch {
@@ -1105,6 +1106,7 @@
     const el = resolveElement(args);
     scrollIntoView(el);
     await ensureActionable(el, args, 'hover');
+    try { document.documentElement.setAttribute('data-bb-agent-input', String(Date.now())); } catch { /* 忽略 */ }
     const common = { bubbles: true, cancelable: true, view: window };
     el.dispatchEvent(new MouseEvent('pointerover', common));
     el.dispatchEvent(new MouseEvent('mouseover', common));
@@ -2569,7 +2571,7 @@
         const now = Date.now();
         // 与 content/human-watch.js 共用同一抑制标记：Agent 的可信输入不应被当成人工接管。
         const marker = Number(document.documentElement.getAttribute('data-bb-agent-input') || 0);
-        if (marker && now - marker < 2000) return;
+        if (marker && now - marker < 10000) return;
         if (now - lastAt < 500) return;
         lastAt = now;
         send('bb.human.input');

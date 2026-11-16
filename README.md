@@ -100,7 +100,7 @@ irm https://raw.githubusercontent.com/iorl566/bridgedeck/main/install-online.ps1
 
 ```sh
 # macOS（Apple Silicon / Intel）与 Linux（x64 / arm64）
-tar -xzf BridgeDeck-cli-0.1.3-darwin-arm64.tar.gz   # 或 linux-x64 / linux-arm64
+tar -xzf BridgeDeck-cli-0.1.3-darwin-arm64.tar.gz   # 或 darwin-x64 / linux-x64 / linux-arm64
 cd BridgeDeck-cli-0.1.3-darwin-arm64
 sh install.sh --add-to-path
 bridge status
@@ -272,7 +272,7 @@ node tools/release.mjs --check      # 发布产物一致性
 
 CI 共 5 条流水线：`ci.yml`（三平台测试 + 交叉打包）、`publish-cli.yml`（手动预发布）、`release-cli.yml`、`release-extension.yml`、`release-dsh-plugin.yml`（tag 触发发布）。
 
-最近结果：单测 **955/955**、CLI **155/155**、MCP **10/10**、DSH 插件 **26/26**、Python SDK **8/8**、protocol-check 全绿（`handlersNotInProtocol=[]`、`extensionWithoutHandler=[]`、`protocolUnclassified=[]`、`localWithoutRoute=[]`、`schemaMissing=[]`）、真实 Edge E2E **141/143 通过（2 项因借用确认安全策略跳过）**。
+最近结果：单测 **955/955**、CLI **155/155**、MCP **10/10**、DSH 插件 **26/26**、Python SDK **8/8**、protocol-check 全绿（`handlersNotInProtocol=[]`、`extensionWithoutHandler=[]`、`protocolUnclassified=[]`、`localWithoutRoute=[]`、`schemaMissing=[]`）、真实 Edge E2E **145/147 通过（2 项因借用确认安全策略跳过）**。
 
 ```text
 cli/            CLI 入口

@@ -1,17 +1,9 @@
 // ui/options.js —— 设置页
 import { DEFAULT_SETTINGS, normalizeSettings, readSettings, writeSettings } from '../src/settings.js';
 import { getLang, setLang, whenReady } from './i18n.js';
+import { $, toast } from './common.js';
 
-const $ = (id) => document.getElementById(id);
 const FIELDS = ['instanceLabel', 'borrowConfirm', 'allowHelp', 'longShotMode', 'pageGuard'];
-
-function toast(text) {
-  const node = $('toast');
-  node.textContent = text;
-  node.className = 'toast show';
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { node.className = 'toast'; }, 1600);
-}
 
 function render(settings) {
   $('instanceLabel').value = settings.instanceLabel || '';

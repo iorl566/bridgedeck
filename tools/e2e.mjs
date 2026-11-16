@@ -32,10 +32,38 @@ const browser = opt('--browser', 'edge');
 const keep = args.includes('--keep');
 // 默认每次 E2E 都同步 README 截图；需要保持工作树干净时设 BB_E2E_SYNC_DOCS=0。
 const SYNC_DOCS = process.env.BB_E2E_SYNC_DOCS !== '0';
-const BROWSER_PATHS = {
-  edge: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  chrome: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-};
+
+function browserCandidates(name) {
+  if (process.platform === 'win32') {
+    return name === 'edge'
+      ? ['C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe']
+      : ['C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'];
+  }
+  if (process.platform === 'darwin') {
+    return name === 'edge'
+      ? ['/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', path.join(process.env.HOME || '', 'Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge')]
+      : ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', path.join(process.env.HOME || '', 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome')];
+  }
+  return name === 'edge'
+    ? ['/usr/bin/microsoft-edge', '/usr/bin/microsoft-edge-stable', '/opt/microsoft/msedge/msedge']
+    : ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/snap/bin/chromium'];
+}
+
+function findBrowser(name) {
+  for (const candidate of browserCandidates(name)) {
+    if (candidate && existsSync(candidate)) return candidate;
+  }
+  if (process.platform !== 'win32' && process.platform !== 'darwin') {
+    const commands = name === 'edge' ? ['microsoft-edge', 'microsoft-edge-stable'] : ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'];
+    for (const command of commands) {
+      const found = spawnSync('which', [command], { encoding: 'utf8' });
+      if (found.status === 0 && found.stdout.trim()) return found.stdout.trim();
+    }
+  }
+  return browserCandidates(name)[0];
+}
+
+const BROWSER_EXE = findBrowser(browser);
 
 const results = [];
 function check(name, fn) {
@@ -147,7 +175,7 @@ console.log('BridgeDeck E2E');
 console.log(`  repo      ${ROOT}`);
 console.log(`  daemon    port=${port} BB_HOME=${bbHome}`);
 console.log(`  fixture   ${pageUrl}`);
-console.log(`  browser   ${browser} (${BROWSER_PATHS[browser]})`);
+console.log(`  browser   ${browser} (${BROWSER_EXE})`);
 console.log(`  profile   ${profileDir}\n`);
 
 // ---------------------------------------------------------------- 浏览器进程
@@ -159,15 +187,57 @@ const BROWSER_ARGS = (p) => browserArgs({
   windowSize: '1280,900',
 });
 
-function launchBrowser() {
-  const exe = BROWSER_PATHS[browser];
+async function launchBrowser() {
+  const exe = BROWSER_EXE;
   if (!existsSync(exe)) throw new Error(`找不到浏览器：${exe}`);
   if (!existsSync(path.join(testExtDir, 'manifest.json'))) throw new Error('测试扩展目录缺少 manifest.json（extension/ 还没交付？）');
+  const baseArgs = BROWSER_ARGS(profileDir);
+  let args = baseArgs;
+  let stdio = 'ignore';
+  if (browser === 'chrome') {
+    // Chrome 137+ 的品牌版忽略 --load-extension；改走 CDP pipe 的
+    // Extensions.loadUnpacked（需要 --enable-unsafe-extension-debugging）。
+    args = baseArgs.filter((arg) => !arg.startsWith('--load-extension='));
+    args.push('--remote-debugging-pipe', '--enable-unsafe-extension-debugging');
+    stdio = ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'];
+  }
   // 注意：windowsHide 会让 Edge 主窗口以 SW_HIDE 启动，用户看不到调试页面；
   // 这里必须保持可见（浏览器是 GUI，不是控制台子进程）。
-  const proc = spawn(exe, BROWSER_ARGS(profileDir), { stdio: 'ignore', windowsHide: false, detached: false });
+  const proc = spawn(exe, args, { stdio, windowsHide: false, detached: false });
   proc.on('error', (e) => console.log(`  browser spawn error: ${e.message}`));
+  if (browser === 'chrome') await loadChromeExtensionViaPipe(proc);
   return proc;
+}
+
+/** 通过 Chrome CDP pipe 加载 unpacked 扩展；成功返回扩展 ID。 */
+function loadChromeExtensionViaPipe(proc) {
+  return new Promise((resolve, reject) => {
+    const input = proc.stdio[3];
+    const output = proc.stdio[4];
+    if (!input || !output) return reject(new Error('Chrome CDP pipe 不可用'));
+    let buffer = '';
+    const timer = setTimeout(() => {
+      output.removeAllListeners('data');
+      reject(new Error('Chrome Extensions.loadUnpacked 超时'));
+    }, 30000);
+    output.on('data', (chunk) => {
+      buffer += chunk.toString('utf8');
+      const parts = buffer.split('\0');
+      buffer = parts.pop();
+      for (const part of parts) {
+        if (!part.trim()) continue;
+        let message;
+        try { message = JSON.parse(part); } catch { continue; }
+        if (message.id !== 1) continue;
+        clearTimeout(timer);
+        output.removeAllListeners('data');
+        if (message.error) reject(new Error('Chrome 加载扩展失败：' + JSON.stringify(message.error)));
+        else resolve(message.result && message.result.id);
+        return;
+      }
+    });
+    input.write(JSON.stringify({ id: 1, method: 'Extensions.loadUnpacked', params: { path: testExtDir } }) + '\0');
+  });
 }
 /** 关掉浏览器并等它真的退出（否则 profile 目录还被占着，删不掉）。 */
 async function killBrowser() {
@@ -332,7 +402,7 @@ process.on('SIGINT', async () => { killSignal = true; await cleanup(); process.e
 // 前三步是前置条件：任一失败就直接终止，否则后面 9 项只会连锁爆 E_NO_SESSION 掩盖真正原因。
 const LOAD_HINT =
   browser === 'chrome'
-    ? '（Chrome 137+ 稳定版已忽略 --load-extension：请改用 --browser edge，或换 Chrome for Testing，或在 chrome://extensions 里手动加载 extension/）'
+    ? '（Chrome 137+ 品牌版已忽略 --load-extension；E2E 会自动用 CDP Extensions.loadUnpacked 加载，失败时检查 --enable-unsafe-extension-debugging 是否生效）'
     : '';
 try {
   if (!(await check('1. 启动 daemon 并连通（CLI 自动拉起）', async () => {
@@ -343,7 +413,7 @@ try {
   }))) throw new Error('前置条件失败：daemon 未就绪，终止验收');
 
   if (!(await check('2. 启动浏览器并等扩展连上', async () => {
-    browserProc = launchBrowser();
+    browserProc = await launchBrowser();
     let last = null;
     for (let i = 0; i < 80; i++) {
       await sleep(500);
@@ -955,7 +1025,7 @@ try {
   });
 
   await check('20d. record CLI：记录用户操作 → 事件 → 历史', async () => {
-    expectOk(await cliJson(['record', 'start', '--session', sessionId]), 'record start');
+    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record start');
     await cliJson(['click', '#submit-btn', '--session', sessionId]);
     await sleep(900);
     const stopped = expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record stop');
@@ -982,7 +1052,7 @@ try {
   });
 
   await check('20d3. record 记录 tab-switch 步骤', async () => {
-    expectOk(await cliJson(['record', 'start', '--session', sessionId]), 'record tab-switch start');
+    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record tab-switch start');
     const opened = expectOk(await cliJson(['tab', 'new', 'about:blank', '--session', sessionId]), 'tab new for record');
     await sleep(700);
     expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record tab-switch stop');
@@ -995,7 +1065,7 @@ try {
   });
 
   await check('20d4. record 导航后恢复记录器', async () => {
-    expectOk(await cliJson(['record', 'start', '--session', sessionId]), 'record nav start');
+    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record nav start');
     expectOk(await cliJson(['navigate', pageUrl + '?record-nav=1', '--session', sessionId]), 'navigate during record');
     await sleep(900);
     expectOk(await cliJson(['click', '#submit-btn', '--session', sessionId]), 'click after record nav');
@@ -1009,7 +1079,7 @@ try {
   });
 
   await check('20d5. record 记录跨窗口步骤', async () => {
-    expectOk(await cliJson(['record', 'start', '--session', sessionId]), 'record window start');
+    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record window start');
     const opened = expectOk(await cliJson(['tab', 'new', 'about:blank', '--window', '--session', sessionId]), 'tab new window for record');
     await sleep(700);
     expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record window stop');
@@ -1023,7 +1093,7 @@ try {
   });
 
   await check('20d6. record 记录 iframe 内操作', async () => {
-    expectOk(await cliJson(['record', 'start', '--session', sessionId]), 'record frame start');
+    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record frame start');
     const frames = expectOk(await cliJson(['observe', '--frames', '--session', sessionId]), 'observe frames for record');
     const match = /button "框架内按钮" \[@(e\d+)\]/.exec(String(frames.text || ''));
     assert(match, '没有找到 iframe 按钮 ref');
@@ -1035,6 +1105,74 @@ try {
     const framed = (recording.events || []).find((event) => event.kind === 'click' && Number(event.frameId) > 0);
     assert(framed, '没有记录 iframe 内点击：' + JSON.stringify((recording.events || []).map((event) => ({ kind: event.kind, frameId: event.frameId }))));
     return 'frameId=' + framed.frameId;
+  });
+
+  await check('20d7. record 跨 frame popup 归属', async () => {
+    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record cross popup start');
+    const frames = expectOk(await cliJson(['observe', '--frames', '--session', sessionId]), 'observe frames for popup');
+    const match = /button "打开菜单" \[@(e\d+)\]/.exec(String(frames.text || ''));
+    assert(match, '没有找到 iframe 菜单触发 ref');
+    expectOk(await cliJson(['hover', '@' + match[1], '--session', sessionId]), 'hover iframe menu trigger');
+    await sleep(400);
+    const visible = expectOk(await cliJson(['evaluate', "document.getElementById('xframe-menu').hidden === false", '--session', sessionId]), 'read popup visibility');
+    assert(visible.value === true, 'iframe hover 没有打开顶层菜单');
+    const top = expectOk(await cliJson(['observe', '--session', sessionId]), 'observe top menu');
+    const item = /menuitem "跨域菜单项" \[@(e\d+)\]/.exec(String(top.observation || ''));
+    assert(item, '顶层菜单项没有 ref：' + String(top.observation || '').slice(-500));
+    expectOk(await cliJson(['click', '@' + item[1], '--session', sessionId]), 'click top menu item');
+    await sleep(500);
+    expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record cross popup stop');
+    const out = expectOk(await cliJson(['evaluate', "document.getElementById('xframe-out').textContent", '--session', sessionId]), 'xframe popup out');
+    assert(out.value === 'xframe-menu-clicked', '菜单点击没有回传：' + JSON.stringify(out.value));
+    const listed = expectOk(await cliJson(['record', 'list', '--session', sessionId]), 'record list cross popup');
+    const recording = (listed.recordings || [])[0] || {};
+    const linked = (recording.events || []).find((event) => event.kind === 'click'
+      && Number(event.parentFrameId) > 0
+      && String(event.parent || '').includes('x-menu'));
+    assert(linked, '没有记录跨 frame popup 归属：' + JSON.stringify((recording.events || []).map((event) => ({ kind: event.kind, parent: event.parent, parentFrameId: event.parentFrameId }))));
+    return 'parentFrameId=' + linked.parentFrameId;
+  });
+
+  await check('20d8. record 文本 diff + 媒体进度', async () => {
+    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record text/media start');
+    expectOk(await cliJson(['click', '#submit-btn', '--session', sessionId]), 'click for text diff');
+    await sleep(150);
+    expectOk(await cliJson(['evaluate', "document.getElementById('out').textContent='diff-' + Date.now(); 'ok'", '--session', sessionId]), 'mutate text for diff');
+    await sleep(800);
+    expectOk(await cliJson(['evaluate', "const v=document.getElementById('media-demo'); v.dispatchEvent(new Event('play')); v.dispatchEvent(new Event('timeupdate')); 'ok'", '--session', sessionId]), 'dispatch media events');
+    await sleep(300);
+    expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record text/media stop');
+    const listed = expectOk(await cliJson(['record', 'list', '--session', sessionId]), 'record list text/media');
+    const recording = (listed.recordings || [])[0] || {};
+    const clickEvent = (recording.events || []).find((event) => event.kind === 'click' && Array.isArray(event.textChanges) && event.textChanges.length > 0);
+    assert(clickEvent, '没有记录文本变化：' + JSON.stringify((recording.events || []).map((event) => ({ kind: event.kind, textChanges: event.textChanges }))));
+    const mediaEvent = (recording.events || []).find((event) => Array.isArray(event.media) && event.media.length > 0);
+    assert(mediaEvent, '没有记录媒体进度：' + JSON.stringify((recording.events || []).map((event) => ({ kind: event.kind, media: event.media }))));
+    return 'textChanges=' + clickEvent.textChanges.length + ' media=' + mediaEvent.media.length;
+  });
+
+  await check('20d9. record hover 停留', async () => {
+    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record dwell start');
+    expectOk(await cliJson(['hover', '#more-link', '--session', sessionId]), 'hover link');
+    await sleep(1000);
+    expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record dwell stop');
+    const listed = expectOk(await cliJson(['record', 'list', '--session', sessionId]), 'record list dwell');
+    const recording = (listed.recordings || [])[0] || {};
+    const hoverEvent = (recording.events || []).find((event) => event.kind === 'hover' && event.dwellMs === 800);
+    assert(hoverEvent, '没有记录 hover 停留：' + JSON.stringify((recording.events || []).map((event) => ({ kind: event.kind, dwellMs: event.dwellMs }))));
+    return 'hover dwell=' + hoverEvent.dwellMs;
+  });
+
+  await check('20d10. record 默认过滤 Agent 动作', async () => {
+    expectOk(await cliJson(['record', 'start', '--session', sessionId]), 'record agent-filter start');
+    expectOk(await cliJson(['click', '#submit-btn', '--session', sessionId]), 'agent click should be filtered');
+    await sleep(500);
+    expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record agent-filter stop');
+    const listed = expectOk(await cliJson(['record', 'list', '--session', sessionId]), 'record list agent-filter');
+    const recording = (listed.recordings || [])[0] || {};
+    const clicks = (recording.events || []).filter((event) => event.kind === 'click');
+    assert(clicks.length === 0, 'Agent 动作没有被过滤：' + JSON.stringify(clicks.map((event) => ({ actor: event.actor, selector: event.selector }))));
+    return 'filtered';
   });
 
   await check('20e. debug duplicates 重复请求检测', async () => {
@@ -2064,7 +2202,7 @@ try {
   });
 
   await check('24c. 操作录制浮层：出现 → 结束', async () => {
-    expectOk(await cliJson(['record', 'start', '--session', sessionId]), 'record start overlay');
+    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record start overlay');
     let present = false;
     for (let attempt = 0; attempt < 10 && !present; attempt += 1) {
       await sleep(300);

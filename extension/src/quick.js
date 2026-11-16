@@ -208,6 +208,8 @@ export async function popupState(socket) {
     title: item.title || item.url || ('标签页 ' + item.tabId),
     meta: '网站调试 · 采集中' + (item.bodies ? ' · 记录正文' : ''),
     url: chrome.runtime.getURL('ui/debug.html'),
+    debug: true,
+    tabId: item.tabId,
   }));
   const connection = socket && typeof socket.getSnapshot === 'function' ? socket.getSnapshot() : {};
   return {

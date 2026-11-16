@@ -545,8 +545,7 @@ bridge settings [--json]` 与 `bridge settings set --label <名字> --borrow-con
 
 条目结构：`{ id, method, url, status, type, startedAt, durationMs, requestBytes, responseBytes, error?, fromCache, pageUrl }`。
 
-* 默认用 `chrome.webRequest` 采集元数据（不挂 debugger、无提示条）；`bodies: true` 时改用 debugger 的
-  `Network` 域取正文（可能出现提示条），正文上限 1MB、超出标记 `truncated`。
+* 统一用 debugger 的 `Network` 域采集元数据与正文（可能出现调试提示条），正文上限 1MB、超出标记 `truncated`。
 * 采集绑定 tabId，页面导航后继续（同一 tab 的新文档）。
 * `network.replay` 在页面上下文用 `fetch` 发同源请求，可能改变服务端数据——CLI 帮助里必须写明。
 
@@ -752,8 +751,8 @@ bridge install-skill [--harness dsh|claude|cursor] [--dir <path>] [--force] [--l
 6. **手动长截图的真实形态**：扩展方法 `screenshot.manual.start|frame|save`，帧按 tabId 存在扩展内存，
    `save` 返回 `{ ok, dataUrl, frames, width, height }`。CLI 的 `--mode manual` 只调一次 `frame`，
    `--stitch` 调 `save` 后由 CLI 落盘。§17 里 `--stitch <session>` 的写法作废。
-7. **`network.start`** 返回 `{ captureId, bodies, mode: "webRequest"|"debugger" }`：
-   `bodies:false` 用 `webRequest`（无提示条，只记元数据），`bodies:true` 挂 debugger 的 `Network` 域
+7. **`network.start`** 返回 `{ captureId, bodies, mode: "debugger" }`：
+   统一挂 debugger 的 `Network` 域；`bodies` 只控制是否读取响应正文
    （有提示条，正文上限 1MB，超出标 `truncated`）。
 8. **`network.replay`** 在页面主世界用 `fetch(credentials:"include")` 重放（页面侧方法 `fetch-run`），
    返回 `{ status, statusText, headers, body, durationMs, url }`。
@@ -837,7 +836,7 @@ SW 在扩展 WebSocket 上发 `{ type:"call", id, method, params }`，daemon 只
 
 * `ops`：`chrome.scripting.executeScript` 注入自包含记录器，采集 click/input/change（密码框值为
   `********`）+ tabs.onUpdated 导航事件；停止时写入 `chrome.storage.local` 的 `bb.ops.recordings`（最多 20 条）。
-* `debug`：复用 `network`（webRequest 元数据）+ 主世界 console/异常缓冲 + `page-metrics` 上下文；
+* `debug`：复用 `network`（debugger Network 元数据）+ 主世界 console/异常缓冲 + `page-metrics` 上下文；
   停止时写入 `bb.debug.history`（最多 10 条），导出 JSON。
 
 ### 25.6 页面自测钩子
@@ -926,7 +925,7 @@ debug 采集与读取面（规则/operations 尚未实现）：
 | `debug stop` | 停止采集，写入扩展历史（最多 10 条，带 name），返回请求/控制台条数 |
 | `debug status` | 采集中显示计数；否则列出最近历史 |
 | `debug requests [--filter <子串>] [--method M]` | 请求列表（id/method/status/ms/type/url） |
-| `debug request <id> [--part headers\|timing\|request\|response\|all]` | 单条详情；headers 来自 webRequest（请求头需 onSendHeaders），正文需 `--bodies` |
+| `debug request <id> [--part headers\|timing\|request\|response\|all]` | 单条详情；headers 来自 debugger Network，正文需 `--bodies` |
 | `debug console` | 控制台/未捕获异常（最近 100 条） |
 | `debug pages` | 页面上下文（url/title/视口/滚动尺寸/dpr） |
 | `debug performance` | TTFF/DOMContentLoaded/load、paint（FCP）、LCP、资源数量与传输字节 |
@@ -961,7 +960,7 @@ IndexedDB `bb-videos`；`recordingId` 由 SW 生成并贯穿 offscreen/SW，停�
 
 | 命令 | 行为 |
 | --- | --- |
-| `record start` | 在当前会话页注入记录器，采集 click/input/change（密码值打码）+ 导航 |
+| `record start` | 注入记录器，采集人工 click/input/change/导航/文本 diff/媒体进度/hover 停留；默认过滤 Agent 动作，`--include-agent` 可包含 |
 | `record stop` | 停止并落库（最多 20 条历史），返回事件条数 |
 | `record status` | 进行中的录制与事件数 |
 | `record list` | 历史记录（id/事件数/时间/标题） |

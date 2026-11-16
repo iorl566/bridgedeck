@@ -1,10 +1,18 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8" /><title>跨源内嵌页</title></head>
 <body>
-  <p>跨源文档</p>
+  <p>跨源文本文档</p>
   <button id="x-btn" type="button">跨域按钮</button>
+  <button id="x-menu" type="button" aria-haspopup="menu" aria-expanded="false">打开菜单</button>
   <strong id="x-out">none</strong>
   <script>
+    const menuButton = document.getElementById('x-menu');
+    const openMenu = () => {
+      if (window.parent) window.parent.postMessage({ type: 'xframe-open-menu' }, '*');
+    };
+    menuButton.addEventListener('pointerover', openMenu);
+    menuButton.addEventListener('mouseover', openMenu);
+    menuButton.addEventListener('click', openMenu);
     document.getElementById('x-btn').addEventListener('click', () => {
       document.getElementById('x-out').textContent = 'clicked';
       if (parent) parent.postMessage({ type: 'xframe-clicked' }, '*');

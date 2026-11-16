@@ -1,17 +1,19 @@
-﻿import { whenReady } from './i18n.js';
+import { whenReady } from './i18n.js';
 import { mountAuditPanel } from './panels/audit-panel.js';
 import { mountLongshotPanel } from './panels/longshot-panel.js';
 import { mountVideoPanel } from './panels/video-panel.js';
 import { mountDebugPanel } from './panels/debug-panel.js';
 import { mountOpsPanel } from './panels/ops-panel.js';
 // ui/popup.js —— BridgeDeck弹窗（品牌与配色自有）
-const $ = (id) => document.getElementById(id);
+import { $ } from './common.js';
+import { PROTOCOL_VERSION } from '../src/protocol-version.js';
 const send = (message) => chrome.runtime.sendMessage(message).catch((error) => ({ ok: false, error: String((error && error.message) || error) }));
 
 let state = { connected: false, settings: {}, notifications: [] };
 // 弹窗里的"本机/远程配对"是 UI 状态：用户点开远程后，轮询刷新不能把它弹回本机。
 // null = 跟随已保存的设置；'remote'/'local' = 用户正在看的模式。
 let uiMode = null;
+let settingsSaving = false;
 
 function setSwitch(el, on) {
   if (!el) return;
@@ -51,7 +53,12 @@ function render(next) {
     : !connectionEnabled ? '已关闭' : connecting ? '连接中' : '未连接';
   const errorNode = $('stateError');
   if (errorNode) {
-    const skewText = state.protocolSkew ? '协议偏差：daemon ' + (state.protocol || '?') + '，扩展 1.8' : '';
+    const skewHint = state.protocolSkew === 'daemon_newer'
+      ? '请更新扩展'
+      : '请运行 bridge update apply 升级 daemon';
+    const skewText = state.protocolSkew
+      ? '协议偏差：daemon ' + (state.protocol || '?') + '，扩展 ' + PROTOCOL_VERSION + '；' + skewHint
+      : '';
     const text = !connected && state.lastError ? String(state.lastError) : skewText;
     errorNode.textContent = text;
     errorNode.classList.toggle('hidden', !text);
@@ -59,12 +66,16 @@ function render(next) {
   setSwitch($('connToggle'), connectionEnabled);
 
   $('browserLabel').textContent = state.label || '未命名浏览器';
+  const renameBusy = Array.isArray(state.sessions) && state.sessions.length > 0;
+  $('rename').disabled = renameBusy;
+  $('rename').title = renameBusy ? '会话进行中不能修改浏览器名称' : '修改浏览器名称';
+  $('rename').setAttribute('aria-disabled', String(renameBusy));
   setSwitch($('controlHint'), settings.controlHint !== false);
   setSwitch($('borrowConfirm'), settings.borrowConfirm !== false);
   setSwitch($('allowHelp'), settings.allowHelp !== false);
 
-  $('cliVersion').textContent = state.cliVersion || '0.1.1';
-  $('extVersion').textContent = state.extVersion || '0.1.1';
+  $('cliVersion').textContent = state.cliVersion || '—';
+  $('extVersion').textContent = chrome.runtime.getManifest().version;
   $('instanceId').textContent = state.instanceId || '—';
   $('copyInstance').disabled = !state.instanceId;
 
@@ -100,7 +111,13 @@ function render(next) {
     btn.innerHTML = icon + '<span class="text"><b></b><span></span></span>' + arrow;
     btn.querySelector('b').textContent = task.title || '任务';
     btn.querySelector('.text span').textContent = task.meta || '';
-    if (task.url) btn.addEventListener('click', () => chrome.tabs.create({ url: task.url }));
+    if (task.debug === true && Number.isInteger(task.tabId)) {
+      btn.addEventListener('click', () => {
+        chrome.tabs.create({ url: chrome.runtime.getURL('ui/debug.html') + '?tab=' + task.tabId });
+      });
+    } else if (task.url) {
+      btn.addEventListener('click', () => chrome.tabs.create({ url: task.url }));
+    }
     li.appendChild(btn);
     list.appendChild(li);
   }
@@ -113,16 +130,45 @@ async function refresh() {
 }
 
 async function setSetting(patch) {
-  const result = await send({ type: 'bb.settings.set', patch });
-  if (!result || result.ok === false) return;
-  await refresh();
+  if (settingsSaving) return;
+  settingsSaving = true;
+  for (const id of ['controlHint', 'borrowConfirm', 'allowHelp', 'connToggle']) {
+    const node = $(id);
+    if (node) node.disabled = true;
+  }
+  try {
+    const result = await send({ type: 'bb.settings.set', patch });
+    if (!result || result.ok === false) {
+      const errorNode = $('stateError');
+      if (errorNode) {
+        errorNode.textContent = (result && result.error) || '设置保存失败';
+        errorNode.classList.remove('hidden');
+      }
+      return;
+    }
+    await refresh();
+  } finally {
+    settingsSaving = false;
+    for (const id of ['controlHint', 'borrowConfirm', 'allowHelp', 'connToggle']) {
+      const node = $(id);
+      if (node) node.disabled = false;
+    }
+  }
 }
 
 $('connToggle').addEventListener('click', async () => {
-  const next = !$('connToggle').classList.contains('on');
-  const result = await send({ type: 'bb.connection', enabled: next });
-  if (result && result.ok === false) return;
-  await refresh();
+  if (settingsSaving) return;
+  settingsSaving = true;
+  $('connToggle').disabled = true;
+  try {
+    const next = !$('connToggle').classList.contains('on');
+    const result = await send({ type: 'bb.connection', enabled: next });
+    if (!result || result.ok === false) return;
+    await refresh();
+  } finally {
+    settingsSaving = false;
+    $('connToggle').disabled = false;
+  }
 });
 // 配对指引：按浏览器语言给 10 种文案，未配对连接仍可用但会提示身份未验证。
 const PAIRING_GUIDE = {

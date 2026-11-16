@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateMethodParams } from '../../lib/schemas.mjs';
+import { normalizeParams, METHOD_EFFECT as GENERATED_EFFECT } from '../../extension/src/generated/protocol.js';
+import { METHOD_EFFECT } from '../../lib/protocol.mjs';
 
 test('schema validates required fields and ranges', () => {
   assert.equal(validateMethodParams('navigate', { url: 'https://example.com' }).length, 0);
@@ -13,6 +15,9 @@ test('schema validates required fields and ranges', () => {
 test('schema ignores unknown methods and extra fields', () => {
   assert.equal(validateMethodParams('not-a-method', { anything: true }).length, 0);
   assert.equal(validateMethodParams('click', { selector: '#a', unknown: 1 }).length, 0);
+  assert.equal(normalizeParams('observe', { max_tokens: 10 }).maxTokens, 10);
+  assert.equal(normalizeParams('observe', { maxTokens: 10 }).max_tokens, undefined);
+  assert.deepEqual(GENERATED_EFFECT, METHOD_EFFECT);
 });
 
 test('schema reports missing required field path', () => {

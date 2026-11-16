@@ -1,7 +1,7 @@
 // ui/longshot.js —— 长截图：自动滚动 / 手动拼接 + 预览保存
 import { back, fillTabSelect, preferredTabFromQuery, selectedTabId } from './tab-picker.js';
 
-const $ = (id) => document.getElementById(id);
+import { $ } from './common.js';
 
 async function loadLastPreview() {
   try {

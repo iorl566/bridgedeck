@@ -1,6 +1,7 @@
 // src/control.js —— 共享控制：sync 产出 context/observation，动作校验与失效
 import { bridgeError } from './errors.js';
 import { execPage } from './inject.js';
+import { getHumanState } from './human-state.js';
 import { log } from './log.js';
 import { sleep } from './tabs.js';
 import { getTakeoverState } from './takeover.js';
@@ -116,13 +117,15 @@ export async function cooperateWait(params = {}) {
   const clearedAt = state ? state.humanClearedAt || 0 : 0;
   while (true) {
     const activity = await execPage(tabId, 'human-activity', {}).catch(() => null);
-    const last = Number(activity && activity.lastInputAt) || 0;
-    const active = Boolean(activity && activity.active) && last > clearedAt;
+    const rich = getHumanState(tabId);
+    const richAt = Number(rich && rich.at) || 0;
+    const last = Math.max(Number(activity && activity.lastInputAt) || 0, richAt);
+    const active = (Boolean(activity && activity.active) || (richAt > 0 && Date.now() - richAt < 2000)) && last > clearedAt;
     if (!active) {
-      return { state: { mode: 'ready' }, ready: true, waitedMs: Date.now() - started, ...base };
+      return { state: { mode: 'ready' }, ready: true, waitedMs: Date.now() - started, ...(rich ? { human: rich } : {}), ...base };
     }
     if (Date.now() - started >= timeout) {
-      return { state: { mode: 'human' }, ready: false, waitedMs: Date.now() - started, ...base };
+      return { state: { mode: 'human' }, ready: false, waitedMs: Date.now() - started, ...(rich ? { human: rich } : {}), ...base };
     }
     await sleep(250);
   }

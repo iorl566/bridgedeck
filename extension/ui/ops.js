@@ -1,7 +1,7 @@
 // ui/ops.js —— 操作录制页
 import { back, fillTabSelect, preferredTabFromQuery, selectedTabId } from './tab-picker.js';
 
-const $ = (id) => document.getElementById(id);
+import { $ } from './common.js';
 let recordings = [];
 let activeTabId = null;
 let pollTimer = null;

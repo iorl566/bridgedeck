@@ -28,6 +28,10 @@ BridgeDeck 的文档分两层：用户文档说明怎么用，验证记录说明
 | [9 站实测](SITE-BENCH-BRIDGEDECK-1.9.md) | 主流站点上的观察、脚本、截图与会话启动数据 |
 | [收官报告](FINAL-REPORT-2026-11-15.md) | 能力、性能、回归与后续方向的总结 |
 | [运行时决策](RUNTIME-DECISION.md) | CLI / MCP / 插件直连 / 原生 thin client 的取舍与实测 |
+| [UI 组件化](UI-COMPONENTIZATION.md) | 扩展 UI 的框架取舍与共享模块 |
+| [权限审计](PERMISSIONS.md) | 当前权限、未使用权限与进一步收紧顺序 |
+| [平台支持](PLATFORMS.md) | Windows/macOS/Linux、Edge/Chrome 的发布物与验证状态 |
+| [UI 按钮审计](UI-BUTTON-AUDIT.md) | 80 个按钮的绑定与运行时覆盖 |
 | [剩余工作](REMAINING-GAPS.md) | 已知边界与后续计划 |
 | [商店文案](STORE-LISTING.md) | 扩展商店描述 |
 | [商店审核](STORE-REVIEW.md) | 审核材料与隐私说明 |

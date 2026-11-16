@@ -9,10 +9,14 @@
 | `tabs`, `windows` | 列出/绑定标签页与窗口，支持 Agent 窗口 | 用户启动会话或操作标签页 |
 | `scripting` + `<all_urls>` | 在用户指定页面读取 DOM、点击、填表、截图 | 用户/Agent 发起命令 |
 | `debugger` | 可信输入（反爬场景）、设备仿真、closed shadow 读取、整页截图 | 显式命令或截图 |
-| `webRequest`, `declarativeNetRequest` | 网站调试的请求观察与拦截规则 | 用户开启调试/规则 |
+| `declarativeNetRequest` | 网站调试的拦截/重定向规则 | 用户开启规则 |
 | `downloads` | 保存截图、CSV、视频、导出文件 | 用户导出 |
 | `tabCapture`, `offscreen` | 标签页录制（无声音） | 用户开始录制 |
 | `storage`, `alarms` | 本地设置、会话状态、定时清理 | 持续 |
+| `idle` | 系统空闲恢复后重连 daemon | 系统唤醒/回到前台 |
+| `notifications` | 借用确认、人工协助、录制完成的系统提醒 | 需要用户确认/任务完成时 |
+| `tabGroups` | Agent 窗口标签页分组 | 创建/复用 Agent 窗口 |
+| `webNavigation` | iframe 树、隐藏/跨源 frame 标记 | 观察 iframe 或记录时 |
 
 ## 数据与合规
 

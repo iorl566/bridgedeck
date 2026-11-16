@@ -3,7 +3,7 @@ import { back, fillTabSelect, preferredTabFromQuery, selectedTabId } from './tab
 
 const DB_NAME = 'bb-videos';
 const STORE = 'videos';
-const $ = (id) => document.getElementById(id);
+import { $, formatBytes } from './common.js';
 let activeTabId = null;
 let tickTimer = null;
 let startedAt = 0;
@@ -23,13 +23,6 @@ function formatTime(ts) {
   const date = new Date(Number(ts) || Date.now());
   const pad = (n) => String(n).padStart(2, '0');
   return pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
-}
-
-function formatBytes(bytes) {
-  const n = Number(bytes) || 0;
-  if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  return (n / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 function openDb() {

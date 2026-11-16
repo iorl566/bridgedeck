@@ -9,7 +9,7 @@
 - **页面侧性能**：观察 186ms、验证型脚本 156ms、导航 1166ms（9 站中位）。
 - **常驻路径更快**：MCP observe 12ms；插件直连 observe warm 9ms、session.start 144ms、read 5ms、截图 194ms。
 - **仍是运行时下限**：CLI 冷启动 72–86ms（Node 运行时）、视口截图 358ms、CLI 会话启动 367ms。
-- **质量**：单测 955、CLI 155、MCP 10、DSH 插件 26、插件直连冒烟 11/11、Node/Python SDK 8/8、真实 Edge E2E 141/143（2 项按借用确认策略跳过）、protocol-check 全绿。
+- **质量**：单测 955、CLI 155、MCP 10、DSH 插件 26、插件直连冒烟 11/11、Node/Python SDK 8/8、真实 Edge E2E 145/147（2 项按借用确认策略跳过）、protocol-check 全绿。
 
 ## 1. 形态
 
@@ -82,7 +82,7 @@
 | DSH 插件 selftest | 26/26 |
 | 插件直连冒烟（真实 Edge） | 11/11，0 次 CLI 回退 |
 | Node SDK / Python SDK | 8/8 / 8/8 |
-| 真实 Edge E2E | 141/143（2 项按借用确认安全策略跳过） |
+| 真实 Edge E2E | 145/147（2 项按借用确认安全策略跳过） |
 | protocol-check | 全绿 |
 
 E2E 覆盖：观察事实、表单、表格、阻挡层、AX 兜底、closed shadow + click-backend、对话框、上传/下载、网络/调试/规则/重放、视频/录制/长截图、iframe/shadow、plan/step/recipe、人工协作、可信输入反爬、daemon 重启恢复、扩展 UI 等。
@@ -106,7 +106,7 @@ node tests/mcp/selftest.mjs                       # 10
 node tests/plugin/selftest.mjs                    # 26
 node tests/plugin/smoke.mjs                       # 11（需 BB_SMOKE_BROWSER=<instanceId>）
 node tools/protocol-check.mjs                     # 全绿
-$env:BB_E2E_SYNC_DOCS='0'; node tools/e2e.mjs     # 141/143
+$env:BB_E2E_SYNC_DOCS='0'; node tools/e2e.mjs     # 145/147
 ```
 
 ## 8. 相关文档

@@ -1,4 +1,4 @@
-// src/network.js —— 网络采集：webRequest 记元数据，debugger 取正文
+// src/network.js —— 网络采集：debugger Network 域统一取元数据/正文
 import { bridgeError } from './errors.js';
 import { acquire, onEvent, release, send } from './debugger.js';
 import { execPage } from './inject.js';
@@ -60,64 +60,6 @@ function publicEntry(entry) {
   };
 }
 
-function installWebRequest(state) {
-  const filter = { urls: ['<all_urls>'], tabId: state.tabId };
-  const onBefore = (details) => {
-    state.seq += 1;
-    const entry = {
-      id: state.seq,
-      requestId: details.requestId,
-      method: details.method,
-      url: details.url,
-      type: details.type,
-      startedAt: details.timeStamp,
-      status: null,
-      durationMs: null,
-      pageUrl: details.initiator || '',
-      commandId: currentCommand(state.tabId),
-    };
-    state.byRequestId.set(details.requestId, entry);
-    pushEntry(state, entry);
-  };
-  const onCompleted = (details) => {
-    const entry = state.byRequestId.get(details.requestId);
-    if (!entry) return;
-    entry.status = details.statusCode;
-    entry.durationMs = Math.max(0, Math.round(details.timeStamp - entry.startedAt));
-    entry.fromCache = details.fromCache === true;
-    entry.requestBytes = details.requestSize || 0;
-    entry.responseBytes = details.responseSize != null
-      ? details.responseSize
-      : headerBytes(details.responseHeaders);
-    if (details.responseHeaders) entry.responseHeaders = redactHeaders(details.responseHeaders);
-  };
-  const onError = (details) => {
-    const entry = state.byRequestId.get(details.requestId);
-    if (!entry) return;
-    entry.error = details.error || 'failed';
-    entry.durationMs = Math.max(0, Math.round(details.timeStamp - entry.startedAt));
-  };
-  const onSendHeaders = (details) => {
-    const entry = state.byRequestId.get(details.requestId);
-    if (!entry) return;
-    if (details.requestHeaders) {
-      entry.requestHeaders = redactHeaders(details.requestHeaders);
-      const tagged = Object.entries(details.requestHeaders).find(([key]) => key.toLowerCase() === 'x-bridge-command');
-      if (tagged) entry.commandId = String(tagged[1] || '') || entry.commandId;
-    }
-  };
-  chrome.webRequest.onBeforeRequest.addListener(onBefore, filter);
-  chrome.webRequest.onSendHeaders.addListener(onSendHeaders, filter, ['requestHeaders']);
-  chrome.webRequest.onCompleted.addListener(onCompleted, filter, ['responseHeaders']);
-  chrome.webRequest.onErrorOccurred.addListener(onError, filter);
-  state.cleanup = () => {
-    chrome.webRequest.onBeforeRequest.removeListener(onBefore);
-    chrome.webRequest.onSendHeaders.removeListener(onSendHeaders);
-    chrome.webRequest.onCompleted.removeListener(onCompleted);
-    chrome.webRequest.onErrorOccurred.removeListener(onError);
-  };
-}
-
 function installDebuggerNetwork(state) {
   const dbg = state.dbg;
   state.unsubs = [
@@ -125,6 +67,8 @@ function installDebuggerNetwork(state) {
       if (!event || !event.request) return;
       if (event.type === 'Preflight') return;
       state.seq += 1;
+      const headers = event.request.headers && typeof event.request.headers === 'object' ? event.request.headers : {};
+      const taggedKey = Object.keys(headers).find((key) => key.toLowerCase() === 'x-bridge-command');
       const entry = {
         id: state.seq,
         requestId: event.requestId,
@@ -135,6 +79,7 @@ function installDebuggerNetwork(state) {
         status: null,
         durationMs: null,
         pageUrl: event.documentURL || '',
+        commandId: taggedKey ? String(headers[taggedKey] || '') || null : currentCommand(state.tabId) || null,
       };
       state.byRequestId.set(event.requestId, entry);
       pushEntry(state, entry);
@@ -174,16 +119,12 @@ export async function networkStart(params = {}) {
     startedAt: Date.now(),
     stopped: false,
   };
-  if (bodies) {
-    state.dbg = await acquire(tabId, 'network');
-    await send(tabId, 'Network.enable', { maxTotalBufferSize: 10 * 1024 * 1024, maxResourceBufferSize: 2 * 1024 * 1024 });
-    installDebuggerNetwork(state);
-  } else {
-    installWebRequest(state);
-  }
+  state.dbg = await acquire(tabId, 'network');
+  await send(tabId, 'Network.enable', { maxTotalBufferSize: 10 * 1024 * 1024, maxResourceBufferSize: 2 * 1024 * 1024 });
+  installDebuggerNetwork(state);
   captures.set(tabId, state);
   log('网络采集开始 tab=' + tabId + ' bodies=' + bodies);
-  return { captureId: tabId + '-' + state.startedAt, bodies, mode: bodies ? 'debugger' : 'webRequest' };
+  return { captureId: tabId + '-' + state.startedAt, bodies, mode: 'debugger' };
 }
 
 export async function networkStop(params = {}) {
@@ -195,11 +136,11 @@ export async function networkStop(params = {}) {
     try {
       state.cleanup();
     } catch (error) {
-      log('卸载 webRequest 监听失败', error && error.message);
+      log('卸载网络监听失败', error && error.message);
     }
     state.cleanup = null;
   }
-  if (state.bodies) {
+  if (state.dbg) {
     for (const unsubscribe of state.unsubs || []) {
       try {
         unsubscribe();

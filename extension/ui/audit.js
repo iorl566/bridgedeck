@@ -1,5 +1,5 @@
 // ui/audit.js —— 任务审计（扩展侧记录，默认关闭）
-const $ = (id) => document.getElementById(id);
+import { $ } from './common.js';
 
 function note(text, isError) {
   const node = $('note');

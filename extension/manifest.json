@@ -9,13 +9,15 @@
                         "scripting",
                         "storage",
                         "alarms",
+                        "idle",
+                        "notifications",
                         "windows",
                         "downloads",
-                        "webRequest",
                         "webNavigation",
                         "debugger",
                         "tabCapture",
                         "offscreen",
+                        "tabGroups",
                         "declarativeNetRequest"
                     ],
     "host_permissions":  [
@@ -56,7 +58,21 @@
                                            "content/human-watch.js"
                                        ],
                                 "run_at":  "document_start",
-                                "all_frames":  false
+                                "all_frames":  true,
+                                "match_about_blank":  true,
+                                "match_origin_as_fallback":  true
+                            },
+                            {
+                                "matches":  [
+                                                "\u003call_urls\u003e"
+                                            ],
+                                "js":  [
+                                           "content/record-capture.js"
+                                       ],
+                                "run_at":  "document_start",
+                                "all_frames":  true,
+                                "match_about_blank":  true,
+                                "match_origin_as_fallback":  true
                             }
                         ],
     "action":  {

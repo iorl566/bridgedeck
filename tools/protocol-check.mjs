@@ -1,5 +1,6 @@
 // tools/protocol-check.mjs —— 协议一致性门禁：METHOD_EFFECT 为唯一方法清单，lib/methods.mjs 为分类来源
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { METHOD_EFFECT } from '../lib/protocol.mjs';
 import { EXT_METHODS, LOCAL_METHODS, validateMethodRegistry } from '../lib/methods.mjs';
 import { METHOD_SCHEMAS } from '../lib/schemas.mjs';
@@ -33,6 +34,12 @@ const mcpMethodsNotInProtocol = [...new Set(TOOLS.flatMap((tool) => tool.methods
   .filter((method) => !canonical.has(method))
   .sort();
 const mcpToolsMissingMapping = TOOLS.filter((tool) => !Array.isArray(tool.methods)).map((tool) => tool.name).sort();
+let generatedProtocol = 'ok';
+try {
+  execFileSync(process.execPath, ['tools/gen-protocol.mjs', '--check'], { cwd: process.cwd(), stdio: 'pipe' });
+} catch {
+  generatedProtocol = 'stale';
+}
 
 const result = {
   canonicalMethods: canonical.size,
@@ -47,6 +54,7 @@ const result = {
   localWithoutRoute,
   registryErrors,
   schemaMissing,
+  generatedProtocol,
 };
 console.log(JSON.stringify(result, null, 2));
 process.exit(
@@ -58,6 +66,7 @@ process.exit(
   || schemaMissing.length
   || mcpMethodsNotInProtocol.length
   || mcpToolsMissingMapping.length
+  || generatedProtocol !== 'ok'
     ? 1
     : 0,
 );

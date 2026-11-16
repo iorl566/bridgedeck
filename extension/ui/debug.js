@@ -1,7 +1,7 @@
 // ui/debug.js —— 网站调试页
 import { back, fillTabSelect, preferredTabFromQuery, selectedTabId } from './tab-picker.js';
 
-const $ = (id) => document.getElementById(id);
+import { $ } from './common.js';
 let activeTabId = null;
 let pollTimer = null;
 let lastLive = null;

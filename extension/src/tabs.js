@@ -306,7 +306,29 @@ export async function ensureAgent(params = {}) {
       // 忽略置前失败，不影响后续命令
     }
   }
+  groupAgentWindowTabs(windowId).catch(() => {});
   return { tabId: tab.id, windowId };
+}
+
+/** 把 Agent 窗口的标签页收进一个同名标签组；权限/API 不可用时静默跳过。 */
+export async function groupAgentWindowTabs(windowId) {
+  if (!Number.isInteger(windowId)) return null;
+  if (!chrome.tabs || typeof chrome.tabs.group !== 'function' || !chrome.tabGroups) return null;
+  try {
+    if (!(await isAgentWindow(windowId))) return null;
+    const tabs = await chrome.tabs.query({ windowId });
+    const tabIds = tabs.map((tab) => tab.id).filter((id) => Number.isInteger(id));
+    if (!tabIds.length) return null;
+    const groups = await chrome.tabGroups.query({ windowId });
+    const existing = groups.find((group) => group.title === 'BridgeDeck');
+    const groupId = existing
+      ? await chrome.tabs.group({ groupId: existing.id, tabIds })
+      : await chrome.tabs.group({ tabIds, createProperties: { windowId } });
+    if (!existing) await chrome.tabGroups.update(groupId, { title: 'BridgeDeck', color: 'blue' }).catch(() => {});
+    return groupId;
+  } catch {
+    return null;
+  }
 }
 
 /** 新建一个专属 Agent 窗口（每个 session 一个），返回它的 tab。 */
@@ -359,6 +381,7 @@ export async function newAgentWindow(params = {}) {
     // 后台建窗不需要等焦点回到原窗口：失败/延迟不影响会话。
     withTimeout(chrome.windows.update(previousFocused.id, { focused: true }), 3000, 'windows.update').catch(() => {});
   }
+  groupAgentWindowTabs(windowId).catch(() => {});
   return { tabId: tab.id, windowId, incognito: created.incognito === true };
 }
 
@@ -451,6 +474,7 @@ export async function tabNew(params = {}) {
     throw mapChromeError(error, '新建 tab 失败');
   }
   markSelfCreated(tab.id);
+  if (Number.isInteger(tab.windowId)) groupAgentWindowTabs(tab.windowId).catch(() => {});
   return { tabId: tab.id, windowId: tab.windowId };
 }
 
@@ -805,6 +829,10 @@ async function tabBorrowInner(params, stage) {
         const lang = await readUiLang();
         await injectBanner(tabId, borrowBanner, [requestId, tab.title || '', BORROW_TIMEOUT_MS, lang]);
         try {
+          const pendingNotify = chrome.runtime.sendMessage({ type: 'bb.borrow.request', requestId, tabId, title: tab.title || '' });
+          if (pendingNotify && typeof pendingNotify.catch === 'function') pendingNotify.catch(() => {});
+        } catch { /* 通知失败不影响页面确认 */ }
+        try {
           await withTimeout(chrome.windows.update(tab.windowId, { focused: true }), 3000, 'windows.update');
         } catch {
           // 窗口可能已关闭，忽略
@@ -941,6 +969,10 @@ export async function requestHelp(params = {}) {
   try {
     const overlayLang = await readUiLang();
     await injectBanner(tabId, helpOverlayFunc, [requestId, reason, highlightTarget, highlightRect, String(params.title || ''), overlayLang]);
+    try {
+      const pendingNotify = chrome.runtime.sendMessage({ type: 'bb.help.request', requestId, tabId, title: params.title || '' });
+      if (pendingNotify && typeof pendingNotify.catch === 'function') pendingNotify.catch(() => {});
+    } catch { /* 通知失败不影响页面协助 */ }
     try {
       await withTimeout(chrome.windows.update(tab.windowId, { focused: true }), 3000, 'windows.update');
       await withTimeout(chrome.tabs.update(tabId, { active: true }), 3000, 'tabs.update');

@@ -139,10 +139,10 @@ function installTakeover(info, lang, version) {
   const shadow = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = [
-    '.glow{position:fixed;inset:0;border-radius:10px;box-shadow:inset 0 0 18px 3px rgba(47,111,237,.10);pointer-events:none}',
-    '.glow::after{content:"";position:fixed;inset:0;border-radius:10px;box-shadow:inset 0 0 0 3px rgba(47,111,237,.95),inset 0 0 18px 4px rgba(47,111,237,.55);opacity:0;animation:bbp 3s ease-in-out 2 forwards;pointer-events:none}',
-    '@keyframes bbp{0%{opacity:0}50%{opacity:1}100%{opacity:.6}}',
-    '@media (prefers-reduced-motion: reduce){.glow::after{animation:none;opacity:.6}}',
+    '.glow{position:fixed;inset:0;z-index:2147483646;box-shadow:inset 0 0 20px 4px rgba(47,111,237,.25);pointer-events:none}',
+    '.glow::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 40px 8px rgba(47,111,237,.5);opacity:0;animation:bbp 3s ease-in-out 2;pointer-events:none}',
+    '@keyframes bbp{0%,100%{opacity:0}50%{opacity:1}}',
+    '@media (prefers-reduced-motion: reduce){.glow::after{animation:none;opacity:0}}',
     '.card{position:fixed;right:18px;bottom:18px;box-sizing:border-box;width:280px;max-width:calc(100vw - 28px);padding:14px;border:1px solid #dbe4f5;border-radius:16px;background:#f7f9fc;color:#1c2230;box-shadow:0 10px 28px rgba(28,34,48,.14),0 2px 6px rgba(28,34,48,.08);font:12.5px/1.5 system-ui,sans-serif;pointer-events:auto}',
     '.head{display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:grab;user-select:none}',
     '.head:active{cursor:grabbing}',
