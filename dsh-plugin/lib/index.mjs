@@ -4,7 +4,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools';
 import { createRunner } from './bridge.mjs';
 import { buildToolSpecs } from './tools.mjs';
 import { createPluginStartJournal, defaultJournalPath, recoverOrphanStarts } from './start-journal.mjs';
-import { registerBundledSkill } from './skill-register.mjs';
+import { safeRegisterBundledSkill } from './skill-register.mjs';
 
 export const name = 'browser-bridge-tools';
 export const inject = ['tools'];
@@ -49,13 +49,13 @@ export function apply(ctx, config) {
   };
 
   // 技能注册不依赖 CLI 是否可用：即使 bridge CLI 缺失，技能目录仍应可发现。
-  ctx.effect(() => registerBundledSkill(ctx), 'browser-bridge-tools:skill');
+  ctx.effect(() => safeRegisterBundledSkill(ctx), 'browser-bridge-tools:skill');
   if (typeof ctx.on === 'function') {
     const agentRegistrations = new Map();
     ctx.effect(() => {
       const stopCreated = ctx.on('agent/created', ({ agent }) => {
         if (!agent || !agent.ctx || agentRegistrations.has(agent)) return;
-        agentRegistrations.set(agent, registerBundledSkill(agent.ctx));
+        agentRegistrations.set(agent, safeRegisterBundledSkill(agent.ctx));
       });
       const stopDisposed = ctx.on('agent/disposed', ({ agent }) => {
         const dispose = agentRegistrations.get(agent);

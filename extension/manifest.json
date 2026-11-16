@@ -1,89 +1,88 @@
 {
-    "manifest_version":  3,
-    "name":  "BridgeDeck",
-    "version":  "0.1.3",
-    "description":  "BridgeDeck 本地浏览器扩展：让命令行 AI agent 驱动当前浏览器（仅连接 127.0.0.1 上的本地 daemon）。",
-    "minimum_chrome_version":  "111",
-    "permissions":  [
-                        "tabs",
-                        "scripting",
-                        "storage",
-                        "alarms",
-                        "idle",
-                        "notifications",
-                        "windows",
-                        "downloads",
-                        "webNavigation",
-                        "debugger",
-                        "tabCapture",
-                        "offscreen",
-                        "tabGroups",
-                        "declarativeNetRequest"
-                    ],
-    "host_permissions":  [
-                             "\u003call_urls\u003e"
-                         ],
-    "background":  {
-                       "service_worker":  "background.js",
-                       "type":  "module"
-                   },
-    "content_scripts":  [
-                            {
-                                "matches":  [
-                                                "\u003call_urls\u003e"
-                                            ],
-                                "js":  [
-                                           "injected/page-lib.js"
-                                       ],
-                                "run_at":  "document_start",
-                                "all_frames":  false,
-                                "world":  "ISOLATED"
-                            },
-
-                            {
-                                "matches":  [
-                                                "\u003call_urls\u003e"
-                                            ],
-                                "js":  [
-                                           "content/human-watch.js"
-                                       ],
-                                "run_at":  "document_start",
-                                "all_frames":  true,
-                                "match_about_blank":  true,
-                                "match_origin_as_fallback":  true
-                            },
-                            {
-                                "matches":  [
-                                                "\u003call_urls\u003e"
-                                            ],
-                                "js":  [
-                                           "content/record-capture.js"
-                                       ],
-                                "run_at":  "document_start",
-                                "all_frames":  true,
-                                "match_about_blank":  true,
-                                "match_origin_as_fallback":  true
-                            }
-                        ],
-    "action":  {
-                   "default_title":  "BridgeDeck",
-                   "default_popup":  "ui/popup.html",
-                   "default_icon":  {
-                                        "16":  "icons/icon16.png",
-                                        "32":  "icons/icon32.png",
-                                        "48":  "icons/icon48.png",
-                                        "128":  "icons/icon128.png"
-                                    }
-               },
-    "options_ui":  {
-                       "page":  "ui/options.html",
-                       "open_in_tab":  true
-                   },
-    "icons":  {
-                  "16":  "icons/icon16.png",
-                  "32":  "icons/icon32.png",
-                  "48":  "icons/icon48.png",
-                  "128":  "icons/icon128.png"
-              },
-    "short_name":  "BridgeDeck"
+  "manifest_version": 3,
+  "name": "BridgeDeck",
+  "version": "0.1.4",
+  "description": "BridgeDeck 本地浏览器扩展：让命令行 AI agent 驱动当前浏览器（仅连接 127.0.0.1 上的本地 daemon）。",
+  "minimum_chrome_version": "111",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "storage",
+    "alarms",
+    "idle",
+    "notifications",
+    "windows",
+    "downloads",
+    "webNavigation",
+    "debugger",
+    "tabCapture",
+    "offscreen",
+    "tabGroups",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "injected/page-lib.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false,
+      "world": "ISOLATED"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content/human-watch.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content/record-capture.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
+    }
+  ],
+  "action": {
+    "default_title": "BridgeDeck",
+    "default_popup": "ui/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_ui": {
+    "page": "ui/options.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "short_name": "BridgeDeck"
 }
