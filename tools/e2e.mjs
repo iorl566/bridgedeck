@@ -2518,6 +2518,17 @@ try {
     return 'swapped';
   });
 
+  await check('35e. click --text --trusted --follow 跟随新标签页', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'follow navigate');
+    const clicked = expectOk(await cliJson([
+      'click', '--text', '打开新标签页', '--trusted', '--follow', '--session', sessionId,
+    ]), 'click text follow');
+    assert(clicked.followed && String(clicked.followed.url).includes('frame.html'), '没有跟随新标签页：' + JSON.stringify(clicked));
+    const current = expectOk(await cliJson(['evaluate', 'location.href', '--session', sessionId]), 'followed url');
+    assert(String(current.value).includes('frame.html'), 'session 没有切到新标签页：' + JSON.stringify(current.value));
+    return 'followed=' + clicked.followed.url;
+  });
+
   await check('36. 收尾：清空 session + status', async () => {
     const before = expectOk(await cliJson(['session', 'list']), 'session list');
     for (const session of before.sessions || []) {

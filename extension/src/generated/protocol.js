@@ -697,6 +697,7 @@ export const METHOD_SCHEMA_KEYS = {
       "force",
       "ref",
       "selector",
+      "text",
       "trusted",
       "waitTimeoutMs"
     ]

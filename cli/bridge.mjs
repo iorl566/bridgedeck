@@ -129,6 +129,8 @@ VALUE_FLAGS.add('backend');
 VALUE_FLAGS.add('pipeline');
 BOOL_FLAGS.add('fallback-ax');
 BOOL_FLAGS.add('compare-ax');
+BOOL_FLAGS.add('follow');
+VALUE_FLAGS.add('text');
 
 const REPEATABLE_FLAGS = new Set(['file', 'param']);
 
@@ -1931,12 +1933,35 @@ async function cmdPage(command, flags, pos) {
       const params = withControl(flags, { ...target });
       if (flags.trusted === true) params.trusted = true;
       if (flags.force === true) params.force = true;
+      let followBefore = null;
+      const followSession = flags.session || flags['session-id'];
+      if (flags.follow === true) {
+        if (!followSession) throw new ArgError('--follow 需要 --session <id>');
+        const tabs = await sessionTabIds(String(followSession));
+        followBefore = new Set(tabs.map((tab) => tab.tabId));
+      }
       let beforeUrl = null;
       if (command === 'click' && flags['wait-navigation'] === true) {
         const probe = await callRpc('evaluate', withNavigationProbe(flags, 'location.href'), Math.max(timeoutOf(flags), 5000));
         if (probe.ok) beforeUrl = String((probe.result || {}).value || '');
       }
       const body = await callRpc(command, params, timeoutOf(flags));
+      if (body.ok && command === 'click' && flags.follow === true) {
+        try {
+          const followed = await followOpenedTab(String(followSession), followBefore);
+          if (followed) {
+            if (!body.result) body.result = {};
+            body.result.followed = followed;
+            if (!jsonMode) print('已跟随新标签页：' + followed.url);
+          }
+        } catch (error) {
+          const code = (error && error.code) || 'E_APP_SSO_FAILED';
+          const message = (error && error.message) || String(error);
+          if (jsonMode) emitJson({ ok: false, error: { code, message } });
+          else print('跟随失败：' + message);
+          return 1;
+        }
+      }
       if (body.ok && command === 'click' && beforeUrl) {
         const navigation = await waitForNavigationAfterClick(flags, beforeUrl);
         if (!body.result) body.result = {};
@@ -2146,17 +2171,49 @@ function withControl(flags, params) {
 function resolveTarget(flags, pos, index, { required }) {
   const hasRef = flags.ref !== undefined;
   const hasSelector = flags.selector !== undefined;
-  if (hasRef && hasSelector) throw new ArgError('--ref 与 --selector 只能给一个');
+  const hasText = flags.text !== undefined;
+  if ([hasRef, hasSelector, hasText].filter(Boolean).length > 1) {
+    throw new ArgError('--ref、--selector、--text 只能给一个');
+  }
+  if (hasText) return { text: String(flags.text) };
   if (hasRef) return { ref: String(flags.ref) };
   if (hasSelector) return { selector: String(flags.selector) };
   const value = pos[index];
   if (value === undefined || value === '') {
-    if (required) throw new ArgError('缺少参数 <ref|selector>');
+    if (required) throw new ArgError('缺少参数 <ref|selector> 或 --text');
     return null;
   }
   return value.startsWith('@') ? { ref: value } : { selector: value };
 }
 
+async function sessionTabIds(sessionId) {
+  const body = await callRpc('tab.list', { session: sessionId }, 10000);
+  if (!body || body.ok !== true) return [];
+  const tabs = (body.result && body.result.tabs) || [];
+  return tabs;
+}
+
+/** 应用启动后跟随新标签页；识别 IAM SSO 错误页。 */
+async function followOpenedTab(sessionId, beforeIds) {
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const tabs = await sessionTabIds(sessionId);
+    const fresh = tabs.filter((tab) => !beforeIds.has(tab.tabId));
+    if (fresh.length) {
+      const tab = fresh[fresh.length - 1];
+      const rebind = await callRpc('session.rebind', { session: sessionId, tab: tab.tabId, releaseOld: false }, 20000);
+      if (!rebind || rebind.ok !== true) {
+        throw new BridgeError('E_FOLLOW_FAILED', '新标签页已打开，但 session rebind 失败：' + JSON.stringify(rebind && rebind.error));
+      }
+      const url = String(tab.url || '');
+      if (/\/login\/errorPage\.html/i.test(url)) {
+        throw new BridgeError('E_APP_SSO_FAILED', '应用启动被 IAM 拒绝（SSO20004 App子帐号不可用）；请使用 --trusted 点击或检查应用授权');
+      }
+      return { tabId: tab.tabId, url, title: tab.title || '' };
+    }
+    await sleep(500);
+  }
+  return null;
+}
 /** 写 dataUrl 到文件，返回路径与字节数。 */
 function writeDataUrl(out, dataUrl) {
   const match = /^data:image\/[a-z0-9.+-]+;base64,(.*)$/is.exec(String(dataUrl || ''));

@@ -1043,12 +1043,32 @@
 
   // ---------- 元素解析 ----------
 
+  function findByText(text) {
+    const wanted = String(text == null ? '' : text).trim();
+    if (!wanted) pageError('E_BAD_ARG', 'text 不能为空');
+    const candidates = [...document.querySelectorAll('button,a,[role="button"],[role="link"],[role="menuitem"],[data-key],.desktop-item')];
+    const textOf = (el) => String(el.innerText || el.textContent || '').trim();
+    let matches = candidates.filter((el) => textOf(el) === wanted);
+    if (!matches.length) matches = candidates.filter((el) => textOf(el).includes(wanted));
+    if (!matches.length) {
+      const all = [...document.querySelectorAll('*')].filter((el) => textOf(el) === wanted && (el.offsetWidth || el.offsetHeight));
+      matches = all.length ? all : [...document.querySelectorAll('*')].filter((el) => textOf(el) === wanted);
+    }
+    if (!matches.length) pageError('E_NOT_FOUND', '找不到文本匹配的元素: ' + wanted);
+    // 优先取最内层匹配，避免点到只包一层的 wrapper；应用卡片本身仍有 data-key。
+    const leaves = matches.filter((el) => !matches.some((other) => other !== el && el.contains(other)));
+    return (leaves.length ? leaves : matches)[0];
+  }
+
   function resolveElement(args) {
     const hasRef = typeof args.ref === 'string' && args.ref.length > 0;
     const hasSelector = typeof args.selector === 'string' && args.selector.length > 0;
-    if (hasRef === hasSelector) {
-      pageError('E_BAD_ARG', 'ref 与 selector 必须恰好给一个');
+    const hasText = typeof args.text === 'string' && args.text.length > 0;
+    const count = [hasRef, hasSelector, hasText].filter(Boolean).length;
+    if (count !== 1) {
+      pageError('E_BAD_ARG', 'ref、selector、text 必须恰好给一个');
     }
+    if (hasText) return findByText(args.text);
     if (hasSelector) {
       let el = null;
       try {

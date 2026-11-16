@@ -318,7 +318,9 @@ async function trustedKey(tabId, spec) {
 }
 
 async function trustedFocusPoint(tabId, params) {
-  const target = params && params.ref ? { ref: params.ref } : (params && params.selector ? { selector: params.selector } : null);
+  const target = params && params.ref
+    ? { ref: params.ref }
+    : (params && params.selector ? { selector: params.selector } : (params && params.text ? { text: params.text } : null));
   if (!target) return null;
   return execPage(tabId, 'point', target).catch(() => null);
 }

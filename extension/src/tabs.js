@@ -666,6 +666,13 @@ export async function isControlledTab(tabId) {
   return list.includes(tabId);
 }
 
+/** 将 Agent 自己打开的新标签页登记为受控，避免自动跟随时再次弹借用确认。 */
+export async function markControlledTab(tabId) {
+  if (!Number.isInteger(tabId)) return;
+  const list = await readControlledTabs();
+  if (!list.includes(tabId)) await writeControlledTabs([...list, tabId]);
+}
+
 /** 注入函数：借用确认条。必须自包含（序列化后在页面里执行）。 */
 function borrowBanner(requestId, tabTitle, timeoutMs, lang) {
   const T = lang === 'en' ? {

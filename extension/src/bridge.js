@@ -9,7 +9,7 @@ import { listCredentials, revokeAllCredentials, revokeCredential } from './trans
 import { showTakeover, hideTakeover, setTakeoverState, getTakeoverState, clearTakeoverState, syncControlHintsVisible } from './takeover.js';
 import { capture, hideManualOverlay, manualFrame, manualSave, manualStart, popupState, saveDataUrl, saveDataUrlImage, showManualOverlay } from './quick.js';
 import { readSettings, subscribeSettings, writeSettings } from './settings.js';
-import { consumeSelfCreated, readAgentWindows, isSelfCreatedWindow, refreshTakeoverForTab, resolveHumanDecision } from './tabs.js';
+import { consumeSelfCreated, markControlledTab, markSelfCreated, readAgentWindows, isSelfCreatedWindow, refreshTakeoverForTab, resolveHumanDecision } from './tabs.js';
 import { dialogAccept, dialogDismiss, dialogStatus, onDialogOpened, pendingDialog } from './dialogs.js';
 import { awaitOperation, cancelOperation, registerOperation, settleOperation } from './operations.js';
 import { noteNavigation } from './control.js';
@@ -645,7 +645,11 @@ function installPageGuard() {
         if (Number.isInteger(openerId)) {
           try {
             const opener = await chrome.tabs.get(openerId);
-            if (opener && agentSet.has(opener.windowId)) return;
+            if (opener && agentSet.has(opener.windowId)) {
+              markSelfCreated(tab.id);
+              await markControlledTab(tab.id);
+              return;
+            }
           } catch {
             // opener 已关闭：按外部标签页处理
           }
