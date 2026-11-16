@@ -14,7 +14,7 @@ BridgeDeck（浏览器桥）：本机 Chromium（Edge/Chrome）自动化。
 
 ```powershell
 Set-Location "D:\浏览器桥"
-node --test "tests/unit/*.test.mjs"      # 期望 997 pass / 0 fail
+node --test "tests/unit/*.test.mjs"      # 期望 1003 pass / 0 fail
 node tests/extension/module-load.mjs     # 期望 PASS
 node tests/plugin/selftest.mjs           # 期望 26 通过
 node tools/gen-protocol.mjs --check      # 期望 up to date
@@ -87,7 +87,7 @@ page-lib v43 重载后又跑了一轮回归（`.tmp-bench/captcha-drive/run-v43/
 - **观测**：VOM 增加 `[field: "..."]` 前置标题绑定、`[custom-dropdown: expanded|click to open]`、连续 ≥3 条只读行折叠；stealth 增加零对比度、text-indent、bg-clip 渐变保留、sr-only 保留；`unchanged` 观察复用（页面没变时扩展不回全文，daemon 用缓存补）；CLI 侧 `--delta` 真正计算行级 patch；虚拟滚动行 `rowAnchor` 校验（`E_TARGET_MISMATCH` + `reason=virtual_row_recycled`）。
 - **输入/会话**：`select` 先校验后滚动、按 label/大小写/`label` 属性匹配、歧义候选带 `available`；`session start|open --scope` 绑定 caller scope，`BB_SESSION_SCOPE` 兜底；`wait-for-navigation` 读 `pendingUrl`，`back/forward` 以"complete 且 URL 已变"为准（bfcache 不再白等 15s）。
 - **可靠/安全**：feature 兼容表 + 派发前 preflight（旧扩展缺 `unverified`/`expect`/`plan`/`read` 直接报 `E_UNSUPPORTED_CAPABILITY`）；recipe 独占锁 + run marker（新码 `E_RECIPE_LOCKED`）；账本增加目标/步骤摘要与 0600；配对服务端证明（daemon 用同 token 签 challenge，扩展在 hello-ack 校验）+ `bridge daemon rotate`；输入标记改 `performance.now()` 单调时钟（兼容旧 epoch）；AX 域 10s 租约；接管浮层最小化按会话存 background；popup 连接设置常显 + 未配对警告；`logs --follow`、`--quiet`、`--verbose`、`get-html --out` 帮助、`--steps-file`。
-- **本轮新增**：`plan` 改为 daemon 逐步骤执行（每步独立账本记录/结算，首步失败即停；E_NOT_FOUND 等 precondition 失败记 `effect_state:none` 不冻结标签页）；观察/截图结果带短别名 `oN`/`cN`，可写 `--observation o2`、`--baseline o1`、`--capture c1`；`observeSmart` 与 `observe` 共用 observationId 缓存，默认 observe 的 delta/unchanged 也能对上；行级补丁支持新增/删除行（`structural-text`，CLI 输出 `+/-` 并本地合并）；接管浮层最小化经 `showTakeover` 传入页面脚本，跨导航保留（真实页面验证）；page-lib 增加 mutation log——观察 childList/characterData/attributes 与同源 iframe 文档，并把 scroll/resize 记为 layout 变化；无 DOM/属性/布局/交互变化时跳过 VOM 重建，只有纯文本节点变化时用 `lineMap` 只重渲染最近祖先子树（`incremental:true`），属性变化或新增/删除节点回退整页（新增 `tests/unit/mutation-summary.test.mjs`）；多 frame 页面的 `--delta` 用合并基线计算 patch，避免删掉其它 frame；导航/刷新清空扩展观察基线；`bridge ui --diagnostics` 输出页面自检与 AX 域租约；`debugger.simulate-detach` 走真实 `chrome.debugger.detach` 路径模拟浏览器侧分离，实测重挂后焦点仿真恢复；本地 `observations/` 按 7 天 TTL + 300 文件上限清理；删除未使用的 `action-guard`；注入失败的 frame 用 CDP `Target.setAutoAttach` + per-target AX 采集兜底（只读文本，`--cdp-frames` 可强制诊断，新增 `tests/unit/frame-cdp.test.mjs`）。
+- **本轮新增**：`plan` 改为 daemon 逐步骤执行（每步独立账本记录/结算，首步失败即停；E_NOT_FOUND 等 precondition 失败记 `effect_state:none` 不冻结标签页）；观察/截图结果带短别名 `oN`/`cN`，可写 `--observation o2`、`--baseline o1`、`--capture c1`；`observeSmart` 与 `observe` 共用 observationId 缓存，默认 observe 的 delta/unchanged 也能对上；行级补丁支持新增/删除行（`structural-text`，CLI 输出 `+/-` 并本地合并）；接管浮层最小化经 `showTakeover` 传入页面脚本，跨导航保留（真实页面验证）；page-lib 增加 mutation log——观察 childList/characterData/attributes 与同源 iframe 文档，并把 scroll/resize 记为 layout 变化；无 DOM/属性/布局/交互变化时跳过 VOM 重建，只有纯文本节点变化时用 `lineMap` 只重渲染最近祖先子树（`incremental:true`），属性变化或新增/删除节点回退整页（新增 `tests/unit/mutation-summary.test.mjs`）；多 frame 页面的 `--delta` 用合并基线计算 patch，避免删掉其它 frame；导航/刷新清空扩展观察基线；`bridge ui --diagnostics` 输出页面自检与 AX 域租约；`debugger.simulate-detach` 走真实 `chrome.debugger.detach` 路径模拟浏览器侧分离，实测重挂后焦点仿真恢复；本地 `observations/` 按 7 天 TTL + 300 文件上限清理；删除未使用的 `action-guard`；`bridge install-skill --commands` 为 Claude Code/Codex/Cursor 生成 `/browser-bridge` 命令包装；DSH 插件通过 `ctx.skills.register` 注册内嵌技能（agent 作用域），安装插件后无需再装 DSH 文件技能。注入失败的 frame 用 CDP `Target.setAutoAttach` + per-target AX 采集兜底（只读文本，`--cdp-frames` 可强制诊断，新增 `tests/unit/frame-cdp.test.mjs`）。
 - **明确未做**：跨源 iframe 的帧内增量重渲染（CDP 兜底只提供只读文本，不生成可动作 ref；多 frame delta 的 patch 正确但帧内仍整帧重建）；macOS x64 便携包需在 macOS 上构建。
 
 ## 6. 已知坑（都踩过，别再踩）
@@ -131,7 +131,7 @@ page-lib v43 重载后又跑了一轮回归（`.tmp-bench/captcha-drive/run-v43/
 
 - 浏览器实例：`f745d380`（Edge 157，扩展 0.1.3，`LIB_VERSION 49`）
 - 无活动会话（`bridge status` 应为 `sessions (0)`）
-- 单测 997 pass / 0 fail
+- 单测 1003 pass / 0 fail
 - 扩展包：`dist/BridgeDeck-extension-0.1.3.zip`
 - 驱动通道基线：3 轮 × 6 题型，`channel-verified=5 / never-reacted=1 (双滑块)`，见 `tests/anti-bot/captcha-drive-baseline.json`；原始每轮结果在 `.tmp-bench/captcha-drive/run-{1,2,3}/matrix.json`
 

@@ -35,6 +35,10 @@ DeepSeek Harness 插件：把 **BridgeDeck** 的 CLI 包装成模型可直接调
 工具内部就是一次 `bridge <命令> --json` 调用：退出码 0 取 `result`，否则抛带错误码的异常
 （`E_STALE_REF`、`E_TIMEOUT`、`E_BORROW_DENIED`…），模型能按错误码自我修正。
 
+插件还会把同一份 `browser-bridge` 技能注册到 DSH 的 skills 服务（`ctx.skills.register`，
+并按 agent 作用域注册），因此 DSH 内可以直接 `/browser-bridge`，不需要再执行
+`bridge install-skill --harness dsh`。CLI 技能仍是其他 harness 的安装来源。
+
 ## 安装
 
 先确保BridgeDeck本体可用（`bridge doctor` 全 ok），然后：

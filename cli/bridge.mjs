@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { isControllerInfo } from '../extension/src/lib/controller-info.js';
 import { recoveryHint } from '../lib/error-codes.mjs';
 import { pruneObservationCache } from '../lib/observation-cache.mjs';
+import { commandTargetFor, renderSkillCommand } from '../lib/skill-commands.mjs';
 
 /**
  * 重模块按需加载：status/evaluate/read/screenshot/session 等热路径不再为 update/trace/debug/recipe
@@ -124,7 +125,7 @@ const VALUE_FLAGS = new Set([
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
 for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force']) BOOL_FLAGS.add(name);
 for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before']) VALUE_FLAGS.add(name);
-for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'quiet', 'verbose', 'diagnostics', 'cdp-frames']) BOOL_FLAGS.add(name);
+for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'quiet', 'verbose', 'diagnostics', 'cdp-frames', 'commands']) BOOL_FLAGS.add(name);
 VALUE_FLAGS.add('request-id');
 VALUE_FLAGS.add('steps-file');VALUE_FLAGS.add('until');
 VALUE_FLAGS.add('backend');
@@ -5255,9 +5256,9 @@ async function cmdInstallSkill(flags, pos) {
   const isInstalled = (name) => fs.existsSync(path.join(SKILL_TARGETS[name](), 'SKILL.md'));
 
   if (flags.list === true) {
-    const rows = names.map((name) => ({ harness: name, path: SKILL_TARGETS[name](), detected: isDetected(name), installed: isInstalled(name) }));
+    const rows = names.map((name) => ({ harness: name, path: SKILL_TARGETS[name](), detected: isDetected(name), installed: isInstalled(name), command: commandTargetFor(name)?.path || null }));
     if (jsonMode) { emitJson({ ok: true, result: { harnesses: rows, skillVersion: SKILL_VERSION, embedded: true } }); return 0; }
-    for (const row of rows) print(row.harness + '  ' + (row.detected ? '已检测' : '未检测') + (row.installed ? ' · 已安装' : '') + '  →  ' + row.path);
+    for (const row of rows) print(row.harness + '  ' + (row.detected ? '已检测' : '未检测') + (row.installed ? ' · 已安装' : '') + '  →  ' + row.path + (row.command ? '（命令：' + row.command + '）' : ''));
     return 0;
   }
 
@@ -5274,28 +5275,43 @@ async function cmdInstallSkill(flags, pos) {
   for (const name of selected) {
     const targetDir = name === 'dir' ? path.resolve(process.cwd(), String(flags.dir)) : SKILL_TARGETS[name]();
     const targetFile = path.join(targetDir, 'SKILL.md');
-    if (fs.existsSync(targetFile) && flags.force !== true) {
-      results.push({ harness: name, path: targetFile, status: 'skipped' });
-      continue;
+    let skipped = fs.existsSync(targetFile) && flags.force !== true;
+    if (skipped) {
+      results.push({ kind: 'skill', harness: name, path: targetFile, status: 'skipped' });
+    } else {
+      const installed = await installSkillAtomic(
+        targetDir,
+        (tempDir) => (useEmbedded ? writeSkillFiles(tempDir) : copySkillDir(source, tempDir)),
+        useEmbedded ? 'embedded' : 'filesystem',
+        flags.force === true,
+      );
+      if (installed.skipped) {
+        results.push({ kind: 'skill', harness: name, path: targetFile, status: 'skipped' });
+      } else {
+        results.push({ kind: 'skill', harness: name, path: targetFile, status: 'installed', files: Object.keys(installed.manifest.files).length, manifest: installed.manifest.version });
+      }
     }
-    const installed = await installSkillAtomic(
-      targetDir,
-      (tempDir) => (useEmbedded ? writeSkillFiles(tempDir) : copySkillDir(source, tempDir)),
-      useEmbedded ? 'embedded' : 'filesystem',
-      flags.force === true,
-    );
-    if (installed.skipped) {
-      results.push({ harness: name, path: targetFile, status: 'skipped' });
-      continue;
+    if (flags.commands === true) {
+      const commandTarget = commandTargetFor(name);
+      if (!commandTarget) {
+        results.push({ kind: 'command', harness: name, commandStatus: 'unsupported' });
+      } else if (fs.existsSync(commandTarget.path) && flags.force !== true) {
+        results.push({ kind: 'command', harness: name, commandPath: commandTarget.path, commandStatus: 'skipped' });
+      } else {
+        fs.mkdirSync(path.dirname(commandTarget.path), { recursive: true });
+        fs.writeFileSync(commandTarget.path, renderSkillCommand({ harness: name, skillDir: targetDir }), { mode: 0o644 });
+        results.push({ kind: 'command', harness: name, commandPath: commandTarget.path, commandStatus: 'installed' });
+      }
     }
-    results.push({ harness: name, path: targetFile, status: 'installed', files: Object.keys(installed.manifest.files).length, manifest: installed.manifest.version });
-    if (flags.mcp === true) results.push(configureMcp(name));
+    if (flags.mcp === true) results.push({ kind: 'mcp', ...configureMcp(name) });
   }
   if (jsonMode) { emitJson({ ok: true, result: { results, skillVersion: SKILL_VERSION, embedded: useEmbedded } }); return 0; }
   for (const row of results) {
-    if (row.harness && row.path && row.files === undefined) {
+    if (row.kind === 'command') {
+      if (row.commandPath) print(row.commandStatus === 'skipped' ? '命令已存在，跳过（--force 覆盖）：' + row.commandPath : '已安装命令 → ' + row.commandPath);
+    } else if (row.kind === 'mcp') {
       print('MCP ' + row.harness + ' → ' + row.path + '（' + row.status + '）');
-    } else {
+    } else if (row.kind === 'skill') {
       print(row.status === 'skipped' ? '已存在，跳过（--force 覆盖）：' + row.path : '已安装 skill → ' + row.path + '（' + row.files + ' 个文件）');
     }
   }
@@ -5343,8 +5359,8 @@ async function printHelp() {
   audit export --out <file> [--since 24h] [--format jsonl|json]
   audit prune --older-than 30d | --before <日期> [--dry-run]
   audit clear --yes
-  install-skill [--harness <name>] [--dir <path>] [--force] [--list] [--all] [--source <dir>] [--embedded] [--mcp]
-                                  --mcp 同时写入 Codex/Cursor/Claude 的 MCP 客户端配置
+  install-skill [--harness <name>] [--dir <path>] [--force] [--list] [--all] [--source <dir>] [--embedded] [--mcp] [--commands]
+                                  --mcp 同时写入 Codex/Cursor/Claude 的 MCP 客户端配置；--commands 同时写 Claude/Codex/Cursor 的斜杠命令
   update check|verify|stage|fetch|state|auto [--manifest <path>] [--source <url>] [--out <path>] [--key <file>] [--force] [--download] [--apply --target <dir>]
                                   校验/暂存 dist/release.json（不自动替换当前安装）
   update install --from <zip|tar.gz> [--manifest <release.json>] [--dest <dir>] [--port <n>] [--no-restart] | --rollback <备份目录>

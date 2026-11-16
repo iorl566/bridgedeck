@@ -95,6 +95,18 @@ Start-Process 'edge://extensions'
 
 请用户：打开开发者模式 → 加载已解压的扩展 → 选择 `$ext`。
 
+## 2.5 给其他 Agent 安装技能 / 斜杠命令
+
+`bridge install-skill` 会把 `SKILL.md` + `references/` 装进宿主自己的 skills 目录；斜杠命令需要额外 `--commands`：
+
+```powershell
+bridge install-skill --harness claude-code --commands   # ~/.claude/commands/browser-bridge.md
+bridge install-skill --harness codex --commands         # ~/.codex/prompts/browser-bridge.md
+bridge install-skill --harness cursor --commands        # ~/.cursor/commands/browser-bridge.md
+```
+
+DSH 额外支持插件内嵌技能：安装 `dsh-plugin` 后直接 `/browser-bridge`，不再需要 `install-skill --harness dsh`。
+
 ## 3. 验证连接
 
 ```powershell

@@ -49,6 +49,17 @@ BridgeDeck 不绑定模型，也不要求换 Agent。只要能调用本地命令
 | **DSH 插件** | `dsh-plugin/`（35 个工具） | DeepSeek Harness，带任务预览与截图结果 |
 | **Node/Python SDK** | `import { connect } from 'browser-bridge/sdk'` / `sdk/python/browser_bridge.py` | 写 Node/TypeScript 或 Python 脚本、集成测试 |
 | **内嵌技能** | `bridge install-skill` | 支持 skill 的宿主，一条命令装上使用说明 |
+| **斜杠命令** | `bridge install-skill --harness <id> --commands` | Claude Code / Codex / Cursor 等把技能包装成 `/browser-bridge` |
+
+`install-skill` 只写 `SKILL.md` + `references/`，这是自动发现/模型调用的技能格式；斜杠命令是宿主自己的命令层，需要 `--commands` 额外生成：
+
+```powershell
+bridge install-skill --harness claude-code --commands   # ~/.claude/commands/browser-bridge.md
+bridge install-skill --harness codex --commands         # ~/.codex/prompts/browser-bridge.md
+bridge install-skill --harness cursor --commands        # ~/.cursor/commands/browser-bridge.md
+```
+
+DSH 不需要命令文件：插件会通过 skills 服务注册内嵌技能，直接 `/browser-bridge` 使用。
 
 ## 能做什么
 
