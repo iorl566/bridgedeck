@@ -99,6 +99,11 @@ daemon 回：
 `instanceId` 由 daemon 生成（8 位 hex），同一浏览器实例在本次 daemon 生命周期内保持不变
 （重连时扩展可在 hello 里带上次的 `instanceId` 作为提示，但 daemon 以自己生成的为准）。
 
+本机新配对（`local.pair` 生成的链接）同时有一个 6 位配对码。扩展的 hello 带
+`authChallenge: true`、`authKeyId`、`pairToken`，并在首次配对时带 `pairCode`；daemon 在发放
+`auth-challenge` 前校验配对码，缺失或不匹配返回 `E_PAIR_REQUIRED`。配对成功后 daemon 清除待配对码，
+后续重连带 token 即可。远程配对码（`pair.create`）走独立流程，不使用该字段。
+
 握手保护：daemon 要求 hello 在 **5s** 内到达，首帧不超过 **64KiB**；远程 IP 连续失败
 **10 次/60s** 后封禁 **60s**，期间返回 `hello-error { code: "E_RATE_LIMITED" }` 并关闭连接。
 超时返回 `E_TIMEOUT`，首帧过大返回 `E_TOO_LARGE`。

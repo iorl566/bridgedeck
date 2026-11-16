@@ -161,7 +161,8 @@
         </div>
         <div id="pairDetails" class="hidden settings-body" style="margin-top:0">
           <input id="pairLink" placeholder="粘贴配对链接（含端口与凭据）" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px" />
-          <p class="hint" style="margin:0">由 <code>bridge daemon pair</code> 生成，链接里已带端口和 token，粘贴后保存即可。</p>
+          <input id="pairCode" inputmode="numeric" maxlength="6" placeholder="6 位配对码（bridge daemon pair 显示）" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;margin-top:6px" />
+          <p class="hint" style="margin:0">由 <code>bridge daemon pair</code> 生成；保存前核对命令输出的 6 位配对码。</p>
           <ul id="pairGuide" class="hint" style="margin:6px 0 0;padding-left:18px"></ul>
           <p id="pairError" class="hint hidden" style="color:#c2410c;margin:0"></p>
           <div style="display:flex;gap:8px">

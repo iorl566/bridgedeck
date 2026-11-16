@@ -52,6 +52,7 @@ export class BridgeSocket {
     this.lastError = null;
     this.helloDone = false;
     this.pairToken = '';
+    this.pairCode = '';
     this.stopped = true;
     this.connecting = false;
     this.retryTimer = null;
@@ -184,7 +185,7 @@ export class BridgeSocket {
   async endpoints() {
     const settings = await readSettings();
     if (settings.daemonUrl) {
-      return [{ url: withQuery(settings.daemonUrl, { role: 'extension', v: chrome.runtime.getManifest().version }), token: settings.daemonToken || '', remote: true }];
+      return [{ url: withQuery(settings.daemonUrl, { role: 'extension', v: chrome.runtime.getManifest().version }), token: settings.daemonToken || '', code: settings.daemonCode || '', remote: true }];
     }
     if (!this.lastPort) {
       try {
@@ -265,6 +266,7 @@ export class BridgeSocket {
       socket.onopen = async () => {
         this.port = endpoint.port || Number((new URL(endpoint.url)).port) || null;
         this.pairToken = endpoint.token || '';
+        this.pairCode = endpoint.code || '';
         log('WS 连接 ' + endpoint.url.replace(/\?.*$/, '') + ' 已建立，发送 hello');
         this.handshakeTimer = setTimeout(() => finish(new Error('hello-ack 超时')), HANDSHAKE_TIMEOUT_MS);
         let keyId;
@@ -289,6 +291,7 @@ export class BridgeSocket {
           userAgent: navigator.userAgent,
           authChallenge: true,
           authKeyId: keyId,
+          pairCode: this.pairCode || undefined,
         });
       };
       socket.onmessage = (event) => {

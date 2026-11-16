@@ -26,6 +26,8 @@ import { createSessionState } from '../lib/session-state.mjs';
 import { createSessionQueue } from '../lib/session-queue.mjs';
 import { authKeyId } from '../lib/auth-challenge.mjs';
 import { createAuthSession } from '../lib/auth-session.mjs';
+import { createPairCode, pairCodeMatches } from '../lib/pair-code.mjs';
+import { domainAllowed, normalizeDomains } from '../lib/domain-policy.mjs';
 import { decodeTextFrame } from '../lib/transport-frame.mjs';
 import { isSessionExpired, sessionPublicView } from '../lib/session-model.mjs';
 import { createSessionRecord, markSessionDisconnected, rebindSessionRecord, setSessionPaused } from '../lib/session-lifecycle.mjs';
@@ -109,7 +111,7 @@ function tlsPaths() {
 }
 const PAIR_TTL_MS = 10 * 60 * 1000;
 let LOCAL_TRUST_PATH = '';
-let localTrust = { token: '', strict: false, pairedAt: 0, pendingUntil: 0 };
+let localTrust = { token: '', strict: false, pairedAt: 0, pendingUntil: 0, pendingCode: '' };
 const authGuard = createAuthGuard({ maxAttempts: 10, windowMs: 60_000, blockMs: 60_000, maxHelloBytes: 64 * 1024 });
 const sessionState = createSessionState();
 const HANDSHAKE_TIMEOUT_MS = 5000;
@@ -555,6 +557,7 @@ function pairRotate() {
   localTrust.token = crypto.randomBytes(24).toString('hex');
   localTrust.pairedAt = Date.now();
   localTrust.pendingUntil = 0;
+  localTrust.pendingCode = '';
   saveLocalTrust();
   let kicked = 0;
   for (const instance of [...instances.values()]) {
@@ -577,9 +580,10 @@ function loadLocalTrust() {
       strict: raw.strict === true,
       pairedAt: Number(raw.pairedAt) || 0,
       pendingUntil: Number(raw.pendingUntil) || 0,
+      pendingCode: typeof raw.pendingCode === 'string' ? raw.pendingCode : '',
     };
   } catch {
-    localTrust = { token: '', strict: false, pairedAt: 0, pendingUntil: 0 };
+    localTrust = { token: '', strict: false, pairedAt: 0, pendingUntil: 0, pendingCode: '' };
   }
 }
 function saveLocalTrust() {
@@ -587,13 +591,15 @@ function saveLocalTrust() {
 }
 function localPairCreate(params = {}) {
   const token = crypto.randomBytes(16).toString('hex');
+  const code = createPairCode();
   localTrust.token = token;
   localTrust.pendingUntil = Date.now() + LOCAL_PAIR_TTL_MS;
+  localTrust.pendingCode = code;
   if (params.replace) localTrust.pairedAt = 0;
   saveLocalTrust();
   const link = wsUrlFor('') + '#' + token;
   log('本机配对链接已生成（5 分钟内有效）');
-  return { ok: true, link, token, expiresAt: localTrust.pendingUntil, strict: localTrust.strict !== true };
+  return { ok: true, link, token, code, expiresAt: localTrust.pendingUntil, strict: localTrust.strict !== true };
 }
 function localTrustSet(params = {}) {
   localTrust.strict = params.strict === true;
@@ -614,6 +620,14 @@ function localPairVerified(token) {
   // 配对成功后长期有效；从未使用过的链接 5 分钟后过期。
   if (localTrust.pairedAt > 0) return true;
   return localTrust.pendingUntil === 0 || localTrust.pendingUntil > Date.now();
+}
+
+/** 新配对链接必须同时带 6 位确认码，防止只拿到链接就完成配对。 */
+function localPairCodeRequired() {
+  return localTrust.pendingUntil > Date.now() && Boolean(localTrust.pendingCode);
+}
+function localPairCodeValid(message) {
+  return !localPairCodeRequired() || pairCodeMatches(localTrust.pendingCode, message && message.pairCode);
 }
 
 function isPairTokenValid(token) {
@@ -706,6 +720,7 @@ function registerInstance(conn, hello, extra = {}) {
   if (instance.localVerified) {
     localTrust.pairedAt = Date.now();
     localTrust.pendingUntil = 0;
+    localTrust.pendingCode = '';
     saveLocalTrust();
   }
   for (const session of sessions.values()) {
@@ -965,6 +980,11 @@ function onExtensionConnection(conn, req) {
           try { conn.close(4003, 'local pair required'); } catch { /* 忽略 */ }
           return;
         }
+        if (!isRemote && localPairCodeRequired() && !localPairCodeValid(msg)) {
+          try { conn.sendJson({ type: 'hello-error', code: 'E_PAIR_REQUIRED', message: '本机配对码不匹配：请核对 bridge daemon pair 显示的 6 位数字' }); } catch (error) { log('发送配对码错误失败：' + (error && error.message)); }
+          setTimeout(() => { try { conn.close(4003, 'local pair code required'); } catch { /* 忽略 */ } }, 50);
+          return;
+        }
         const challenge = crypto.randomBytes(32).toString('hex');
         if (!authSession.begin({ ...msg, pairToken: authInfo.token }, authInfo.token, challenge)) {
           try { conn.sendJson({ type: 'hello-error', code: 'E_AUTH_BUSY', message: '认证握手已在进行中' }); } catch { /* 忽略 */ }
@@ -987,6 +1007,11 @@ function onExtensionConnection(conn, req) {
         authGuard.fail(peerKey);
         try { conn.sendJson({ type: 'hello-error', code: 'E_PAIR_REQUIRED', message: '远程连接需要有效的配对 token（bridge pair redeem <code>）' }); } catch { /* 忽略 */ }
         try { conn.close(4003, 'pair required'); } catch { /* 忽略 */ }
+        return;
+      }
+      if (!isRemote && localPairCodeRequired() && !localPairCodeValid(msg)) {
+        try { conn.sendJson({ type: 'hello-error', code: 'E_PAIR_REQUIRED', message: '本机配对码不匹配：请核对 bridge daemon pair 显示的 6 位数字' }); } catch (error) { log('发送配对码错误失败：' + (error && error.message)); }
+        setTimeout(() => { try { conn.close(4003, 'local pair code required'); } catch { /* 忽略 */ } }, 50);
         return;
       }
       msg.localVerified = localVerified;
@@ -1670,6 +1695,8 @@ async function startSession(params, timeoutMs) {  const traceStart = Date.now();
     incognito: params.incognito === true,
     controller,
     scope: callerScope,
+    allowDomains: normalizeDomains(params.allowDomains),
+    denyDomains: normalizeDomains(params.denyDomains),
   }));
   saveSessions();
   log(`session ${sessionId} 创建 instance=${instance.instanceId} tab=${tabId}${borrowed ? '（借用）' : ''}`);
@@ -2031,6 +2058,13 @@ function isExtensionRouted(method) {
  */
 async function dispatchExtension(method, params, timeoutMs) {
   const route = await prepareRoute(method, params);
+  if (route.session && (method === 'navigate' || (method === 'tab.new' && route.params.url))) {
+    const targetUrl = method === 'navigate' ? route.params.url : route.params.url;
+    const decision = domainAllowed(route.session.allowDomains, route.session.denyDomains, targetUrl);
+    if (!decision.allowed) {
+      throw new BridgeError('E_FORBIDDEN', '会话域名策略拒绝：' + decision.reason + '（' + String(targetUrl || '') + '）');
+    }
+  }
   requireFeatures(route.instance, method, route.params);
   verifyDecision(route, method);
   return submitRouted(route, method, params, timeoutMs);

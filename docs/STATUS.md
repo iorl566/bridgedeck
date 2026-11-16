@@ -2,14 +2,14 @@
 
 > 换会话接手请先读 [HANDOFF](HANDOFF.md)（状态、验证命令、已知坑、下一步）。
 
-最后更新：2026-11-16（BridgeDeck 0.1.4，协议 1.9）
+最后更新：2026-11-16（BridgeDeck 0.1.5，协议 1.9）
 
 ## 已验证
 
 | 项 | 结果 |
 | --- | --- |
 | 真实 Edge E2E | 145/147（2 项按借用确认安全策略跳过） |
-| 纯函数单测 | 1004/1004 |
+| 纯函数单测 | 1020/1020 |
 | CLI selftest | 155/155 |
 | 宿主插件 | 26/26 |
 | 插件直连冒烟（真实 Edge） | 11/11，0 次 CLI 回退 |
@@ -46,7 +46,7 @@
 - 视觉候选加"可点性"校验（page-lib v42）：`visualScan` 收录前对候选中心做 `elementFromPoint`，落点不是自身/子树/祖先链就丢弃，并过滤 `opacity:0`。起因是拼图页同时存在隐藏/模板副本，按它的坐标派发会"打到空气"——拖拽返回成功、页面毫无反应。现在**扫描时保证候选可点，派发时保证落点归属**，两端都堵住。
 - 多段手势 `visual-gesture`：`--visual N --points "x,y;x,y"` 依次点击，或 `--plan <file|json>` 混合「点击 / 拖拽（支持 `hold` 长按、`duration` 时长、`steps` 插值）/ 等待」，每步各自重新截候选区域（单次消费不变），最多 12 步。实测点击拼图 4 个 `.piece` 候选：两步点选与「点击→等待→长按拖拽→反向拖拽」混合计划全部返回 `ok` 并带回 `hit`。这补齐了单次拖拽覆盖不到的两类控件（点选、多把手）。
 - `tools/captcha-drive-matrix.ps1` 驱动通道矩阵按题型换手势（`drag` 滑块 / `hold` 长按 / `points` 点选 / `dual` 双把手），带 `-Only` 单题型重跑与窗口化反馈采样（动作后 300ms 粒度，最多 2.4s：失败/成功文案、题图换图、页码推进、`正在加载验证码`）。**2026-11-16 重跑 3 轮 × 6 题型**，`tools/merge-captcha-drive.mjs` 按"至少一次 rejected"合并：滑拼、刮刮乐、圆柱、**按压旋转**、**点击拼图** 共 5 题 `channel-verified`，双滑块 `never-reacted`；圆柱某轮 dx=60 恰好拼合（`验证成功` + 页码推进，记为 `advanced`）。基线 `tests/anti-bot/captcha-drive-baseline.json`。两处机制修正：按压旋转的控件是 `.press-btn` 按钮（按题图零反应），点击拼图 `visuals` 给的是 4 块 `.piece` 且要再点 `.submit` 才判定（文案延迟约 1.2s、只活 ~0.5s）。双滑块两个手柄都可驱动、但错位不判定。关键教训：**单次瞬时采样会漏掉判定文案**，"无反馈"不等于通道不通。同时修掉一个长按时序缺陷（page-lib v43）：`drag --hold` 的非可信路径原来把 hold 的 sleep 放在 `pointerdown` 之前，长按不会发生；现在改为按下后再保持按住（非可信路径实测 `pointerdown → pointerup` 由 3ms 变为 ≈800ms），扩展包已重新打包。
-- 能力增强（page-lib v49，2026-11-16）：契约层修账本结算字段（`error.data.dispatched/effect_state`）、`plan` 返回同步观察并兼容三种步骤写法、技能文档 plan 示例、`fill` 回 `actual_value/formatted`、`press` 标点物理 code；观测层加 `[field:]`/`[custom-dropdown]`/连续只读行折叠、stealth 零对比度与 text-indent、`unchanged` 观察复用、CLI 行级 `--delta`、虚拟行 `rowAnchor`；输入/会话层加 select 前置校验与 label 变体、`--scope` caller scope + `BB_SESSION_SCOPE`、`wait-for-navigation` 在途/bfcache；可靠安全层加 feature 兼容 preflight、recipe 独占锁、账本目标摘要与 0600、配对服务端证明 + `daemon rotate`、输入标记单调时钟、AX 10s 租约、浮层最小化按会话存、popup 连接设置常显、`logs --follow`/`--quiet`/`--verbose`/`--steps-file`。随后把 plan 改为 daemon 逐步骤执行（每步独立账本与结算），并给观察/截图加 `oN`/`cN` 短别名（`--observation o2`、`--baseline o1`、`--capture c1`）；行级补丁再支持新增/删除行（`structural-text`）；接管浮层最小化跨导航保留；page-lib 加 mutation log（观察 attributes/childList/characterData + scroll/resize；无变更跳过 VOM 重建；纯文本变化才走增量补丁，属性变化/结构变化回退整页）；`bridge ui --diagnostics` 暴露页面自检与 AX 租约；同源 iframe 也纳入 mutation 观察；多 frame delta 用合并基线避免删掉其它 frame；导航清空扩展观察基线；`debugger.simulate-detach` 实测重挂后焦点仿真恢复；observations 缓存 7 天/300 文件清理；删除未使用的 action-guard；注入失败的 frame 用 CDP OOPIF + AX 兜底采集（只读文本，`--cdp-frames` 诊断）；`install-skill --commands` 生成 Claude/Codex/Cursor 斜杠命令；DSH 插件内嵌并注册技能。单测 1004/1004。
+- 能力增强（page-lib v49，2026-11-16）：契约层修账本结算字段（`error.data.dispatched/effect_state`）、`plan` 返回同步观察并兼容三种步骤写法、技能文档 plan 示例、`fill` 回 `actual_value/formatted`、`press` 标点物理 code；观测层加 `[field:]`/`[custom-dropdown]`/连续只读行折叠、stealth 零对比度与 text-indent、`unchanged` 观察复用、CLI 行级 `--delta`、虚拟行 `rowAnchor`；输入/会话层加 select 前置校验与 label 变体、`--scope` caller scope + `BB_SESSION_SCOPE`、`wait-for-navigation` 在途/bfcache；可靠安全层加 feature 兼容 preflight、recipe 独占锁、账本目标摘要与 0600、配对服务端证明 + `daemon rotate`、输入标记单调时钟、AX 10s 租约、浮层最小化按会话存、popup 连接设置常显、`logs --follow`/`--quiet`/`--verbose`/`--steps-file`。随后把 plan 改为 daemon 逐步骤执行（每步独立账本与结算），并给观察/截图加 `oN`/`cN` 短别名（`--observation o2`、`--baseline o1`、`--capture c1`）；行级补丁再支持新增/删除行（`structural-text`）；接管浮层最小化跨导航保留；page-lib 加 mutation log（观察 attributes/childList/characterData + scroll/resize；无变更跳过 VOM 重建；纯文本变化才走增量补丁，属性变化/结构变化回退整页）；`bridge ui --diagnostics` 暴露页面自检与 AX 租约；同源 iframe 也纳入 mutation 观察；多 frame delta 用合并基线避免删掉其它 frame；导航清空扩展观察基线；`debugger.simulate-detach` 实测重挂后焦点仿真恢复；observations 缓存 7 天/300 文件清理；删除未使用的 action-guard；注入失败的 frame 用 CDP OOPIF + AX 兜底采集（只读文本，`--cdp-frames` 诊断）；`install-skill --commands` 生成 Claude/Codex/Cursor 斜杠命令；DSH 插件内嵌并注册技能。单测 1020/1020。
 - 观测代数守卫补全（page-lib v41）：`read`/`extract` 结果也带 `revision`，`bridge read`/`extract` 支持 `--expect-revision`，于是"读到的值到现在没变过"可以表达——先 `read` 拿代数，再用同一代数去 `click`/`fill`，中间重渲染会被 `E_OBSERVATION_CHANGED` 挡下。
 - 新增观测代数守卫（page-lib v40）：`observe` 结果带 `revision`，动作可带 `--expect-revision N` 要求与观测同一代 DOM，不符则 `E_OBSERVATION_CHANGED` 且**不派发输入**。默认不开启（不带参数不校验），避免误伤无关 DOM 变化。实测：`revision=16` 时 `--expect-revision 3` 被拒、`--expect-revision 16` 正常执行。
 - `extract` 增加覆盖度说明（page-lib v39）：结果带 `coverage: { scope, returned, declared, stopReason, datasetComplete }`。`declared` 取自 `aria-rowcount`/`aria-setsize`，无声明为 `null`；`stopReason` 区分 `end`/`max-rows`/`max-bytes`；`datasetComplete` 只有"声明数读满"才 `complete`——**不代表页面内容真的全**。`declared` 取自 `aria-rowcount`/`aria-setsize`，没有声明就是 `null`（不猜）；`stopReason` 区分 `end`/`max-rows`/`max-bytes`；`datasetComplete` 只有"声明数读满"才给 `complete`，被截断给 `incomplete`，无声明给 `unknown`——**`complete` 不代表页面内容真的全**（分页、无限滚动、canvas 不在覆盖范围）。实测 SpiderBuf C03：`declared=null, returned=5, stopReason=max-rows, datasetComplete=incomplete`。CSV 模式也会打印一行覆盖度。

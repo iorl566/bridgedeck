@@ -34,3 +34,18 @@ bridge recipe save --file /absolute/reviewed.json
 ```
 
 检查 `errors` 与 `warnings`。草稿会省略输入值：fill/select 的值变成参数；为参数命名并约束，补 `outputs` 和明确的完成条件。前一步结果决定下一步时另起一段。配方只支持读取和可逆动作，不支持脚本、上传、下载或不可逆操作。
+
+## 条件、循环与人工节点
+
+步骤可以是普通动作，也可以是块：
+
+```json
+{"type":"if","when":{"urlIncludes":"/dashboard"},"then":[{"method":"observe"}],"else":[{"method":"navigate","params":{"url":"https://example.com/login"}}]}
+{"type":"loop","times":3,"steps":[{"method":"press","params":{"key":"ArrowDown"}}]}
+{"type":"human","reason":"请在浏览器里完成登录/验证码，完成后继续","timeoutMs":180000}
+```
+
+- `if` 目前只支持 `urlIncludes` / `urlMatches`；条件在运行时读取当前 URL，再执行对应分支。
+- `loop` 次数上限 50。
+- `human` 会调用 `request-help` 并等待；超时按 `E_TIMEOUT` 失败，不会静默跳过。
+- 分支/循环里的 `click`/`fill` 仍算风险步骤，`recipe risk` 会递归检查，整条 recipe 仍需人工审批。

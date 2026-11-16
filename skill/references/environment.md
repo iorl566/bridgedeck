@@ -38,7 +38,7 @@ bridge logs --tail 50
 ## 远程与配对
 
 ```sh
-bridge daemon pair                       # 生成 5 分钟有效的本机配对链接
+bridge daemon pair                       # 生成 5 分钟有效的本机配对链接 + 6 位配对码
 bridge daemon rotate                     # 轮换本机 token：旧链接/旧连接立即失效，输出新链接
 bridge daemon trust-local off            # 拒绝本机未配对连接（严格模式）
 bridge pair create [--ttl 10m] [--label 名称] [--host <ip>]

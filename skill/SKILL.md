@@ -13,10 +13,10 @@ description: |
 ## 开始前
 
 - 人工协作是内建能力：需要用户完成登录/验证码/确认时用 `request-help`，不要改设置绕过。
-- 做失败复现、请求分析、性能调查前读 [debugging](references/debugging.md)，先开采集再导航。
+- 做失败复现、请求分析、性能调查前读 [debugging](references/debugging.md)，先开采集再导航；`bridge debug performance --insight` 会直接给阈值结论。
 - 指定浏览器 profile 时读 [tabs and profiles](references/tabs-and-profiles.md)，每次会话显式 `--browser`。
 - 并行任务：见 [tabs and profiles](references/tabs-and-profiles.md)。
-- 本机配对是可选的：未配对也能用（扩展显示“未配对”）；需要验证身份时 `bridge daemon pair` 生成链接，粘贴到扩展。`bridge daemon trust-local off` 才拒绝未配对连接。
+- 本机配对是可选的：未配对也能用（扩展显示“未配对”）；需要验证身份时 `bridge daemon pair` 生成链接和 **6 位配对码**，两者填到扩展“连接设置”。`bridge daemon trust-local off` 才拒绝未配对连接。
 - CLI 缺失、daemon 起不来、连接失败、远程/本机配对读 [environment](references/environment.md)。
   不要通过重启共享 daemon 或删除运行文件来“恢复”。
 
@@ -82,10 +82,15 @@ description: |
 | 多步计划 | `bridge plan --context ID --steps '[...]' --session <id>` |
 | 回放配方 | `bridge recipe run <name> --session <id> --param k=v`（[recipes](references/recipes.md)） |
 | 语义树 | `bridge observe [--max-tokens N] [--cursor <t>]` |
+| 候选动作 | `bridge observe --actions [--max-tokens N] --session <id>`（可先选再执行） |
+| 语义自愈 | `bridge click @e3 --heal` / `fill` / `select`（ref 失效时按上次动作语义重找） |
+| 敏感填充 | `bridge fill @e3 --secret PASSWORD`（读 `BB_SECRET_PASSWORD`；输出自动脱敏） |
 | 静态快照 | `bridge snapshot --session <id>`（带 `@eN`） |
 | 原始 HTML | `bridge get-html --session <id>` |
 
 - `select` 用 option 的 value，不是可见文本。
+- `session start --allow-domains a.com,b.com --deny-domains x.com` 限制该会话可导航的域名；策略外导航返回 `E_FORBIDDEN`。
+- `recipe` 支持 `{type:"human"}`、`{type:"if",when:{urlIncludes:"..."},then,else}`、`{type:"loop",times,steps}`；分支内风险步骤仍按整体 recipe 审批。
 - CSS selector 只在主文档；iframe/shadow 内部用 ref。
 - `--trusted` 是反爬场景的显式开关（原生键鼠注入），默认关闭。
 - 动作通用参数：`--settle 300ms`、`--expect '<json>'`、`--depends-on '<json>'`、`--context`、`--observation`。

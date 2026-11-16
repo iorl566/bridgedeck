@@ -1,6 +1,7 @@
 // src/tools/navigation.js —— navigate / reload / back / forward。
 import { bridgeError } from '../errors.js';
 import { execPage } from '../inject.js';
+import { restrictedUrlReason } from '../lib/page-policy.js';
 import { getTab, sleep, waitForLoad } from '../tabs.js';
 import { clearObservationCache } from './observation.js';
 import { log } from '../log.js';
@@ -24,6 +25,10 @@ export async function navigate(params = {}) {
     throw bridgeError('E_BAD_ARG', 'navigate 需要非空 url');
   }
   const url = params.url.trim();
+  const blocked = restrictedUrlReason(url);
+  if (blocked) {
+    throw bridgeError('E_FORBIDDEN', '目标页面受限（' + blocked + '）：BridgeDeck 不导航到浏览器内部或扩展页面');
+  }
   const tab = await getTab(tabId);
   shadowRefs.delete(tabId);
   clearFrameAliases(tabId);

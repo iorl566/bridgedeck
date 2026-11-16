@@ -91,6 +91,7 @@ function render(next) {
   if (uiMode === null) {
     $('pairUrl').value = settings.daemonUrl || '';
     $('pairToken').value = settings.daemonToken || '';
+    $('pairCode').value = settings.daemonCode || '';
   }
   $('localSection').classList.toggle('hidden', remote);
   $('pairDetails').classList.toggle('hidden', !remote);
@@ -343,7 +344,7 @@ $('copyInstance').addEventListener('click', async () => {
 $('modeLocal').addEventListener('click', async () => {
   uiMode = 'local';
   render(state);
-  await setSetting({ daemonUrl: '', daemonToken: '' });
+  await setSetting({ daemonUrl: '', daemonToken: '', daemonCode: '' });
   uiMode = null;
 });
 $('modeRemote').addEventListener('click', () => {
@@ -367,6 +368,7 @@ $('pairSave').addEventListener('click', async () => {
   let url = $('pairUrl').value.trim();
   let token = $('pairToken').value.trim();
   const link = $('pairLink') ? $('pairLink').value.trim() : '';
+  const code = $('pairCode') ? $('pairCode').value.replace(/\D/g, '').slice(0, 6) : '';
   if (link) {
     const hash = link.indexOf('#');
     url = (hash >= 0 ? link.slice(0, hash) : link).trim();
@@ -376,6 +378,7 @@ $('pairSave').addEventListener('click', async () => {
     }
   }
   if (!/^wss?:\/\//i.test(url)) return showPairError('需要 ws:// 或 wss:// 地址');
+  if (code && code.length !== 6) return showPairError('配对码需为 6 位数字');
   if (/^ws:\/\//i.test(url)) {
     try {
       const parsed = new URL(url);
@@ -388,11 +391,11 @@ $('pairSave').addEventListener('click', async () => {
   }
   showPairError('');
   uiMode = null;
-  await setSetting({ daemonUrl: url, daemonToken: token });
+  await setSetting({ daemonUrl: url, daemonToken: token, daemonCode: code });
 });
 $('pairClear').addEventListener('click', async () => {
   uiMode = null;
-  await setSetting({ daemonUrl: '', daemonToken: '' });
+  await setSetting({ daemonUrl: '', daemonToken: '', daemonCode: '' });
 });
 
 // 自测：开关 + 配对保存/恢复（E2E 29b 依赖该 title）
@@ -413,14 +416,15 @@ $('pairClear').addEventListener('click', async () => {
     if ((restored.controlHint !== false) !== (before.controlHint !== false)) throw new Error('开关未恢复原值');
     $('pairUrl').value = 'ws://127.0.0.1:52999/ws';
     $('pairToken').value = 'selftest-token';
+    $('pairCode').value = '123456';
     $('pairSave').click();
     await new Promise((resolve) => setTimeout(resolve, 250));
     const paired = (await send({ type: 'bb.state' })).settings || {};
-    if (paired.daemonUrl !== 'ws://127.0.0.1:52999/ws' || paired.daemonToken !== 'selftest-token') throw new Error('配对保存失败');
+    if (paired.daemonUrl !== 'ws://127.0.0.1:52999/ws' || paired.daemonToken !== 'selftest-token' || paired.daemonCode !== '123456') throw new Error('配对保存失败');
     $('pairClear').click();
     await new Promise((resolve) => setTimeout(resolve, 250));
     const cleared = (await send({ type: 'bb.state' })).settings || {};
-    if (cleared.daemonUrl !== '' || cleared.daemonToken !== '') throw new Error('配对恢复失败');
+    if (cleared.daemonUrl !== '' || cleared.daemonToken !== '' || cleared.daemonCode !== '') throw new Error('配对恢复失败');
     $('pairLink').value = 'ws://127.0.0.1:52998/ws#link-token';
     $('pairUrl').value = '';
     $('pairToken').value = '';

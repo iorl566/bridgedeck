@@ -5,6 +5,7 @@ import { bridgeError, mapChromeError } from './errors.js';
 import { log } from './log.js';
 import { acquire, release, send as cdpSend } from './debugger.js';
 import { ensureHooks } from './page-hooks.js';
+import { restrictedUrlReason } from './lib/page-policy.js';
 
 const MAIN_FRAME = 0;
 /** 页面能力库版本；必须与 injected/page-lib.js 的 LIB_VERSION 同步。 */
@@ -128,8 +129,23 @@ export async function injectPageLib(tabId, frameId = 0) {
   }
 }
 
+/** 浏览器内部页/扩展页不允许注入或执行页面动作。 */
+async function assertInspectableTab(tabId) {
+  let tab;
+  try {
+    tab = await chrome.tabs.get(tabId);
+  } catch {
+    return; // 让后续 chrome API 给出更准确的错误
+  }
+  const reason = restrictedUrlReason((tab && (tab.url || tab.pendingUrl)) || '');
+  if (reason) {
+    throw bridgeError('E_FORBIDDEN', '当前页面受限（' + reason + '）：BridgeDeck 不操作浏览器内部或扩展页面');
+  }
+}
+
 /** 调用页面侧能力库上的方法；返回 result 或抛协议错误。 */
 export async function execPage(tabId, name, args, frameId = 0) {
+  await assertInspectableTab(tabId);
   let raw = await runInjection(tabId, 'ISOLATED', pageCallFunc, [name, args || {}, PAGE_LIB_VERSION], frameId);
   if (raw && raw.__bbMissing) {
     log(`tab ${tabId} 缺少/过期页面能力库，补注入后重试 ${name}`);
@@ -212,6 +228,7 @@ export async function readConsole(tabId, since, limit) {
 
 /** 在所有 frame（含跨源 OOPIF）执行 page-lib 方法。 */
 export async function execPageAllFrames(tabId, name, args) {
+  await assertInspectableTab(tabId);
   const safeArgs = [name, args || {}, PAGE_LIB_VERSION].map((value) => (value === undefined ? null : value));
   async function run() {
     try {

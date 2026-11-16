@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS = {
   auditEnabled: false,
   daemonUrl: '',
   daemonToken: '',
+  daemonCode: '',
 };
 
 function sanitizeDaemonUrl(value) {
@@ -48,6 +49,7 @@ export function normalizeSettings(raw) {
     auditEnabled: input.auditEnabled === true,
     daemonUrl: sanitizeDaemonUrl(input.daemonUrl),
     daemonToken: typeof input.daemonToken === 'string' ? input.daemonToken.trim().slice(0, 128) : '',
+    daemonCode: typeof input.daemonCode === 'string' ? input.daemonCode.replace(/\D/g, '').slice(0, 6) : '',
   };
 }
 

@@ -16,6 +16,11 @@ import { isControllerInfo } from '../extension/src/lib/controller-info.js';
 import { recoveryHint } from '../lib/error-codes.mjs';
 import { pruneObservationCache } from '../lib/observation-cache.mjs';
 import { commandTargetFor, renderSkillCommand } from '../lib/skill-commands.mjs';
+import { deriveActions, findHealingAction } from '../lib/observe-actions.mjs';
+import { recallAction, rememberActions } from '../lib/action-cache.mjs';
+import { redactFillResult, resolveSecretValue } from '../lib/secrets.mjs';
+import { analyzePerformance } from '../lib/perf-insights.mjs';
+import { matchRecipeWhen, normalizeLoopTimes, recipeStepType } from '../lib/recipe-blocks.mjs';
 
 /**
  * 重模块按需加载：status/evaluate/read/screenshot/session 等热路径不再为 update/trace/debug/recipe
@@ -76,6 +81,7 @@ const REPO_ROOT = path.resolve(path.dirname(SCRIPT_PATH), '..');
 const SERVER_PATH = path.join(REPO_ROOT, 'daemon', 'server.mjs');
 
 const HOME_DIR = resolveHomeDir();
+const ACTION_CACHE_PATH = path.join(HOME_DIR, 'action-cache.json');
 const DAEMON_JSON_PATH = path.join(HOME_DIR, 'daemon.json');
 const LOG_PATH = path.join(HOME_DIR, 'daemon.log');
 
@@ -107,7 +113,7 @@ function sleep(ms) {
 
 const BOOL_FLAGS = new Set([
   'json', 'no-focus', 'probe-hover', 'full', 'keep', 'help', 'tail',
-  'all', 'mobile', 'reset', 'queue', 'bodies', 'accept', 'dismiss', 'force', 'list', 'stitch', 'no-clear', 'overwrite', 'annotate', 'grid', 'screenshot', 'incognito', 'with-requests', 'frames', 'release-old', 'by', 'confirm-human', 'closed-shadow', 'trusted', 'window', 'focus', 'enable', 'disable', 'download', 'apply', 'prune', 'wait-navigation', 'screenshots', 'include-agent',
+  'all', 'mobile', 'reset', 'queue', 'bodies', 'accept', 'dismiss', 'force', 'list', 'stitch', 'no-clear', 'overwrite', 'annotate', 'grid', 'screenshot', 'incognito', 'with-requests', 'frames', 'release-old', 'confirm-human', 'closed-shadow', 'trusted', 'window', 'focus', 'enable', 'disable', 'download', 'apply', 'prune', 'wait-navigation', 'screenshots', 'include-agent',
 ]);
 const VALUE_FLAGS = new Set([
   'session', 'port', 'timeout', 'out', 'value', 'ref', 'selector',
@@ -124,8 +130,8 @@ const VALUE_FLAGS = new Set([
 ]);
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
 for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force']) BOOL_FLAGS.add(name);
-for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before']) VALUE_FLAGS.add(name);
-for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'quiet', 'verbose', 'diagnostics', 'cdp-frames', 'commands']) BOOL_FLAGS.add(name);
+for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before', 'allow-domains', 'deny-domains', 'secret', 'by']) VALUE_FLAGS.add(name);
+for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'quiet', 'verbose', 'diagnostics', 'cdp-frames', 'commands', 'actions', 'heal', 'insight']) BOOL_FLAGS.add(name);
 VALUE_FLAGS.add('request-id');
 VALUE_FLAGS.add('steps-file');VALUE_FLAGS.add('until');
 VALUE_FLAGS.add('backend');
@@ -136,6 +142,93 @@ BOOL_FLAGS.add('follow');
 VALUE_FLAGS.add('text');
 
 const REPEATABLE_FLAGS = new Set(['file', 'param']);
+
+async function executeRecipeBlocks(steps, flags) {
+  let current = [];
+  let planned = 0;
+  let completed = 0;
+  const flush = async () => {
+    if (!current.length) return null;
+    const segment = current;
+    current = [];
+    const body = await callRpc('plan', withControl(flags, { steps: segment }), Math.max(timeoutOf(flags), 180000));
+    if (!body.ok) return body;
+    planned += segment.length;
+    completed += Number((body.result && body.result.completed) || 0);
+    return null;
+  };
+  const urlNow = async () => {
+    const body = await callRpc('evaluate', withControl(flags, { expression: 'location.href' }), Math.max(timeoutOf(flags), 10000));
+    if (!body.ok) return body;
+    return { ok: true, url: String((body.result && body.result.value) || '') };
+  };
+  const walk = async (list) => {
+    for (const step of Array.isArray(list) ? list : []) {
+      const type = recipeStepType(step);
+      if (type === 'human') {
+        const failed = await flush();
+        if (failed) return failed;
+        const timeoutMs = Math.max(5000, Math.min(Number(step.timeoutMs) || 180000, 1800000));
+        const body = await callRpc('request-help', withControl(flags, { reason: String(step.reason || step.prompt || '请完成人工步骤'), timeoutMs }), timeoutMs + 5000);
+        if (!body.ok) return body;
+        const action = String((body.result && body.result.action) || 'timeout');
+        if (action === 'timeout') return { ok: false, error: { code: 'E_TIMEOUT', message: '人工节点等待超时' } };
+        continue;
+      }
+      if (type === 'if') {
+        const failed = await flush();
+        if (failed) return failed;
+        const currentUrl = await urlNow();
+        if (!currentUrl.ok) return currentUrl;
+        const branch = matchRecipeWhen(step.when, currentUrl.url) ? step.then : step.else;
+        const branchFailed = await walk(branch);
+        if (branchFailed) return branchFailed;
+        continue;
+      }
+      if (type === 'loop') {
+        const failed = await flush();
+        if (failed) return failed;
+        const times = normalizeLoopTimes(step.times);
+        if (!times) throw new ArgError('recipe loop 需要 1-50 的 times');
+        for (let index = 0; index < times; index += 1) {
+          const loopFailed = await walk(step.steps);
+          if (loopFailed) return loopFailed;
+        }
+        continue;
+      }
+      current.push(step);
+      if (current.length >= 25) {
+        const failed = await flush();
+        if (failed) return failed;
+      }
+    }
+    return null;
+  };
+  const failed = await walk(steps);
+  if (failed) return failed;
+  const tail = await flush();
+  if (tail) return tail;
+  return { ok: true, result: { completed, planned } };
+}
+
+async function healAction(command, params, body, flags) {
+  if (flags.heal !== true || !body || body.ok) return body;
+  const code = String((body.error && body.error.code) || '');
+  if (!/STALE|NOT_FOUND|BAD_REF|UNKNOWN_REF/i.test(code)) return body;
+  const ref = params && params.ref;
+  if (typeof ref !== 'string' || !/^@e\d+$/.test(ref)) return body;
+  const previous = recallAction(ACTION_CACHE_PATH, ref);
+  if (!previous) return body;
+  const observed = await callRpc('observe', withControl(flags, { vom: true }), timeoutOf(flags));
+  if (!observed.ok) return body;
+  const actions = deriveActions(observed.result && observed.result.nodes);
+  const found = findHealingAction(actions, previous, command);
+  if (!found || found.ref === ref) return body;
+  const retry = await callRpc(command, { ...params, ref: found.ref }, timeoutOf(flags));
+  if (retry.ok && retry.result) retry.result.healed = { from: ref, to: found.ref };
+  rememberActions(ACTION_CACHE_PATH, [{ ...found, action: command }], (observed.result && observed.result.url) || '');
+  return retry;
+}
 
 function parseArgs(argv) {
   const flags = Object.create(null);
@@ -953,6 +1046,7 @@ async function cmdDaemon(flags, pos) {
     if (jsonMode) return outputJsonBody(body);
     const result = body.result || {};
     print('本机配对链接：' + result.link);
+    if (result.code) print('6 位配对码：' + result.code + '（扩展“连接设置”里填写）');
     print('（5 分钟内有效，粘贴到扩展“连接设置 → 配对链接”）');
     return 0;
   }
@@ -1457,6 +1551,8 @@ async function cmdSession(flags, pos) {
     // 只有显式 --no-focus 才在后台开窗（不抢焦点）。
     const params = { noFocus: flags['no-focus'] === true };
     if (flags.incognito === true) params.incognito = true;
+    if (flags['allow-domains'] !== undefined) params.allowDomains = String(flags['allow-domains']);
+    if (flags['deny-domains'] !== undefined) params.denyDomains = String(flags['deny-domains']);
     if (flags.browser !== undefined) params.browser = String(flags.browser);
     if (flags.scope !== undefined) params.scope = String(flags.scope);
     else if (process.env.BB_SESSION_SCOPE && process.env.BB_SESSION_SCOPE.trim()) params.scope = process.env.BB_SESSION_SCOPE.trim();
@@ -1743,7 +1839,7 @@ async function cmdPage(command, flags, pos) {
       if (flags['max-tokens'] !== undefined) params.maxTokens = intFlag(flags, 'max-tokens', { min: 1 });
       if (flags['max-depth'] !== undefined) params.maxDepth = intFlag(flags, 'max-depth', { min: 1 });
       if (flags['debug-surfaces'] === true) params.debugSurfaces = true;
-      if (flags.vom === true) params.vom = true;
+      if (flags.vom === true || flags.actions === true) params.vom = true;
       if (flags.ax === true) params.ax = true;
       if (flags.facts === true) params.facts = true;
       if (flags['fallback-ax'] === true) params.fallbackAx = true;
@@ -1763,6 +1859,24 @@ async function cmdPage(command, flags, pos) {
       }
       const body = await callRpc('observe', params, timeoutOf(flags));
       if (!body.ok) return outputFailure(body);
+      if (body.result && flags.actions === true) {
+        const actions = deriveActions(body.result.nodes);
+        body.result.actions = actions;
+        rememberActions(ACTION_CACHE_PATH, actions, body.result.url || '');
+        if (jsonMode) {
+          emitJson(body);
+          return 0;
+        }
+        if (!actions.length) {
+          print('当前没有可执行候选动作（可加 --max-tokens 或先滚动/等待）');
+          return 0;
+        }
+        print('候选动作 ' + actions.length + ' 个（用 ref 执行；--heal 可在 ref 失效时按语义重找）：');
+        for (const item of actions) {
+          print('  ' + item.ref + '  ' + item.action + '  ' + item.role + '  ' + JSON.stringify(item.name) + (item.offscreen ? '  (offscreen)' : ''));
+        }
+        return 0;
+      }
       if (body.result) {
         if (!body.result.observationId) body.result.observationId = 'ob_' + crypto.randomBytes(6).toString('hex');
         // --delta：本地拿基线文本做行级 diff（扩展只回全文/unchanged，diff 在 CLI 侧算）。
@@ -2218,7 +2332,8 @@ async function cmdPage(command, flags, pos) {
         const probe = await callRpc('evaluate', withNavigationProbe(flags, 'location.href'), Math.max(timeoutOf(flags), 5000));
         if (probe.ok) beforeUrl = String((probe.result || {}).value || '');
       }
-      const body = await callRpc(command, params, timeoutOf(flags));
+      let body = await callRpc(command, params, timeoutOf(flags));
+      body = await healAction(command, params, body, flags);
       if (body.ok && command === 'click' && flags.follow === true) {
         try {
           const followed = await followOpenedTab(String(followSession), followBefore);
@@ -2253,12 +2368,16 @@ async function cmdPage(command, flags, pos) {
     }
     case 'fill': {
       const target = resolveTarget(flags, pos, 1, { required: true });
-      if (flags.value === undefined) throw new ArgError('fill 需要 --value <text>');
-      const params = { ...target, value: String(flags.value) };
+      if (flags.value === undefined && flags.secret === undefined) throw new ArgError('fill 需要 --value <text> 或 --secret <NAME>');
+      const secret = resolveSecretValue({ value: flags.value, secret: flags.secret });
+      const params = { ...target, value: secret.value };
       if (flags['no-clear'] === true) params.noClear = true;
       if (flags.trusted === true) params.trusted = true;
       if (flags.force === true) params.force = true;
-      const body = await callRpc('fill', withControl(flags, params), timeoutOf(flags));
+      const fillParams = withControl(flags, params);
+      let body = await callRpc('fill', fillParams, timeoutOf(flags));
+      body = await healAction('fill', fillParams, body, flags);
+      if (secret.used && body.result) body.result = redactFillResult(body.result);
       return renderPageBody(body, (result) => {
         const bits = [];
         if (result.actual_value !== undefined) bits.push('实际值=' + result.actual_value + (result.actual_value_truncated === true ? '…' : ''));
@@ -2280,7 +2399,9 @@ async function cmdPage(command, flags, pos) {
       const target = resolveTarget(flags, pos, 1, { required: true });
       if (flags.value === undefined) throw new ArgError('select 需要 --value <value>');
       const params = { ...target, value: String(flags.value) };
-      const body = await callRpc('select', withControl(flags, params), timeoutOf(flags));
+      const selectParams = withControl(flags, params);
+      let body = await callRpc('select', selectParams, timeoutOf(flags));
+      body = await healAction('select', selectParams, body, flags);
       return renderPageBody(body, () => print('ok'));
     }
     case 'evaluate': {
@@ -4035,8 +4156,13 @@ async function cmdDebug(flags, pos) {
   if (sub === 'performance') {
     const body = await callRpc('debug.performance', session, timeoutOf(flags));
     if (!body.ok) return outputFailure(body);
-    if (jsonMode) return outputJsonBody(body);
     const metrics = (body.result && body.result.metrics) || {};
+    if (flags.insight === true) {
+      body.result.insights = analyzePerformance(metrics);
+      if (jsonMode) return outputJsonBody(body);
+    } else if (jsonMode) {
+      return outputJsonBody(body);
+    }
     print('TTFB: ' + (metrics.ttfb != null ? metrics.ttfb + 'ms' : '—'));
     print('DOMContentLoaded: ' + (metrics.domContentLoaded != null ? metrics.domContentLoaded + 'ms' : '—'));
     print('load: ' + (metrics.load != null ? metrics.load + 'ms' : '—'));
@@ -4045,6 +4171,10 @@ async function cmdDebug(flags, pos) {
     print('资源: ' + ((metrics.resources && metrics.resources.count) || 0) + ' 个 / ' + ((metrics.resources && metrics.resources.transferBytes) || 0) + ' 字节');
     print('CLS: ' + (metrics.cls != null ? metrics.cls : '—'));
     print('长任务: ' + ((metrics.longTasks && metrics.longTasks.count) || 0) + ' 个，最长 ' + ((metrics.longTasks && metrics.longTasks.maxMs) || 0) + 'ms');
+    if (flags.insight === true) {
+      print('');
+      for (const item of body.result.insights || []) print('  [' + item.level + '] ' + item.code + ': ' + item.message);
+    }
     return 0;
   }
 
@@ -4920,7 +5050,7 @@ async function cmdRecipe(flags, pos) {
     const lock = acquireRecipeLock(RECIPE_DIR, name);
     try {
       writeRunMarker(RECIPE_DIR, name, { status: 'running', steps: steps.length });
-      const body = await callRpc('plan', withControl(flags, { steps }), Math.max(timeoutOf(flags), 180000));
+      const body = await executeRecipeBlocks(steps, flags);
       if (!body.ok) {
         writeRunMarker(RECIPE_DIR, name, { status: 'failed', error: body.error && body.error.code ? body.error.code : 'E_INTERNAL', steps: steps.length });
         return outputFailure(body);
@@ -5371,7 +5501,7 @@ async function printHelp() {
   daemon trust-local on|off                本机未配对连接是否允许（off=严格模式）
 
 会话：
-  session start [--browser <id|名字|edge|chrome>] [--tab <tabId>] [--no-focus] [--incognito] [--request-id <token>]
+  session start [--browser <id|名字|edge|chrome>] [--tab <tabId>] [--no-focus] [--incognito] [--request-id <token>] [--allow-domains a,b] [--deny-domains x,y]
   session prepare|claim|cancel|request --request-id <token>
                 [--agent-name <name>] [--project <name>] [--controller-color <#rrggbb>]
                 默认新建并聚焦独立 Agent Window；--no-focus 才在后台开窗
@@ -5381,7 +5511,7 @@ async function printHelp() {
 
 页面（省略 --session 且只有一个 session 时自动选用）：
   navigate <url> | reload | back|navigate-back | forward|navigate-forward
-  observe [--probe-hover] [--max-depth N] [--debug-surfaces] [--cdp-frames] [--save-full <path>] [--max-tokens N] [--cursor <token>] [--frames] [--closed-shadow] [--vom] [--ax] [--facts] [--fallback-ax] [--compare-ax] [--pipeline page-lib|ax]
+  observe [--probe-hover] [--max-depth N] [--debug-surfaces] [--cdp-frames] [--save-full <path>] [--max-tokens N] [--cursor <token>] [--frames] [--closed-shadow] [--vom] [--actions] [--ax] [--facts] [--fallback-ax] [--compare-ax] [--pipeline page-lib|ax]
           [--delta --baseline <observationId>] [--out <path>]
                                    只读观察；文本原地变化时可用增量补丁，未命中基线自动回退整页
   snapshot
@@ -5405,9 +5535,9 @@ async function printHelp() {
   动作通用：--context <id> --observation <id> --expect '<json>' --depends-on '<json>' --settle 300ms --wait-timeout 5s
   click --wait-navigation           点击后等 URL 变化且 document readyState=complete（最多 8s）
   hover | focus | scroll-to <ref|selector>
-  fill <ref|selector> ${fillFlags}
+  fill <ref|selector> [--value <text>|--secret <NAME>] [--heal] ${fillFlags}
   press <key> [--ref <ref>]
-  select <ref|selector> --value <value>
+  select <ref|selector> --value <value> [--heal]
   drag <from> --to <to> | --dx N --dy N [--mode hold|click-move-click] [--hold 500ms] [--duration 800ms] [--modifiers ctrl+shift]
   drag --capture <id> --image-x X --image-y Y --image-dx N --image-dy N   视觉坐标拖拽（截图像素，强制原生输入）
   wheel --delta-y <n> [--delta-x <n>] [--ref @eN | --selector css]
@@ -5436,7 +5566,7 @@ async function printHelp() {
   schema [method]   列出方法/作用域/effect/参数 schema（单一来源）
   debug start [--name <t>] [--bodies] | stop | status | export --output <file> | query --file <json> --filter <text>
   debug requests [--filter <子串>] | request <id> [--part headers|timing|request|response|all]
-  debug console | pages | performance | aggregate [--filter <子串>] [--slow-ms N]
+  debug console | pages | performance [--insight] | aggregate [--filter <子串>] [--slow-ms N]
   debug operations [--limit N] | operation <id> [--with-requests]
   debug capabilities | activity [--limit N] | pin <id> | unpin <id> | pinned
   debug fetch_probe [--ms 1500] | duplicates [--window-ms N] | rule_add --rule '<json>'|--rule-file <f>
@@ -5464,7 +5594,7 @@ tab / window：
   step <method> [参数...] [--until-visible <selector>] [--wait-timeout-ms N] [--save-full <path>]
   recipe list | show <name> | draft|save <name> --file <json>
   recipe approve <name> --confirm-human [--by x]
-  recipe run <name> [--param k=v ...] | rm <name>
+  recipe run <name> [--param k=v ...] | rm <name>   # 支持 if/human/loop 块
                                    默认只回放只读/可逆步骤；含 click/fill 等风险步骤需先
                                    recipe approve <name> --confirm-human
 

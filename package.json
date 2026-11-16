@@ -1,6 +1,6 @@
 {
   "name": "browser-bridge",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "type": "module",
   "description": "BridgeDeck：用命令行驱动本机已登录的 Chromium 浏览器（MV3 扩展 + 本地 daemon/CLI，零依赖）",
