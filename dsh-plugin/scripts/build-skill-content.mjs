@@ -15,7 +15,7 @@ const text = fs.readFileSync(sourceFile, 'utf8');
 const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
 if (!match) throw new Error('SKILL.md 缺少 frontmatter');
 const front = match[1];
-const body = text.slice(match[0].length);
+const body = text.slice(match[0].length).replace(/\r\n/g, '\n');
 const name = (front.match(/^name:\s*(.+)$/m) || [])[1]?.trim();
 const frontLines = front.split(/\r?\n/);
 const descIndex = frontLines.findIndex((line) => /^description:/.test(line));

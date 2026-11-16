@@ -8,7 +8,7 @@ const root = path.resolve(import.meta.dirname, '..', '..');
 const source = fs.readFileSync(path.join(root, 'skill', 'SKILL.md'), 'utf8');
 const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
 const front = match[1];
-const body = source.slice(match[0].length);
+const body = source.slice(match[0].length).replace(/\r\n/g, '\n');
 const name = (front.match(/^name:\s*(.+)$/m) || [])[1].trim();
 
 test('DSH 插件内嵌技能与仓库 skill/SKILL.md 同步', () => {
