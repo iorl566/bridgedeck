@@ -92,7 +92,7 @@ description: |
 - `session start --allow-domains a.com,b.com --deny-domains x.com` 限制该会话可导航的域名；策略外导航返回 `E_FORBIDDEN`。
 - `recipe` 支持 `{type:"human"}`、`{type:"if",when:{urlIncludes:"..."},then,else}`、`{type:"loop",times,steps}`；分支内风险步骤仍按整体 recipe 审批。
 - CSS selector 只在主文档；iframe/shadow 内部用 ref。
-- `--trusted` 是反爬场景的显式开关（原生键鼠注入），默认关闭。
+- `click/fill/press/drag` 默认走原生 CDP 输入（页面看到 `isTrusted=true`）；`--synthetic` 才用页面内合成事件（更快，但 `isTrusted=false`）。`select` 仍是程序化选择 + `input/change`。
 - 动作通用参数：`--settle 300ms`、`--expect '<json>'`、`--depends-on '<json>'`、`--context`、`--observation`。
 
 ## 原生对话框

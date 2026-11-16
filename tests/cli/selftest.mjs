@@ -482,7 +482,7 @@ async function runTests() {
   const extractCsv = await runCli(['extract', '--selector', 'table', '--format', 'csv', '--out', csvPath, '--json', '--session', sessionId]);
   check('extract --format csv 落盘', extractCsv.code === 0 && fs.existsSync(csvPath) && fs.readFileSync(csvPath, 'utf8').includes('姓名'));
 
-  const dragRes = await runCli(['drag', '@e1', '--to', '@e3', '--json', '--session', sessionId]);
+  const dragRes = await runCli(['drag', '@e1', '--to', '@e3', '--synthetic', '--json', '--session', sessionId]);
   check('drag 成功', dragRes.code === 0 && Boolean(jsonOf(dragRes) && jsonOf(dragRes).ok === true));
   const wheelRes = await runCli(['wheel', '--delta-y', '-300', '--json', '--session', sessionId]);
   check('wheel 支持负 delta', wheelRes.code === 0 && Boolean(jsonOf(wheelRes) && jsonOf(wheelRes).ok === true));

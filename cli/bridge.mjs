@@ -21,6 +21,7 @@ import { recallAction, rememberActions } from '../lib/action-cache.mjs';
 import { redactFillResult, resolveSecretValue } from '../lib/secrets.mjs';
 import { analyzePerformance } from '../lib/perf-insights.mjs';
 import { matchRecipeWhen, normalizeLoopTimes, recipeStepType } from '../lib/recipe-blocks.mjs';
+import { defaultInputMode } from '../lib/input-mode.mjs';
 
 /**
  * 重模块按需加载：status/evaluate/read/screenshot/session 等热路径不再为 update/trace/debug/recipe
@@ -131,7 +132,7 @@ const VALUE_FLAGS = new Set([
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
 for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force']) BOOL_FLAGS.add(name);
 for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before', 'allow-domains', 'deny-domains', 'secret', 'by']) VALUE_FLAGS.add(name);
-for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'quiet', 'verbose', 'diagnostics', 'cdp-frames', 'commands', 'actions', 'heal', 'insight']) BOOL_FLAGS.add(name);
+for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'quiet', 'verbose', 'diagnostics', 'cdp-frames', 'commands', 'actions', 'heal', 'insight', 'synthetic']) BOOL_FLAGS.add(name);
 VALUE_FLAGS.add('request-id');
 VALUE_FLAGS.add('steps-file');VALUE_FLAGS.add('until');
 VALUE_FLAGS.add('backend');
@@ -2312,8 +2313,8 @@ async function cmdPage(command, flags, pos) {
         return 0;
       }
       const target = resolveTarget(flags, pos, 1, { required: true });
-      const params = withControl(flags, { ...target });
-      if (flags.trusted === true) params.trusted = true;
+      let params = withControl(flags, { ...target });
+      params = defaultInputMode(params, flags);
       if (flags.force === true) params.force = true;
       if (flags['expect-revision'] !== undefined) {
         const revision = Number(flags['expect-revision']);
@@ -2374,7 +2375,7 @@ async function cmdPage(command, flags, pos) {
       if (flags['no-clear'] === true) params.noClear = true;
       if (flags.trusted === true) params.trusted = true;
       if (flags.force === true) params.force = true;
-      const fillParams = withControl(flags, params);
+      const fillParams = defaultInputMode(withControl(flags, params), flags);
       let body = await callRpc('fill', fillParams, timeoutOf(flags));
       body = await healAction('fill', fillParams, body, flags);
       if (secret.used && body.result) body.result = redactFillResult(body.result);
@@ -2387,8 +2388,8 @@ async function cmdPage(command, flags, pos) {
     }
     case 'press': {
       const key = requirePos(pos, 1, '<key>');
-      const params = { key };
-      if (flags.trusted === true) params.trusted = true;
+      let params = { key };
+      params = defaultInputMode(params, flags);
       if (flags.force === true) params.force = true;
       const target = resolveTarget(flags, pos, 2, { required: false });
       if (target) Object.assign(params, target);
@@ -2862,7 +2863,7 @@ async function cmdDrag(flags, pos) {
   if (!imageCapture && !from) {
     throw new ArgError('drag 需要 <from>，或改用 --capture 配 --image-x/--image-y（视觉坐标拖拽）');
   }
-  const params = withControl(flags, {});
+  let params = withControl(flags, {});
   if (from) params.from = targetOf(from);
   if (flags.to !== undefined) params.to = targetOf(flags.to);
   if (flags.dx !== undefined) params.dx = Number(flags.dx);
@@ -2892,7 +2893,7 @@ async function cmdDrag(flags, pos) {
   if (steps !== undefined) params.steps = steps;
   params.holdMs = parseDurationMs(flags.hold, 0);
   params.durationMs = parseDurationMs(flags.duration, 0);
-  if (flags.trusted === true) params.trusted = true;
+  params = defaultInputMode(params, flags);
   if (flags.force === true) params.force = true;
   for (const key of ['from-offset-x', 'from-offset-y', 'to-offset-x', 'to-offset-y']) {
     if (flags[key] !== undefined) {
@@ -5535,7 +5536,7 @@ async function printHelp() {
   动作通用：--context <id> --observation <id> --expect '<json>' --depends-on '<json>' --settle 300ms --wait-timeout 5s
   click --wait-navigation           点击后等 URL 变化且 document readyState=complete（最多 8s）
   hover | focus | scroll-to <ref|selector>
-  fill <ref|selector> [--value <text>|--secret <NAME>] [--heal] ${fillFlags}
+  fill <ref|selector> [--value <text>|--secret <NAME>] [--heal] [--synthetic] ${fillFlags}
   press <key> [--ref <ref>]
   select <ref|selector> --value <value> [--heal]
   drag <from> --to <to> | --dx N --dy N [--mode hold|click-move-click] [--hold 500ms] [--duration 800ms] [--modifiers ctrl+shift]

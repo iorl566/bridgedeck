@@ -6,7 +6,7 @@
 ## 1. 这是什么项目
 
 BridgeDeck（浏览器桥）：本机 Chromium（Edge/Chrome）自动化。
-- **扩展**（MV3，`extension/`，版本 0.1.5）+ **本机 daemon**（`daemon/`）+ **CLI**（`cli/bridge.mjs`）+ MCP 服务（`mcp/`）+ DSH 插件（`dsh-plugin/`）+ Node/Python SDK（`sdk/`）。
+- **扩展**（MV3，`extension/`，版本 0.1.6）+ **本机 daemon**（`daemon/`）+ **CLI**（`cli/bridge.mjs`）+ MCP 服务（`mcp/`）+ DSH 插件（`dsh-plugin/`）+ Node/Python SDK（`sdk/`）。
 - 协议 1.9；**运行时零依赖**（只用 Node 内置模块）。
 - 设计边界：桥负责"看得清、点得准、错得明白"；**不做识别、不内置任何站点的验证码解法**。
 
@@ -14,7 +14,7 @@ BridgeDeck（浏览器桥）：本机 Chromium（Edge/Chrome）自动化。
 
 ```powershell
 Set-Location "D:\浏览器桥"
-node --test "tests/unit/*.test.mjs"      # 期望 1020 pass / 0 fail
+node --test "tests/unit/*.test.mjs"      # 期望 1021 pass / 0 fail
 node tests/extension/module-load.mjs     # 期望 PASS
 node tests/plugin/selftest.mjs           # 期望 26 通过
 node tools/gen-protocol.mjs --check      # 期望 up to date
@@ -30,10 +30,10 @@ node cli/bridge.mjs status               # 需要 daemon 在跑；扩展在浏�
 改了扩展后重新打包：
 
 ```powershell
-node tools/build-extension.mjs   # 产物 dist/BridgeDeck-extension-0.1.5.zip（版本号保持 0.1.5）
+node tools/build-extension.mjs   # 产物 dist/BridgeDeck-extension-0.1.6.zip（版本号保持 0.1.6）
 ```
 
-打包后同步 `dist/SHA256SUMS`、`dist/SHA256SUMS-0.1.5` 与 `docs/releases/0.1.5.md` 里的哈希。
+打包后同步 `dist/SHA256SUMS`、`dist/SHA256SUMS-0.1.6` 与 `docs/releases/0.1.6.md` 里的哈希。
 
 ## 4. 当前完成度（按层）
 
@@ -129,10 +129,10 @@ page-lib v43 重载后又跑了一轮回归（`.tmp-bench/captcha-drive/run-v43/
 
 ## 9. 交接时的现场状态
 
-- 浏览器实例：`f745d380`（Edge 157，扩展 0.1.5，`LIB_VERSION 49`）
+- 浏览器实例：`f745d380`（Edge 157，扩展 0.1.6，`LIB_VERSION 49`）
 - 无活动会话（`bridge status` 应为 `sessions (0)`）
-- 单测 1020 pass / 0 fail
-- 扩展包：`dist/BridgeDeck-extension-0.1.5.zip`
+- 单测 1021 pass / 0 fail
+- 扩展包：`dist/BridgeDeck-extension-0.1.6.zip`
 - 驱动通道基线：3 轮 × 6 题型，`channel-verified=5 / never-reacted=1 (双滑块)`，见 `tests/anti-bot/captcha-drive-baseline.json`；原始每轮结果在 `.tmp-bench/captcha-drive/run-{1,2,3}/matrix.json`
 
 ---
