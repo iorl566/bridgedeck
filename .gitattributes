@@ -1,0 +1,10 @@
+# 生成的协议/技能文件必须保持 LF，否则 Windows checkout 会把生成物转成 CRLF，
+# 让 `tools/gen-protocol.mjs --check` 在 CI 里误报 stale。
+extension/src/generated/protocol.js text eol=lf
+cli/embedded-skill.mjs text eol=lf
+dsh-plugin/lib/skill-content.generated.mjs text eol=lf
+dsh-plugin/skill/** text eol=lf
+docs/PROTOCOL.md text eol=lf
+sdk/index.mjs text eol=lf
+sdk/index.d.ts text eol=lf
+sdk/python/browser_bridge.py text eol=lf
