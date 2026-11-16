@@ -1,53 +1,68 @@
-/** Inline audit panel: switch, recent runs, and full-viewer entry. */
+/** Inline audit panel: toggle, recent entries, and full-viewer entry. */
 
 const $ = (id) => document.getElementById(id);
 
-async function request(action, params = {}) {
-  const response = await chrome.runtime.sendMessage({ kind: 'bb_audit', action, ...params });
-  if (!response || !response.ok) throw new Error(response?.error || 'unavailable');
-  return response.data;
+function setStatus(text, error = false) {
+  const node = $('auditStatus');
+  node.textContent = text;
+  node.style.color = error ? 'var(--danger, #dc2626)' : '';
 }
 
-function renderRuns(list) {
+async function readState() {
+  const response = await chrome.runtime.sendMessage({ type: 'bb.state' });
+  return response?.settings || {};
+}
+
+async function setEnabled(enabled) {
+  const response = await chrome.runtime.sendMessage({ type: 'bb.settings.set', patch: { auditEnabled: enabled } });
+  if (!response || response.ok === false) throw new Error(response?.error || '保存失败');
+  return response.settings || {};
+}
+
+async function listEntries() {
+  const response = await chrome.runtime.sendMessage({ type: 'bb.audit.list', limit: 5 });
+  if (!response || response.ok === false) throw new Error(response?.error || '读取失败');
+  return { entries: response.entries || [], total: response.total || 0 };
+}
+
+function renderEntries(entries) {
   const container = $('auditRuns');
   container.replaceChildren();
-  for (const run of list?.runs ?? []) {
+  for (const entry of entries) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'audit-run';
     const content = document.createElement('span');
     const name = document.createElement('b');
-    name.textContent = run.name || run.site || '未命名任务';
+    name.textContent = entry.method || '调用';
     const meta = document.createElement('small');
-    meta.textContent = `${run.operations} 个操作`;
+    meta.textContent = new Date(Number(entry.ts) || Date.now()).toLocaleTimeString();
     content.append(name, meta);
     button.append(content);
     button.addEventListener('click', () => {
-      const url = new URL(chrome.runtime.getURL('audit.html'));
-      url.searchParams.set('id', run.id);
-      chrome.tabs.create({ url: url.href });
+      chrome.tabs.create({ url: chrome.runtime.getURL('audit.html') });
     });
     container.append(button);
   }
 }
 
-/** Load state and the five most recent runs. */
+/** Load state and the five most recent audit entries. */
 export async function refreshAuditPanel() {
   try {
-    const state = await request('state');
-    const enabled = state.enabled === true;
+    const settings = await readState();
+    const enabled = settings.auditEnabled === true;
     $('auditToggle').classList.toggle('on', enabled);
     $('auditToggle').setAttribute('aria-checked', String(enabled));
     if (!enabled) {
-      $('auditStatus').textContent = '审计已关闭';
+      setStatus('审计已关闭');
       $('auditRuns').replaceChildren();
       return;
     }
-    const list = await request('list', { limit: 5 });
-    $('auditStatus').textContent = `最近 ${list.runs?.length ?? 0} / 共 ${list.total ?? 0} 条`;
-    renderRuns(list);
+    const list = await listEntries();
+    setStatus(`已开启 · 最近 ${list.entries.length} 条 / 共 ${list.total} 条`);
+    renderEntries(list.entries);
   } catch (error) {
-    $('auditStatus').textContent = error instanceof Error ? error.message : '审计不可用';
+    setStatus(error instanceof Error ? error.message : '审计状态读取失败', true);
   }
 }
 
@@ -57,8 +72,10 @@ export function mountAuditPanel() {
     const next = !$('auditToggle').classList.contains('on');
     $('auditToggle').disabled = true;
     try {
-      await request('configure', { enabled: next });
+      await setEnabled(next);
       await refreshAuditPanel();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '保存失败', true);
     } finally {
       $('auditToggle').disabled = false;
     }

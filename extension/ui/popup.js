@@ -433,6 +433,11 @@ $('pairClear').addEventListener('click', async () => {
     document.querySelector('.feature[data-page="audit.html"]')?.click();
     if ($('subView').classList.contains('hidden')) throw new Error('快捷功能子页未打开');
     if ($('auditPanel').classList.contains('hidden')) throw new Error('审计面板未内嵌打开');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const auditStatus = ($('auditStatus')?.textContent || '').trim();
+    if (!auditStatus || /unavailable|读取失败|失败/i.test(auditStatus)) {
+      throw new Error('审计面板状态异常：' + auditStatus);
+    }
     await new Promise((resolve) => setTimeout(resolve, 120));
     $('backFromFeatures').click();
     if ($('featuresView').classList.contains('hidden')) throw new Error('子页未返回快捷功能');
