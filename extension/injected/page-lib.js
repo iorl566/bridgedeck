@@ -1094,10 +1094,22 @@
       // 忽略 focus 失败
     }
     if (!el.isConnected) pageError('E_NOT_ACTIONABLE', '目标在聚焦时被替换（detached）');
-    if (typeof el.click === 'function') {
-      el.click();
+    // 有些站点把真正的按钮嵌在外层 custom button 里（例如 SSO 登录按钮），
+    // 直接 el.click() 只触发外层，页面不会提交。优先点击视口中心命中的子元素。
+    let target = el;
+    try {
+      const rect = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (hit && hit !== el && el.contains(hit) && typeof hit.click === 'function' && !(hit.closest && hit.closest('[id^="__bb_"]'))) {
+        target = hit;
+      }
+    } catch {
+      // 命中测试失败时退回目标本身
+    }
+    if (typeof target.click === 'function') {
+      target.click();
     } else {
-      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
     }
     return { ok: true };
   }
