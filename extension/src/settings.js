@@ -83,11 +83,18 @@ export function subscribeSettings(callback) {
 /** settings.get：daemon/CLI 读扩展设置。 */
 export async function settingsGet() {
   const settings = await readSettings();
-  return { settings, label: settings.instanceLabel };
+  return {
+    settings: {
+      ...settings,
+      daemonToken: settings.daemonToken ? '********' : '',
+      daemonCode: settings.daemonCode ? '******' : '',
+    },
+    label: settings.instanceLabel,
+  };
 }
 
 /** 只能由浏览器扩展设置页修改的字段：CLI/Agent 一侧写入一律拒绝。 */
-const HUMAN_ONLY_KEYS = ['borrowConfirm'];
+const HUMAN_ONLY_KEYS = ['borrowConfirm', 'daemonUrl', 'daemonToken', 'daemonCode'];
 
 /** settings.set：局部更新扩展设置。 */
 export async function settingsSet(params = {}) {
@@ -96,7 +103,7 @@ export async function settingsSet(params = {}) {
     if (Object.prototype.hasOwnProperty.call(patch, key)) {
       throw bridgeError(
         'E_FORBIDDEN',
-        '借用前确认（borrowConfirm）是人工开关：只能由用户在扩展设置页修改，Agent/CLI 不可改',
+        key + ' 是人工开关：只能由用户在扩展设置页修改，Agent/CLI 不可改',
       );
     }
   }

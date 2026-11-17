@@ -210,6 +210,7 @@ export function forgetDialogTab(tabId) {
   const state = runtime.get(tabId);
   if (state && state.pending && state.pending.timer) clearTimeout(state.pending.timer);
   runtime.delete(tabId);
+  openedListeners.delete(tabId);
 }
 
 /** dialog.status：与 list 相同的视图，便于对齐 dialog status。 */

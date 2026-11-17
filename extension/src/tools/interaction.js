@@ -117,12 +117,19 @@ async function trustedOrFallback(kind, params, fallback) {
               await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: mx, y: my, button: 'none', buttons: 0, clickCount: 0 });
             }
             if (kind === 'click') {
-              await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1 });
-              await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1 });
+              let pressed = false;
+              try {
+                await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1 });
+                pressed = true;
+                await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1 });
+                pressed = false;
+              } finally {
+                if (pressed) await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1 }).catch(() => {});
+              }
             }
             return { ok: true, trusted: true, x: point.x, y: point.y };
           } finally {
-            void cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
+            if (!isTabArmed(tabId)) void cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
             await release(tabId, 'input').catch(() => {});
           }
         } catch {
@@ -169,19 +176,26 @@ async function trustedDrag(params, fallback) {
       await cdpSend(tabId, 'Page.setWebLifecycleState', { state: 'active' }).catch(() => {});
       await cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
       await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: start.x, y: start.y, button: 'none', buttons: 0, clickCount: 0, modifiers });
-      await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: start.x, y: start.y, button: 'left', buttons: 1, clickCount: 1, modifiers });
-      if (holdMs > 0) await sleep(holdMs);
-      for (let i = 1; i <= steps; i += 1) {
-        const t = i / steps;
-        const x = start.x + (end.x - start.x) * t;
-        const y = start.y + (end.y - start.y) * t;
-        await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'left', buttons: 1, modifiers });
-        if (pause > 0) await sleep(pause);
+      let pressed = false;
+      try {
+        await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: start.x, y: start.y, button: 'left', buttons: 1, clickCount: 1, modifiers });
+        pressed = true;
+        if (holdMs > 0) await sleep(holdMs);
+        for (let i = 1; i <= steps; i += 1) {
+          const t = i / steps;
+          const x = start.x + (end.x - start.x) * t;
+          const y = start.y + (end.y - start.y) * t;
+          await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'left', buttons: 1, modifiers });
+          if (pause > 0) await sleep(pause);
+        }
+        await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: end.x, y: end.y, button: 'left', buttons: 0, clickCount: 1, modifiers });
+        pressed = false;
+      } finally {
+        if (pressed) await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: end.x, y: end.y, button: 'left', buttons: 0, clickCount: 1, modifiers }).catch(() => {});
       }
-      await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: end.x, y: end.y, button: 'left', buttons: 0, clickCount: 1, modifiers });
       return { ok: true, trusted: true, from: start, to: end, hit: params.hitAt || undefined };
     } finally {
-      void cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
+      if (!isTabArmed(tabId)) void cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
       await release(tabId, 'input').catch(() => {});
     }
   } finally {
@@ -210,6 +224,9 @@ export async function clickBackend(params = {}) {
     throw bridgeError('E_BAD_ARG', 'click-backend 需要 backendId 正整数');
   }
   await acquire(tabId, 'click-backend');
+  await ensureInputFocus(tabId).catch(() => {});
+  await cdpSend(tabId, 'Page.bringToFront').catch(() => {});
+  await cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
   try {
     await cdpSend(tabId, 'DOM.enable').catch(() => {});
     const resolved = await cdpSend(tabId, 'DOM.resolveNode', { backendNodeId: backendId });
@@ -255,10 +272,18 @@ export async function clickBackend(params = {}) {
     const x = Math.round(Number(value.x) * 100) / 100;
     const y = Math.round(Number(value.y) * 100) / 100;
     await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
-    await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
-    await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    let pressed = false;
+    try {
+      await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+      pressed = true;
+      await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
+      pressed = false;
+    } finally {
+      if (pressed) await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 }).catch(() => {});
+    }
     return { ok: true, trusted: true, via: 'cdp-backend', backendNodeId: backendId, x, y };
   } finally {
+    if (!isTabArmed(tabId)) await cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
     await release(tabId, 'click-backend').catch(() => {});
   }
 }
@@ -365,11 +390,16 @@ function pipeCdp(tabId, commands) {
 }
 
 async function trustedClickPoint(tabId, point) {
-  await pipeCdp(tabId, [
-    ['Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none', buttons: 0, clickCount: 0 }],
-    ['Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1 }],
-    ['Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1 }],
-  ]);
+  await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none', buttons: 0, clickCount: 0 });
+  let pressed = false;
+  try {
+    await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1 });
+    pressed = true;
+    await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1 });
+    pressed = false;
+  } finally {
+    if (pressed) await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1 }).catch(() => {});
+  }
 }
 
 /**
@@ -405,6 +435,7 @@ async function trustedFillFast(params) {
   }
   const raw = await execPage(tabId, 'fill-focus', target).catch((error) => { throw error; });
   const prep = raw && raw.value && typeof raw.value === 'object' ? raw.value : raw;
+  if (prep && prep.textLike === false) return { __programmatic: true, reason: prep.reason || 'programmatic-only', inputType: prep.inputType || '' };
   if (!prep || prep.textLike !== true) return null;
   if (prep.occluded === true && params.force !== true) {
     throw bridgeError('E_NOT_ACTIONABLE', '目标被遮挡（occluded），可用 --force 强制填写');
@@ -462,7 +493,7 @@ async function trustedFill(params, fallback) {
       }
       await cdpSend(tabId, 'Input.insertText', { text: String(params.value === undefined ? '' : params.value) });
     } finally {
-      void cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
+      if (!isTabArmed(tabId)) void cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
       await release(tabId, 'input').catch(() => {});
     }
   } finally {
@@ -497,7 +528,7 @@ async function trustedPress(params, fallback) {
       await trustedKey(tabId, String(params.key));
       return { ok: true, trusted: true };
     } finally {
-      void cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
+      if (!isTabArmed(tabId)) void cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
       await release(tabId, 'input').catch(() => {});
     }
   } finally {
@@ -536,6 +567,14 @@ export async function fill(params = {}) {
         return null;
       });
       if (fast) {
+        if (fast.__programmatic === true) {
+          const result = await rawFill(params);
+          const verified = await execPage(Number(params.tabId), 'fill-verify', {
+            ...fillVerifyTargets(params),
+            expected: String(params.value === undefined ? '' : params.value),
+          }).catch(() => null);
+          return { ...result, ...fillVerifyFields(verified), trusted: false, fallback: 'programmatic', reason: fast.reason };
+        }
         if (params.ref) recentFillFocus.set(Number(params.tabId), { ref: params.ref, at: Date.now() });
         return fast;
       }

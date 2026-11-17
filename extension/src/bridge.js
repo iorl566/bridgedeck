@@ -14,6 +14,10 @@ import { dialogAccept, dialogDismiss, dialogStatus, onDialogOpened, pendingDialo
 import { awaitOperation, cancelOperation, registerOperation, settleOperation } from './operations.js';
 import { noteNavigation } from './control.js';
 import { clearInputLeases } from './input-lease.js';
+import { clearObservationCache } from './tools/observation.js';
+import { clearFrameAliases } from './tools/frames.js';
+import { shadowRefs } from './tools/state.js';
+import { forgetDialogTab } from './dialogs.js';
 import { forgetRules, reinjectRules } from './rules.js';
 import { ruleAdd, ruleClear, ruleExport, ruleImport, ruleList } from './rules.js';
 import { networkReplay } from './network.js';
@@ -40,7 +44,7 @@ let currentSettings = null;
 // 挂起对话框期间仍然可用。
 const PAGE_ACTION_METHODS = new Set([
   'navigate', 'reload', 'navigate-back', 'navigate-forward',
-  'click', 'hover', 'fill', 'press', 'select', 'focus', 'blur', 'scroll-to',
+  'click', 'click-point', 'shadow.click', 'hover', 'fill', 'press', 'select', 'focus', 'blur', 'scroll-to',
   'drag', 'wheel', 'evaluate', 'upload', 'download',
   'plan', 'step',
 ]);
@@ -208,6 +212,7 @@ async function handleCommandInner(message) {
     cancelCommand(String(id));
     if (operation) settleOperation(operation, { state: 'failed', error: { code: 'E_TIMEOUT', message: method + ' 超时' } });
     respond({ ok: false, error: { code: 'E_TIMEOUT', message: '扩展执行 ' + method + ' 超过 ' + deadline.limit + 'ms' } });
+    if (unsubscribe) unsubscribe();
     return;
   }
   deadline.cancel();
@@ -801,6 +806,11 @@ function registerListeners() {
   chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
     log('tab 关闭 tabId=' + tabId + ' windowId=' + (removeInfo && removeInfo.windowId));
     clearInputLeases(tabId);
+    clearObservationCache(tabId);
+    clearFrameAliases(tabId);
+    shadowRefs.delete(tabId);
+    clearTakeoverState(tabId);
+    forgetDialogTab(tabId);
     getClient().sendJson({ type: 'event', event: 'tab-removed', params: { tabId } });
   });
 

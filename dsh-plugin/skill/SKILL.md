@@ -82,6 +82,7 @@ description: |
 | 多步计划 | `bridge plan --context ID --steps '[...]' --session <id>` |
 | 回放配方 | `bridge recipe run <name> --session <id> --param k=v`（[recipes](references/recipes.md)） |
 | 语义树 | `bridge observe [--max-tokens N] [--cursor <t>]` |
+| 自检 | `bridge diagnose --session <id>`（只报告 webdriver/扩展 DOM/CDP 痕迹） |
 | 候选动作 | `bridge observe --actions [--max-tokens N] --session <id>`（可先选再执行） |
 | 语义自愈 | `bridge click @e3 --heal` / `fill` / `select`（ref 失效时按上次动作语义重找） |
 | 敏感填充 | `bridge fill @e3 --secret PASSWORD`（读 `BB_SECRET_PASSWORD`；输出自动脱敏） |
@@ -90,6 +91,7 @@ description: |
 
 - `select` 用 option 的 value，不是可见文本。
 - `session start --allow-domains a.com,b.com --deny-domains x.com` 限制该会话可导航的域名；策略外导航返回 `E_FORBIDDEN`。
+- `session start --min-interval 300ms` 给同一会话的变更动作加最小间隔，避免连续点击/提交过快。
 - `recipe` 支持 `{type:"human"}`、`{type:"if",when:{urlIncludes:"..."},then,else}`、`{type:"loop",times,steps}`；分支内风险步骤仍按整体 recipe 审批。
 - CSS selector 只在主文档；iframe/shadow 内部用 ref。
 - `click/fill/press/drag` 默认走原生 CDP 输入（页面看到 `isTrusted=true`）；`--synthetic` 才用页面内合成事件（更快，但 `isTrusted=false`）。`select` 仍是程序化选择 + `input/change`。

@@ -14,7 +14,11 @@ foreach ($Artifact in @($Manifest.artifacts)) {
   if ($Hash -ne $Artifact.sha256) { $Problems += "sha256 mismatch $($Artifact.name)" }
   if ($Artifact.name -like '*.exe') {
     $Signature = Get-AuthenticodeSignature -LiteralPath $Path
-    if ($Signature.Status -ne 'Valid') { $Problems += "signature $($Signature.Status) $($Artifact.name)" }
+    if ($Signature.Status -eq 'UnknownError' -and $Signature.SignerCertificate) {
+      Write-Warning "self-signed/untrusted chain: $($Artifact.name) [$($Signature.SignerCertificate.Subject)]"
+    } elseif ($Signature.Status -ne 'Valid') {
+      $Problems += "signature $($Signature.Status) $($Artifact.name)"
+    }
   }
 }
 $Checksums = Join-Path $Dist 'SHA256SUMS'

@@ -1,4 +1,4 @@
-﻿// src/overlay-suppress.js —— 截图/原生输入期间隐藏扩展浮层，避免挡住页面或被截进图里
+// src/overlay-suppress.js —— 截图/原生输入期间隐藏扩展浮层，避免挡住页面或被截进图里
 import { log } from './log.js';
 import { beginCapture, endCapture, hasOpenOverlays } from './overlay-state.js';
 
@@ -18,7 +18,7 @@ function apply(tabId, hidden) {
     target: { tabId, frameIds: [0] },
     func: (ids, hide) => {
       for (const id of ids) {
-        const node = document.getElementById(id);
+        const node = document.getElementById(id) || (id === '__bb_takeover_host' ? document.querySelector('[data-bb-ui="takeover"]') : null);
         if (!node) continue;
         if (hide) {
           if (!node.hasAttribute('data-bb-suppressed')) {

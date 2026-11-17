@@ -454,7 +454,7 @@ function loadSessions() {
   try {
     const data = JSON.parse(fs.readFileSync(SESSIONS_PATH, 'utf8'));
     for (const session of data.sessions || []) {
-      if (session && typeof session.sessionId === 'string' && Number.isInteger(session.tabId)) {
+      if (session && typeof session.sessionId === 'string' && Number.isInteger(session.tabId) && Date.now() - (Number(session.startedAt) || 0) < 24 * 60 * 60 * 1000) {
         sessions.set(session.sessionId, { ...session, observation: null, restored: true });
         sessionState.recover(session.sessionId);
       }
@@ -838,7 +838,11 @@ function handleExtensionEvent(instance, msg) {
     for (const [sessionId, session] of sessions) {
       if (session.instanceId === instance.instanceId && session.tabId === tabId) {
         sessions.delete(sessionId);
-      saveSessions();
+        aliases.clear(sessionId);
+        releaseTransfersForSession(sessionId);
+        sessionState.finish(sessionId);
+        sessionQueue.drop(sessionId);
+        saveSessions();
         log(`tab ${tabId} 已关闭，移除 session ${sessionId}`);
       }
     }
@@ -897,6 +901,12 @@ function onExtensionConnection(conn, req) {
   const role = conn.query ? conn.query.get('role') : 'extension';
   if (role !== 'extension') {
     try { conn.close(1008, 'unsupported role'); } catch { /* 忽略 */ }
+    return;
+  }
+  // 只允许扩展来源或没有 Origin 的本地测试客户端；网页/沙箱 Origin 不能连本机 daemon。
+  const origin = String((req && req.headers && req.headers.origin) || '');
+  if (origin && !/^(chrome-extension|moz-extension):\/\//i.test(origin)) {
+    try { conn.close(1008, 'web origin not allowed'); } catch { /* 忽略 */ }
     return;
   }
   const remoteAddress = conn.socket && conn.socket.remoteAddress ? conn.socket.remoteAddress : '';
@@ -1235,6 +1245,9 @@ async function prepareRoute(method, rawParams) {
     const instance = instances.get(session.instanceId);
     if (!instance) throw new BridgeError('E_NO_BROWSER', '会话所属浏览器实例已断开');
     if (params.tabId === undefined || params.tabId === null) params.tabId = session.tabId;
+    else if (Number(params.tabId) !== Number(session.tabId)) {
+      throw new BridgeError('E_FORBIDDEN', '会话只能操作自己的标签页：请用 session.rebind 改绑，或在目标会话上执行');
+    }
     applyAliasParams(params, session);
     return { instance, session, params };
   }
@@ -1697,6 +1710,7 @@ async function startSession(params, timeoutMs) {  const traceStart = Date.now();
     scope: callerScope,
     allowDomains: normalizeDomains(params.allowDomains),
     denyDomains: normalizeDomains(params.denyDomains),
+    minIntervalMs: Math.max(0, Math.min(Number(params.minIntervalMs) || 0, 5000)),
   }));
   saveSessions();
   log(`session ${sessionId} 创建 instance=${instance.instanceId} tab=${tabId}${borrowed ? '（借用）' : ''}`);
@@ -2056,15 +2070,30 @@ function isExtensionRouted(method) {
  * 扩展方法统一入口：prepareRoute → verifyDecision → ledgerTargetFromRoute → sendCommand。
  * 账本目标与真正派发的实例/tab 来自同一份 route，避免再解析一次 session。
  */
+async function enforceSessionPolicy(route, method, params = route.params) {
+  if (!route || !route.session) return;
+  let targetUrl = '';
+  if ((method === 'navigate' || method === 'tab.new' || method === 'download') && params && params.url) targetUrl = String(params.url);
+  if (method === 'step' && params && params.action && typeof params.action === 'object') {
+    const inner = params.action;
+    const innerMethod = String(inner.method || inner.action || '');
+    if (['navigate', 'tab.new', 'download'].includes(innerMethod) && inner.params && inner.params.url) targetUrl = String(inner.params.url);
+  }
+  if (targetUrl) {
+    const decision = domainAllowed(route.session.allowDomains, route.session.denyDomains, targetUrl);
+    if (!decision.allowed) throw new BridgeError('E_FORBIDDEN', '会话域名策略拒绝：' + decision.reason + '（' + targetUrl + '）');
+  }
+  if (isMutating(method) && route.session.minIntervalMs > 0) {
+    const now = Date.now();
+    const scheduled = Math.max(now, (Number(route.session.lastActionAt) || 0) + route.session.minIntervalMs);
+    route.session.lastActionAt = scheduled;
+    if (scheduled > now) await sleep(scheduled - now);
+  }
+}
+
 async function dispatchExtension(method, params, timeoutMs) {
   const route = await prepareRoute(method, params);
-  if (route.session && (method === 'navigate' || (method === 'tab.new' && route.params.url))) {
-    const targetUrl = method === 'navigate' ? route.params.url : route.params.url;
-    const decision = domainAllowed(route.session.allowDomains, route.session.denyDomains, targetUrl);
-    if (!decision.allowed) {
-      throw new BridgeError('E_FORBIDDEN', '会话域名策略拒绝：' + decision.reason + '（' + String(targetUrl || '') + '）');
-    }
-  }
+  await enforceSessionPolicy(route, method, route.params);
   requireFeatures(route.instance, method, route.params);
   verifyDecision(route, method);
   return submitRouted(route, method, params, timeoutMs);
@@ -2308,6 +2337,7 @@ async function dispatchInner(method, params, timeoutMs) {
       return transferRelease(params);
     case 'upload': {
       const route = await prepareRoute('upload', params);
+      await enforceSessionPolicy(route, 'upload', route.params);
       verifyDecision(route, 'upload');
       const withPaths = injectTransferPaths({ ...route.params, sessionId: route.session ? route.session.sessionId : undefined });
       delete withPaths.sessionId;
@@ -2316,6 +2346,7 @@ async function dispatchInner(method, params, timeoutMs) {
     }
     case 'download': {
       const route = await prepareRoute('download', params);
+      await enforceSessionPolicy(route, 'download', route.params);
       verifyDecision(route, 'download');
       const result = await submitRouted(route, 'download', params, timeoutMs);
       return stageDownloadResult(result, route.session ? route.session.sessionId : null);
@@ -2579,7 +2610,9 @@ async function checkAutoUpdate() {
       if (signature === false) throw new Error('发布清单签名无效');
     }
     const latest = typeof manifest.version === 'string' ? manifest.version : null;
+    if (latest && !/^[0-9A-Za-z._-]{1,32}$/.test(latest)) throw new Error('清单 version 非法：' + latest);
     const available = Boolean(latest && latest !== VERSION);
+    if (available && auto.apply === true && signature !== true) throw new Error('自动应用要求有效的发布签名');
     let downloadedDir = null;
     if (available && auto.download === true && Array.isArray(manifest.artifacts)) {
       downloadedDir = path.join(HOME_DIR, 'update-cache', 'v' + latest);

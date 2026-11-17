@@ -58,6 +58,13 @@ test('没有配对码/配对码错误时拒绝，正确时进入 auth-challenge'
   const created = cliJson(['daemon', 'pair']).result;
   assert.match(created.code, /^\d{6}$/);
 
+  const web = await connectWs('ws://127.0.0.1:' + PORT + '/ws?role=extension', { timeoutMs: 3000, headers: { Origin: 'https://evil.test' } });
+  const webClosed = await new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), 2000);
+    web.on('close', () => { clearTimeout(timer); resolve(true); });
+  });
+  assert.equal(webClosed, true, '网页 Origin 不能连接本机 WS');
+
   const wrong = await connectWs('ws://127.0.0.1:' + PORT + '/ws?role=extension', { timeoutMs: 3000 });
   const rejectedPromise = waitMessage(wrong);
   wrong.sendJson(hello(created.token, '000000'));

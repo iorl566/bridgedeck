@@ -23,6 +23,8 @@ jobs:
       HAS_WIN_THUMB: ${{ secrets.WINDOWS_CERT_THUMBPRINT != '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
 
       - uses: actions/setup-node@v4
         with:

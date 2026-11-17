@@ -22,6 +22,7 @@ import { redactFillResult, resolveSecretValue } from '../lib/secrets.mjs';
 import { analyzePerformance } from '../lib/perf-insights.mjs';
 import { matchRecipeWhen, normalizeLoopTimes, recipeStepType } from '../lib/recipe-blocks.mjs';
 import { defaultInputMode } from '../lib/input-mode.mjs';
+import { summarizePageDiagnostics } from '../lib/diagnostics.mjs';
 
 /**
  * 重模块按需加载：status/evaluate/read/screenshot/session 等热路径不再为 update/trace/debug/recipe
@@ -131,7 +132,7 @@ const VALUE_FLAGS = new Set([
 ]);
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
 for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force']) BOOL_FLAGS.add(name);
-for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before', 'allow-domains', 'deny-domains', 'secret', 'by']) VALUE_FLAGS.add(name);
+for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before', 'allow-domains', 'deny-domains', 'secret', 'by', 'min-interval']) VALUE_FLAGS.add(name);
 for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'quiet', 'verbose', 'diagnostics', 'cdp-frames', 'commands', 'actions', 'heal', 'insight', 'synthetic']) BOOL_FLAGS.add(name);
 VALUE_FLAGS.add('request-id');
 VALUE_FLAGS.add('steps-file');VALUE_FLAGS.add('until');
@@ -174,6 +175,7 @@ async function executeRecipeBlocks(steps, flags) {
         if (!body.ok) return body;
         const action = String((body.result && body.result.action) || 'timeout');
         if (action === 'timeout') return { ok: false, error: { code: 'E_TIMEOUT', message: '人工节点等待超时' } };
+        if (action === 'skip' || action === 'cancel') return { ok: false, error: { code: 'E_CANCELLED', message: '用户取消了人工节点' } };
         continue;
       }
       if (type === 'if') {
@@ -222,6 +224,8 @@ async function healAction(command, params, body, flags) {
   if (!previous) return body;
   const observed = await callRpc('observe', withControl(flags, { vom: true }), timeoutOf(flags));
   if (!observed.ok) return body;
+  const observedUrl = String((observed.result && observed.result.url) || '');
+  if (previous.url && observedUrl && previous.url !== observedUrl) return body;
   const actions = deriveActions(observed.result && observed.result.nodes);
   const found = findHealingAction(actions, previous, command);
   if (!found || found.ref === ref) return body;
@@ -787,6 +791,24 @@ async function cmdAgent(flags, pos) {
   print('');
   print('下一步：' + brief.next.join(' / '));
   return 0;
+}
+
+async function cmdDiagnose(flags) {
+  const sessionId = flags.session || flags['session-id'] || process.env.BB_SESSION || '';
+  if (!sessionId) throw new ArgError('diagnose 需要 --session <id>');
+  const expression = "JSON.stringify({webdriver:navigator.webdriver,plugins:navigator.plugins.length,languages:String(navigator.languages||''),chrome:typeof window.chrome,mainWorldBB:typeof window.__BB_PAGE__==='object',overlay:!!(document.querySelector('[data-bb-ui=\\\"takeover\\\"]')||document.getElementById('__bb_takeover_host'))})";
+  const body = await callRpc('evaluate', withControl(flags, { expression }), timeoutOf(flags));
+  if (!body.ok) return outputFailure(body);
+  let markers = {};
+  try { markers = JSON.parse((body.result && body.result.value) || '{}'); } catch { markers = {}; }
+  const report = summarizePageDiagnostics(markers);
+  if (jsonMode) {
+    emitJson({ ok: true, result: report });
+    return report.ok ? 0 : 1;
+  }
+  print('页面自动化痕迹（只报告，不修改指纹）：');
+  for (const item of report.findings) print('  [' + item.level + '] ' + item.code + ': ' + item.message);
+  return report.ok ? 0 : 1;
 }
 
 async function cmdStatus(flags) {
@@ -1373,6 +1395,15 @@ async function cmdUpdateFetch(flags) {
   return 0;
 }
 
+function assertInside(base, candidate, label) {
+  const root = path.resolve(base);
+  const value = path.resolve(candidate);
+  if (value !== root && !value.startsWith(root + path.sep)) {
+    throw new BridgeError('E_RELEASE_INVALID', label + ' 越界：' + candidate);
+  }
+  return value;
+}
+
 async function cmdUpdateApply(flags) {
   const { writeUpdateState } = await loadUpdate();
   if (flags.staging === undefined) throw new ArgError('update apply 需要 --staging <dir>');
@@ -1389,11 +1420,12 @@ async function cmdUpdateApply(flags) {
   const files = [];
   for (const item of Array.isArray(record.artifacts) ? record.artifacts : []) {
     if (!item || !item.name) throw new BridgeError('E_RELEASE_INVALID', 'staged.json artifact 缺少 name');
-    const src = path.join(stagedDir, item.name);
+    if (path.basename(item.name) !== item.name) throw new BridgeError('E_RELEASE_INVALID', 'artifact name 含路径：' + item.name);
+    const src = assertInside(stagedDir, path.join(stagedDir, item.name), 'artifact src');
     if (!fs.existsSync(src)) throw new BridgeError('E_NOT_FOUND', 'staging 缺少文件：' + src);
     const sha256 = sha256File(src);
     if (sha256 !== item.sha256) throw new BridgeError('E_RELEASE_INVALID', 'staging 文件哈希不匹配：' + item.name);
-    const dest = path.join(target, item.name);
+    const dest = assertInside(target, path.join(target, item.name), 'artifact dest');
     const existed = fs.existsSync(dest);
     let backup = null;
     let beforeSha256 = null;
@@ -1432,11 +1464,11 @@ async function cmdUpdateRollback(flags) {
   const target = path.resolve(String(record.target || ''));
   const restored = [];
   for (const item of Array.isArray(record.files) ? record.files : []) {
-    const dest = path.join(target, item.name);
+    const dest = assertInside(target, path.join(target, item.name), 'artifact dest');
     if (item.existed) {
       const backupFile = item.backup
-        ? path.resolve(target, item.backup)
-        : path.join(backupDir, item.name);
+        ? assertInside(target, path.resolve(target, item.backup), 'rollback backup')
+        : assertInside(backupDir, path.join(backupDir, item.name), 'rollback backup');
       if (!fs.existsSync(backupFile)) throw new BridgeError('E_NOT_FOUND', '备份文件缺失：' + backupFile);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.copyFileSync(backupFile, dest);
@@ -1554,6 +1586,7 @@ async function cmdSession(flags, pos) {
     if (flags.incognito === true) params.incognito = true;
     if (flags['allow-domains'] !== undefined) params.allowDomains = String(flags['allow-domains']);
     if (flags['deny-domains'] !== undefined) params.denyDomains = String(flags['deny-domains']);
+    if (flags['min-interval'] !== undefined) params.minIntervalMs = Math.min(parseDurationMs(flags['min-interval'], 0), 5000);
     if (flags.browser !== undefined) params.browser = String(flags.browser);
     if (flags.scope !== undefined) params.scope = String(flags.scope);
     else if (process.env.BB_SESSION_SCOPE && process.env.BB_SESSION_SCOPE.trim()) params.scope = process.env.BB_SESSION_SCOPE.trim();
@@ -5475,6 +5508,7 @@ async function printHelp() {
   ledger resolve <id> [--outcome abandoned|done]
                                    确认一条账本记录，解除同标签页的重放拦截
   status                           daemon + 浏览器 + session 总览
+  diagnose [--session <id>]        只报告页面自动化痕迹（webdriver/扩展 DOM/CDP）
   agent brief --session <id>       面向 agent 的页面简报（引用/截断/对话框/下一步）
   cancel <commandId>               取消进行中的命令（协作式取消，需扩展支持）
   browsers                         已连接浏览器实例（含实例名）
@@ -5502,7 +5536,7 @@ async function printHelp() {
   daemon trust-local on|off                本机未配对连接是否允许（off=严格模式）
 
 会话：
-  session start [--browser <id|名字|edge|chrome>] [--tab <tabId>] [--no-focus] [--incognito] [--request-id <token>] [--allow-domains a,b] [--deny-domains x,y]
+  session start [--browser <id|名字|edge|chrome>] [--tab <tabId>] [--no-focus] [--incognito] [--request-id <token>] [--allow-domains a,b] [--deny-domains x,y] [--min-interval 300ms]
   session prepare|claim|cancel|request --request-id <token>
                 [--agent-name <name>] [--project <name>] [--controller-color <#rrggbb>]
                 默认新建并聚焦独立 Agent Window；--no-focus 才在后台开窗
@@ -5621,6 +5655,8 @@ async function runCommand(flags, pos) {
   switch (command) {
     case 'status':
       return cmdStatus(flags);
+    case 'diagnose':
+      return cmdDiagnose(flags);
     case 'agent':
       return cmdAgent(flags, pos);
     case 'cancel':

@@ -6,7 +6,7 @@
   'use strict';
 
   const KEY = '__BB_PAGE__';
-  const LIB_VERSION = 49;
+  const LIB_VERSION = 53;
   if (globalThis[KEY] && globalThis[KEY].version >= LIB_VERSION) return;
 
   const NAME_MAX = 80;
@@ -156,11 +156,11 @@
     const mutation = state.mutation;
     for (const record of records) {
       // 忽略桥自己注入的浮层（documentElement 下），否则每次浮层出现都会被当成结构变化。
-      if (record.target && record.target.nodeType === 1 && record.target.closest && record.target.closest('#__bb_takeover_host')) continue;
+      if (record.target && record.target.nodeType === 1 && record.target.closest && record.target.closest('[data-bb-ui="takeover"], #__bb_takeover_host')) continue;
       if (record.type === 'childList') {
         const addedNodes = record.addedNodes ? Array.from(record.addedNodes) : [];
         const removedNodes = record.removedNodes ? Array.from(record.removedNodes) : [];
-        const touchesOverlay = addedNodes.concat(removedNodes).some((node) => node && node.nodeType === 1 && (node.id === '__bb_takeover_host' || (node.closest && node.closest('#__bb_takeover_host'))));
+        const touchesOverlay = addedNodes.concat(removedNodes).some((node) => node && node.nodeType === 1 && ((node.getAttribute && node.getAttribute('data-bb-ui') === 'takeover') || node.id === '__bb_takeover_host' || (node.closest && node.closest('[data-bb-ui="takeover"], #__bb_takeover_host'))));
         if (touchesOverlay) continue;
         if (mutation.raw.length < 200) mutation.raw.push({ type: 'childList', target: record.target, added: addedNodes.length, removed: removedNodes.length });
       } else if (record.type === 'characterData') {
@@ -318,14 +318,11 @@
 
   /** Agent 输入标记：用单调时钟（performance.now）而不是墙钟，睡眠/改系统时间不会误判人工接管。 */
   function markAgentInput() {
-    try { document.documentElement.setAttribute('data-bb-agent-input', String(performance.now())); } catch { /* 忽略 */ }
+    // 不写页面 DOM：Agent 输入由 background 的命令窗口过滤，避免 10s 盲区和页面伪造。
   }
 
-  function agentInputRecent(nowEpoch = Date.now(), nowMono = performance.now()) {
-    const raw = Number(document.documentElement.getAttribute('data-bb-agent-input') || 0);
-    if (!raw) return false;
-    if (raw > 1e11) return nowEpoch - raw < 10000; // 兼容旧版 epoch 标记
-    return nowMono >= raw && nowMono - raw < 10000;
+  function agentInputRecent() {
+    return false;
   }
 
   function isVisible(el) {
@@ -1058,6 +1055,7 @@
     let current = node;
     for (let depth = 0; current && current.nodeType === 1 && depth < 12; depth += 1) {
       if (OWN_OVERLAY_IDS.has(String(current.id || ''))) return true;
+      if (current.getAttribute && current.getAttribute('data-bb-ui') === 'takeover') return true;
       current = current.parentElement;
     }
     return false;
@@ -1890,7 +1888,7 @@
     if (tag !== 'input' && tag !== 'textarea' && !isCe) pageError('E_TARGET_NOT_FILLABLE', '目标不可填写');
     if (el.disabled === true || el.readOnly === true) pageError('E_TARGET_NOT_FILLABLE', '目标已禁用或只读');
     const textLike = isCe || tag === 'textarea' || (tag === 'input' && ['', 'text', 'search', 'url', 'tel', 'email', 'password', 'number'].includes(type));
-    if (!textLike) return { ok: true, textLike: false };
+    if (!textLike) return { ok: true, textLike: false, reason: 'programmatic-only', inputType: type };
     const box = el.getBoundingClientRect();
     const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
     const ownOverlay = !!(hit && hit.closest && hit.closest('[id^="__bb_"]'));
@@ -2951,7 +2949,7 @@
     const rawSteps = Number(args.steps);
     const steps = Math.min(Math.max(Number.isFinite(rawSteps) && rawSteps > 0 ? Math.round(rawSteps) : 8, 2), 40);
     scrollIntoView(fromEl);
-    ensureActionable(fromEl, args, 'drag');
+    await ensureActionable(fromEl, args, 'drag');
     const a = rectCenter(fromEl);
     const fromOffset = { x: Number(args.fromOffsetX) || 0, y: Number(args.fromOffsetY) || 0 };
     a.x += fromOffset.x;
@@ -3270,6 +3268,9 @@
       let lastAt = 0;
       const onInput = (event) => {
         if (!event || event.isTrusted !== true) return;
+        // 浮层自己的按钮不能算“人工接管页面”：否则点“交给 Agent”会立刻被自动暂停。
+        const target = event.target;
+        if (target && target.nodeType === 1 && target.closest && target.closest('[data-bb-ui], #__bb_takeover_host, #__bb_help_host, #__bb_help_highlight, #__bb_record_host, #__bb_manual_host, #__bb_borrow_modal, #__bb_control_hint, #__bb_human_banner')) return;
         const now = Date.now();
         // 与 content/human-watch.js 共用同一抑制标记：Agent 的可信输入不应被当成人工接管。
         if (agentInputRecent(now)) return;

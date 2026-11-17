@@ -224,7 +224,7 @@ async function collectAxNodes(tabId, limit = 1000) {
 async function observeAxFallback(tabId, params, options = {}) {
   // 先收起 BridgeDeck 自己的浮层，避免 AX 树把接管卡片也当成页面内容。
   // AX 树更新有一拍延迟，移除后稍等一下再取快照。
-  await hideTakeover(tabId).catch(() => {});
+  await hideTakeover(tabId, { preserveState: true }).catch(() => {});
   await sleep(300);
   let axNodes;
   try {
@@ -306,7 +306,12 @@ export async function visualScan(params = {}) {
   };
 }
 
-export async function observe(params = {}) {  if (params.vom === true && (params.cursor || Number(params.maxTokens) > 0)) {
+export async function observe(params = {}) {
+  const policyTabId = requireTabId(params);
+  // 新一轮 observe 让旧 frame 别名/closed-shadow ref 失效，避免 @eN 串到另一个元素。
+  clearFrameAliases(policyTabId);
+  shadowRefs.delete(policyTabId);
+  if (params.vom === true && (params.cursor || Number(params.maxTokens) > 0)) {
     throw bridgeError('E_BAD_ARG', '--vom 不能与 --cursor/--max-tokens 同时使用');
   }
   if (params.fallbackAx === true && (params.vom === true || params.ax === true)) {
@@ -553,7 +558,7 @@ export async function observe(params = {}) {  if (params.vom === true && (params
   if (params.compareAx === true) {
     try {
       // 对照前收起 BridgeDeck 自身浮层，避免把“暂停 Agent/停止任务”算成页面交互元素。
-      await hideTakeover(tabId).catch(() => {});
+      await hideTakeover(tabId, { preserveState: true }).catch(() => {});
       await sleep(300);
       const axStarted = Date.now();
       const compareAx = await collectAxNodes(tabId, 800);

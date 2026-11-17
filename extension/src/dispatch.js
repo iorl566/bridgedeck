@@ -350,7 +350,7 @@ async function dispatchCommand(method, params) {
 // 记下这些命令的执行窗口，后台据此忽略“自产”的 human.input，避免误自动暂停会话。
 const agentInputWindows = new Map(); // tabId -> { start, end }
 const AGENT_INPUT_METHODS = new Set([
-  'click', 'click-backend', 'hover', 'fill', 'press', 'select', 'drag', 'wheel', 'upload', 'download', 'click-point',
+  'click', 'click-backend', 'hover', 'fill', 'press', 'select', 'drag', 'wheel', 'upload', 'download', 'click-point', 'shadow.click',
 ]);
 
 export function isAgentInputWindow(tabId, at) {

@@ -1,6 +1,6 @@
 // src/tools/shadow.js —— closed shadow 元素点击/读取。
 import { bridgeError } from '../errors.js';
-import { acquire, release, send as cdpSend } from '../debugger.js';
+import { acquire, isTabArmed, release, send as cdpSend } from '../debugger.js';
 import { requireTabId } from './shared.js';
 async function shadowObject(tabId, entry) {
   if (!entry || !Number.isInteger(entry.backendNodeId)) return null;
@@ -20,11 +20,21 @@ export async function shadowRefClick(tabId, entry) {
     const point = rect && rect.result ? rect.result.value : null;
     if (!point) return null;
     await acquire(tabId, 'shadow-ref');
+    await cdpSend(tabId, 'Page.bringToFront').catch(() => {});
+    await cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
     try {
       await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none', buttons: 0, clickCount: 0 });
-      await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1 });
-      await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1 });
+      let pressed = false;
+      try {
+        await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1 });
+        pressed = true;
+        await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1 });
+        pressed = false;
+      } finally {
+        if (pressed) await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1 }).catch(() => {});
+      }
     } finally {
+      if (!isTabArmed(tabId)) await cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {});
       await release(tabId, 'shadow-ref').catch(() => {});
     }
     return point;
@@ -76,7 +86,7 @@ async function findClosedShadow(tabId, text) {
       const value = info && info.result && info.result.value;
       if (value && value.visible && value.text.includes(text)) {
         keep = true;
-        return { objectId, value };
+        return { objectId, value, backendNodeId: node.backendNodeId };
       }
     } catch {
       // 单个节点失败继续找
@@ -96,12 +106,9 @@ export async function shadowClick(params = {}) {
     await cdpSend(tabId, 'DOM.enable').catch(() => {});
     const found = await findClosedShadow(tabId, text);
     if (!found) throw bridgeError('E_NOT_FOUND', 'closed shadow 内没有匹配文本的元素：' + text);
-    await cdpSend(tabId, 'Runtime.callFunctionOn', {
-      objectId: found.objectId,
-      functionDeclaration: 'function(){ this.click(); return true; }',
-      returnByValue: true,
-    });
-    return { ok: true, matched: found.value.text, tag: found.value.tag, via: 'cdp-closed-shadow' };
+    const point = await shadowRefClick(tabId, { backendNodeId: found.backendNodeId }).catch(() => null);
+    if (!point) throw bridgeError('E_NOT_ACTIONABLE', 'closed shadow 元素当前不可点击');
+    return { ok: true, matched: found.value.text, tag: found.value.tag, trusted: true, via: 'cdp-closed-shadow', x: point.x, y: point.y };
   } finally {
     await release(tabId, 'closed-shadow').catch(() => {});
   }

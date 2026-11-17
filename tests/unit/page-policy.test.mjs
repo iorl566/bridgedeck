@@ -24,3 +24,8 @@ test('拦截浏览器内部页、扩展页、devtools、view-source', () => {
     assert.notEqual(restrictedUrlReason(url), '', url);
   }
 });
+
+test('剥离浏览器会忽略的 C0/换行后再判定', () => {
+  assert.notEqual(restrictedUrlReason(String.fromCharCode(0) + 'chrome://settings'), '');
+  assert.notEqual(restrictedUrlReason('java\nscript:alert(1)'), '');
+});

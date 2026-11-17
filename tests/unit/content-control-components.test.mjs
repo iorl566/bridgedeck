@@ -25,6 +25,12 @@ test('呼吸动画必须无限循环，且不会停在低透明度', () => {
   assert.match(html, /prefers-reduced-motion/, '减少动效偏好下要有静态可见效果');
 });
 
+test('接管浮层使用 closed shadow，移除固定 host id', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'takeover.js'), 'utf8');
+  assert.match(source, /attachShadow\(\{ mode: 'closed' \}\)/);
+  assert.doesNotMatch(source, /host\.id =/);
+  assert.match(source, /data-bb-ui/);
+});
 test('接管浮层呼吸边框同样无限循环，暂停时停止', () => {
   const source = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'takeover.js'), 'utf8');
   assert.match(source, /animation:bbp 3s ease-in-out infinite/, '接管边框呼吸要持续');

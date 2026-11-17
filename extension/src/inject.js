@@ -9,7 +9,7 @@ import { restrictedUrlReason } from './lib/page-policy.js';
 
 const MAIN_FRAME = 0;
 /** 页面能力库版本；必须与 injected/page-lib.js 的 LIB_VERSION 同步。 */
-const PAGE_LIB_VERSION = 49;
+const PAGE_LIB_VERSION = 53;
 
 /** 注入函数：调用页面侧能力库 __BB_PAGE__。 */
 export function pageCallFunc(name, args, requiredVersion) {

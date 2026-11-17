@@ -66,7 +66,9 @@ function installTakeover(info, lang, version) {
     controlling: 'Agent 正在控制',
     reading: '正在读取最新页面状态',
   };
-  const ID = '__bb_takeover_host';
+  const UI_SELECTOR = '[data-bb-ui="takeover"]';
+  const LEGACY_ID = '__bb_takeover_host';
+  const roots = globalThis.__bbTakeoverRoots || (globalThis.__bbTakeoverRoots = new WeakMap());
   // 页面内监听「控制提示」开关：关闭瞬间摘掉浮层（不依赖 service worker 的消息时序）。
   try {
     if (!window.__bbControlHintWatch) {
@@ -75,9 +77,9 @@ function installTakeover(info, lang, version) {
         if (area !== 'local' || !changes['bb.settings']) return;
         const next = changes['bb.settings'].newValue || {};
         if (next.controlHint === false) {
-          const node = document.getElementById(ID);
+          const node = document.querySelector(UI_SELECTOR) || document.getElementById(LEGACY_ID);
           if (node) node.remove();
-        } else if (!document.getElementById(ID)) {
+        } else if (!(document.querySelector(UI_SELECTOR) || document.getElementById(LEGACY_ID))) {
           // 重新打开：用同一份信息把浮层补回来
           try { installTakeover(info, lang, version); } catch { /* 忽略 */ }
         }
@@ -86,7 +88,7 @@ function installTakeover(info, lang, version) {
   } catch {
     // 页面环境拿不到 storage 时忽略，回退到 SW 侧同步
   }
-  const existing = document.getElementById(ID);
+  const existing = document.querySelector(UI_SELECTOR) || document.getElementById(LEGACY_ID);
   const apply = (root) => {
     const session = String(info.sessionId || '');
     const paused = info.paused === true;
@@ -138,14 +140,18 @@ function installTakeover(info, lang, version) {
     if (miniButton) miniButton.style.display = minimized ? 'inline-flex' : 'none';
   };
 
-  if (existing && existing.shadowRoot) {
-    apply(existing.shadowRoot);
+  const existingRoot = existing ? (roots.get(existing) || existing.shadowRoot) : null;
+  if (existingRoot) {
+    apply(existingRoot);
     return;
   }
+  // 旧宿主没有 root 记录（isolated world 被重置/旧 open shadow）：先移除，避免叠出两个浮层。
+  if (existing) existing.remove();
   const host = document.createElement('div');
-  host.id = ID;
+  host.setAttribute('data-bb-ui', 'takeover');
   host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:none;';
-  const shadow = host.attachShadow({ mode: 'open' });
+  const shadow = host.attachShadow({ mode: 'closed' });
+  roots.set(host, shadow);
   const style = document.createElement('style');
   style.textContent = [
     '.glow{position:fixed;inset:0;z-index:2147483646;box-shadow:inset 0 0 20px 4px rgba(47,111,237,.25);pointer-events:none}',
@@ -206,6 +212,7 @@ function installTakeover(info, lang, version) {
   const primary = shadow.querySelector('[data-act="pause"]');
   primary.addEventListener('click', () => {
     const next = primary.dataset.paused !== '1';
+    info.paused = next;
     primary.dataset.paused = next ? '1' : '0';
     apply(shadow);
     try { chrome.runtime.sendMessage({ type: 'bb.takeover.pause', paused: next }); } catch { /* 忽略 */ }
@@ -275,7 +282,7 @@ function installTakeover(info, lang, version) {
   };
   const inOverlay = (event) => {
     const path = event.composedPath ? event.composedPath() : [];
-    return path.some((node) => node && node.id === '__bb_takeover_host');
+    return path.some((node) => node && ((node.getAttribute && node.getAttribute('data-bb-ui') === 'takeover') || node.id === '__bb_takeover_host'));
   };
   document.addEventListener('pointerdown', (event) => { if (!inOverlay(event)) showHuman(false); }, true);
   document.addEventListener('keydown', (event) => { if (!inOverlay(event)) showHuman(false); }, true);
@@ -339,15 +346,15 @@ export async function showTakeover(tabId, info = {}) {
 export async function removeTakeoverDom(tabId) {
   takeoverVersions.set(tabId, (takeoverVersions.get(tabId) || 0) + 1);
   try {
-    await chrome.scripting.executeScript({ target: { tabId }, func: () => { window.__bbTakeoverVersion = (Number(window.__bbTakeoverVersion) || 0) + 1; const n = document.getElementById('__bb_takeover_host'); if (n) n.remove(); } });
+    await chrome.scripting.executeScript({ target: { tabId }, func: () => { window.__bbTakeoverVersion = (Number(window.__bbTakeoverVersion) || 0) + 1; const n = document.querySelector('[data-bb-ui="takeover"]') || document.getElementById('__bb_takeover_host'); if (n) n.remove(); } });
   } catch {
     // 页面可能已关闭
   }
 }
 
-export async function hideTakeover(tabId) {
+export async function hideTakeover(tabId, options = {}) {
   closeOverlay(tabId, 'takeover');
-  clearTakeoverState(tabId);
+  if (options.preserveState !== true) clearTakeoverState(tabId);
   await removeTakeoverDom(tabId);
 }
 

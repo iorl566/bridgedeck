@@ -6,6 +6,7 @@ import { log } from './log.js';
 import { execPage } from './inject.js';
 import { armTab } from './debugger.js';
 import { showTakeover, hideTakeover } from './takeover.js';
+import { restrictedUrlReason } from './lib/page-policy.js';
 import { closeOverlay, openOverlay } from './overlay-state.js';
 import { expectedTabMoves } from './session-manager/tab-moves.js';
 
@@ -413,7 +414,6 @@ export async function windowClose(params = {}) {
 export async function refreshTakeoverForTab(tabId) {
   try {
     const agentWindows = await readAgentWindows();
-    stage.value = 'controlled';
     const controlled = await readControlledTabs();
     let tab = null;
     try { tab = await chrome.tabs.get(tabId); } catch { tab = null; }
@@ -452,6 +452,8 @@ export async function tabList(params = {}) {
 /** tab.new：优先在 agent 窗口里开新 tab。 */
 export async function tabNew(params = {}) {
   const url = typeof params.url === 'string' && params.url ? params.url : 'about:blank';
+  const blocked = restrictedUrlReason(url);
+  if (blocked) throw bridgeError('E_FORBIDDEN', '新建标签页目标受限（' + blocked + '）：BridgeDeck 不打开浏览器内部或扩展页面');
   const noFocus = params.noFocus === true;
   if (params.newWindow === true) {
     let win;
@@ -984,7 +986,7 @@ export async function requestHelp(params = {}) {
     try { highlightRect = await execPage(tabId, 'rect', { ref: localRef }, frameId); } catch { highlightRect = null; }
     highlightTarget = '';
   }
-  await hideTakeover(tabId).catch(() => {});
+  await hideTakeover(tabId, { preserveState: true }).catch(() => {});
   openOverlay(tabId, 'help', { priority: 50 });
   try {
     const overlayLang = await readUiLang();

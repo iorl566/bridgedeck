@@ -129,7 +129,7 @@ export const METHOD_EFFECT = {
   "wait-for-navigation": "passive_read",
   "actionable": "passive_read",
   "plan": "control_plane",
-  "step": "control_plane",
+  "step": "browser_mutation",
   "debug.rule_add": "browser_mutation",
   "debug.rule_clear": "browser_mutation",
   "debug.rule_enable": "browser_mutation",

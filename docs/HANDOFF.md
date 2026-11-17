@@ -14,7 +14,7 @@ BridgeDeck（浏览器桥）：本机 Chromium（Edge/Chrome）自动化。
 
 ```powershell
 Set-Location "D:\浏览器桥"
-node --test "tests/unit/*.test.mjs"      # 期望 1021 pass / 0 fail
+node --test "tests/unit/*.test.mjs"      # 期望 1027 pass / 0 fail
 node tests/extension/module-load.mjs     # 期望 PASS
 node tests/plugin/selftest.mjs           # 期望 26 通过
 node tools/gen-protocol.mjs --check      # 期望 up to date
@@ -25,7 +25,7 @@ node cli/bridge.mjs status               # 需要 daemon 在跑；扩展在浏�
 
 `extension/` 下任何改动，**用户要在 `edge://extensions` 点一次「重新加载」**，否则跑的还是旧代码。这是本项目最常见的"改了没生效"来源。
 
-改 `extension/injected/page-lib.js` 时**必须同步 bump 版本号**（当前 `LIB_VERSION = 49`，`extension/src/inject.js` 的 `PAGE_LIB_VERSION` 要一致），单测会检查两者相等。
+改 `extension/injected/page-lib.js` 时**必须同步 bump 版本号**（当前 `LIB_VERSION = 53`，`extension/src/inject.js` 的 `PAGE_LIB_VERSION` 要一致），单测会检查两者相等。
 
 改了扩展后重新打包：
 
@@ -129,9 +129,9 @@ page-lib v43 重载后又跑了一轮回归（`.tmp-bench/captcha-drive/run-v43/
 
 ## 9. 交接时的现场状态
 
-- 浏览器实例：`f745d380`（Edge 157，扩展 0.1.6，`LIB_VERSION 49`）
+- 浏览器实例：`f745d380`（Edge 157，扩展 0.1.6，`LIB_VERSION 53`）
 - 无活动会话（`bridge status` 应为 `sessions (0)`）
-- 单测 1021 pass / 0 fail
+- 单测 1027 pass / 0 fail
 - 扩展包：`dist/BridgeDeck-extension-0.1.6.zip`
 - 驱动通道基线：3 轮 × 6 题型，`channel-verified=5 / never-reacted=1 (双滑块)`，见 `tests/anti-bot/captcha-drive-baseline.json`；原始每轮结果在 `.tmp-bench/captcha-drive/run-{1,2,3}/matrix.json`
 

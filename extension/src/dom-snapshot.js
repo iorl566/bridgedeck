@@ -5,6 +5,7 @@
 // 只做“几何/可见性/可点击”增量，不替换既有 page-lib VOM 遍历。
 
 import { acquire, release, send as cdpSend } from './debugger.js';
+import { sensitiveAutocomplete } from './lib/sensitive-autocomplete.js';
 
 /** 事实采集用的一小组高价值样式（够判断可见性与可点击，不追求全量）。 */
 export const FACTS_STYLES = [
@@ -105,8 +106,7 @@ export function decodeSnapshotFacts(snapshot, { wantedStyles = FACTS_STYLES } = 
       const tag = nodeNameList[idx] !== undefined ? String(strings[nodeNameList[idx]]).toLowerCase() : '';
       const type = String(attributeOf(idx, 'type') || '').toLowerCase();
       const autocomplete = String(attributeOf(idx, 'autocomplete') || '').toLowerCase();
-      const sensitive = (tag === 'input' && type === 'password')
-        || /(^|[\s-])(current|new|one-time|cc)-?password/i.test(autocomplete);
+      const sensitive = (tag === 'input' && type === 'password') || sensitiveAutocomplete(autocomplete);
       if (sensitive) value = '********';
       fact.value = value;
     }

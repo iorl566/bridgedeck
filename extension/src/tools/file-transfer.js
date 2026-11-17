@@ -111,8 +111,15 @@ export async function upload(params = {}) {
     const x = Math.round(rect.x + rect.width / 2);
     const y = Math.round(rect.y + rect.height / 2);
     await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
-    await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
-    await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    let pressed = false;
+    try {
+      await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+      pressed = true;
+      await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
+      pressed = false;
+    } finally {
+      if (pressed) await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 }).catch(() => {});
+    }
     const deadline = Date.now() + 5000;
     while (!chooser && Date.now() < deadline) await sleep(100);
     if (!chooser || !chooser.backendNodeId) {

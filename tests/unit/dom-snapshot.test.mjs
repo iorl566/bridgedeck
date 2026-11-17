@@ -120,3 +120,21 @@ test('解码表单值 / checked / selected，并遮蔽密码', () => {
   assert.equal(facts.get(2).selected, true);
   assert.equal(facts.get(3).value, undefined);
 });
+
+test('autocomplete 敏感字段遮蔽', () => {
+  const strings = ['autocomplete', 'one-time-code', 'input', '123456'];
+  const snapshot = {
+    strings,
+    documents: [{
+      nodes: {
+        backendNodeId: [1],
+        nodeName: [2],
+        attributes: [[0, 1]],
+        inputValue: { index: [0], value: [3] },
+      },
+      layout: { nodeIndex: [0], bounds: [[0, 0, 10, 10]], styles: [[]] },
+    }],
+  };
+  const facts = decodeSnapshotFacts(snapshot);
+  assert.equal(facts.get(1).value, '********');
+});

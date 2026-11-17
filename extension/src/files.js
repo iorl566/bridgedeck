@@ -4,6 +4,7 @@ import { execPage } from './inject.js';
 import { getTab, sleep } from './tabs.js';
 import { acquire, release, send as cdpSend } from './debugger.js';
 import { log } from './log.js';
+import { restrictedUrlReason } from './lib/page-policy.js';
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const MAX_TIMEOUT_MS = 120000;
@@ -67,9 +68,16 @@ export async function download(params = {}) {
         const x = Math.round(rect.x + rect.width / 2);
         const y = Math.round(rect.y + rect.height / 2);
         await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
-        await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
-        await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
-        clickedViaCdp = true;
+        let pressed = false;
+        try {
+          await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+          pressed = true;
+          await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
+          pressed = false;
+          clickedViaCdp = true;
+        } finally {
+          if (pressed) await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 }).catch(() => {});
+        }
       } catch (error) {
         log('CDP 点击失败，退回脚本点击：' + ((error && error.message) || error));
       } finally {
@@ -80,8 +88,11 @@ export async function download(params = {}) {
         await execPage(tabId, 'click', { ref: params.ref, selector: params.selector, waitTimeoutMs: 0 });
       }
     } else {
+      const target = String(params.url).trim();
+      const blocked = restrictedUrlReason(target);
+      if (blocked) throw bridgeError('E_FORBIDDEN', '下载目标受限（' + blocked + '）：BridgeDeck 不打开浏览器内部或扩展页面');
       try {
-        await chrome.tabs.update(tabId, { url: String(params.url).trim() });
+        await chrome.tabs.update(tabId, { url: target });
       } catch (error) {
         throw mapChromeError(error, '导航到下载地址失败');
       }

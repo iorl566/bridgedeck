@@ -7,7 +7,7 @@ import { sleep } from './tabs.js';
 import { getTakeoverState } from './takeover.js';
 
 const TAB_METHODS = new Set([
-  'click', 'click-backend', 'hover', 'fill', 'press', 'select', 'focus', 'blur', 'scroll-to',
+  'click', 'click-backend', 'click-point', 'shadow.click', 'hover', 'fill', 'press', 'select', 'focus', 'blur', 'scroll-to',
   'drag', 'wheel', 'evaluate', 'upload', 'download',
 ]);
 

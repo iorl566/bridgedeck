@@ -252,8 +252,15 @@ export async function clickByImage(params = {}) {
     await acquire(capture.tabId, 'image-click');
     try {
       await cdpSend(capture.tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
-      await cdpSend(capture.tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
-      await cdpSend(capture.tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+      let pressed = false;
+      try {
+        await cdpSend(capture.tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+        pressed = true;
+        await cdpSend(capture.tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
+        pressed = false;
+      } finally {
+        if (pressed) await cdpSend(capture.tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 }).catch(() => {});
+      }
     } finally {
       await release(capture.tabId, 'image-click').catch(() => {});
     }

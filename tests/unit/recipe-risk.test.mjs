@@ -16,15 +16,15 @@ test('风险步骤默认被拦截，approve 后放行', () => {
   assert.equal(risk.safe, false);
   assert.deepEqual(risk.risky.sort(), ['click', 'fill']);
   assert.throws(() => assertRunnable(recipe(steps)), (error) => error.code === 'E_RECIPE_NOT_APPROVED');
-  const approved = recipe(steps, { approved: true, expiresAt: Date.now() + 60_000, stepsHash: recipeStepsHash(steps) });
+  const approved = recipe(steps, { approved: true, approvedAt: Date.now(), expiresAt: Date.now() + 60_000, stepsHash: recipeStepsHash(steps) });
   assert.doesNotThrow(() => assertRunnable(approved));
 });
 
 test('审批过期或内容变更仍然拦截', () => {
   const steps = [{ method: 'click' }];
-  const expired = recipe(steps, { approved: true, expiresAt: Date.now() - 1, stepsHash: recipeStepsHash(steps) });
+  const expired = recipe(steps, { approved: true, approvedAt: Date.now() - 2, expiresAt: Date.now() - 1, stepsHash: recipeStepsHash(steps) });
   assert.throws(() => assertRunnable(expired), (error) => error.code === 'E_RECIPE_EXPIRED');
-  const changed = recipe(steps, { approved: true, expiresAt: Date.now() + 60_000, stepsHash: 'deadbeef' });
+  const changed = recipe(steps, { approved: true, approvedAt: Date.now(), expiresAt: Date.now() + 60_000, stepsHash: 'deadbeef' });
   assert.throws(() => assertRunnable(changed), (error) => error.code === 'E_RECIPE_CHANGED');
 });
 
@@ -33,4 +33,11 @@ test('步骤方法支持 method/action/command 三种写法', () => {
   assert.equal(recipeStepMethod({ action: 'screenshot' }), 'screenshot');
   assert.equal(recipeStepMethod({ command: 'scroll-to' }), 'scroll-to');
   assert.deepEqual(recipeRisk([{ action: 'click' }]).risky, ['click']);
+});
+
+test('审批字段缺失时默认拒绝', () => {
+  const steps = [{ method: 'click' }];
+  for (const extra of [{}, { approved: true }, { approved: true, approvedAt: Date.now(), stepsHash: recipeStepsHash(steps) }]) {
+    assert.throws(() => assertRunnable(recipe(steps, extra)), (error) => error.code === 'E_RECIPE_NOT_APPROVED');
+  }
 });
