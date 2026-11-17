@@ -18,7 +18,7 @@ const pending = new Map(); // tabId -> count
 function apply(tabId, hidden) {
   return chrome.scripting.executeScript({
     target: { tabId, frameIds: [0] },
-    func: (ids, hide) => {
+    func: async (ids, hide) => {
       for (const id of ids) {
         const node = document.getElementById(id) || (id === '__bb_takeover_host' ? document.querySelector('[data-bb-ui="takeover"]') : null);
         if (!node) continue;

@@ -20,6 +20,28 @@
   let agentUntil = 0;
   let revision = 0;
   const bump = () => { revision += 1; };
+  const frameState = { mutations: 0, childList: 0, attributes: 0, text: 0, scroll: 0, pointer: 0, keyboard: 0, human: 0, startedAt: Date.now() };
+  const bumpFrame = (kind, by = 1) => {
+    if (!kind) return;
+    frameState[kind] = (frameState[kind] || 0) + by;
+    bump();
+  };
+  const observeFrameState = () => {
+    if (!document || typeof MutationObserver !== 'function') return;
+    try {
+      new MutationObserver((records) => {
+        for (const record of records) {
+          frameState.mutations += 1;
+          if (record.type === 'childList') frameState.childList += 1;
+          else if (record.type === 'attributes') frameState.attributes += 1;
+          else if (record.type === 'characterData') frameState.text += 1;
+        }
+        if (records.length) bump();
+      }).observe(document.documentElement || document, { subtree: true, childList: true, attributes: true, characterData: true });
+    } catch { /* 受限文档不阻塞协作 */ }
+    addEventListener('scroll', () => bumpFrame('scroll'), { passive: true, capture: true });
+  };
+  observeFrameState();
 
   const stopScroll = (event) => {
     if (!blocked || passes.size > 0) return;
@@ -155,6 +177,8 @@
     activity.lastKind = kind;
     activity.editing = editableTarget(target);
     activity.events.push({ kind, at: now, label: labelOf(target) });
+    frameState.human += 1;
+    bumpFrame(kind === 'keydown' ? 'keyboard' : 'pointer');
     if (activity.events.length > 32) activity.events.shift();
   };
   const humanEvent = (kind) => (event) => {
@@ -233,6 +257,20 @@
       textTail: text.slice(-500),
       revision,
       mode: modeFor(),
+      frameState: {
+        mutations: frameState.mutations,
+        childList: frameState.childList,
+        attributes: frameState.attributes,
+        text: frameState.text,
+        scroll: frameState.scroll,
+        pointer: frameState.pointer,
+        keyboard: frameState.keyboard,
+        human: frameState.human,
+        busy: passes.size > 0 || Date.now() < agentUntil,
+        editing: activity.editing,
+        revision,
+        startedAt: frameState.startedAt,
+      },
       activity: {
         lastHumanAt: activity.lastHumanAt,
         lastKind: activity.lastKind,

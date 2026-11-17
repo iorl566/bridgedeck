@@ -22,7 +22,7 @@ Last run: 2026-11-17, Windows Edge 157.
 
 - GitHub v0.1.12: public, signed (keyId `c7b5e21301f91a2d`).
 - Edge 0.1.12: submitted for review (2026-11-17), screenshot `docs/assets/ui/edge-store-0.1.12-review.png`.
-- Extension: **437,117 B**, sha256 `717ffd284e40e15a373d0c64ddd7a10357ba533a46ba71bba56bdad6b1e308ea`.
+- Extension: **438,216 B**, sha256 `60dfbf04b7030a5e71f9954402a3d3865d39a580a13942cea75575097913bd64`.
 - 0.1.10 artifacts archived under `dist/archive-0.1.10/`.
 
 ## 0.1.11 focus
@@ -33,3 +33,10 @@ Last run: 2026-11-17, Windows Edge 157.
 - frame alias URL/documentId;
 - trusted frame click with owner-quad projection and page-lib fallback;
 - released-target fail-closed retained.
+
+## 0.2.0 WIP (2026-11-18)
+
+- RefKey registry / revision fence / Action Receipt / CDP backend route.
+- Nested same-origin iframe owner-chain projection; E2E `23p2` asserts `via=frame-projected`.
+- Current full E2E: **149/149**, 0 skipped; unit **484/484**.
+- Not released; 0.1.12 remains latest.

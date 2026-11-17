@@ -567,8 +567,8 @@ export function installTakeover(info, lang, version, theme, texts) {
   const style = document.createElement('style');
   style.textContent = [
     ':host{--bb-font:system-ui,-apple-system,"Segoe UI","PingFang SC","Noto Sans CJK SC",sans-serif}',
-    '.glow{position:fixed;inset:0;z-index:2147483646;box-shadow:inset 0 0 0 3px rgba(122,167,255,.62),inset 0 0 24px 6px rgba(122,167,255,.34),inset 0 0 60px 12px rgba(122,167,255,.16);pointer-events:none}',
-    '.glow::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 64px 16px rgba(122,167,255,.5);opacity:0;animation:bbp 3s ease-in-out infinite;pointer-events:none}',
+    '.glow{position:fixed;inset:0;z-index:2147483646;box-shadow:inset 0 0 28px 8px rgba(122,167,255,.55),inset 0 0 64px 16px rgba(122,167,255,.22);pointer-events:none}',
+    '.glow::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 80px 20px rgba(122,167,255,.55);opacity:0;animation:bbp 3s ease-in-out infinite;pointer-events:none}',
     '@keyframes bbp{0%,100%{opacity:.15}50%{opacity:1}}',
     '.glow.paused::after{animation:none;opacity:0}',
     '@media (prefers-reduced-motion: reduce){.glow::after{animation:none;opacity:0}}',

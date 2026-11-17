@@ -43,8 +43,9 @@
   };
 
   const send = (payload) => {
-    if (!pending.length) pending.push(Object.assign({ type: 'bb.ops.event' }, payload));
-    else pending.push(Object.assign({ type: 'bb.ops.event' }, payload));
+    const enriched = Object.assign({ documentId: state && state.documentId ? state.documentId : null, frameUrl: location.href }, payload);
+    if (!pending.length) pending.push(Object.assign({ type: 'bb.ops.event' }, enriched));
+    else pending.push(Object.assign({ type: 'bb.ops.event' }, enriched));
     if (pending.length > 200) pending.shift();
     flush();
   };
@@ -275,6 +276,7 @@
       stateTimer: null,
       startedAt: Number(options.startedAt) || Date.now(),
       includeAgent: options.includeAgent === true,
+      documentId: options.documentId || null,
     };
     pending = [];
     sending = false;

@@ -360,7 +360,7 @@ async function sendToAllFrames(tabId, message) {
   let replied = false;
   await Promise.all(frames.map(async (frame) => {
     try {
-      const reply = await chrome.tabs.sendMessage(tabId, message, { frameId: Number(frame.frameId) || 0 });
+      const reply = await chrome.tabs.sendMessage(tabId, { ...message, documentId: frame.documentId || null }, { frameId: Number(frame.frameId) || 0 });
       if (reply && reply.ok === true) replied = true;
     } catch { /* 某帧未注入不阻塞其他帧 */ }
   }));
@@ -373,8 +373,8 @@ async function activateContentRecorder(tabId, startedAt, includeAgent) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
-      func: (at, agent) => { try { globalThis.__bb_record_capture?.start({ startedAt: at, includeAgent: agent }); } catch { /* ignore */ } },
-      args: [startedAt, includeAgent === true],
+      func: (at, agent, documentId) => { try { globalThis.__bb_record_capture?.start({ startedAt: at, includeAgent: agent, documentId }); } catch { /* ignore */ } },
+      args: [startedAt, includeAgent === true, null],
     });
   } catch { /* 某些 frame 不可注入 */ }
   return replied;

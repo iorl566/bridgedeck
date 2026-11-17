@@ -83,7 +83,7 @@ EDGE_API_KEY=... EDGE_CLIENT_ID=... EDGE_PRODUCT_ID=... \
 
 ## 0.1.12（2026-11-18）
 
-- UI：按本地 0.1.7 的 ControlGlow 还原橙色呼吸框（20px/4px 外层 + 40px/8px 呼吸层）。
+- UI：按控制截图的蓝色柔光呼吸框，不使用包裹线。
 - 内部：RefKey 注册表/Revision fence/Action Receipt 基础设施，为 0.2.0 准备。
-- 扩展 437,117 B，sha256 `717ffd284e40e15a373d0c64ddd7a10357ba533a46ba71bba56bdad6b1e308ea`。
+- 扩展 438,216 B，sha256 `60dfbf04b7030a5e71f9954402a3d3865d39a580a13942cea75575097913bd64`。
 - GitHub/Edge 发布状态以发布后 API/Partner Center 为准。
