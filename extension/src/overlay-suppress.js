@@ -9,7 +9,9 @@ const HOST_IDS = [
   '__bb_record_host',
   '__bb_manual_host',
   '__bb_borrow_modal',
+  '__bb_borrow_toast_host',
   '__bb_human_banner',
+  '__bb_control_hint',
 ];
 const pending = new Map(); // tabId -> count
 

@@ -3,11 +3,23 @@ import { blobToDataUrl, pngSize, takeScreenshot } from './screenshot.js';
 import { readSettings } from './settings.js';
 import { log } from './log.js';
 import { debugTasks } from './debug.js';
+import { OVERLAY_THEME } from './overlay-theme.js';
+import { manualOverlayFunc } from './manual-overlay.js';
+import { overlayTexts } from './overlay-texts.js';
 
 const MANUAL_LIMIT = 20;
 const STITCH_MAX_HEIGHT = 20000;
 
 const manual = { tabId: null, frames: [], startedAt: 0 };
+
+async function readUiLang() {
+  try {
+    const stored = await chrome.storage.local.get('bb.uiLang');
+    return (stored && stored['bb.uiLang']) || 'zh';
+  } catch {
+    return 'zh';
+  }
+}
 
 function stamp() {
   const d = new Date();
@@ -54,64 +66,10 @@ export async function saveDataUrlImage(dataUrl, prefix) {
 }
 
 /** 手动拼接：开始 / 拍一帧 / 保存。 */
-function manualOverlayFunc(initialFrames, lang) {
-  const T = lang === 'en'
-    ? { label: 'Manual full-page', frame: 'Capture frame', done: 'Done', cancel: 'Cancel', frames: ' frames' }
-    : { label: '手动长截图', frame: '拍一帧', done: '完成', cancel: '取消', frames: ' 帧' };
-  const ID = '__bb_manual_host';
-  const old = document.getElementById(ID);
-  if (old) old.remove();
-  const host = document.createElement('div');
-  host.id = ID;
-  host.style.cssText = 'position:fixed;left:18px;bottom:18px;z-index:2147483647;pointer-events:none';
-  const shadow = host.attachShadow({ mode: 'open' });
-  const style = document.createElement('style');
-  style.textContent = [
-    '.pill{display:flex;align-items:center;gap:8px;padding:8px 10px 8px 12px;border-radius:999px;background:#1c2230;color:#fff;font:12px/1.4 system-ui,sans-serif;box-shadow:0 10px 26px rgba(16,24,40,.28);pointer-events:auto;cursor:grab}',
-    '.dot{width:8px;height:8px;border-radius:50%;background:#2f6fed;box-shadow:0 0 0 3px rgba(47,111,237,.22)}',
-    '.count{font:11px ui-monospace,Consolas,monospace;opacity:.8}',
-    'button{height:24px;padding:0 9px;border:0;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer}',
-    '.frame{background:#2f6fed;color:#fff}',
-    '.done{background:#16a34a;color:#fff}',
-    '.cancel{background:#374151;color:#e5e7eb}',
-  ].join('');
-  const wrap = document.createElement('div');
-  wrap.innerHTML = '<div class="pill"><span class="dot"></span><span>' + T.label + '</span><span class="count">0' + T.frames + '</span><button class="frame">' + T.frame + '</button><button class="done">' + T.done + '</button><button class="cancel">' + T.cancel + '</button></div>';
-  shadow.appendChild(style);
-  shadow.appendChild(wrap);
-  document.documentElement.appendChild(host);
-  const count = shadow.querySelector('.count');
-  count.textContent = (Number(initialFrames) || 0) + T.frames;
-  const send = (type) => new Promise((resolve) => {
-    try { chrome.runtime.sendMessage({ type }, (reply) => resolve(reply || {})); } catch { resolve({}); }
-  });
-  shadow.querySelector('.frame').addEventListener('click', async () => {
-    const reply = await send('bb.manual.frame');
-    if (reply && reply.ok !== false) count.textContent = (reply.frames || 0) + T.frames;
-  });
-  shadow.querySelector('.done').addEventListener('click', async () => {
-    const reply = await send('bb.manual.finish');
-    if (reply && reply.ok !== false) host.remove();
-  });
-  shadow.querySelector('.cancel').addEventListener('click', async () => {
-    await send('bb.manual.cancel');
-    host.remove();
-  });
-}
-
-async function readUiLang() {
-  try {
-    const stored = await chrome.storage.local.get('bb.uiLang');
-    return stored && stored['bb.uiLang'] === 'en' ? 'en' : 'zh';
-  } catch {
-    return 'zh';
-  }
-}
-
 export async function showManualOverlay(tabId, frames = 0) {
   try {
     const lang = await readUiLang();
-    await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: manualOverlayFunc, args: [Number(frames) || 0, lang] });
+    await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: manualOverlayFunc, args: [Number(frames) || 0, lang, OVERLAY_THEME, overlayTexts(lang)] });
   } catch {
     // 页面不可注入时忽略
   }

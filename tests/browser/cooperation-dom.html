@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>COOP_PENDING</title>
+<body>
+<script>
+  window.chrome = {
+    runtime: {
+      onMessage: {
+        addListener(fn) { window.__coopHandler = fn; },
+      },
+    },
+  };
+</script>
+<script src="/extension/content/cooperation.js"></script>
+<script type="module" src="./cooperation-dom.js"></script>
+</body>

@@ -38,6 +38,10 @@ jobs:
         shell: bash
         run: node --test tests/unit/*.test.mjs
 
+      - name: Reference mirror tests
+        shell: bash
+        run: node --test tests/reference/*.test.mjs
+
       - name: Protocol gate
         run: node tools/protocol-check.mjs
 

@@ -8,6 +8,7 @@ import {
   SESSION_QUEUE_BYPASS,
   isMutating,
   methodScope,
+  remoteScopeAllows,
   validateMethodRegistry,
 } from '../../lib/methods.mjs';
 import { METHOD_EFFECT } from '../../lib/protocol.mjs';
@@ -46,4 +47,11 @@ test('队列旁路方法都有路由归属', () => {
   for (const method of SESSION_QUEUE_BYPASS) {
     assert.ok(SESSION_METHODS.has(method) || LOCAL_METHODS.has(method), method);
   }
+});
+
+test('remoteScopeAllows: read 只能被动读，control 全放行', () => {
+  for (const method of ['observe', 'screenshot', 'read', 'get-html', 'cooperate.sync']) assert.equal(remoteScopeAllows('read', method), true, method);
+  for (const method of ['click', 'fill', 'navigate', 'tab.close', 'session.start', 'debug.rule_add']) assert.equal(remoteScopeAllows('read', method), false, method);
+  assert.equal(remoteScopeAllows('control', 'click'), true);
+  assert.equal(remoteScopeAllows(undefined, 'click'), true);
 });

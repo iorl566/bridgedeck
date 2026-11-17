@@ -34,18 +34,18 @@ function render(next) {
 
   const authBadge = $('localAuthBadge');
   if (authBadge) {
-    const auth = state.localAuth;
-    if (connected && auth && auth.state === 'verified') {
-      authBadge.textContent = '已连接 · 已验证';
-      authBadge.classList.remove('hidden');
-    } else if (connected && auth && auth.state === 'unpaired') {
-      authBadge.textContent = '已连接 · 未配对';
-      authBadge.classList.remove('hidden');
-    } else {
-      authBadge.classList.add('hidden');
-    }
+    const auth = state.localAuth && typeof state.localAuth === 'object' ? state.localAuth : null;
+    let badge = '';
+    if (connected && auth && auth.state === 'verified') badge = '已连接 · 已验证';
+    else if (connected && auth && auth.state === 'unverified_local') {
+      badge = auth.reason === 'skip' ? '已连接 · 已跳过配对（身份未验证）' : '已连接 · 未配对（身份未验证）';
+    } else if (connected && auth && auth.state === 'pairing_required') badge = '需要配对：daemon 要求 6 位配对码';
+    else if (connected && auth && auth.state === 'unpaired') badge = '已连接 · 未配对';
+    else if (connected && auth && auth.state && auth.state !== 'verified') badge = '本地认证状态：' + auth.state;
+    authBadge.textContent = badge;
+    authBadge.classList.toggle('hidden', !badge);
     const warn = $('connWarn');
-    if (warn) warn.classList.toggle('hidden', !(connected && auth && auth.state === 'unpaired'));
+    if (warn) warn.classList.toggle('hidden', !(connected && auth && auth.state && auth.state !== 'verified'));
   }
   $('stateDot').className = 'dot' + (connected ? ' on' : connectionEnabled ? ' warn' : '');
   const connState = state.connectionState || '';
@@ -55,15 +55,27 @@ function render(next) {
     : !connectionEnabled ? '已关闭' : connecting ? '连接中' : '未连接';
   const errorNode = $('stateError');
   if (errorNode) {
-    const skewHint = state.protocolSkew === 'daemon_newer'
-      ? '请更新扩展'
-      : '请运行 bridge update apply 升级 daemon';
-    const skewText = state.protocolSkew
-      ? '协议偏差：daemon ' + (state.protocol || '?') + '，扩展 ' + PROTOCOL_VERSION + '；' + skewHint
-      : '';
-    const text = !connected && state.lastError ? String(state.lastError) : skewText;
+    const text = !connected && state.lastError ? String(state.lastError) : '';
     errorNode.textContent = text;
     errorNode.classList.toggle('hidden', !text);
+  }
+  const upgrade = $('upgradeNotice');
+  if (upgrade) {
+    const skew = state.protocolSkew;
+    if (skew) {
+      const extensionOlder = skew === 'daemon_newer';
+      $('upgradeTitle').textContent = extensionOlder ? '扩展需要更新' : '版本不兼容';
+      $('upgradeVersion').textContent = 'daemon ' + (state.protocol || '?') + ' / 扩展 ' + PROTOCOL_VERSION;
+      $('upgradeDesc').textContent = extensionOlder
+        ? 'daemon 使用的协议比当前扩展新。请更新 BridgeDeck 扩展后重连。'
+        : 'daemon 与扩展协议不一致。请先升级 daemon，再刷新扩展。';
+      $('upgradeCommand').textContent = extensionOlder ? '请更新扩展' : 'bridge update apply';
+      $('upgradeCommand').classList.toggle('hidden', extensionOlder);
+      $('copyUpgrade').classList.toggle('hidden', extensionOlder);
+      upgrade.classList.remove('hidden');
+    } else {
+      upgrade.classList.add('hidden');
+    }
   }
   setSwitch($('connToggle'), connectionEnabled);
 
@@ -75,6 +87,7 @@ function render(next) {
   setSwitch($('controlHint'), settings.controlHint !== false);
   setSwitch($('borrowConfirm'), settings.borrowConfirm !== false);
   setSwitch($('allowHelp'), settings.allowHelp !== false);
+  setSwitch($('cooperationGuard'), settings.cooperationGuard === true);
 
   $('cliVersion').textContent = state.cliVersion || '—';
   $('extVersion').textContent = chrome.runtime.getManifest().version;
@@ -135,7 +148,7 @@ async function refresh() {
 async function setSetting(patch) {
   if (settingsSaving) return;
   settingsSaving = true;
-  for (const id of ['controlHint', 'borrowConfirm', 'allowHelp', 'connToggle']) {
+  for (const id of ['controlHint', 'borrowConfirm', 'allowHelp', 'cooperationGuard', 'connToggle']) {
     const node = $(id);
     if (node) node.disabled = true;
   }
@@ -152,7 +165,7 @@ async function setSetting(patch) {
     await refresh();
   } finally {
     settingsSaving = false;
-    for (const id of ['controlHint', 'borrowConfirm', 'allowHelp', 'connToggle']) {
+    for (const id of ['controlHint', 'borrowConfirm', 'allowHelp', 'cooperationGuard', 'connToggle']) {
       const node = $(id);
       if (node) node.disabled = false;
     }
@@ -249,6 +262,7 @@ void refreshDevices();
 $('controlHint').addEventListener('click', () => setSetting({ controlHint: !$('controlHint').classList.contains('on') }));
 $('borrowConfirm').addEventListener('click', () => setSetting({ borrowConfirm: !$('borrowConfirm').classList.contains('on') }));
 $('allowHelp').addEventListener('click', () => setSetting({ allowHelp: !$('allowHelp').classList.contains('on') }));
+$('cooperationGuard').addEventListener('click', () => setSetting({ cooperationGuard: !$('cooperationGuard').classList.contains('on') }));
 
 $('openFeatures').addEventListener('click', () => setView('features'));
 
@@ -331,14 +345,43 @@ $('labelInput').addEventListener('keydown', (event) => {
   if (event.key === 'Escape') { $('labelInput').classList.add('hidden'); $('browserLabel').classList.remove('hidden'); }
 });
 
+// 复制：剪贴板 API 在无用户手势时会拒绝，回退到 textarea + execCommand。
+async function copyText(text) {
+  const value = String(text || '');
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch { /* 回退 */ }
+  try {
+    const area = document.createElement('textarea');
+    area.value = value;
+    area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    area.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 $('copyCmd').addEventListener('click', async () => {
   const text = 'bridge session start --browser ' + (state.label || state.instanceId || '<实例ID>');
-  try { await navigator.clipboard.writeText(text); } catch { /* 忽略 */ }
-  $('copyCmdText').textContent = '已复制';
+  const copied = await copyText(text);
+  $('copyCmdText').textContent = copied ? '已复制' : '复制失败';
   window.setTimeout(() => { $('copyCmdText').textContent = '复制指令'; }, 1500);
 });
 $('copyInstance').addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText(state.instanceId || ''); } catch { /* 忽略 */ }
+  await copyText(state.instanceId || '');
+});
+$('copyUpgrade').addEventListener('click', async () => {
+  const command = $('upgradeCommand').textContent || 'bridge update apply';
+  const copied = await copyText(command);
+  $('copyUpgrade').textContent = copied ? '已复制' : '复制失败';
+  setTimeout(() => { $('copyUpgrade').textContent = '复制命令'; }, 1500);
 });
 
 $('modeLocal').addEventListener('click', async () => {
@@ -403,6 +446,34 @@ $('pairClear').addEventListener('click', async () => {
   if (!new URL(location.href).searchParams.has('selftest')) return;
   try {
     const before = (await send({ type: 'bb.state' })).settings || {};
+    // v0.1.8 UI：版本偏差提示 / 本地认证徽标 / 复制升级命令必须真实渲染。
+    const demo = {
+      ...state,
+      connected: true,
+      settings: { ...(state.settings || {}), connectionEnabled: true },
+      tasks: [],
+      sessions: [],
+    };
+    render({ ...demo, protocolSkew: 'daemon_newer', protocol: '9.9.9', localAuth: { state: 'unpaired' } });
+    if ($('upgradeNotice').classList.contains('hidden')) throw new Error('版本提示未显示');
+    if (!/扩展需要更新/.test($('upgradeTitle').textContent)) throw new Error('扩展更新标题不对：' + $('upgradeTitle').textContent);
+    if (!String($('upgradeVersion').textContent).includes('daemon 9.9.9')) throw new Error('版本号未显示：' + $('upgradeVersion').textContent);
+    if ($('upgradeCommand').textContent !== '请更新扩展') throw new Error('扩展更新命令文案不对：' + $('upgradeCommand').textContent);
+    if (!$('copyUpgrade').classList.contains('hidden')) throw new Error('扩展更新时不应显示复制命令');
+    if (!/已连接 · 未配对/.test($('localAuthBadge').textContent)) throw new Error('未配对徽标不对：' + $('localAuthBadge').textContent);
+    render({ ...demo, protocolSkew: 'daemon_older', protocol: '0.9.0', localAuth: { state: 'verified' } });
+    if (!/版本不兼容/.test($('upgradeTitle').textContent)) throw new Error('版本不兼容标题不对：' + $('upgradeTitle').textContent);
+    if ($('upgradeCommand').textContent !== 'bridge update apply') throw new Error('升级命令文案不对：' + $('upgradeCommand').textContent);
+    if ($('copyUpgrade').classList.contains('hidden')) throw new Error('版本不兼容时应显示复制命令');
+    if (!/已验证/.test($('localAuthBadge').textContent)) throw new Error('已验证徽标不对：' + $('localAuthBadge').textContent);
+    $('copyUpgrade').click();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    if ($('copyUpgrade').textContent !== '已复制') throw new Error('复制升级命令没有反馈');
+    render({ ...demo, localAuth: { state: 'unverified_local', reason: 'skip' } });
+    if (!/已跳过配对/.test($('localAuthBadge').textContent)) throw new Error('跳过配对徽标不对：' + $('localAuthBadge').textContent);
+    render({ ...demo, localAuth: { state: 'pairing_required' } });
+    if (!/需要配对/.test($('localAuthBadge').textContent)) throw new Error('需要配对徽标不对：' + $('localAuthBadge').textContent);
+    await refresh();
     const toggle = async (id) => {
       $(id).click();
       await new Promise((resolve) => setTimeout(resolve, 120));
@@ -503,6 +574,35 @@ if (new URL(location.href).searchParams.has('reload')) {
 })();
 // 视觉自检/演示：?mode=remote 直接展示远程配对表单
 if (new URL(location.href).searchParams.get('mode') === 'remote') uiMode = 'remote';
-void refresh();
+// 诊断：?coopState=<tabId> 直接询问内容脚本输入锁状态，避免暂停时不能用 evaluate。
+const coopStateTab = Number(new URL(location.href).searchParams.get('coopState'));
+if (Number.isInteger(coopStateTab)) {
+  chrome.tabs.sendMessage(coopStateTab, { type: 'bb.cooperation.state' }, { frameId: 0 })
+    .then((reply) => { document.title = 'COOP:' + JSON.stringify(reply && reply.state ? reply.state : null); })
+    .catch(() => { document.title = 'COOP:fail'; });
+}
+// 视觉自检/演示：?guard=on|off 只用于本机验收输入锁（人类开关的正常入口是 UI）。
+const guardParam = new URL(location.href).searchParams.get('guard');
+if (guardParam === 'on' || guardParam === 'off') {
+  void send({ type: 'bb.settings.set', patch: { cooperationGuard: guardParam === 'on' } })
+    .then((result) => { document.title = 'GUARD:' + (result && result.ok !== false ? guardParam : 'fail'); })
+    .catch(() => { document.title = 'GUARD:fail'; });
+}
+// 视觉自检/演示：?preview=upgrade|incompatible 用假状态渲染协议偏差（不动真实连接状态）。
+const previewMode = new URL(location.href).searchParams.get('preview');
+void refresh().then(() => {
+  if (previewMode !== 'upgrade' && previewMode !== 'incompatible') return;
+  const incompatible = previewMode === 'incompatible';
+  render({
+    ...state,
+    connected: true,
+    protocolSkew: incompatible ? 'daemon_older' : 'daemon_newer',
+    protocol: incompatible ? '1.8.0' : '0.2.0',
+    localAuth: { state: 'unpaired' },
+    tasks: [],
+    sessions: [],
+  });
+  document.documentElement.dataset.bbPreview = previewMode;
+});
 const REFRESH_MS = 2500;
-globalThis['set' + 'Interval'](() => { void refresh(); }, REFRESH_MS);
+if (!previewMode) globalThis['set' + 'Interval'](() => { void refresh(); }, REFRESH_MS);

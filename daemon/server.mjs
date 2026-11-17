@@ -38,8 +38,10 @@ import { RELEASE_PUBLIC_KEY } from '../lib/release-public-key.mjs';
 import { isControllerInfo } from '../extension/src/lib/controller-info.js';
 import { IntentLedger, isUnknownOutcome, hasNoEffect } from '../lib/intent-ledger.mjs';
 import { AliasRegistry } from '../lib/alias-registry.mjs';
+import { selectBrowserInstance } from '../lib/browser-selection.mjs';
+import { createDeviceStore } from '../lib/device-store.mjs';
 import { createStartJournal, normalizeStartToken } from '../lib/start-journal.mjs';
-import { LOCAL_METHODS, SESSION_METHODS, EXT_METHODS, SESSION_QUEUE_BYPASS, isMutating } from '../lib/methods.mjs';
+import { LOCAL_METHODS, SESSION_METHODS, EXT_METHODS, SESSION_QUEUE_BYPASS, isMutating, remoteScopeAllows } from '../lib/methods.mjs';
 import { resolveSessionByScope } from '../lib/session-scope.mjs';
 import { FEATURE_RECOVERY, featureShortfall, featuresForCall } from '../lib/protocol-features.mjs';
 import { serverProof as makeServerProof } from '../lib/local-proof.mjs';
@@ -98,7 +100,9 @@ const STARTUP_WAIT_MS = 10_000;
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const BIND_ADDRESS = process.env.BB_BIND && String(process.env.BB_BIND).trim() ? String(process.env.BB_BIND).trim() : '127.0.0.1';
 const TLS_ENABLED = process.env.BB_TLS === '1' || process.env.BB_TLS === 'true';
-const TLS_PASSPHRASE = 'browser-bridge';
+const TLS_PFX_PATH = process.env.BB_TLS_PFX && String(process.env.BB_TLS_PFX).trim() ? String(process.env.BB_TLS_PFX).trim() : '';
+const TLS_PASSPHRASE = process.env.BB_TLS_PASSPHRASE && String(process.env.BB_TLS_PASSPHRASE) ? String(process.env.BB_TLS_PASSPHRASE) : 'browser-bridge';
+const PUBLIC_URL = process.env.BB_PUBLIC_URL && String(process.env.BB_PUBLIC_URL).trim() ? String(process.env.BB_PUBLIC_URL).trim().replace(/\/+$/, '') : '';
 
 function tlsPaths() {
   const dir = path.join(HOME_DIR, 'tls');
@@ -134,6 +138,7 @@ const intentLedger = new IntentLedger({
 });
 intentLedger.load();
 LOCAL_TRUST_PATH = path.join(HOME_DIR, 'local-trust.json');
+const deviceStore = createDeviceStore(path.join(HOME_DIR, 'devices.json'));
 let auditSeq = 0;
 const SESSIONS_PATH = path.join(HOME_DIR, 'sessions.json');
 const START_JOURNAL_PATH = path.join(HOME_DIR, 'session-starts.json');
@@ -479,6 +484,7 @@ function lanAddress() {
 }
 
 function wsUrlFor(host) {
+  if (PUBLIC_URL) return PUBLIC_URL;
   const bind = BIND_ADDRESS;
   const target = host || (bind === '0.0.0.0' || bind === '::' ? lanAddress() : bind);
   return (TLS_ENABLED ? 'wss://' : 'ws://') + target + ':' + currentPort + '/ws';
@@ -506,6 +512,7 @@ function pairCreate(params = {}) {
     url: wsUrlFor(params.host ? String(params.host) : ''),
     expiresAt: Date.now() + ttl,
     label: typeof params.label === 'string' ? params.label.slice(0, 40) : '',
+    scope: params.scope === 'read' ? 'read' : 'control',
     createdAt: Date.now(),
   };
   pairings.set(code, item);
@@ -518,11 +525,12 @@ function pairList() {
   return {
     devices: [...instances.values()]
       .filter((instance) => instance.remote === true)
-      .map((instance) => ({ instanceId: instance.instanceId, browser: instance.browser, browserVersion: instance.browserVersion, connectedAt: instance.connectedAt, localAuth: 'remote-paired' })),
+      .map((instance) => ({ instanceId: instance.instanceId, browser: instance.browser, browserVersion: instance.browserVersion, connectedAt: instance.connectedAt, localAuth: 'remote-paired', scope: instance.scope || 'control' })),
     pairings: [...pairings.values()]
       .sort((a, b) => b.createdAt - a.createdAt)
-      .map((item) => ({ code: item.code, url: item.url, label: item.label, expiresAt: item.expiresAt })),
+      .map((item) => ({ code: item.code, url: item.url, label: item.label, scope: item.scope, expiresAt: item.expiresAt })),
     bind: BIND_ADDRESS,
+    knownDevices: deviceStore.list(),
   };
 }
 
@@ -531,24 +539,48 @@ function pairRedeem(params = {}) {
   const code = String(params.code || '').trim().toUpperCase();
   const item = pairings.get(code);
   if (!item) throw new BridgeError('E_PAIR_INVALID', '配对码无效或已过期');
-  return { ok: true, code: item.code, url: item.url, token: item.token, expiresAt: item.expiresAt };
+  return { ok: true, code: item.code, url: item.url, token: item.token, scope: item.scope, expiresAt: item.expiresAt };
+}
+
+function pairRenew(params = {}) {
+  const deviceId = String(params.deviceId || '').trim();
+  const rotated = deviceStore.rotate(deviceId, { scope: params.scope });
+  if (!rotated) throw new BridgeError('E_PAIR_INVALID', '设备不存在：' + deviceId);
+  for (const [code, item] of [...pairings]) {
+    if (authKeyId(item.token) === rotated.oldTokenHash.slice(0, 32)) pairings.delete(code);
+  }
+  let kicked = 0;
+  const oldKey = rotated.oldTokenHash.slice(0, 32);
+  for (const instance of [...instances.values()]) {
+    if (instance.pairToken && authKeyId(instance.pairToken) === oldKey) {
+      kicked += 1;
+      try { instance.conn.close(4003, 'pair renewed'); } catch { /* 忽略 */ }
+      dropInstance(instance, '配对已续期');
+    }
+  }
+  const url = wsUrlFor('');
+  return { ok: true, deviceId: rotated.deviceId, token: rotated.token, url, link: url + '#' + rotated.token, scope: rotated.scope, kicked };
 }
 
 function pairRevoke(params = {}) {
-  const code = String(params.code || '').trim().toUpperCase();
+  const raw = String(params.deviceId || params.code || '').trim();
+  const code = raw.toUpperCase();
   const item = pairings.get(code);
   const existed = pairings.delete(code);
+  const known = deviceStore.revoke(raw) || { revoked: false, deviceId: null };
+  if (!known.revoked && item) deviceStore.revoke(authKeyId(item.token));
+  const revokedTokenHash = item ? authKeyId(item.token) : known.tokenHash;
   let kicked = 0;
-  if (item) {
-    for (const instance of [...instances.values()]) {
-      if (instance.pairToken && instance.pairToken === item.token) {
-        kicked += 1;
-        try { instance.conn.close(4003, 'pair revoked'); } catch { /* 忽略 */ }
-        dropInstance(instance, '配对已撤销');
-      }
+  for (const instance of [...instances.values()]) {
+    const matchesPair = item && instance.pairToken && instance.pairToken === item.token;
+    const matchesDevice = revokedTokenHash && instance.pairToken && authKeyId(instance.pairToken) === revokedTokenHash.slice(0, 32);
+    if (matchesPair || matchesDevice) {
+      kicked += 1;
+      try { instance.conn.close(4003, 'pair revoked'); } catch { /* 忽略 */ }
+      dropInstance(instance, '配对已撤销');
     }
   }
-  return { ok: true, revoked: existed, code, kicked };
+  return { ok: true, revoked: existed || known.revoked, code: item ? code : '', deviceId: known.deviceId || null, kicked };
 }
 
 /** 轮换本机配对 token：旧链接立即失效，用旧 token 认证的本机连接断开。 */
@@ -630,13 +662,21 @@ function localPairCodeValid(message) {
   return !localPairCodeRequired() || pairCodeMatches(localTrust.pendingCode, message && message.pairCode);
 }
 
+function scopeForRemoteToken(token) {
+  if (!token) return 'control';
+  for (const item of pairings.values()) {
+    if (item.token === token && item.expiresAt > Date.now()) return item.scope === 'read' ? 'read' : 'control';
+  }
+  return deviceStore.scopeForToken(token) || 'control';
+}
+
 function isPairTokenValid(token) {
   if (!token) return false;
   const now = Date.now();
   for (const item of pairings.values()) {
     if (item.token === token && item.expiresAt > now) return true;
   }
-  return false;
+  return deviceStore.verify(token);
 }
 
 /** 根据客户端发来的 keyId 找回密钥；不把明文 token 放进 hello。 */
@@ -648,9 +688,11 @@ function findAuthSecret(keyId) {
   const now = Date.now();
   for (const item of pairings.values()) {
     if (item.expiresAt > now && authKeyId(item.token) === keyId) {
-      return { token: item.token, local: false, remote: true };
+      return { token: item.token, local: false, remote: true, scope: item.scope === 'read' ? 'read' : 'control' };
     }
   }
+  const deviceToken = deviceStore.secretForKeyId(keyId);
+  if (deviceToken) return { token: deviceToken, local: false, remote: true, scope: deviceStore.scopeForToken(deviceToken) || 'control' };
   return null;
 }
 
@@ -948,6 +990,8 @@ function onExtensionConnection(conn, req) {
     let msg = decoded.value;
     if (!instance) {
       let authCompleted = false;
+      let authSecret = '';
+      let authScope = 'control';
       let serverProof = '';
       if (msg.type === 'auth-response') {
         const result = authSession.verify(msg.challenge, msg.proof);
@@ -961,6 +1005,7 @@ function onExtensionConnection(conn, req) {
         }
         msg = result.hello;
         authCompleted = true;
+        authSecret = result.secret;
         // 双向证明：daemon 也用同一密钥对挑战签名，扩展据此确认"连的是真 daemon"。
         serverProof = makeServerProof(result.secret, result.challenge);
       }
@@ -977,6 +1022,7 @@ function onExtensionConnection(conn, req) {
         return;
       }
       const authInfo = !authCompleted && typeof msg.authKeyId === 'string' ? findAuthSecret(msg.authKeyId) : null;
+      if (authInfo) authScope = authInfo.scope === 'read' ? 'read' : 'control';
       if (msg.authChallenge === true && authInfo && !authCompleted) {
         const localVerified = !isRemote && authInfo.local;
         if (isRemote && !authInfo.remote) {
@@ -1036,6 +1082,19 @@ function onExtensionConnection(conn, req) {
       clearTimeout(handshakeTimer);
       if (isRemote) authGuard.success(peerKey);
       instance.remote = isRemote;
+      if (isRemote) {
+        const remoteToken = authCompleted ? authSecret : msg.pairToken;
+        const remoteScope = authCompleted ? authScope : scopeForRemoteToken(remoteToken);
+        instance.scope = remoteScope;
+        if (remoteToken) {
+          instance.pairToken = remoteToken;
+          try {
+            deviceStore.remember(remoteToken, { label: msg.label || msg.instanceLabel || '', browser: instance.browser, instanceId: instance.instanceId, scope: remoteScope });
+          } catch (error) {
+            log('保存远程设备凭据失败：' + ((error && error.message) || error));
+          }
+        }
+      }
       // localVerified 已在 registerInstance 中写入并用于 hello-ack
       return;
     }
@@ -1109,35 +1168,19 @@ function sessionList() {
 /** 解析 --browser 参数：instanceId 精确匹配，或 edge/chrome 前缀匹配。 */
 function pickInstance(browserSpec) {
   const list = [...instances.values()].sort((a, b) => a.connectedAt - b.connectedAt);
-  if (!list.length) {
-    throw new BridgeError('E_NO_BROWSER', '没有已连接的浏览器；请在 Edge/Chrome 里加载并启用 browser-bridge 扩展');
-  }
-  if (browserSpec) {
-    const spec = String(browserSpec).toLowerCase();
-    const exact = list.find((item) => item.instanceId.toLowerCase() === spec);
-    if (exact) return exact;
-    const byLabel = list.find((item) => (item.label || '').toLowerCase() === spec);
-    if (byLabel) return byLabel;
-    const matched = list.filter((item) => {
-      const name = item.browser.toLowerCase();
-      return name.startsWith(spec) || spec.startsWith(name);
-    });
-    if (matched.length === 1) return matched[0];
-    if (matched.length > 1) {
-      throw new BridgeError('E_BAD_ARG', `浏览器 "${browserSpec}" 匹配到多个实例：${matched.map((i) => i.instanceId).join(', ')}；请用 instanceId 指定`);
+  if (!browserSpec) {
+    if (!list.length) {
+      throw new BridgeError('E_NO_BROWSER', '没有已连接的浏览器；请在 Edge/Chrome 里加载并启用 browser-bridge 扩展');
     }
-    const available = list
-      .map((item) => `${item.browser}/${item.instanceId}${item.label ? `（${item.label}）` : ''}`)
-      .join(', ');
-    throw new BridgeError('E_NO_BROWSER', `没有匹配 "${browserSpec}" 的浏览器实例；已连接：${available}`);
+    const edge = list.filter((item) => item.browser === 'edge');
+    const chrome = list.filter((item) => item.browser === 'chrome');
+    const pool = edge.length ? edge : (chrome.length ? chrome : list);
+    return pool[pool.length - 1];
   }
-  // 多实例时的默认策略：优先 Edge，其次 Chrome，同类取最近连上的。
-  const edge = list.filter((item) => item.browser === 'edge');
-  const chrome = list.filter((item) => item.browser === 'chrome');
-  const pool = edge.length ? edge : (chrome.length ? chrome : list);
-  return pool[pool.length - 1];
+  const selected = selectBrowserInstance(list, browserSpec);
+  if (selected.error) throw new BridgeError(selected.error, selected.message);
+  return selected.instance;
 }
-
 function listSessionIds() {
   return [...sessions.keys()].sort().join(', ');
 }
@@ -1180,6 +1223,10 @@ function sendInstanceEvent(instance, event, params) {
 
 function sendCommand(instance, method, params, timeoutMs) {
   return new Promise((resolve, reject) => {
+    if (instance && instance.remote === true && !remoteScopeAllows(instance.scope, method)) {
+      reject(new BridgeError('E_FORBIDDEN', '该远程设备是只读授权，不能执行 ' + method));
+      return;
+    }
     if (!instance || instance.conn.closed) {
       reject(new BridgeError('E_NO_BROWSER', '浏览器实例已断开'));
       return;
@@ -2319,6 +2366,8 @@ async function dispatchInner(method, params, timeoutMs) {
       return pairRedeem(params);
     case 'pair.revoke':
       return pairRevoke(params);
+    case 'pair.renew':
+      return pairRenew(params);
     case 'pair.rotate':
       return pairRotate();
     case 'settings.get':
@@ -2381,6 +2430,8 @@ function healthPayload() {
     uptimeMs: Date.now() - startedAt,
     port: currentPort,
     tls: TLS_ENABLED,
+    bind: BIND_ADDRESS,
+    publicUrl: PUBLIC_URL || null,
     browsers: instances.size,
     sessions: sessions.size,
   };
@@ -2434,13 +2485,156 @@ async function handleRpcRequest(req, res) {
   }
 }
 
+
+function previewAuthorized(token) {
+  return Boolean(token) && (tokenMatches(token) || isPairTokenValid(token));
+}
+
+function sendPng(res, buffer) {
+  res.writeHead(200, {
+    'content-type': 'image/png',
+    'cache-control': 'no-store',
+    'referrer-policy': 'no-referrer',
+  });
+  res.end(buffer);
+}
+
+function previewPageHtml(sessionId, token) {
+  const safeSession = JSON.stringify(sessionId);
+  const safeToken = JSON.stringify(token);
+  return '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>BridgeDeck Remote View</title>'
+    + '<style>body{margin:0;background:#111827;color:#e5e7eb;font:14px/1.5 system-ui,sans-serif}header{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#1f2937;position:sticky;top:0}header h1{font-size:14px;margin:0;flex:1}button{height:30px;padding:0 12px;border:0;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}main{padding:10px}#meta{color:#9ca3af;font-size:12px;margin-bottom:8px;overflow-wrap:anywhere}img{max-width:100%;height:auto;display:block;margin:auto;background:#000;border:1px solid #374151}</style>'
+    + '<header><h1>BridgeDeck Remote View</h1><span id="status" style="color:#9ca3af;font-size:12px">…</span><input id="key" placeholder="按键 Enter/Tab" style="height:30px;width:110px;border-radius:8px;border:1px solid #374151;background:#111827;color:#e5e7eb;padding:0 8px"><button id="sendKey">发送按键</button><button id="focus">聚焦标签页</button></header>'
+    + '<main><div id="meta"></div><img id="shot" alt="" title="点击画面即远程点击"></main>'
+    + '<script type="module">const S=' + safeSession + ',T=' + safeToken + ';'
+    + 'const qs=(p)=>"/preview/"+p+"?session="+encodeURIComponent(S)+"&token="+encodeURIComponent(T);'
+    + 'const shot=document.getElementById("shot"),status=document.getElementById("status"),meta=document.getElementById("meta"),keyInput=document.getElementById("key");'
+    + 'let vw=0,vh=0;'
+    + 'async function loadMeta(){try{const r=await fetch(qs("meta"));if(!r.ok)throw new Error("HTTP "+r.status);const j=await r.json();vw=j.width;vh=j.height;meta.textContent=(j.title||S)+" · "+j.url+" · "+vw+"x"+vh;}catch(e){meta.textContent=S;}}'
+    + 'async function refresh(){try{const r=await fetch(qs("shot"),{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);const b=await r.blob();shot.src=URL.createObjectURL(b);status.textContent="已更新 "+new Date().toLocaleTimeString();}catch(e){status.textContent="刷新失败："+e.message}}'
+    + 'async function post(p,body){const r=await fetch(qs(p),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error((await r.text()).slice(0,120));return r.json();}'
+    + 'shot.onclick=async(e)=>{try{const r=shot.getBoundingClientRect();const ix=(e.clientX-r.left)/r.width*shot.naturalWidth;const iy=(e.clientY-r.top)/r.height*shot.naturalHeight;const x=vw?ix*vw/shot.naturalWidth:ix;const y=vh?iy*vh/shot.naturalHeight:iy;await post("click",{x,y});status.textContent="已点击 "+Math.round(x)+","+Math.round(y);setTimeout(refresh,250);}catch(err){status.textContent="点击失败："+err.message}};'
+    + 'document.getElementById("sendKey").onclick=async()=>{try{await post("key",{key:keyInput.value||"Enter"});status.textContent="已发送按键";setTimeout(refresh,250);}catch(err){status.textContent="按键失败："+err.message}};'
+    + 'document.getElementById("focus").onclick=async()=>{try{await post("focus",{});status.textContent="已聚焦";}catch(e){status.textContent="聚焦失败："+e.message}};'
+    + 'loadMeta();refresh();setInterval(refresh,2000);setInterval(loadMeta,5000);</script></html>';
+}
+
+async function previewBody(req) {
+  try {
+    const raw = await readBody(req);
+    return JSON.parse(raw || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function previewControlAllowed(instance) {
+  return !(instance && instance.remote === true && instance.scope === 'read');
+}
+
+async function previewSelectorAt(instance, tabId, x, y) {
+  const expression = '(() => { const el = document.elementFromPoint(' + Number(x) + ',' + Number(y) + '); if (!el) return "";'
+    + ' const old = el.id; if (old && document.querySelectorAll("#" + CSS.escape(old)).length === 1) return "#" + CSS.escape(old);'
+    + ' const id = "__bb_preview_" + Date.now().toString(36); el.id = id; return "#" + id; })()';
+  const result = await sendCommand(instance, 'evaluate', { tabId, expression }, 5000);
+  return String((result && result.value) || '');
+}
+
+async function handlePreviewRequest(req, res, pathname, url) {
+  const token = url.searchParams.get('token') || '';
+  if (!previewAuthorized(token)) {
+    sendJson(res, 401, { ok: false, error: { code: 'E_AUTH', message: 'preview token invalid' } });
+    return;
+  }
+  let session;
+  try {
+    session = resolveSession(url.searchParams.get('session') || '');
+  } catch (error) {
+    sendJson(res, 404, { ok: false, error: { code: 'E_NO_SESSION', message: (error && error.message) || 'no session' } });
+    return;
+  }
+  if (pathname === '/preview' || pathname === '/preview/') {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' });
+    res.end(previewPageHtml(session.sessionId, token));
+    return;
+  }
+  const instance = instances.get(session.instanceId);
+  if (!instance) {
+    sendJson(res, 503, { ok: false, error: { code: 'E_NO_BROWSER', message: 'browser disconnected' } });
+    return;
+  }
+  if (pathname === '/preview/meta') {
+    try {
+      const result = await sendCommand(instance, 'evaluate', { tabId: session.tabId, expression: '({ width: window.innerWidth, height: window.innerHeight })' }, 5000);
+      const value = (result && result.value) || {};
+      sendJson(res, 200, { ok: true, width: Number(value.width) || 0, height: Number(value.height) || 0, url: session.url || '', title: session.title || '' });
+    } catch (error) { sendJson(res, 502, { ok: false, error: { code: 'E_PREVIEW_META', message: (error && error.message) || 'meta failed' } }); }
+    return;
+  }
+  if (pathname === '/preview/click' && req.method === 'POST') {
+    if (!previewControlAllowed(instance)) { sendJson(res, 403, { ok: false, error: { code: 'E_FORBIDDEN', message: 'read-only device' } }); return; }
+    const body = await previewBody(req);
+    const x = Number(body.x); const y = Number(body.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > 20000 || y > 20000) { sendJson(res, 400, { ok: false, error: { code: 'E_BAD_ARG', message: 'x/y required' } }); return; }
+    try {
+      const selector = await previewSelectorAt(instance, session.tabId, x, y);
+      if (!selector) { sendJson(res, 409, { ok: false, error: { code: 'E_NOT_FOUND', message: 'no element at point' } }); return; }
+      const result = await sendCommand(instance, 'click', { tabId: session.tabId, selector, force: true }, 8000);
+      sendJson(res, 200, { ok: true, selector, result });
+    } catch (error) { sendJson(res, 502, { ok: false, error: { code: 'E_CLICK', message: (error && error.message) || 'click failed' } }); }
+    return;
+  }
+  if (pathname === '/preview/key' && req.method === 'POST') {
+    if (!previewControlAllowed(instance)) { sendJson(res, 403, { ok: false, error: { code: 'E_FORBIDDEN', message: 'read-only device' } }); return; }
+    const body = await previewBody(req);
+    const key = String(body.key || '').slice(0, 32);
+    if (!key) { sendJson(res, 400, { ok: false, error: { code: 'E_BAD_ARG', message: 'key required' } }); return; }
+    try {
+      const result = await sendCommand(instance, 'press', { tabId: session.tabId, key }, 5000);
+      sendJson(res, 200, { ok: true, result });
+    } catch (error) { sendJson(res, 502, { ok: false, error: { code: 'E_KEY', message: (error && error.message) || 'key failed' } }); }
+    return;
+  }
+  if (pathname === '/preview/shot') {
+    try {
+      const result = await sendCommand(instance, 'screenshot', { tabId: session.tabId, scope: 'viewport', preview: true }, 10000);
+      const dataUrl = String((result && result.dataUrl) || '');
+      const comma = dataUrl.indexOf(',');
+      if (comma < 0) throw new Error('screenshot returned no dataUrl');
+      sendPng(res, Buffer.from(dataUrl.slice(comma + 1), 'base64'));
+    } catch (error) {
+      sendJson(res, 502, { ok: false, error: { code: 'E_SCREENSHOT', message: (error && error.message) || 'screenshot failed' } });
+    }
+    return;
+  }
+  if (pathname === '/preview/focus' && req.method === 'POST') {
+    try {
+      await sendCommand(instance, 'window.focus', { windowId: session.windowId }, 5000);
+      sendJson(res, 200, { ok: true });
+    } catch (error) {
+      sendJson(res, 502, { ok: false, error: { code: 'E_FOCUS', message: (error && error.message) || 'focus failed' } });
+    }
+    return;
+  }
+  sendJson(res, 404, { ok: false, error: { code: 'E_NOT_FOUND', message: 'preview route not found' } });
+}
+
 function handleHttpRequest(req, res) {
   let pathname = '/';
+  let requestUrl = null;
   try {
-    pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
+    requestUrl = new URL(req.url || '/', 'http://127.0.0.1');
+    pathname = requestUrl.pathname;
   } catch { /* 保持默认 */ }
   if (req.method === 'GET' && pathname === '/health') {
     sendJson(res, 200, healthPayload());
+    return;
+  }
+  if (requestUrl && pathname.startsWith('/preview')) {
+    handlePreviewRequest(req, res, pathname, requestUrl).catch((err) => {
+      try { sendJson(res, 500, { ok: false, error: { code: 'E_INTERNAL', message: (err && err.message) || 'preview error' } }); } catch { /* 忽略 */ }
+    });
     return;
   }
   if (req.method === 'POST' && pathname === '/rpc') {
@@ -2498,8 +2692,10 @@ function ensureTlsCert() {
 function createHttpServer() {
   let server;
   if (TLS_ENABLED) {
-    const paths = ensureTlsCert();
-    if (process.platform === 'win32') {
+    const paths = TLS_PFX_PATH ? null : ensureTlsCert();
+    if (TLS_PFX_PATH) {
+      server = https.createServer({ pfx: fs.readFileSync(TLS_PFX_PATH), passphrase: TLS_PASSPHRASE }, handleHttpRequest);
+    } else if (process.platform === 'win32') {
       server = https.createServer({ pfx: fs.readFileSync(paths.cert), passphrase: TLS_PASSPHRASE }, handleHttpRequest);
     } else {
       server = https.createServer({ key: fs.readFileSync(paths.keyPem), cert: fs.readFileSync(paths.certPem) }, handleHttpRequest);

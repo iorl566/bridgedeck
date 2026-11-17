@@ -1,73 +1,75 @@
-# 发布清单签名
+# 发布签名与上架准备
 
-`dist/release.json` 记录每个 artifact 的 SHA256，并可选带 `signature`。客户端/daemon 在更新前可以校验它，防止清单或产物被替换。
+`dist/release.json` 当前 **unsigned**；签名/上架需要私钥和商店权限，属于外部阻塞。
 
-支持两种签名：
+## 1. 预检
 
-| 算法 | 密钥 | 适用 |
-| --- | --- | --- |
-| `ed25519` | CI 私钥 + 客户端内置公钥 | **推荐**，公开分发 |
-| `hmac-sha256` | 同一个 secret | 发布机/运维自校验；不要把 secret 发给客户端 |
-
-## Ed25519（推荐）
-
-### 1. 生成密钥对
-
-```powershell
-node tools/release-keygen.mjs --write-public-key
+```sh
+node tools/release-preflight.mjs
+node tools/release-preflight.mjs --json
 ```
 
-产物：
+检查：
 
-- `dist/signing/release-private.pem`：私钥，**不要提交**
-- `dist/signing/release-public.pem`：公钥
-- `lib/release-public-key.mjs`：写入公钥与 `keyId`，提交这个文件
+- 每个 artifact 是否存在；
+- 实际字节数/sha256 是否与 manifest 一致；
+- 制品版本是否混合（例如 0.1.7 CLI + 0.1.8 extension）；
+- `release.json` 是否已签名；
+- 提供 `--key` 时只校验私钥类型，不签名。
 
-### 2. 配置 CI
+当前（2026-11-17）状态：0.1.7 制品已移到 `dist/archive-0.1.7/`，`release.json` 只含 0.1.8：
 
-```powershell
-# 私钥整段 PEM 作为 Secret（也支持 Base64）
-gh secret set RELEASE_SIGNING_PRIVATE_KEY --body (Get-Content .\dist\signing\release-private.pem -Raw)
+```text
+[ok] darwin-arm64/darwin-x64/linux-arm64/linux-x64 portable
+[ok] win32-x64 portable
+[ok] CLI bundle
+[ok] DSH plugin
+[ok] extension
+[ok] BridgeDeckSetup-0.1.8.exe
+blocker: release.json 缺少签名
 ```
 
-`release-cli.yml` 检测到该 Secret 后会用 `--sign-ed25519` 生成 `signature: { alg: "ed25519", value, keyId }`，并把公钥写入 `dist/release-public.pem` 一并上传。
+0.1.8 的 macOS/Linux/Windows portable、CLI bundle、DSH plugin、extension、Setup exe 都已重建；只剩签名。
 
-### 3. 本地校验
+## 2. 重新构建全部制品
 
-```powershell
-node tools/release.mjs --check --public-key .\dist\signing\release-public.pem
+```sh
+node tools/build-extension.mjs
+node tools/build-cli.mjs
+node tools/build-cli-bundle.mjs
+node tools/build-dsh-plugin.mjs
+node tools/build-installer.ps1
+node tools/release.mjs
 ```
 
-### 4. 客户端校验
+以各自脚本的实际参数为准；先确保所有制品都是 0.1.8。
 
-CLI 会内置 `lib/release-public-key.mjs` 的公钥；当清单是 `ed25519` 时自动校验，不需要用户额外传 key。
+## 3. 签名
 
-也可以显式指定：
-
-```powershell
-bridge update fetch --key .\release-public.pem
-bridge update fetch --key .\release-signing.key      # HMAC 模式
+```sh
+node tools/release.mjs --sign-ed25519 C:\keys\bridge-release.pem
 ```
 
-`bridge update check`、`bridge update install --manifest`、daemon 自动更新同样支持。
+- 私钥不能提交到仓库；
+- 公钥写入 `dist/release-public.pem`，并同步到 `lib/release-public-key.mjs`；
+- 验证：
+  ```sh
+  node tools/release.mjs --verify --public-key dist/release-public.pem
+  node tools/release-preflight.mjs
+  ```
 
-## HMAC（兼容保留）
+## 4. 上架
 
-```powershell
-node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))" > release-signing.key
-gh secret set RELEASE_SIGNING_KEY --body (Get-Content .\release-signing.key -Raw)
-node tools/release.mjs --sign-key .\release-signing.key
-node tools/release.mjs --check --sign-key .\release-signing.key
-```
+- GitHub Release：上传 `release.json`、`release-public.pem`、extension zip、CLI 包、安装包；
+- Edge Add-ons：上传 extension zip，填写权限说明和隐私说明；
+- 商店审核通过前不要改版本号或重新打包，否则哈希/签名失效。
 
-限制：HMAC 是对称的，谁能校验谁就能伪造。密钥不能分发给用户，所以它只适合发布机/运维侧校验，不能让终端用户建立信任。
+## 5. 外部阻塞
 
-## 轮换
+以下需要用户提供，不能由 Agent 自行完成：
 
-1. 重新运行 `node tools/release-keygen.mjs --write-public-key --force`（或在旧公钥模块里替换）。
-2. 更新 `RELEASE_SIGNING_PRIVATE_KEY` Secret。
-3. 发布一个新版本；旧版本客户端仍会拿旧公钥校验，所以**旧版本不支持新 key**。需要平滑轮换时，客户端应同时内置新旧两个公钥并按 `keyId` 选择；当前版本只内置一个。
+- Ed25519 私钥（或签名服务）；
+- GitHub release 写权限；
+- Edge Partner Center 账号/产品权限。
 
-## 校验范围
-
-签名覆盖 `version` 与所有 artifact 的 `name/file/bytes/sha256`（按名字排序）；签名本身不含 `generatedAt`，也不覆盖 `release-public.pem` 文件。
+没有这些材料时，只能完成预检、打包和文档，不能完成签名/上架。

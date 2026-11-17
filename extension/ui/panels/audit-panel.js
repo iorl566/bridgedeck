@@ -40,7 +40,7 @@ function renderEntries(entries) {
     content.append(name, meta);
     button.append(content);
     button.addEventListener('click', () => {
-      chrome.tabs.create({ url: chrome.runtime.getURL('audit.html') });
+      chrome.tabs.create({ url: chrome.runtime.getURL('ui/audit.html') });
     });
     container.append(button);
   }
@@ -81,7 +81,7 @@ export function mountAuditPanel() {
     }
   });
   $('auditOpen').addEventListener('click', () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('audit.html') });
+    chrome.tabs.create({ url: chrome.runtime.getURL('ui/audit.html') });
   });
   return { refresh: refreshAuditPanel };
 }

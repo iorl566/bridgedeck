@@ -21,7 +21,9 @@ const target = path.join(stage, 'BridgeDeckSetup.exe');
 
 try {
   const payload = path.join(stage, 'payload.zip');
-  const pack = spawnSync(process.execPath, [path.join(ROOT, 'tools', 'package-portable.mjs'), '--out', payload], { encoding: 'utf8' });
+  const packArgs = [path.join(ROOT, 'tools', 'package-portable.mjs'), '--out', payload];
+  if (process.env.BB_SETUP_NO_NODE === '1' || args.includes('--no-node')) packArgs.push('--no-node');
+  const pack = spawnSync(process.execPath, packArgs, { encoding: 'utf8' });
   if (pack.status !== 0) throw new Error('package-portable failed: ' + (pack.stderr || pack.stdout));
   fs.copyFileSync(path.join(ROOT, 'tools', 'sfx-install.ps1'), path.join(stage, 'install-sfx.ps1'));
 

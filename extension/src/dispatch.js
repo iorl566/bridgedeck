@@ -1,5 +1,8 @@
 // src/dispatch.js —— 命令分发：方法表 + 同一 tabId 串行
 import { bridgeError, toWireError } from './errors.js';
+import { beginCooperationPassthrough, endCooperationPassthrough } from './cooperation.js';
+import { showTargetMarker } from './target-marker-client.js';
+import { getTakeoverState } from './takeover.js';
 import { cancelWait, observe, observeSmart, observeFrames, resolveFrameAlias, shadowClick, shadowRead, snapshot, getHtml, click, clickBackend, hover, fill, actionable, press, select, focus, scrollTo, evaluate, consoleEntries, navigate, reload, goBack, goForward, waitMs, waitForElement, waitForNavigationCmd, read, extract, extractDiscover, extractList, extractTable, drag, wheel, blur, upload, visualScan } from './actions.js';
 import { normalizeParams } from './generated/protocol.js';
 import { ensureAgent, newAgentWindow, windowClose, sleep, tabList, tabNew, tabClose, tabSelect, tabMove, windowList, windowFocus, windowResize, tabBorrow, tabReturn, requestHelp, controlHint } from './tabs.js';
@@ -361,25 +364,65 @@ export function isAgentInputWindow(tabId, at) {
   return timestamp >= window.start - 50 && timestamp <= end + 500;
 }
 
+const passthroughTokens = new Map();
+const TARGET_MARKER_METHODS = new Set(['click', 'click-point', 'click-backend', 'hover']);
+
 export function runSerialized(method, params) {
   const input = params && typeof params === 'object' ? params : {};
   const tabId = Number.isInteger(input.tabId) ? input.tabId : null;
-  const track = () => {
-    if (tabId != null && AGENT_INPUT_METHODS.has(method)) agentInputWindows.set(tabId, { start: Date.now(), end: Infinity });
+  const markTarget = async (result) => {
+    if (!result || !TARGET_MARKER_METHODS.has(method)) return result;
+    if (tabId == null) { result.targetMarker = 'no-tab'; return result; }
+    if (!getTakeoverState(tabId)) { result.targetMarker = 'no-takeover'; return result; }
+    let x = Number(result.x);
+    let y = Number(result.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      const target = input.ref ? { ref: input.ref } : (input.selector ? { selector: input.selector } : null);
+      if (!target) { result.targetMarker = 'no-target'; return result; }
+      const point = await execPage(tabId, 'point', target).catch(() => null);
+      if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) { result.targetMarker = 'no-point'; return result; }
+      x = point.x;
+      y = point.y;
+    }
+    result.targetMarker = (await showTargetMarker(tabId, x, y).catch(() => false)) ? 'shown' : 'failed';
+    return result;
+  };
+  const track = async () => {
+    if (tabId == null || !AGENT_INPUT_METHODS.has(method)) return;
+    agentInputWindows.set(tabId, { start: Date.now(), end: Infinity });
+    try {
+      const lease = await beginCooperationPassthrough(tabId);
+      if (lease) passthroughTokens.set(tabId, lease);
+    } catch { /* 内容脚本不可用时按无锁继续 */ }
   };
   const untrack = () => {
     const window = tabId != null ? agentInputWindows.get(tabId) : null;
     if (window) window.end = Date.now();
+    const lease = tabId != null ? passthroughTokens.get(tabId) : null;
+    if (lease) {
+      passthroughTokens.delete(tabId);
+      void endCooperationPassthrough(tabId, lease);
+    }
   };
   if (tabId == null || UNSERIALIZED_METHODS.has(method)) {
-    track();
-    return dispatchCommand(method, input).finally(untrack);
+    return (async () => {
+      await track();
+      try {
+        return await markTarget(await dispatchCommand(method, input));
+      } finally {
+        untrack();
+      }
+    })();
   }
 
   const previous = tabChains.get(tabId) || Promise.resolve();
-  const current = previous.catch(() => {}).then(() => {
-    track();
-    return dispatchCommand(method, input).finally(untrack);
+  const current = previous.catch(() => {}).then(async () => {
+    await track();
+    try {
+      return markTarget(await dispatchCommand(method, input));
+    } finally {
+      untrack();
+    }
   });
   tabChains.set(tabId, current);
   current

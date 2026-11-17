@@ -16,4 +16,6 @@ test('settings clamp labels and default booleans safely', () => {
   assert.equal(out.borrowConfirm, false);
   assert.equal(out.allowHelp, false);
   assert.equal(out.pageGuard, true);
+  assert.equal(out.cooperationGuard, false);
+  assert.equal(normalizeSettings({ cooperationGuard: true }).cooperationGuard, true);
 });

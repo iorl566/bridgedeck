@@ -1,21 +1,29 @@
 // src/record-overlay.js —— 页面内“正在录制你的操作”浮层
 import { log } from './log.js';
 import { closeOverlay, isCapturing, openOverlay } from './overlay-state.js';
+import { OVERLAY_THEME } from './overlay-theme.js';
+import { overlayTexts } from './overlay-texts.js';
 
-function installRecordOverlay(startedAt, lang) {
-  const T = lang === 'en'
+export function installRecordOverlay(startedAt, lang, theme, texts) {
+  const BASE = lang === 'en'
     ? { label: 'Recording your actions', finish: 'Finish' }
     : { label: '正在录制你的操作', finish: '结束' };
+  const T = { ...BASE, ...(texts?.record || {}) };
   const ID = '__bb_record_host';
   const old = document.getElementById(ID);
   if (old) old.remove();
   const host = document.createElement('div');
   host.id = ID;
+  const forced = document.documentElement.getAttribute('data-bb-theme');
+  const dark = forced === 'dark' || (forced !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const tokens = (theme && theme[dark ? 'dark' : 'light']) || {};
+  host.setAttribute('data-bb-theme', dark ? 'dark' : 'light');
   host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:none;';
+  for (const [key, value] of Object.entries(tokens)) host.style.setProperty(key, value);
   const shadow = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = [
-    '.pill{position:fixed;left:18px;bottom:18px;display:flex;align-items:center;gap:9px;padding:8px 10px 8px 12px;border-radius:999px;background:#1c2230;color:#fff;font:12px/1.4 system-ui,sans-serif;box-shadow:0 10px 26px rgba(16,24,40,.28);pointer-events:auto;cursor:grab;user-select:none}',
+    '.pill{position:fixed;left:18px;bottom:18px;display:flex;align-items:center;gap:9px;padding:8px 10px 8px 12px;border-radius:999px;background:var(--bb-surface,#1c2230);color:var(--bb-fg,#fff);font:12px/1.4 system-ui,sans-serif;box-shadow:0 10px 26px var(--bb-shadow-strong,rgba(16,24,40,.28));pointer-events:auto;cursor:grab;user-select:none}',
     '.dot{width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.22);animation:bbpulse 1.6s ease-in-out infinite}',
     '@keyframes bbpulse{0%,100%{opacity:1}50%{opacity:.45}}',
     '.time{font:11px ui-monospace,SFMono-Regular,Consolas,monospace;opacity:.8;min-width:42px}',
@@ -68,7 +76,7 @@ function installRecordOverlay(startedAt, lang) {
 async function readUiLang() {
   try {
     const stored = await chrome.storage.local.get('bb.uiLang');
-    return stored && stored['bb.uiLang'] === 'en' ? 'en' : 'zh';
+    const value = stored && stored['bb.uiLang']; return value || 'zh';
   } catch {
     return 'zh';
   }
@@ -79,7 +87,7 @@ export async function showRecordOverlay(tabId, startedAt = Date.now()) {
   openOverlay(tabId, 'record', { priority: 5 });
   try {
     const lang = await readUiLang();
-    await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: installRecordOverlay, args: [Number(startedAt) || Date.now(), lang] });
+    await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: installRecordOverlay, args: [Number(startedAt) || Date.now(), lang, OVERLAY_THEME, overlayTexts(lang)] });
   } catch (error) {
     log('录制浮层注入失败 tab=' + tabId + '：' + ((error && error.message) || error));
   }

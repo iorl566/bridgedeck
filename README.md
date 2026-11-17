@@ -208,7 +208,7 @@ BridgeDeck 没有必须使用的云服务，也不收集产品遥测。扩展不
 - **整页截图**：`bridge screenshot --mode auto --out page.png`，或在弹窗里打开"长截图"。[长截图](docs/long-screenshot.md)
 - **指定浏览器**：`bridge browsers` 查看实例，`bridge session start --browser "工作账号"` 绑定。[本地配对](docs/local-pairing.md)
 - **多 Agent 并行**：`session start --agent-name … --project …`，之后用 `--session-scope <名字>` 或 `BB_SESSION` 选会话。[会话作用域](docs/scope.md)
-- **远程连接**：扩展通过 WSS 连接服务器上的 daemon，本机无需开入站端口。[本地配对](docs/local-pairing.md)
+- **远程连接**：扩展通过 WSS 连接服务器上的 daemon；server 模式需显式 TLS 证书与公网地址。[远程 server](docs/remote-server.md) · [本地配对](docs/local-pairing.md)
 - **任务视频**：`bridge video start --duration 60s --quality high`。[视频录制](docs/video-recording.md)
 - **操作审计**：`bridge audit list --limit 20`。[操作审计](docs/operation-audit.md)
 - **网站调试**：`bridge debug start` → `debug requests` → `debug archive --output debug.json`。[网站调试](docs/website-debugging.md)
@@ -254,7 +254,7 @@ bridge update install --rollback .rollback/<timestamp>/
 | 回放 Trace 步骤 | [Trace Viewer](docs/trace-viewer.md) |
 | 检查文字/按钮对比度 | [VOM 颜色对比度](docs/visual-contrast.md) |
 | 查看方法参数 schema | [协议 schema](docs/schema.md) |
-| 连接服务器上的 Agent | [本地配对](docs/local-pairing.md) |
+| 连接服务器上的 Agent | [远程 server](docs/remote-server.md) · [本地配对](docs/local-pairing.md) |
 | 多会话/多 Agent 选会话 | [会话作用域](docs/scope.md) |
 | 调试器何时挂载/分离 | [调试器生命周期](docs/debugger-lifecycle.md) |
 | 了解预写意图账本 | [意图账本](docs/intent-ledger.md) |
@@ -283,7 +283,7 @@ node tools/release.mjs --check      # 发布产物一致性
 
 CI 共 5 条流水线：`ci.yml`（三平台测试 + 交叉打包）、`publish-cli.yml`（手动预发布）、`release-cli.yml`、`release-extension.yml`、`release-dsh-plugin.yml`（tag 触发发布）。
 
-最近结果：单测 **955/955**、CLI **155/155**、MCP **10/10**、DSH 插件 **26/26**、Python SDK **8/8**、protocol-check 全绿（`handlersNotInProtocol=[]`、`extensionWithoutHandler=[]`、`protocolUnclassified=[]`、`localWithoutRoute=[]`、`schemaMissing=[]`）、真实 Edge E2E **145/147 通过（2 项因借用确认安全策略跳过）**。
+最近结果：运行时单测 **464/464**、参考镜像测试 **507/507**、CLI **155/155**、MCP **10/10**、DSH 插件 **26/26**、Python SDK **8/8**、protocol-check 全绿（`handlersNotInProtocol=[]`、`extensionWithoutHandler=[]`、`protocolUnclassified=[]`、`localWithoutRoute=[]`、`schemaMissing=[]`）、真实 Edge E2E **145/147 通过（2 项因借用确认安全策略跳过）**。
 
 ```text
 cli/            CLI 入口

@@ -138,6 +138,7 @@ VALUE_FLAGS.add('request-id');
 VALUE_FLAGS.add('steps-file');VALUE_FLAGS.add('until');
 VALUE_FLAGS.add('backend');
 VALUE_FLAGS.add('pipeline');
+for (const name of ['listen', 'public-url', 'tls-pfx', 'tls-passphrase']) VALUE_FLAGS.add(name);
 BOOL_FLAGS.add('fallback-ax');
 BOOL_FLAGS.add('compare-ax');
 BOOL_FLAGS.add('follow');
@@ -975,6 +976,38 @@ async function cmdDoctor(flags) {
 async function cmdDaemon(flags, pos) {
   const sub = pos[1];
   if (sub === 'start') {
+    const mode = String(flags.mode || 'local').toLowerCase();
+    if (mode !== 'local' && mode !== 'server') throw new ArgError('--mode 需要 local|server');
+    if (mode === 'server') {
+      const listen = String(flags.listen || '0.0.0.0');
+      const publicUrl = String(flags['public-url'] || '').trim().replace(/\/+$/, '');
+      if (!/^wss:\/\/[^/]+/i.test(publicUrl)) {
+        throw new ArgError('server 模式需要 --public-url wss://host[:port]/ws；远程必须 TLS');
+      }
+      const pfx = flags['tls-pfx'] ? path.resolve(process.cwd(), String(flags['tls-pfx'])) : '';
+      if (!pfx || !fs.existsSync(pfx)) throw new ArgError('server 模式需要存在的 --tls-pfx <cert.pfx>');
+      process.env.BB_BIND = listen;
+      process.env.BB_TLS = '1';
+      process.env.BB_TLS_PFX = pfx;
+      if (flags['tls-passphrase'] !== undefined) process.env.BB_TLS_PASSPHRASE = String(flags['tls-passphrase']);
+      process.env.BB_PUBLIC_URL = publicUrl;
+      if (flags.port !== undefined) {
+        const port = intFlag(flags, 'port', { min: 1, max: 65535 });
+        process.env.BB_PORT = String(port);
+      }
+      const stopped = await stopDaemon();
+      daemonInfo = null;
+      const info = await ensureDaemon();
+      if (jsonMode) {
+        emitJson({ ok: true, result: { running: true, pid: info.pid, port: info.port, mode, listen, publicUrl, tls: true, stopped: stopped.stopped === true } });
+        return 0;
+      }
+      print(`daemon 已以 server 模式启动 (pid ${info.pid}, bind ${listen}, ${publicUrl})`);
+      print('警告：这会监听非本机地址；只暴露在可信网络/反代后，并配置防火墙。');
+      print('下一步：bridge pair create --label <device>，把链接/配对码发给另一台浏览器。');
+      print('远程浏览器必须信任 --tls-pfx 对应的证书；自签证书需先导入信任库。');
+      return 0;
+    }
     const info = await ensureDaemon();
     if (jsonMode) {
       emitJson({ ok: true, result: { running: true, pid: info.pid, port: info.port } });
@@ -1038,8 +1071,10 @@ async function cmdDaemon(flags, pos) {
     if (!body.ok) return outputFailure(body);
     if (jsonMode) return outputJsonBody(body);
     const result = body.result || {};
-    print('已配对远程浏览器：' + (result.devices || []).length);
+    print('已连接远程浏览器：' + (result.devices || []).length);
     for (const device of result.devices || []) print('  ' + device.instanceId + '  ' + device.browser + ' v' + (device.browserVersion || '?'));
+    print('已记住远程设备：' + (result.knownDevices || []).length);
+    for (const device of result.knownDevices || []) print('  ' + device.deviceId + '  ' + (device.label || '-') + '  [' + (device.scope || 'control') + ']  ' + device.browser);
     print('未使用配对码：' + (result.pairings || []).length);
     return 0;
   }
@@ -1704,12 +1739,8 @@ async function cmdSession(flags, pos) {
 
 async function cmdTab(flags, pos) {
   const sub = pos[1];
-  const withSession = (params) => {
-    if (flags.session !== undefined) params.session = String(flags.session);
-    return params;
-  };
   if (sub === 'list') {
-    const params = withSession({ scope: flags.scope !== undefined ? String(flags.scope) : 'agent' });
+    const params = withSession(flags, { scope: flags.scope !== undefined ? String(flags.scope) : 'agent' });
     const body = await callRpc('tab.list', params, timeoutOf(flags));
     if (!body.ok) return outputFailure(body);
     if (jsonMode) return outputJsonBody(body);
@@ -1725,7 +1756,7 @@ async function cmdTab(flags, pos) {
     return 0;
   }
   if (sub === 'new') {
-    const params = withSession({ noFocus: flags['no-focus'] === true });
+    const params = withSession(flags, { noFocus: flags['no-focus'] === true });
     if (pos[2]) params.url = pos[2];
     if (flags.window === true) params.newWindow = true;
     const body = await callRpc('tab.new', params, timeoutOf(flags));
@@ -1738,7 +1769,8 @@ async function cmdTab(flags, pos) {
   if (sub === 'borrow' || sub === 'return') {
     const tabId = requirePos(pos, 2, '<tabId>');
     if (!/^\d+$/.test(tabId)) throw new ArgError('<tabId> 需要整数，收到 "' + tabId + '"');
-    const body = await callRpc('tab.' + sub, { tabId: Number(tabId) }, Math.max(timeoutOf(flags), 45000));
+    const borrowParams = withSession(flags, { tabId: Number(tabId) });
+    const body = await callRpc('tab.' + sub, borrowParams, Math.max(timeoutOf(flags), 75000));
     if (!body.ok) return outputFailure(body);
     if (jsonMode) return outputJsonBody(body);
     if (sub === 'borrow') {
@@ -1752,7 +1784,7 @@ async function cmdTab(flags, pos) {
   if (sub === 'close' || sub === 'select') {
     const tabId = requirePos(pos, 2, '<tabId>');
     if (!/^\d+$/.test(tabId)) throw new ArgError(`<tabId> 需要整数，收到 "${tabId}"`);
-    const params = withSession({ tabId: Number(tabId) });
+    const params = withSession(flags, { tabId: Number(tabId) });
     const body = await callRpc(`tab.${sub}`, params, timeoutOf(flags));
     if (!body.ok) return outputFailure(body);
     if (jsonMode) return outputJsonBody(body);
@@ -3133,7 +3165,7 @@ async function cmdUi(flags, pos) {
     if (jsonMode) return outputJsonBody(body);
     const result = body.result || {};
     print('extension v' + (result.packageVersion || '?') + (result.ok ? '（自检通过）' : '（自检有问题）'));
-    for (const name of ['popup', 'options', 'quick', 'record', 'debug', 'longshot', 'ops', 'audit']) {
+    for (const name of ['popup', 'options', 'preview', 'quick', 'record', 'debug', 'longshot', 'ops', 'audit']) {
       const item = result[name];
       if (!item) continue;
       const extra = Array.isArray(item.missing) && item.missing.length ? ' missing: ' + item.missing.join(',') : '';
@@ -3161,6 +3193,11 @@ async function cmdPair(flags, pos) {
     if (flags.label !== undefined) params.label = String(flags.label);
     if (flags.host !== undefined) params.host = String(flags.host);
     if (flags.replace === true) params.replace = true;
+    if (flags.scope !== undefined) {
+      const scope = String(flags.scope).toLowerCase();
+      if (scope !== 'read' && scope !== 'control') throw new ArgError('--scope 需要 read|control');
+      params.scope = scope;
+    }
     const body = await callRpc('pair.create', params, timeoutOf(flags));
     if (!body.ok) return outputFailure(body);
     if (jsonMode) return outputJsonBody(body);
@@ -3178,16 +3215,29 @@ async function cmdPair(flags, pos) {
     if (!body.ok) return outputFailure(body);
     if (jsonMode) return outputJsonBody(body);
     const devices = (body.result && body.result.devices) || [];
-    if (!devices.length) {
+    const known = (body.result && body.result.knownDevices) || [];
+    if (known.length) {
+      print(renderTable(['device', 'label', 'scope', 'browser', 'instance', 'lastSeen'], known.map((item) => [
+        item.deviceId,
+        item.label || '',
+        item.scope || 'control',
+        item.browser || '',
+        item.instanceId || '',
+        formatTime(item.lastSeenAt),
+      ])));
+    } else if (!devices.length) {
       print('(没有已连接的远程设备)');
       return 0;
     }
-    print(renderTable(['instance', 'browser', 'version', 'connected'], devices.map((item) => [
-      item.instanceId,
-      item.browser || '',
-      item.browserVersion || '',
-      formatTime(item.connectedAt),
-    ])));
+    if (devices.length) {
+      print('');
+      print(renderTable(['instance', 'browser', 'version', 'connected'], devices.map((item) => [
+        item.instanceId,
+        item.browser || '',
+        item.browserVersion || '',
+        formatTime(item.connectedAt),
+      ])));
+    }
     return 0;
   }
   if (sub === 'list') {
@@ -3217,12 +3267,30 @@ async function cmdPair(flags, pos) {
     print('配对 token：' + result.token);
     return 0;
   }
+  if (sub === 'renew') {
+    const deviceId = requirePos(pos, 2, '<deviceId>');
+    const params = { deviceId };
+    if (flags.scope !== undefined) {
+      const scope = String(flags.scope).toLowerCase();
+      if (scope !== 'read' && scope !== 'control') throw new ArgError('--scope 需要 read|control');
+      params.scope = scope;
+    }
+    const body = await callRpc('pair.renew', params, timeoutOf(flags));
+    if (!body.ok) return outputFailure(body);
+    if (jsonMode) return outputJsonBody(body);
+    const result = body.result || {};
+    print('设备已续期：' + result.deviceId + '（scope=' + result.scope + '）');
+    print('新配对链接：' + result.link);
+    print('（旧 token 已失效；把新链接粘贴到远端扩展）');
+    return 0;
+  }
   if (sub === 'revoke') {
     const code = requirePos(pos, 2, '<code>');
     const body = await callRpc('pair.revoke', { code: String(code) }, timeoutOf(flags));
     if (!body.ok) return outputFailure(body);
     if (jsonMode) return outputJsonBody(body);
     print((body.result && body.result.revoked ? '已撤销 ' : '没有找到 ') + String(code));
+    if (body.result && body.result.deviceId) print('设备：' + body.result.deviceId);
     return 0;
   }
   throw new ArgError('用法：bridge pair create [--ttl 10m] [--label x] [--replace] | devices | list | redeem <code> | revoke <code>');
@@ -3579,6 +3647,15 @@ async function cmdCooperate(flags, pos) {
     print('');
     print('url: ' + (result.url || ''));
     print('title: ' + (result.title || ''));
+    if (result.cooperation) {
+      const coop = result.cooperation;
+      const fields = Array.isArray(coop.fields) ? coop.fields : [];
+      const media = Array.isArray(coop.media) ? coop.media : [];
+      print('cooperation: fields=' + fields.length + ' media=' + media.length +
+        ' editing=' + (coop.editing === true) + ' focus=' + (coop.focus || '-') +
+        ' human=' + ((coop.activity && coop.activity.lastKind) || '-') +
+        ' mode=' + (coop.mode || '-') + ' rev=' + (coop.revision ?? '-'));
+    }
     print('');
     print(result.observation && result.observation.text ? result.observation.text : '');
     return 0;
@@ -5514,7 +5591,7 @@ async function printHelp() {
   browsers                         已连接浏览器实例（含实例名）
   doctor                           环境自检
   settings [--json]                查看扩展设置
-  ui [--page popup|options|quick|record|debug|longshot|ops|audit] [--query k=v] [--diagnostics]
+  ui [--page popup|options|preview|quick|record|debug|longshot|ops|audit] [--query k=v] [--diagnostics]
                                   在浏览器里打开扩展页面
   settings set [--label <名字>] [--allow-help on|off] [--control-hint on|off]
                [--page-guard on|off] [--long-shot auto|manual]
@@ -5531,6 +5608,7 @@ async function printHelp() {
   update install --from <zip|tar.gz> [--manifest <release.json>] [--dest <dir>] [--port <n>] [--no-restart] | --rollback <备份目录>
                                   装新 → 试跑 → 原端口重启；失败自动回滚到上一版本
   daemon start|stop|restart|status|log [--tail [N]] | logs [--tail N] [--follow]
+  daemon start --mode server --listen 0.0.0.0 --port 52900 --public-url wss://host:52900/ws --tls-pfx cert.pfx [--tls-passphrase ...]
   daemon pair [--replace <browserId>] | devices | revoke <code>|--all | rotate | trust-local on|off
   daemon pair [--replace <browserId>]      生成本机配对链接（5 分钟）
   daemon trust-local on|off                本机未配对连接是否允许（off=严格模式）
@@ -5593,7 +5671,7 @@ async function printHelp() {
   operation await <id> [--timeout 60s] | operation cancel <id>
   cooperate sync [--policy auto|strict] [--probe-hover] [--match-text <t>] [--context-lines N]
   cooperate wait [--timeout 5s] | cooperate handback
-  pair create [--ttl 10m] [--label x] [--host ip] [--replace] | devices | list | redeem <code> | revoke <code>
+  pair create [--ttl 10m] [--label x] [--host ip] [--scope read|control] [--replace] | devices | list | redeem <code> | renew <deviceId> [--scope read|control] | revoke <code|deviceId>
   video start [--duration 60s] [--quality standard|high] | status <id> | stop <id> | recover
   video save <id> --out <path> [--overwrite] | list | discard <id> | prune [--ttl 24h]
   record start [--screenshots] [--include-agent] | stop | status | list | export [id] [--out <dir>] [--screenshot]

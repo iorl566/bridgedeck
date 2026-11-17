@@ -9,6 +9,10 @@ import { showTakeover, hideTakeover } from './takeover.js';
 import { restrictedUrlReason } from './lib/page-policy.js';
 import { closeOverlay, openOverlay } from './overlay-state.js';
 import { expectedTabMoves } from './session-manager/tab-moves.js';
+import { clearActionNotification, notifyActionRequest } from './action-notifications.js';
+import { borrowBanner, borrowToast, helpOverlayFunc } from './overlay-ui.js';
+import { overlayTexts } from './overlay-texts.js';
+import { OVERLAY_THEME } from './overlay-theme.js';
 
 const AGENT_WINDOW_KEY = 'bb.agentWindowId';
 const DEFAULT_SESSION_AREA = chrome.storage.session;
@@ -594,7 +598,7 @@ export async function windowResize(params = {}) {
 // ---------------------------------------------------------------------------
 
 const CONTROLLED_KEY = 'bb.controlledTabs';
-const BORROW_TIMEOUT_MS = 30000;
+const BORROW_TIMEOUT_MS = 60000;
 
 /** 扩展自己创建的标签页（tab.new / agent 窗口），页面守卫不能把它当外部标签页移走。 */
 const selfCreated = new Map();
@@ -688,128 +692,35 @@ export async function markControlledTab(tabId) {
   if (!list.includes(tabId)) await writeControlledTabs([...list, tabId]);
 }
 
-/** 注入函数：借用确认条。必须自包含（序列化后在页面里执行）。 */
-function borrowBanner(requestId, tabTitle, timeoutMs, lang) {
-  const T = lang === 'en' ? {
-    title: 'Allow tab borrowing?',
-    body: 'The agent wants to move this tab into its workspace. You can deny or allow it.',
-    target: 'Target tab: ',
-    deny: 'Deny',
-    allow: 'Allow',
-    autoDeny: 'Auto-deny in ',
-  } : {
-    title: '允许借用标签页？',
-    body: 'AI Agent 希望将此标签页移入工作区。您可以拒绝或允许借用。',
-    target: '目标标签页：',
-    deny: '拒绝',
-    allow: '允许',
-    autoDeny: ' 秒后自动拒绝',
-  };
-  const ID = '__bb_borrow_modal';
-  const old = document.getElementById(ID);
-  if (old) old.remove();
-  const total = Math.max(1, Math.ceil((Number(timeoutMs) || 30000) / 1000));
-  const host = document.createElement('div');
-  host.id = ID;
-  host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.4);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;pointer-events:auto';
-  const card = document.createElement('div');
-  card.style.cssText = 'box-sizing:border-box;width:400px;max-width:calc(100vw - 32px);background:#f7f9fc;color:#1c2230;border:1px solid #dbe4f5;border-radius:16px;padding:22px 24px 20px;box-shadow:0 25px 50px rgba(28,34,48,.22);font:13px/1.5 system-ui,sans-serif';
-  const title = String(tabTitle || '').slice(0, 30) + (String(tabTitle || '').length > 30 ? '…' : '');
-  card.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    + '<span style="width:22px;height:22px;border-radius:6px;background:#2f6fed;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M3 17h18"/><path d="M6 17V9"/><path d="M18 17V9"/><path d="M6 9c3 4 9 4 12 0"/></svg></span>'
-    + '<strong style="font-size:15px">' + T.title + '</strong></div>'
-    + '<p style="margin:0 0 8px;color:#4b5563">' + T.body + '</p>'
-    + '<p style="margin:0 0 14px;color:#6b7488;font-size:12px">' + T.target + (title ? title.replace(/[<>&]/g, '') : (lang === 'en' ? 'Current tab' : '当前标签页')) + '</p>'
-    + '<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin:6px 0 16px">'
-    + '<svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="#e4e8f0" stroke-width="4"/><circle data-ring cx="22" cy="22" r="18" fill="none" stroke="#2f6fed" stroke-width="4" stroke-linecap="round" stroke-dasharray="113.1" stroke-dashoffset="0" transform="rotate(-90 22 22)"/></svg>'
-    + '<span data-count style="font-size:12.5px;color:#6b7488"></span></div>'
-    + '<div style="display:flex;gap:10px"><button data-deny style="flex:1;height:34px;border-radius:9px;border:1px solid #dbe4f5;background:#fff;color:#1c2230;font-size:12.5px;font-weight:550;cursor:pointer">' + T.deny + '</button>'
-    + '<button data-allow style="flex:1;height:34px;border-radius:9px;border:1px solid #2f6fed;background:#2f6fed;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer">' + T.allow + '</button></div>';
-  host.appendChild(card);
-  document.documentElement.appendChild(host);
-
-  const ring = card.querySelector('[data-ring]');
-  const count = card.querySelector('[data-count]');
-  const circumference = 2 * Math.PI * 18;
-  let left = total;
-  let settled = false;
-  const finish = (ok, timedOut) => {
-    if (settled) return;
-    settled = true;
-    host.remove();
-    try {
-      chrome.runtime.sendMessage({ type: 'bb.borrow.decision', requestId, allow: ok, timedOut: timedOut === true });
-    } catch { /* SW 不可达时由超时兜底 */ }
-  };
-  const paint = () => {
-    count.textContent = lang === 'en' ? T.autoDeny + left + ' s' : left + T.autoDeny;
-    ring.style.strokeDashoffset = String(circumference * (1 - left / total));
-  };
-  paint();
-  const timer = globalThis['set' + 'Interval'](() => {
-    left -= 1;
-    if (left <= 0) {
-      globalThis['clear' + 'Interval'](timer);
-      finish(false, true);
-      return;
-    }
-    paint();
-  }, 1000);
-  card.querySelector('[data-deny]').addEventListener('click', () => { globalThis['clear' + 'Interval'](timer); finish(false, false); });
-  card.querySelector('[data-allow]').addEventListener('click', () => { globalThis['clear' + 'Interval'](timer); finish(true, false); });
+async function clearBorrowToast(tabId, requestId) {
+  if (!tabId) return;
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (rid) => {
+        const host = document.getElementById('__bb_borrow_toast_host');
+        if (!host) return;
+        for (const el of Array.from(host.querySelectorAll('[data-request]'))) {
+          if (el.dataset.request === rid) el.remove();
+        }
+        if (!host.children.length) host.remove();
+      },
+      args: [requestId],
+    });
+  } catch {
+    // 标签页可能已关闭。
+  }
 }
 
 async function readUiLang() {
   try {
     const stored = await chrome.storage.local.get('bb.uiLang');
-    return stored && stored['bb.uiLang'] === 'en' ? 'en' : 'zh';
+    const value = stored && stored['bb.uiLang']; return value || 'zh';
   } catch {
     return 'zh';
   }
 }
 
-/** 注入函数：人工协助条。 */
-function helpBanner(requestId, reason) {
-  const ID = '__bb_human_banner';
-  const old = document.getElementById(ID);
-  if (old) old.remove();
-  const box = document.createElement('div');
-  box.id = ID;
-  box.style.cssText = [
-    'position:fixed', 'z-index:2147483647', 'left:50%', 'top:12px', 'transform:translateX(-50%)',
-    'display:flex', 'gap:10px', 'align-items:flex-start', 'max-width:92vw',
-    'background:#ffffff', 'color:#101828', 'border:1px solid #d0d7e2', 'border-radius:10px',
-    'box-shadow:0 8px 28px rgba(16,24,40,.18)', 'padding:10px 14px',
-    'font:13px/1.5 system-ui,"PingFang SC","Noto Sans CJK SC",sans-serif',
-  ].join(';');
-  const label = document.createElement('span');
-  label.textContent = '需要你协助：' + reason;
-  label.style.cssText = 'flex:1;min-width:200px;white-space:pre-wrap';
-  const makeButton = (caption, primary) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = caption;
-    button.style.cssText = [
-      'font:inherit', 'cursor:pointer', 'border-radius:8px', 'padding:5px 12px', 'white-space:nowrap',
-      primary ? 'background:#2f6fed;border:1px solid #2f6fed;color:#fff' : 'background:#fff;border:1px solid #d0d7e2;color:#344054',
-    ].join(';');
-    return button;
-  };
-  const skip = makeButton('跳过', false);
-  const done = makeButton('我先处理好了', true);
-  const finish = (action) => {
-    box.remove();
-    try {
-      chrome.runtime.sendMessage({ type: 'bb.help.resolved', requestId, action });
-    } catch (error) {
-      // 由超时兜底
-    }
-  };
-  skip.addEventListener('click', () => finish('skip'));
-  done.addEventListener('click', () => finish('done'));
-  box.append(label, skip, done);
-  document.documentElement.appendChild(box);
-}
 
 async function injectBanner(tabId, func, args) {
   try {
@@ -830,9 +741,105 @@ function waitHumanDecision(requestId, timeoutMs, onTimeout) {
 }
 
 /** tab.borrow：标记接管用户标签页；borrowConfirm 打开时必须由用户点「允许」。 */
+const borrowInFlight = new Set();
+
 async function tabBorrowInner(params, stage) {
+  const tabId = Number(params && params.tabId);
+  if (!Number.isInteger(tabId)) return tabBorrowInnerUnlocked(params, stage);
+  if (borrowInFlight.has(tabId)) {
+    throw bridgeError('E_BORROW_CONFLICT', '该标签页已有借用确认进行中，请等待当前请求结束');
+  }
+  borrowInFlight.add(tabId);
+  try {
+    return await tabBorrowInnerUnlocked(params, stage);
+  } finally {
+    borrowInFlight.delete(tabId);
+  }
+}
+
+
+// ── 借用确认的全局请求列表 ──────────────────────────────────────
+// 每个请求记住自己的目标窗口和当前展示面（模态/Toast）。标签切换时，
+// 由 rehomeBorrowUi 按当前活动标签重新分配，避免 Toast 留在已经切走的标签里。
+const borrowUiRequests = new Map();
+let borrowRehomeChain = Promise.resolve();
+
+async function injectBorrowModal(req, { focus = false } = {}) {
+  if (req.surface === 'modal' && req.surfaceTabId === req.targetTabId) return;
+  await clearBorrowUiSurface(req);
+  if (focus) {
+    try { await withTimeout(chrome.windows.update(req.windowId, { focused: true }), 3000, 'windows.update'); } catch { /* 忽略 */ }
+  }
+  openOverlay(req.targetTabId, 'borrow', { priority: 100, exclusive: true });
+  await injectBanner(req.targetTabId, borrowBanner, [req.requestId, req.title, req.timeoutMs, req.lang, OVERLAY_THEME, overlayTexts(req.lang)]);
+  req.surface = 'modal';
+  req.surfaceTabId = req.targetTabId;
+}
+
+async function injectBorrowToast(req, toastTabId) {
+  if (req.surface === 'toast' && req.surfaceTabId === toastTabId) return;
+  await clearBorrowUiSurface(req);
+  await injectBanner(toastTabId, borrowToast, [req.requestId, req.title, req.timeoutMs, req.lang, OVERLAY_THEME]);
+  openOverlay(toastTabId, 'borrow-toast', { priority: 100 });
+  req.surface = 'toast';
+  req.surfaceTabId = toastTabId;
+}
+
+async function clearBorrowUiSurface(req) {
+  if (!req || !req.surface) return;
+  const surface = req.surface;
+  const surfaceTabId = req.surfaceTabId;
+  req.surface = null;
+  req.surfaceTabId = null;
+  if (surface === 'modal') {
+    await clearBorrowBanner(req.targetTabId).catch(() => {});
+    closeOverlay(req.targetTabId, 'borrow');
+  } else if (surface === 'toast') {
+    await clearBorrowToast(surfaceTabId, req.requestId).catch(() => {});
+    closeOverlay(surfaceTabId, 'borrow-toast');
+  }
+}
+
+async function releaseBorrowUi(requestId) {
+  const req = borrowUiRequests.get(requestId);
+  if (!req) return;
+  await clearBorrowUiSurface(req);
+  borrowUiRequests.delete(requestId);
+}
+
+async function rehomeBorrowUiNow(windowId) {
+  const reqs = [...borrowUiRequests.values()].filter((req) => req.windowId === Number(windowId));
+  if (!reqs.length) return;
+  let activeTab = null;
+  try {
+    const activeTabs = await chrome.tabs.query({ active: true, windowId: Number(windowId) });
+    activeTab = (activeTabs || [])[0] || null;
+  } catch { /* 窗口已关闭 */ }
+  if (!activeTab || !Number.isInteger(Number(activeTab.id))) return;
+  const activeId = Number(activeTab.id);
+  for (const req of reqs) {
+    try {
+      if (req.targetTabId === activeId) {
+        await injectBorrowModal(req, { focus: false });
+      } else if (req.surface === 'modal' || (req.surface === 'toast' && req.surfaceTabId !== activeId)) {
+        await injectBorrowToast(req, activeId);
+      }
+    } catch (error) {
+      log('借用确认重新分配失败 tab=' + req.targetTabId + '：' + ((error && error.message) || error));
+    }
+  }
+}
+
+export function rehomeBorrowUi(windowId) {
+  borrowRehomeChain = borrowRehomeChain
+    .then(() => rehomeBorrowUiNow(windowId))
+    .catch((error) => log('借用确认重新分配异常：' + ((error && error.message) || error)));
+  return borrowRehomeChain;
+}
+
+async function tabBorrowInnerUnlocked(params, stage) {
   const tabId = params.tabId;
-  if (!Number.isInteger(tabId)) throw bridgeError('E_BAD_ARG', 'tab.borrow 需要 tabId');
+  if (!Number.isInteger(tabId)) throw bridgeError('E_BAD_ARG', 'tab.borrow 需要一个 tabId');
   stage.value = 'getTab';
   const tab = await getTab(tabId);
   stage.value = 'settings';
@@ -842,34 +849,60 @@ async function tabBorrowInner(params, stage) {
   const controlled = await readControlledTabs();
   if (!controlled.includes(tabId)) {
     const isExtPage = /^(chrome|edge)-extension:\/\//i.test(tab.url || '');
+    if (await isAgentWindow(tab.windowId)) {
+      throw bridgeError('E_FORBIDDEN', '不能借用 Agent 窗口内的标签页，请先把标签页移到普通浏览器窗口');
+    }
     if (confirm && !isExtPage) {
       stage.value = 'banner';
       const requestId = crypto.randomUUID();
-      openOverlay(tabId, 'borrow', { priority: 100, exclusive: true });
+      const req = {
+        requestId,
+        targetTabId: tabId,
+        windowId: tab.windowId,
+        title: tab.title || '',
+        lang: await readUiLang(),
+        timeoutMs: BORROW_TIMEOUT_MS,
+        surface: null,
+        surfaceTabId: null,
+      };
+      borrowUiRequests.set(requestId, req);
+      const pending = waitHumanDecision(requestId, BORROW_TIMEOUT_MS, () => ({ decision: 'timeout' }));
       try {
-        const pending = waitHumanDecision(requestId, BORROW_TIMEOUT_MS, () => ({ decision: 'timeout' }));
-        const lang = await readUiLang();
-        await injectBanner(tabId, borrowBanner, [requestId, tab.title || '', BORROW_TIMEOUT_MS, lang]);
+        let activeTab = null;
         try {
-          const pendingNotify = chrome.runtime.sendMessage({ type: 'bb.borrow.request', requestId, tabId, title: tab.title || '' });
-          if (pendingNotify && typeof pendingNotify.catch === 'function') pendingNotify.catch(() => {});
-        } catch { /* 通知失败不影响页面确认 */ }
-        try {
-          await withTimeout(chrome.windows.update(tab.windowId, { focused: true }), 3000, 'windows.update');
-        } catch {
-          // 窗口可能已关闭，忽略
+          const activeTabs = await chrome.tabs.query({ active: true, windowId: tab.windowId });
+          activeTab = (activeTabs || [])[0] || null;
+        } catch { /* 查询失败按目标标签处理 */ }
+        const targetIsActive = activeTab && Number(activeTab.id) === tabId;
+        if (targetIsActive) {
+          await injectBorrowModal(req, { focus: true });
+        } else if (activeTab && Number.isInteger(Number(activeTab.id))) {
+          try {
+            await injectBorrowToast(req, Number(activeTab.id));
+          } catch {
+            // 活动标签不可注入（chrome:// 等）时退回目标标签模态，不能没有可见确认。
+            try { await withTimeout(chrome.tabs.update(tabId, { active: true }), 3000, 'tabs.update'); } catch { /* 忽略 */ }
+            await injectBorrowModal(req, { focus: true });
+          }
+        } else {
+          await injectBorrowModal(req, { focus: true });
+        }
+        // Toast 已经显示在当前标签页右下角；再发系统通知会在同一位置盖住它
+        // （本机 Edge 实测）。只有模态确认才额外发系统通知，保证两处不互相遮挡。
+        if (req.surface === 'modal') {
+          try {
+            await notifyActionRequest('borrow', { requestId, tabId, title: tab.title || '', lang: req.lang });
+          } catch { /* 通知失败不影响页面确认 */ }
         }
         const answer = await pending;
+        clearActionNotification('borrow', requestId);
         if (answer.decision === 'timeout') {
           throw bridgeError('E_BORROW_TIMEOUT', '借用确认 ' + BORROW_TIMEOUT_MS + 'ms 内没有响应');
         }
         if (answer.allow !== true) throw bridgeError('E_BORROW_DENIED', '用户拒绝了借用请求');
-        await injectBanner(tabId, () => {
-          const node = document.getElementById('__bb_human_banner');
-          if (node) node.remove();
-        }, []);
       } finally {
-        closeOverlay(tabId, 'borrow');
+        clearActionNotification('borrow', requestId);
+        await releaseBorrowUi(requestId);
       }
     }
     stage.value = 'takeover';
@@ -890,10 +923,25 @@ async function tabBorrowInner(params, stage) {
   };
 }
 
+async function clearBorrowBanner(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [0] },
+      world: 'ISOLATED',
+      func: () => {
+        for (const id of ['__bb_borrow_modal', '__bb_human_banner']) {
+          const node = document.getElementById(id);
+          if (node) node.remove();
+        }
+      },
+    });
+  } catch { /* 页面可能已关闭 */ }
+}
+
 export async function tabBorrow(params = {}) {
   const stage = { value: 'start' };
   try {
-    return await withTimeout(tabBorrowInner(params, stage), 45000, 'tabBorrow');
+    return await withTimeout(tabBorrowInner(params, stage), 75000, 'tabBorrow');
   } catch (error) {
     if (error && !String(error.message || '').includes('[stage=')) error.message = String(error.message || error) + ' [stage=' + stage.value + ']';
     throw error;
@@ -990,10 +1038,9 @@ export async function requestHelp(params = {}) {
   openOverlay(tabId, 'help', { priority: 50 });
   try {
     const overlayLang = await readUiLang();
-    await injectBanner(tabId, helpOverlayFunc, [requestId, reason, highlightTarget, highlightRect, String(params.title || ''), overlayLang]);
+    await injectBanner(tabId, helpOverlayFunc, [requestId, reason, highlightTarget, highlightRect, String(params.title || ''), overlayLang, OVERLAY_THEME, overlayTexts(overlayLang)]);
     try {
-      const pendingNotify = chrome.runtime.sendMessage({ type: 'bb.help.request', requestId, tabId, title: params.title || '' });
-      if (pendingNotify && typeof pendingNotify.catch === 'function') pendingNotify.catch(() => {});
+      await notifyActionRequest('help', { requestId, tabId, title: params.title || '', lang: overlayLang });
     } catch { /* 通知失败不影响页面协助 */ }
     try {
       await withTimeout(chrome.windows.update(tab.windowId, { focused: true }), 3000, 'windows.update');
@@ -1008,6 +1055,7 @@ export async function requestHelp(params = {}) {
     } finally {
       stopCriteriaPolling = true;
     }
+    clearActionNotification('help', requestId);
     try { await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: () => { const n = document.getElementById('__bb_help_host'); if (n) n.remove(); const h = document.getElementById('__bb_help_highlight'); if (h) h.remove(); } }); } catch { /* 页面可能已关闭 */ }
     await showTakeover(tabId, {}).catch(() => {});
     return { action: answer.action === 'done' ? 'done' : answer.action === 'skip' ? 'skip' : 'timeout', note: typeof answer.note === 'string' ? answer.note : '' };
@@ -1016,196 +1064,15 @@ export async function requestHelp(params = {}) {
   }
 }
 
-/** 注入函数：人工协助卡片（品牌蓝配色）。 */
-function helpOverlayFunc(requestId, reason, targetSelector, targetRect, titleText, lang) {
-  const T = lang === 'en' ? {
-    defaultTitle: 'Agent needs your help',
-    defaultReason: 'Finish the page action, then hand control back to the agent.',
-    collapse: 'Collapse',
-    placeholder: 'Message for the agent (optional)',
-    cancel: 'Cancel request',
-    done: 'Done, hand back control',
-    expand: 'Expand',
-  } : {
-    defaultTitle: 'Agent 需要你的帮助',
-    defaultReason: 'Agent 需要你完成页面上的操作后继续。',
-    collapse: '折叠',
-    placeholder: '给 Agent 留言（可选）',
-    cancel: '取消请求',
-    done: '完成并交还控制权',
-    expand: '展开',
-  };
-  const HOST = '__bb_help_host';
-  const HL = '__bb_help_highlight';
-  const old = document.getElementById(HOST);
-  if (old) old.remove();
-  const oldHl = document.getElementById(HL);
-  if (oldHl) oldHl.remove();
-
-  let target = null;
-  if (targetSelector) {
-    try { target = document.querySelector(targetSelector); } catch { target = null; }
-  }
-
-  const hl = document.createElement('div');
-  hl.id = HL;
-  hl.style.cssText = 'position:fixed;z-index:2147483645;pointer-events:none;border:2px solid #2f6fed;border-radius:8px;box-shadow:0 0 0 6px rgba(47,111,237,.18),0 0 22px rgba(47,111,237,.35);display:none';
-  document.documentElement.appendChild(hl);
-
-  const host = document.createElement('div');
-  host.id = HOST;
-  host.style.cssText = 'position:fixed;inset:0;z-index:2147483646;pointer-events:none';
-  const shadow = host.attachShadow({ mode: 'open' });
-  const style = document.createElement('style');
-  style.textContent = [
-    '.card{position:fixed;box-sizing:border-box;width:380px;max-width:calc(100vw - 24px);background:#f7f9fc;color:#1c2230;border:1px solid #dbe4f5;border-radius:14px;box-shadow:0 16px 40px rgba(28,34,48,.18),0 3px 8px rgba(28,34,48,.08);font:12.5px/1.5 system-ui,sans-serif;pointer-events:auto}',
-    '.dragbar{position:absolute;top:6px;left:50%;transform:translateX(-50%);width:36px;height:4px;border-radius:2px;background:#dbe4f5}',
-    '.head{display:flex;align-items:center;gap:9px;padding:16px 14px 8px;cursor:grab;user-select:none}',
-    '.logo{width:20px;height:20px;border-radius:6px;background:#2f6fed;display:flex;align-items:center;justify-content:center;flex:0 0 auto}',
-    '.logo svg{width:13px;height:13px;color:#fff}',
-    '.title{flex:1;font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '.chev{width:22px;height:22px;border:0;background:transparent;color:#6b7488;cursor:pointer;border-radius:6px;font-size:14px;line-height:1}',
-    '.chev:hover{background:#eef2fa}',
-    '.body{padding:0 14px 14px}',
-    '.body.hidden{display:none}',
-    '.msg{margin:2px 0 10px;font-size:12.5px;line-height:1.55;color:#1c2230}',
-    '.note{width:100%;box-sizing:border-box;min-height:38px;max-height:90px;resize:vertical;border:1px solid #dbe4f5;border-radius:9px;background:#fff;color:#1c2230;font:12px/1.5 system-ui,sans-serif;padding:8px 10px}',
-    '.note::placeholder{color:#9aa3b5}',
-    '.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}',
-    '.btn{height:32px;padding:0 14px;border-radius:9px;border:1px solid #dbe4f5;background:#fff;color:#1c2230;font-size:12px;font-weight:550;cursor:pointer}',
-    '.btn.primary{background:#2f6fed;border-color:#2f6fed;color:#fff}',
-  ].join('');
-  const wrap = document.createElement('div');
-  wrap.innerHTML = '<div class="card"><div class="dragbar"></div>'
-    + '<div class="head"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 17h18"/><path d="M6 17V9"/><path d="M18 17V9"/><path d="M6 9c3 4 9 4 12 0"/></svg></span><span class="title"></span><button class="chev" title="' + T.collapse + '">⌄</button></div>'
-    + '<div class="body"><p class="msg"></p><textarea class="note" placeholder="' + T.placeholder + '"></textarea>'
-    + '<div class="actions"><button class="btn" data-act="cancel">' + T.cancel + '</button><button class="btn primary" data-act="done">' + T.done + '</button></div></div>'
-    + '</div>';
-  shadow.appendChild(style);
-  shadow.appendChild(wrap);
-  document.documentElement.appendChild(host);
-
-  const card = shadow.querySelector('.card');
-  const body = shadow.querySelector('.body');
-  shadow.querySelector('.title').textContent = titleText || T.defaultTitle;
-  shadow.querySelector('.msg').textContent = reason || T.defaultReason;
-
-  const place = () => {
-    if (targetRect && targetRect.width >= 0) {
-      hl.style.display = 'block';
-      hl.style.left = (targetRect.x - 3) + 'px';
-      hl.style.top = (targetRect.y - 3) + 'px';
-      hl.style.width = (targetRect.width + 6) + 'px';
-      hl.style.height = (targetRect.height + 6) + 'px';
-      if (!card.dataset.moved) {
-        const left = Math.max(12, Math.min(window.innerWidth - 392, targetRect.x));
-        const top = Math.max(12, Math.min(window.innerHeight - 200, targetRect.y + targetRect.height + 12));
-        card.style.left = left + 'px';
-        card.style.top = top + 'px';
-      }
-      return;
-    }
-    if (target) {
-      const rect = target.getBoundingClientRect();
-      if (rect.width || rect.height) {
-        hl.style.display = 'block';
-        hl.style.left = (rect.left - 3) + 'px';
-        hl.style.top = (rect.top - 3) + 'px';
-        hl.style.width = (rect.width + 6) + 'px';
-        hl.style.height = (rect.height + 6) + 'px';
-        if (!card.dataset.moved) {
-          const left = Math.max(12, Math.min(window.innerWidth - 392, rect.left));
-          const top = Math.max(12, Math.min(window.innerHeight - 200, rect.bottom + 12));
-          card.style.left = left + 'px';
-          card.style.top = top + 'px';
-        }
-        return;
-      }
-    }
-    if (!card.dataset.moved) {
-      card.style.left = '16px';
-      card.style.top = '16px';
-    }
-  };
-  place();
-  window.addEventListener('scroll', place, true);
-  window.addEventListener('resize', place);
-
-  const send = (action) => {
-    const note = shadow.querySelector('.note').value || '';
-    try { chrome.runtime.sendMessage({ type: 'bb.help.resolved', requestId, action, note }); } catch { /* 忽略 */ }
-    host.remove();
-    hl.remove();
-    window.removeEventListener('scroll', place, true);
-    window.removeEventListener('resize', place);
-  };
-  shadow.querySelector('[data-act="done"]').addEventListener('click', () => send('done'));
-  shadow.querySelector('[data-act="cancel"]').addEventListener('click', () => send('skip'));
-  shadow.querySelector('.chev').addEventListener('click', () => {
-    body.classList.toggle('hidden');
-    shadow.querySelector('.chev').textContent = body.classList.contains('hidden') ? '›' : '⌄';
-  });
-
-  const head = shadow.querySelector('.head');
-  head.addEventListener('pointerdown', (event) => {
-    if (event.target.closest && event.target.closest('button')) return;
-    const rect = card.getBoundingClientRect();
-    const dx = event.clientX - rect.left;
-    const dy = event.clientY - rect.top;
-    card.style.left = rect.left + 'px';
-    card.style.top = rect.top + 'px';
-    const move = (ev) => {
-      card.dataset.moved = '1';
-      card.style.left = Math.max(4, Math.min(window.innerWidth - rect.width - 4, ev.clientX - dx)) + 'px';
-      card.style.top = Math.max(4, Math.min(window.innerHeight - rect.height - 4, ev.clientY - dy)) + 'px';
-    };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  });
-}
-
-/** 注入函数：控制提示条（自包含）。 */
-function controlHintFunc(enabled, text) {
-  const ID = '__bb_control_hint';
-  const existing = document.getElementById(ID);
-  if (!enabled) {
-    if (existing) existing.remove();
-    return { enabled: false };
-  }
-  if (existing) return { enabled: true };
-  const box = document.createElement('div');
-  box.id = ID;
-  box.style.cssText = [
-    'position:fixed', 'right:14px', 'bottom:14px', 'z-index:2147483646',
-    'display:flex', 'gap:6px', 'align-items:center',
-    'background:#101828', 'color:#ffffff', 'border-radius:999px',
-    'padding:6px 12px', 'font:12px/1.4 system-ui,"PingFang SC","Noto Sans CJK SC",sans-serif',
-    'box-shadow:0 6px 20px rgba(16,24,40,.25)', 'opacity:.92', 'pointer-events:none',
-  ].join(';');
-  const dot = document.createElement('span');
-  dot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block';
-  const label = document.createElement('span');
-  label.textContent = text;
-  box.append(dot, label);
-  document.documentElement.appendChild(box);
-  return { enabled: true };
-}
-
-/** control-hint：会话期间在受控标签页显示/移除控制提示（受设置 controlHint 约束）。 */
+/** control-hint：旧的深色胶囊提示已由 takeover.js 的浮层取代，这里只清理历史残留。 */
 export async function controlHint(params = {}) {
   const tabId = Number(params.tabId);
   if (!Number.isInteger(tabId)) throw bridgeError('E_BAD_ARG', 'control-hint 需要 tabId');
-  // 旧的深色胶囊提示已由 takeover.js 的新浮层取代；这里只负责清理历史残留。
   try {
     await chrome.scripting.executeScript({
       target: { tabId, frameIds: [0] },
       world: 'ISOLATED',
-      func: controlHintFunc,
-      args: [false, ''],
+      func: () => { document.getElementById('__bb_control_hint')?.remove(); },
     });
   } catch {
     // 页面不可注入时忽略

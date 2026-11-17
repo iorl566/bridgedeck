@@ -2,6 +2,7 @@
 import { execPage } from './inject.js';
 import { log } from './log.js';
 import { showRecordOverlay, hideRecordOverlay } from './record-overlay.js';
+import { clearCooperationPassthroughs } from './cooperation.js';
 
 const RECORDINGS_KEY = 'bb.ops.recordings';
 const MAX_EVENTS = 500;
@@ -465,6 +466,7 @@ export async function startRecording(params = {}) {
     active.delete(tabId);
     throw new Error('注入记录器失败：' + ((error && error.message) || error));
   }
+  void clearCooperationPassthroughs(tabId);
   void showRecordOverlay(tabId, active.get(tabId).startedAt);
   log('操作录制开始 tab=' + tabId);
   return { ok: true, tabId, startedAt: Date.now() };
@@ -500,6 +502,7 @@ export async function stopRecording(params = {}) {
   } catch {
     // 页面可能已关闭
   }
+  void clearCooperationPassthroughs(tabId);
   let finalObservation = null;
   try {
     const observation = await execPage(tabId, 'observe', { probeHover: false });

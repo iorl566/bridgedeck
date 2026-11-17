@@ -6,6 +6,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import {
+  checkRuntimeClassification,
+  listExtensionFiles,
+  readReferenceOnly,
+} from './lib/extension-runtime.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXT = path.join(ROOT, 'extension');
@@ -17,21 +22,49 @@ const out = path.join(DIST, name);
 if (!fs.existsSync(path.join(EXT, 'manifest.json'))) {
   throw new Error('extension/manifest.json 不存在');
 }
+const { runtime, problems } = checkRuntimeClassification(EXT);
+if (problems.length) {
+  throw new Error('运行时/参考模块分类不一致：\n  ' + problems.join('\n  '));
+}
+const referenceOnly = readReferenceOnly(EXT);
+
 fs.mkdirSync(DIST, { recursive: true });
 fs.rmSync(out, { force: true });
+const staging = path.join(DIST, '.extension-build');
+fs.rmSync(staging, { recursive: true, force: true });
+fs.mkdirSync(staging, { recursive: true });
+const excluded = [];
+try {
+  for (const file of listExtensionFiles(EXT)) {
+    if (file === 'reference-only.json') continue;
+    if (file.endsWith('.js') && !runtime.has(file)) {
+      excluded.push(file);
+      continue;
+    }
+    const dest = path.join(staging, file);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(path.join(EXT, file), dest);
+  }
+  if (!fs.existsSync(path.join(staging, 'manifest.json'))) throw new Error('staging 缺少 manifest.json');
 
-const psPath = (value) => String(value).replace(/'/g, "''");
-const script = `Compress-Archive -Path '${psPath(path.join(EXT, '*'))}' -DestinationPath '${psPath(out)}' -Force`;
-const packed = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' });
-if (packed.status !== 0) {
-  throw new Error('Compress-Archive 失败：' + (packed.stderr || packed.stdout));
+  const psPath = (value) => String(value).replace(/'/g, "''");
+  const script = `Compress-Archive -Path '${psPath(path.join(staging, '*'))}' -DestinationPath '${psPath(out)}' -Force`;
+  const packed = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' });
+  if (packed.status !== 0) {
+    throw new Error('Compress-Archive 失败：' + (packed.stderr || packed.stdout));
+  }
+} finally {
+  fs.rmSync(staging, { recursive: true, force: true });
 }
 
 const listed = spawnSync('tar', ['-tf', out], { encoding: 'utf8' });
 if (listed.status !== 0) throw new Error('无法读取 zip 列表：' + (listed.stderr || listed.stdout));
 const entries = new Set(String(listed.stdout).split(/\r?\n/).filter(Boolean));
-for (const required of ['manifest.json', 'background.js', 'content/human-watch.js', 'injected/page-lib.js']) {
+for (const required of ['manifest.json', 'background.js', 'content/human-watch.js', 'injected/page-lib.js', 'ui/popup.html', 'offscreen.html']) {
   if (!entries.has(required)) throw new Error('扩展 zip 缺少文件：' + required);
+}
+for (const file of Object.keys(referenceOnly)) {
+  if (entries.has(file)) throw new Error('参考镜像文件被打进 zip：' + file);
 }
 
 const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -48,6 +81,12 @@ if (fs.existsSync(releasePath)) {
 }
 release.version = pkg.version;
 release.generatedAt = new Date().toISOString();
+// artifacts 变了，旧签名必然失效；保留它会让 update stage 直接拒绝清单。
+// 发布前用 tools/release.mjs --sign-ed25519 <private.pem> 重新签名。
+if (release.signature) {
+  console.error('[build-extension] release.json 旧签名已移除；正式发布前请重新签名。');
+}
+delete release.signature;
 release.artifacts = Array.isArray(release.artifacts) ? release.artifacts : [];
 const artifact = {
   name,
@@ -71,4 +110,12 @@ fs.writeFileSync(
   'utf8',
 );
 
-console.log(JSON.stringify({ ok: true, name, bytes, sha256: artifact.sha256, entries: entries.size }, null, 2));
+console.log(JSON.stringify({
+  ok: true,
+  name,
+  bytes,
+  sha256: artifact.sha256,
+  entries: entries.size,
+  runtimeJs: runtime.size,
+  excludedReferenceJs: excluded.length,
+}, null, 2));

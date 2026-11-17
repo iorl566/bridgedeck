@@ -1,0 +1,1662 @@
+{
+  "未连接": {
+    "en": "Disconnected",
+    "existing": {
+      "en": "Disconnected",
+      "ja": "未接続",
+      "ko": "연결되지 않음",
+      "de": "Getrennt",
+      "es": "Desconectado",
+      "fr": "Déconnecté",
+      "it": "Disconnesso",
+      "pt": "Desconectado",
+      "zh-TW": "未連線"
+    }
+  },
+  "已连接": {
+    "en": "Connected",
+    "existing": {
+      "en": "Connected",
+      "ja": "接続済み",
+      "ko": "연결됨",
+      "de": "Verbunden",
+      "es": "Conectado",
+      "fr": "Connecté",
+      "it": "Connesso",
+      "pt": "Conectado",
+      "zh-TW": "已連線"
+    }
+  },
+  "连接中": {
+    "en": "Connecting",
+    "existing": null
+  },
+  "协议偏差": {
+    "en": "Protocol mismatch",
+    "existing": null
+  },
+  "已关闭": {
+    "en": "Off",
+    "existing": {
+      "en": "Off",
+      "ja": "オフ",
+      "ko": "꺼짐",
+      "de": "Aus",
+      "es": "Desactivado",
+      "fr": "Désactivé",
+      "it": "Disattivato",
+      "pt": "Desativado",
+      "zh-TW": "Off"
+    }
+  },
+  "连接中…": {
+    "en": "Connecting…",
+    "existing": {
+      "en": "Connecting…",
+      "ja": "接続中…",
+      "ko": "연결 중…",
+      "de": "Verbindung wird hergestellt…",
+      "es": "Conectando…",
+      "fr": "Connexion…",
+      "it": "Connessione…",
+      "pt": "Conectando…",
+      "zh-TW": "連線中…"
+    }
+  },
+  "未命名浏览器": {
+    "en": "Unnamed browser",
+    "existing": {
+      "en": "Unnamed browser",
+      "ja": "名前のないブラウザ",
+      "ko": "이름 없는 브라우저",
+      "de": "Unbenannter Browser",
+      "es": "Navegador sin nombre",
+      "fr": "Navigateur sans nom",
+      "it": "Browser senza nome",
+      "pt": "Navegador sem nome",
+      "zh-TW": "未命名瀏覽器"
+    }
+  },
+  "当前浏览器": {
+    "en": "Current browser",
+    "existing": {
+      "en": "Current browser",
+      "ja": "現在のブラウザ",
+      "ko": "현재 브라우저",
+      "de": "Aktueller Browser",
+      "es": "Navegador actual",
+      "fr": "Navigateur actuel",
+      "it": "Browser attuale",
+      "pt": "Navegador atual",
+      "zh-TW": "目前瀏覽器"
+    }
+  },
+  "复制指令": {
+    "en": "Copy command",
+    "existing": {
+      "en": "Copy instructions",
+      "ja": "指示をコピー",
+      "ko": "지침 복사",
+      "de": "Anweisungen kopieren",
+      "es": "Copiar instrucciones",
+      "fr": "Copier les instructions",
+      "it": "Copia istruzioni",
+      "pt": "Copiar instruções",
+      "zh-TW": "複製指令"
+    }
+  },
+  "连接设置": {
+    "en": "Connection settings",
+    "existing": {
+      "en": "Connection settings",
+      "ja": "接続設定",
+      "ko": "연결 설정",
+      "de": "Verbindungseinstellungen",
+      "es": "Ajustes de conexión",
+      "fr": "Paramètres de connexion",
+      "it": "Impostazioni di connessione",
+      "pt": "Configurações de conexão",
+      "zh-TW": "連線設定"
+    }
+  },
+  "· 本机": {
+    "en": "· Local",
+    "existing": null
+  },
+  "本机 · 未连接": {
+    "en": "Local · Disconnected",
+    "existing": null
+  },
+  "本机": {
+    "en": "Local",
+    "existing": {
+      "en": "Local",
+      "ja": "ローカル",
+      "ko": "로컬",
+      "de": "Lokal",
+      "es": "Local",
+      "fr": "Local",
+      "it": "Locale",
+      "pt": "Local",
+      "zh-TW": "本機"
+    }
+  },
+  "远程配对": {
+    "en": "Remote pairing",
+    "existing": null
+  },
+  "本机端口": {
+    "en": "Local port",
+    "existing": {
+      "en": "Local port",
+      "ja": "ローカルポート",
+      "ko": "로컬 포트",
+      "de": "Lokaler Port",
+      "es": "Puerto local",
+      "fr": "Port local",
+      "it": "Porta locale",
+      "pt": "Porta local",
+      "zh-TW": "本機連接埠"
+    }
+  },
+  "留空恢复默认端口。": {
+    "en": "Leave empty to restore the default port.",
+    "existing": null
+  },
+  "保存端口": {
+    "en": "Save port",
+    "existing": {
+      "en": "Save port",
+      "ja": "ポートを保存",
+      "ko": "포트 저장",
+      "de": "Port speichern",
+      "es": "Guardar puerto",
+      "fr": "Enregistrer le port",
+      "it": "Salva porta",
+      "pt": "Salvar porta",
+      "zh-TW": "儲存連接埠"
+    }
+  },
+  "保存并连接": {
+    "en": "Save and connect",
+    "existing": null
+  },
+  "恢复本机": {
+    "en": "Back to local",
+    "existing": null
+  },
+  "控制提示": {
+    "en": "Control hint",
+    "existing": {
+      "en": "Control hints",
+      "ja": "操作ヒント",
+      "ko": "제어 표시",
+      "de": "Steuerungshinweise",
+      "es": "Indicadores de control",
+      "fr": "Indices de contrôle",
+      "it": "Indicatori di controllo",
+      "pt": "Indicadores de controle",
+      "zh-TW": "控制提示"
+    }
+  },
+  "Agent 控制页面时显示提示条和蓝色高亮。": {
+    "en": "Show a hint bar and blue highlight while the agent controls the page.",
+    "existing": null
+  },
+  "自动化设置": {
+    "en": "Automation",
+    "existing": {
+      "en": "Automation settings",
+      "ja": "自動化設定",
+      "ko": "자동화 설정",
+      "de": "Automatisierungseinstellungen",
+      "es": "Ajustes de automatización",
+      "fr": "Paramètres d'automatisation",
+      "it": "Impostazioni di automazione",
+      "pt": "Configurações de automação",
+      "zh-TW": "自動化設定"
+    }
+  },
+  "借用标签页前确认": {
+    "en": "Confirm before borrowing tabs",
+    "existing": {
+      "en": "Confirm before borrowing tabs",
+      "ja": "タブを借用する前に確認する",
+      "ko": "탭을 빌리기 전에 확인",
+      "de": "Vor dem Ausleihen von Tabs bestätigen",
+      "es": "Confirmar antes de tomar prestadas pestañas",
+      "fr": "Confirmer avant d'emprunter des onglets",
+      "it": "Conferma prima di prendere in prestito le schede",
+      "pt": "Confirmar antes de tomar guias emprestadas",
+      "zh-TW": "借用分頁前確認"
+    }
+  },
+  "开启时，借用你已打开的标签页前会请求允许；关闭时，直接借用。自动保存到当前浏览器配置，对到达插件的所有会话请求生效；命令行参数不能覆盖。": {
+    "en": "When on, the agent asks before taking over one of your tabs. Saved in this browser profile and applies to every session; command-line flags cannot override it.",
+    "existing": null
+  },
+  "允许请求人工协助": {
+    "en": "Allow human help requests",
+    "existing": {
+      "en": "Allow requests for human help",
+      "ja": "人によるサポート要求を許可する",
+      "ko": "사용자 도움 요청 허용",
+      "de": "Anfragen nach menschlicher Hilfe zulassen",
+      "es": "Permitir solicitudes de ayuda humana",
+      "fr": "Autoriser les demandes d'aide humaine",
+      "it": "Consenti richieste di aiuto umano",
+      "pt": "Permitir solicitações de ajuda humana",
+      "zh-TW": "允許請求人工協助"
+    }
+  },
+  "开启时，Agent 可以请求你协助。关闭时，Agent 会尽力自主完成操作，遇到无法处理的步骤再报告受阻。自动保存到当前浏览器配置，对到达插件的所有会话请求生效；命令行参数不能覆盖。": {
+    "en": "When on, the agent may ask you for help. When off, it tries to finish alone and reports a blocker instead. Saved in this browser profile for all sessions; command-line flags cannot override it.",
+    "existing": null
+  },
+  "当前任务": {
+    "en": "Current tasks",
+    "existing": {
+      "en": "Current tasks",
+      "ja": "現在のタスク",
+      "ko": "현재 작업",
+      "de": "Aktuelle Aufgaben",
+      "es": "Tareas actuales",
+      "fr": "Tâches en cours",
+      "it": "Attività correnti",
+      "pt": "Tarefas atuais",
+      "zh-TW": "目前工作"
+    }
+  },
+  "实例 ID": {
+    "en": "Instance ID",
+    "existing": {
+      "en": "Instance ID",
+      "ja": "インスタンス ID",
+      "ko": "인스턴스 ID",
+      "de": "Instanz-ID",
+      "es": "ID de instancia",
+      "fr": "ID d'instance",
+      "it": "ID istanza",
+      "pt": "ID da instância",
+      "zh-TW": "執行個體 ID"
+    }
+  },
+  "快捷功能": {
+    "en": "Quick actions",
+    "existing": {
+      "en": "Quick actions",
+      "ja": "クイックアクション",
+      "ko": "빠른 작업",
+      "de": "Schnellaktionen",
+      "es": "Acciones rápidas",
+      "fr": "Actions rapides",
+      "it": "Azioni rapide",
+      "pt": "Ações rápidas",
+      "zh-TW": "快速功能"
+    }
+  },
+  "视频录制": {
+    "en": "Video recording",
+    "existing": {
+      "en": "Video recording",
+      "ja": "Video recording",
+      "ko": "Video recording",
+      "de": "Video recording",
+      "es": "Video recording",
+      "fr": "Video recording",
+      "it": "Video recording",
+      "pt": "Video recording",
+      "zh-TW": "Video recording"
+    }
+  },
+  "将任务标签页录制为 MP4 视频": {
+    "en": "Record a task tab as MP4 video",
+    "existing": {
+      "en": "Record a task tab as an MP4 video",
+      "ja": "Record a task tab as an MP4 video",
+      "ko": "Record a task tab as an MP4 video",
+      "de": "Record a task tab as an MP4 video",
+      "es": "Record a task tab as an MP4 video",
+      "fr": "Record a task tab as an MP4 video",
+      "it": "Record a task tab as an MP4 video",
+      "pt": "Record a task tab as an MP4 video",
+      "zh-TW": "Record a task tab as an MP4 video"
+    }
+  },
+  "网站调试": {
+    "en": "Website debugging",
+    "existing": {
+      "en": "Website debugging",
+      "ja": "ウェブサイトのデバッグ",
+      "ko": "웹사이트 디버깅",
+      "de": "Website-Debugging",
+      "es": "Depuración de sitios web",
+      "fr": "Débogage de sites web",
+      "it": "Debug dei siti web",
+      "pt": "Depuração de sites",
+      "zh-TW": "網站偵錯"
+    }
+  },
+  "记录请求、异常与页面上下文，随时回看": {
+    "en": "Capture requests, errors and page context for later review",
+    "existing": {
+      "en": "Record requests, errors and page context for later review",
+      "ja": "リクエスト、エラー、ページの状況を記録し、あとから確認できます",
+      "ko": "요청, 오류, 페이지 문맥을 기록하고 다시 확인합니다",
+      "de": "Anfragen, Fehler und Seitenkontext zur späteren Prüfung aufzeichnen",
+      "es": "Registra solicitudes, errores y el contexto de la página para revisarlos después",
+      "fr": "Enregistrer les requêtes, les erreurs et le contexte de page pour les examiner plus tard",
+      "it": "Registra richieste, errori e contesto della pagina per consultarli in seguito",
+      "pt": "Capture requisições, erros e contexto da página para consultar depois",
+      "zh-TW": "記錄請求、錯誤與頁面情境，方便隨時檢視"
+    }
+  },
+  "长截图": {
+    "en": "Full-page screenshot",
+    "existing": {
+      "en": "Full-page screenshot",
+      "ja": "ページ全体のスクリーンショット",
+      "ko": "전체 페이지 스크린샷",
+      "de": "Screenshot der gesamten Seite",
+      "es": "Captura de página completa",
+      "fr": "Capture d'écran de page complète",
+      "it": "Screenshot dell'intera pagina",
+      "pt": "Captura de tela da página inteira",
+      "zh-TW": "整頁截圖"
+    }
+  },
+  "从网页顶部截到底部，预览并保存长图": {
+    "en": "Capture the page from top to bottom, preview and save",
+    "existing": {
+      "en": "Capture a whole page, preview and save it",
+      "ja": "ページ全体をキャプチャして、プレビューし、保存します",
+      "ko": "페이지 전체를 캡처하고 미리 본 후 저장",
+      "de": "Eine ganze Seite erfassen, in der Vorschau ansehen und speichern",
+      "es": "Captura una página entera, previsualízala y guárdala",
+      "fr": "Capturez une page entière, prévisualisez-la et enregistrez-la",
+      "it": "Cattura un'intera pagina, visualizzane l'anteprima e salvala",
+      "pt": "Capture uma página inteira, visualize e salve",
+      "zh-TW": "從網頁頂部截到底部，預覽並儲存長圖"
+    }
+  },
+  "操作录制": {
+    "en": "Action recording",
+    "existing": {
+      "en": "Action recording",
+      "ja": "操作の記録",
+      "ko": "작업 기록",
+      "de": "Aktionsaufzeichnung",
+      "es": "Grabación de acciones",
+      "fr": "Enregistrement d'actions",
+      "it": "Registrazione azioni",
+      "pt": "Gravação de ações",
+      "zh-TW": "操作錄製"
+    }
+  },
+  "录制你的操作，供 Agent 参考": {
+    "en": "Record your actions as a reference for the agent",
+    "existing": {
+      "en": "Record your actions for Agent reference",
+      "ja": "エージェントが参照できるよう、あなたの操作を記録します",
+      "ko": "에이전트가 참고할 수 있도록 작업 기록",
+      "de": "Zeichnen Sie Ihre Aktionen als Referenz für den Agent auf",
+      "es": "Graba tus acciones como referencia para el agente",
+      "fr": "Enregistrez vos actions pour référence de l'Agent",
+      "it": "Registra le tue azioni come riferimento per l'agente",
+      "pt": "Grave suas ações como referência para o agente",
+      "zh-TW": "錄製你的操作，供 Agent 參考"
+    }
+  },
+  "操作审计": {
+    "en": "Task audit",
+    "existing": {
+      "en": "Operation audit",
+      "ja": "操作監査",
+      "ko": "작업 감사",
+      "de": "Vorgangsprotokoll",
+      "es": "Auditoría de operaciones",
+      "fr": "Audit des opérations",
+      "it": "Controllo delle operazioni",
+      "pt": "Auditoria de operações",
+      "zh-TW": "操作稽核"
+    }
+  },
+  "操作审计介绍": {
+    "en": "Task audit",
+    "existing": {
+      "en": "About operation auditing",
+      "ja": "操作監査について",
+      "ko": "작업 감사 소개",
+      "de": "Über das Vorgangsprotokoll",
+      "es": "Acerca de la auditoría de operaciones",
+      "fr": "À propos de l'audit des opérations",
+      "it": "Informazioni sul controllo delle operazioni",
+      "pt": "Sobre a auditoria de operações",
+      "zh-TW": "操作稽核介紹"
+    }
+  },
+  "在完整页面打开": {
+    "en": "Open full page",
+    "existing": null
+  },
+  "面板": {
+    "en": "Panel",
+    "existing": null
+  },
+  "BridgeDeck · 设置": {
+    "en": "BridgeDeck · Settings",
+    "existing": null
+  },
+  "这些设置立刻对已打开和新建的任务生效，保存在当前浏览器配置里。": {
+    "en": "These settings apply immediately to open and new tasks and are saved in this browser profile.",
+    "existing": null
+  },
+  "浏览器实例": {
+    "en": "Browser instance",
+    "existing": null
+  },
+  "名称": {
+    "en": "Name",
+    "existing": null
+  },
+  "给这个浏览器起个名字，Agent 可用": {
+    "en": "Name this browser so the agent can select it with",
+    "existing": null
+  },
+  "精确选中它。": {
+    "en": "to target it precisely.",
+    "existing": null
+  },
+  "复制该实例的启动命令": {
+    "en": "Copy this instance's start command",
+    "existing": null
+  },
+  "自动化": {
+    "en": "Automation",
+    "existing": null
+  },
+  "Agent 接管你已有的标签页前，先在页面顶部弹出确认条。": {
+    "en": "Show a confirmation before the agent takes over one of your tabs.",
+    "existing": null
+  },
+  "允许 Agent 请你处理登录、验证码等必须本人参与的步骤。": {
+    "en": "Allow the agent to ask you for login, CAPTCHA or other steps only you can complete.",
+    "existing": null
+  },
+  "页面守卫": {
+    "en": "Page guard",
+    "existing": null
+  },
+  "外部链接或手动新建的标签页落进 Agent 窗口时，自动移回普通窗口。": {
+    "en": "Move external or manually opened tabs back to a normal window when they land in the agent window.",
+    "existing": null
+  },
+  "默认长截图模式": {
+    "en": "Default full-page mode",
+    "existing": null
+  },
+  "自动滚动": {
+    "en": "Auto scroll",
+    "existing": null
+  },
+  "手动拼接": {
+    "en": "Manual stitch",
+    "existing": null
+  },
+  "保存设置": {
+    "en": "Save settings",
+    "existing": null
+  },
+  "恢复默认": {
+    "en": "Restore defaults",
+    "existing": null
+  },
+  "数据默认只在本机流转；详见": {
+    "en": "Data stays on this machine by default. See",
+    "existing": null
+  },
+  "隐私说明": {
+    "en": "Privacy notice",
+    "existing": null
+  },
+  "快捷功能 · BridgeDeck": {
+    "en": "Quick actions · BridgeDeck",
+    "existing": null
+  },
+  "操作审计 · BridgeDeck": {
+    "en": "Task audit · BridgeDeck",
+    "existing": null
+  },
+  "浏览器本地记录": {
+    "en": "Stored locally in this browser",
+    "existing": {
+      "en": "Browser-local records",
+      "ja": "このブラウザ内の記録",
+      "ko": "브라우저 로컬 기록",
+      "de": "Lokal im Browser gespeicherte Aufzeichnungen",
+      "es": "Registros locales del navegador",
+      "fr": "Captures conservées dans ce navigateur",
+      "it": "Record locali del browser",
+      "pt": "Registros locais do navegador",
+      "zh-TW": "此瀏覽器內的紀錄"
+    }
+  },
+  "记录仅保存在本机，已结束的任务保留 30 天。只保存方法名、耗时、结果码、会话、标签页与 URL； 输入值、页面正文与截图不会保存。可用": {
+    "en": "Records stay on this machine for 30 days. Only method, duration, result code, session, tab and URL are saved; input values, page text and screenshots are not. Use",
+    "existing": null
+  },
+  "读取，": {
+    "en": "to read;",
+    "existing": null
+  },
+  "可关闭。": {
+    "en": "",
+    "existing": null
+  },
+  "全部任务": {
+    "en": "All tasks",
+    "existing": {
+      "en": "All tasks",
+      "ja": "すべてのタスク",
+      "ko": "모든 작업",
+      "de": "Alle Aufgaben",
+      "es": "Todas las tareas",
+      "fr": "Toutes les tâches",
+      "it": "Tutte le attività",
+      "pt": "Todas as tarefas",
+      "zh-TW": "全部工作"
+    }
+  },
+  "最近 1 小时": {
+    "en": "Last hour",
+    "existing": null
+  },
+  "最近 24 小时": {
+    "en": "Last 24 hours",
+    "existing": null
+  },
+  "最近 7 天": {
+    "en": "Last 7 days",
+    "existing": null
+  },
+  "清空记录": {
+    "en": "Clear records",
+    "existing": null
+  },
+  "刷新": {
+    "en": "Refresh",
+    "existing": null
+  },
+  "还没有任务记录。后续通过 BridgeDeck 执行的操作会显示在这里。": {
+    "en": "No task records yet. Operations run through BridgeDeck will appear here.",
+    "existing": null
+  },
+  "视频录制 · BridgeDeck": {
+    "en": "Video recording · BridgeDeck",
+    "existing": null
+  },
+  "录制": {
+    "en": "Record",
+    "existing": null
+  },
+  "开始录制": {
+    "en": "Start recording",
+    "existing": {
+      "en": "Start recording",
+      "ja": "Start recording",
+      "ko": "Start recording",
+      "de": "Start recording",
+      "es": "Start recording",
+      "fr": "Start recording",
+      "it": "Start recording",
+      "pt": "Start recording",
+      "zh-TW": "Start recording"
+    }
+  },
+  "停止录制": {
+    "en": "Stop recording",
+    "existing": {
+      "en": "Stop recording",
+      "ja": "Stop recording",
+      "ko": "Stop recording",
+      "de": "Stop recording",
+      "es": "Stop recording",
+      "fr": "Stop recording",
+      "it": "Stop recording",
+      "pt": "Stop recording",
+      "zh-TW": "Stop recording"
+    }
+  },
+  "未开始": {
+    "en": "Not started",
+    "existing": null
+  },
+  "录制的是标签页画面（无声）。浏览器会在标签页上显示「正在共享」提示。 优先用 MP4（H.264），浏览器不支持时自动退回 WebM。": {
+    "en": "Records the tab (silent). The browser shows a sharing indicator. MP4 (H.264) is preferred and falls back to WebM.",
+    "existing": null
+  },
+  "录制文件": {
+    "en": "Recordings",
+    "existing": null
+  },
+  "还没有录制文件": {
+    "en": "No recordings yet",
+    "existing": null
+  },
+  "关闭预览": {
+    "en": "Close preview",
+    "existing": null
+  },
+  "操作录制历史": {
+    "en": "Action recording history",
+    "existing": null
+  },
+  "录制文件在当前浏览器保留 24 小时，请及时保存重要视频。": {
+    "en": "Recordings are kept for 24 hours in this browser. Save important videos promptly.",
+    "existing": {
+      "en": "Recordings stay in this browser for 24 hours. Save important videos before they expire.",
+      "ja": "Recordings stay in this browser for 24 hours. Save important videos before they expire.",
+      "ko": "Recordings stay in this browser for 24 hours. Save important videos before they expire.",
+      "de": "Recordings stay in this browser for 24 hours. Save important videos before they expire.",
+      "es": "Recordings stay in this browser for 24 hours. Save important videos before they expire.",
+      "fr": "Recordings stay in this browser for 24 hours. Save important videos before they expire.",
+      "it": "Recordings stay in this browser for 24 hours. Save important videos before they expire.",
+      "pt": "Recordings stay in this browser for 24 hours. Save important videos before they expire.",
+      "zh-TW": "Recordings stay in this browser for 24 hours. Save important videos before they expire."
+    }
+  },
+  "最近录制": {
+    "en": "Recent recordings",
+    "existing": {
+      "en": "Recent recordings",
+      "ja": "Recent recordings",
+      "ko": "Recent recordings",
+      "de": "Recent recordings",
+      "es": "Recent recordings",
+      "fr": "Recent recordings",
+      "it": "Recent recordings",
+      "pt": "Recent recordings",
+      "zh-TW": "Recent recordings"
+    }
+  },
+  "还没有录制视频。": {
+    "en": "No videos yet.",
+    "existing": {
+      "en": "No recent recordings.",
+      "ja": "No recent recordings.",
+      "ko": "No recent recordings.",
+      "de": "No recent recordings.",
+      "es": "No recent recordings.",
+      "fr": "No recent recordings.",
+      "it": "No recent recordings.",
+      "pt": "No recent recordings.",
+      "zh-TW": "No recent recordings."
+    }
+  },
+  "完整录制页": {
+    "en": "Open recording page",
+    "existing": null
+  },
+  "长截图 · BridgeDeck": {
+    "en": "Full-page screenshot · BridgeDeck",
+    "existing": null
+  },
+  "自动滚动整页，或手动滚动采集，将内容拼成清晰长图。": {
+    "en": "Auto-scroll the page or capture it manually, then stitch a long image.",
+    "existing": {
+      "en": "Capture a whole page automatically, or scroll manually to build a clear long image.",
+      "ja": "ページ全体を自動的にキャプチャするか、手動でスクロールして鮮明な長い画像を作成します。",
+      "ko": "전체 페이지를 자동으로 캡처하거나 직접 스크롤하여 긴 이미지를 만듭니다.",
+      "de": "Erfassen Sie eine ganze Seite automatisch oder scrollen Sie manuell, um ein klares Langbild zu erstellen.",
+      "es": "Captura una página entera automáticamente o desplázate manualmente para crear una imagen larga y nítida.",
+      "fr": "Capturez automatiquement une page entière, ou faites défiler manuellement pour créer une longue image nette.",
+      "it": "Cattura automaticamente un'intera pagina, oppure scorri manualmente per creare un'immagine lunga e nitida.",
+      "pt": "Capture uma página inteira automaticamente ou role manualmente para criar uma imagem longa e nítida.",
+      "zh-TW": "自動捲動整頁，或手動捲動擷取，將內容拼成清晰長圖。"
+    }
+  },
+  "预览": {
+    "en": "Preview",
+    "existing": null
+  },
+  "打开预览": {
+    "en": "Open preview",
+    "existing": {
+      "en": "Open preview",
+      "ja": "プレビューを開く",
+      "ko": "미리보기 열기",
+      "de": "Vorschau öffnen",
+      "es": "Abrir vista previa",
+      "fr": "Ouvrir l'aperçu",
+      "it": "Apri anteprima",
+      "pt": "Abrir visualização",
+      "zh-TW": "開啟預覽"
+    }
+  },
+  "截图暂不可用": {
+    "en": "Screenshot unavailable",
+    "existing": {
+      "en": "Screenshot unavailable",
+      "ja": "スクリーンショットは利用できません",
+      "ko": "스크린샷을 사용할 수 없습니다",
+      "de": "Screenshot nicht verfügbar",
+      "es": "Captura no disponible",
+      "fr": "Capture indisponible",
+      "it": "Screenshot non disponibile",
+      "pt": "Captura de tela indisponível",
+      "zh-TW": "截圖暫不可用"
+    }
+  },
+  "预览可能已过期或被清理。请回到网页，通过快捷功能重新截图。": {
+    "en": "The preview may have expired or been cleared. Go back to the page and capture again.",
+    "existing": {
+      "en": "This preview may have expired or been removed. Return to the webpage and capture it again from Quick actions.",
+      "ja": "このプレビューは期限切れになったか、削除された可能性があります。ウェブページに戻り、クイックアクションから再度キャプチャしてください。",
+      "ko": "미리보기가 만료되었거나 삭제되었을 수 있습니다. 웹페이지로 돌아가 빠른 기능에서 다시 캡처하세요.",
+      "de": "Diese Vorschau ist möglicherweise abgelaufen oder wurde entfernt. Kehren Sie zur Webseite zurück und erfassen Sie sie erneut über die Schnellaktionen.",
+      "es": "Esta vista previa puede haber caducado o haberse eliminado. Vuelve a la página web y captúrala de nuevo desde las acciones rápidas.",
+      "fr": "Cet aperçu a peut-être expiré ou été supprimé. Retournez sur la page web et recapturez-la depuis les actions rapides.",
+      "it": "Questa anteprima potrebbe essere scaduta o essere stata rimossa. Torna alla pagina web e catturala di nuovo dalle azioni rapide.",
+      "pt": "Esta visualização pode ter expirado ou sido removida. Volte à página web e capture-a novamente nas ações rápidas.",
+      "zh-TW": "預覽可能已過期或已被清除。請回到網頁，透過快速功能重新截圖。"
+    }
+  },
+  "重新截图（高级）": {
+    "en": "Capture again (advanced)",
+    "existing": null
+  },
+  "目标与模式": {
+    "en": "Target and mode",
+    "existing": null
+  },
+  "截取整页": {
+    "en": "Capture full page",
+    "existing": null
+  },
+  "自动滚动并拼接，最多 8 屏": {
+    "en": "Auto-scroll and stitch, up to 8 screens",
+    "existing": null
+  },
+  "开始拼接": {
+    "en": "Start stitching",
+    "existing": null
+  },
+  "拍一帧": {
+    "en": "Capture frame",
+    "existing": null
+  },
+  "拼接": {
+    "en": "Stitch",
+    "existing": null
+  },
+  "0 帧": {
+    "en": "0 frames",
+    "existing": null
+  },
+  "保存到下载目录": {
+    "en": "Save to Downloads",
+    "existing": null
+  },
+  "丢弃": {
+    "en": "Discard",
+    "existing": null
+  },
+  "网站调试 · BridgeDeck": {
+    "en": "Website debugging · BridgeDeck",
+    "existing": null
+  },
+  "每一次调查，都有迹可循。": {
+    "en": "Every investigation leaves a trail.",
+    "existing": null
+  },
+  "查看网页上下文、请求和异常，或导出记录交给 Agent 分析。": {
+    "en": "Inspect page context, requests and errors, or export records for the agent.",
+    "existing": null
+  },
+  "手动采集（高级）": {
+    "en": "Manual capture (advanced)",
+    "existing": null
+  },
+  "开始采集": {
+    "en": "Start capture",
+    "existing": {
+      "en": "Start capture",
+      "ja": "キャプチャを開始",
+      "ko": "캡처 시작",
+      "de": "Erfassung starten",
+      "es": "Iniciar captura",
+      "fr": "Démarrer la capture",
+      "it": "Avvia cattura",
+      "pt": "Iniciar captura",
+      "zh-TW": "開始截圖"
+    }
+  },
+  "停止采集": {
+    "en": "Stop capture",
+    "existing": {
+      "en": "Stop capture",
+      "ja": "収集を停止",
+      "ko": "수집 중지",
+      "de": "Aufzeichnung beenden",
+      "es": "Detener captura",
+      "fr": "Arrêter la capture",
+      "it": "Arresta acquisizione",
+      "pt": "Encerrar captura",
+      "zh-TW": "停止擷取"
+    }
+  },
+  "采集当前标签页的请求元数据（方法/状态/耗时）与控制台输出/未捕获异常；停止后保存为历史，最多保留 10 条。": {
+    "en": "Capture request metadata (method/status/duration), console output and uncaught errors from this tab; keep up to 10 runs.",
+    "existing": null
+  },
+  "请求": {
+    "en": "Requests",
+    "existing": {
+      "en": "Requests",
+      "ja": "リクエスト",
+      "ko": "요청",
+      "de": "Anfragen",
+      "es": "Solicitudes",
+      "fr": "Requêtes",
+      "it": "Richieste",
+      "pt": "Requisições",
+      "zh-TW": "請求"
+    }
+  },
+  "导出 JSON": {
+    "en": "Export JSON",
+    "existing": {
+      "en": "Export JSON",
+      "ja": "JSON をエクスポート",
+      "ko": "JSON 내보내기",
+      "de": "JSON exportieren",
+      "es": "Exportar JSON",
+      "fr": "Exporter en JSON",
+      "it": "Esporta JSON",
+      "pt": "Exportar JSON",
+      "zh-TW": "匯出 JSON"
+    }
+  },
+  "还没有请求": {
+    "en": "No requests yet",
+    "existing": null
+  },
+  "控制台 / 异常": {
+    "en": "Console / errors",
+    "existing": null
+  },
+  "没有控制台输出": {
+    "en": "No console output",
+    "existing": null
+  },
+  "页面上下文": {
+    "en": "Page context",
+    "existing": {
+      "en": "Page context",
+      "ja": "ページの状況",
+      "ko": "페이지 문맥",
+      "de": "Seitenkontext",
+      "es": "Contexto de la página",
+      "fr": "Contexte de page",
+      "it": "Contesto della pagina",
+      "pt": "Contexto da página",
+      "zh-TW": "頁面情境"
+    }
+  },
+  "历史记录": {
+    "en": "History",
+    "existing": {
+      "en": "History",
+      "ja": "履歴",
+      "ko": "이전 기록",
+      "de": "Verlauf",
+      "es": "Historial",
+      "fr": "Historique",
+      "it": "Cronologia",
+      "pt": "Histórico",
+      "zh-TW": "歷史紀錄"
+    }
+  },
+  "还没有调试记录": {
+    "en": "No debug records yet",
+    "existing": {
+      "en": "No debugging records yet",
+      "ja": "デバッグ記録はまだありません",
+      "ko": "디버깅 기록이 없습니다",
+      "de": "Noch keine Debugging-Aufzeichnungen",
+      "es": "Aún no hay registros de depuración",
+      "fr": "Aucune capture de débogage pour le moment",
+      "it": "Ancora nessun record di debug",
+      "pt": "Ainda não há registros de depuração",
+      "zh-TW": "尚無偵錯紀錄"
+    }
+  },
+  "把网站地址和遇到的问题告诉 Agent，它会建立任务并开启采集。": {
+    "en": "Tell the agent the URL and the problem; it will start a capture.",
+    "existing": {
+      "en": "Tell your agent the website and the issue. It can create a task and start capture.",
+      "ja": "対象のサイトと問題をエージェントに伝えてください。エージェントがタスクを作成し、収集を開始できます。",
+      "ko": "에이전트에게 웹사이트와 문제를 알려주면 작업을 만들고 수집을 시작합니다.",
+      "de": "Nennen Sie Ihrem Agenten die Website und das Problem. Er kann eine Aufgabe erstellen und die Aufzeichnung starten.",
+      "es": "Indica a tu agente el sitio web y el problema. Puede crear una tarea e iniciar la captura.",
+      "fr": "Indiquez le site et le problème à votre agent. Il pourra créer une tâche et démarrer la capture.",
+      "it": "Indica all'agente il sito web e il problema. Può creare un'attività e avviare l'acquisizione.",
+      "pt": "Informe ao agente o site e o problema. Ele pode criar uma tarefa e iniciar a captura.",
+      "zh-TW": "告訴 Agent 網站網址與遇到的問題，Agent 就能建立工作並開始擷取。"
+    }
+  },
+  "历史详情": {
+    "en": "History details",
+    "existing": null
+  },
+  "关闭": {
+    "en": "Close",
+    "existing": null
+  },
+  "调试记录保存在当前浏览器本地，任务结束后仍可查看和导出。保留最近 30 天、最多 50 份、总计 50 MiB；常见凭据脱敏，正文有上限。": {
+    "en": "Debug records stay in this browser after the task ends. Kept for 30 days, up to 50 runs and 50 MiB; credentials are redacted and bodies are capped.",
+    "existing": {
+      "en": "Records stay in this browser after tasks end and can be exported. Kept for 30 days, up to 50 records and 50 MiB total. Common credentials are redacted; bodies are bounded.",
+      "ja": "記録はタスク終了後もこのブラウザに保存され、エクスポートできます。保存期間は 30 日間、最大 50 件、合計 50 MiB です。一般的な認証情報はマスキングされ、本文の保存量には上限があります。",
+      "ko": "작업 종료 후에도 현재 브라우저에 기록이 남으며 내보낼 수 있습니다. 최근 30일, 최대 50개 기록과 총 50 MiB를 보관합니다. 일반 인증 정보는 가리고 본문 크기는 제한합니다.",
+      "de": "Aufzeichnungen bleiben nach Aufgabenende in diesem Browser und können exportiert werden. Aufbewahrung: 30 Tage, bis zu 50 Aufzeichnungen und insgesamt 50 MiB. Gängige Zugangsdaten werden maskiert; die Größe der gespeicherten Nachrichteninhalte ist begrenzt.",
+      "es": "Los registros permanecen en este navegador cuando terminan las tareas y se pueden exportar. Se conservan durante 30 días, con un máximo de 50 registros y 50 MiB en total. Se ocultan las credenciales habituales y se limita el tamaño de los cuerpos.",
+      "fr": "Les captures restent dans ce navigateur après la fin des tâches et peuvent être exportées. Conservation : 30 jours, jusqu'à 50 captures et 50 MiB au total. Les identifiants d'authentification courants sont masqués ; la taille des corps conservés est limitée.",
+      "it": "I record restano in questo browser al termine delle attività e possono essere esportati. Si conservano per 30 giorni, fino a 50 record e 50 MiB complessivi. Le credenziali più comuni vengono oscurate; i corpi hanno limiti di dimensione.",
+      "pt": "Os registros ficam neste navegador após o término das tarefas e podem ser exportados. São mantidos por 30 dias, com limite de 50 registros e 50 MiB no total. Credenciais comuns são ocultadas; o conteúdo dos corpos tem limites de captura.",
+      "zh-TW": "工作結束後，紀錄仍保存在此瀏覽器中，並可匯出。保留 30 天，最多 50 筆、合計 50 MiB。常見的認證資訊會遮蔽，本文保留量設有上限。"
+    }
+  },
+  "采集范围与限制": {
+    "en": "Scope and limits",
+    "existing": {
+      "en": "Capture coverage",
+      "ja": "収集範囲",
+      "ko": "수집 범위",
+      "de": "Aufzeichnungsumfang",
+      "es": "Cobertura de la captura",
+      "fr": "Périmètre de capture",
+      "it": "Copertura dell'acquisizione",
+      "pt": "Cobertura da captura",
+      "zh-TW": "擷取範圍"
+    }
+  },
+  "记录请求元数据（方法/状态/耗时）、控制台输出与未捕获异常、页面基础上下文；不记录请求正文与截图。单次采集在本地保留 10 条历史。": {
+    "en": "Records request metadata, console output, uncaught errors and basic page context; request bodies and screenshots are not recorded. Each capture keeps 10 local runs.",
+    "existing": null
+  },
+  "操作录制 · BridgeDeck": {
+    "en": "Action recording · BridgeDeck",
+    "existing": null
+  },
+  "录制你的点击/输入/选择/导航，导出 JSON 给 Agent 参考": {
+    "en": "Record clicks, input, selections and navigation as JSON for the agent",
+    "existing": null
+  },
+  "录制只发生在你选中的这个标签页；密码框的值会被记成": {
+    "en": "Recording stays in the selected tab; password values are stored as",
+    "existing": null
+  },
+  "。 停止后可导出 JSON，配合": {
+    "en": ". Stop, then export JSON and use it with",
+    "existing": null
+  },
+  "或": {
+    "en": "or",
+    "existing": null
+  },
+  "复制": {
+    "en": "Copy",
+    "existing": {
+      "en": "Copy",
+      "ja": "コピー",
+      "ko": "복사",
+      "de": "Kopieren",
+      "es": "Copiar",
+      "fr": "Copier",
+      "it": "Copia",
+      "pt": "Copiar",
+      "zh-TW": "複製"
+    }
+  },
+  "未配对": {
+    "en": "Unpaired",
+    "existing": {
+      "en": "Unpaired",
+      "ja": "未ペアリング",
+      "ko": "페어링 안 됨",
+      "de": "Nicht gekoppelt",
+      "es": "Sin vincular",
+      "fr": "Non associé",
+      "it": "Non associato",
+      "pt": "Não pareado",
+      "zh-TW": "未配對"
+    }
+  },
+  "已验证": {
+    "en": "Verified",
+    "existing": {
+      "en": "Verified",
+      "ja": "検証済み",
+      "ko": "검증됨",
+      "de": "Verifiziert",
+      "es": "Verificado",
+      "fr": "Vérifié",
+      "it": "Verificato",
+      "pt": "Verificado",
+      "zh-TW": "已驗證"
+    }
+  },
+  "已连接 · 未配对": {
+    "en": "Connected · Unpaired",
+    "existing": null
+  },
+  "已连接 · 已验证": {
+    "en": "Connected · Verified",
+    "existing": null
+  },
+  "远程": {
+    "en": "Remote",
+    "existing": {
+      "en": "Remote",
+      "ja": "リモート",
+      "ko": "원격",
+      "de": "Remote",
+      "es": "Remoto",
+      "fr": "Distant",
+      "it": "Remoto",
+      "pt": "Remoto",
+      "zh-TW": "遠端"
+    }
+  },
+  "界面语言 / Language": {
+    "en": "Language",
+    "existing": null
+  },
+  "保存图片": {
+    "en": "Save image",
+    "existing": null
+  },
+  "停止并保存": {
+    "en": "Stop and save",
+    "existing": null
+  },
+  "复制录制指令": {
+    "en": "Copy recording command",
+    "existing": {
+      "en": "Copy recording instructions",
+      "ja": "記録の指示をコピー",
+      "ko": "기록 지침 복사",
+      "de": "Aufzeichnungsanweisungen kopieren",
+      "es": "Copiar instrucciones de grabación",
+      "fr": "Copier les instructions d'enregistrement",
+      "it": "Copia le istruzioni di registrazione",
+      "pt": "Copiar instruções de gravação",
+      "zh-TW": "複製錄製指令"
+    }
+  },
+  "复制给 Agent 的指令": {
+    "en": "Copy agent command",
+    "existing": {
+      "en": "Copy agent prompt",
+      "ja": "エージェントへの指示をコピー",
+      "ko": "에이전트 지시 복사",
+      "de": "Agent-Prompt kopieren",
+      "es": "Copiar instrucciones para el agente",
+      "fr": "Copier les instructions pour l'agent",
+      "it": "Copia istruzioni per l'agente",
+      "pt": "Copiar instruções para o agente",
+      "zh-TW": "複製 Agent 指令"
+    }
+  },
+  "复制给 Agent 的提示词": {
+    "en": "Copy agent prompt",
+    "existing": {
+      "en": "Copy agent prompt",
+      "ja": "Copy agent prompt",
+      "ko": "Copy agent prompt",
+      "de": "Copy agent prompt",
+      "es": "Copy agent prompt",
+      "fr": "Copy agent prompt",
+      "it": "Copy agent prompt",
+      "pt": "Copy agent prompt",
+      "zh-TW": "Copy agent prompt"
+    }
+  },
+  "已打开手动长截图页": {
+    "en": "Opened manual full-page page",
+    "existing": null
+  },
+  "开关读写异常": {
+    "en": "Failed to read or write switch",
+    "existing": null
+  },
+  "开启操作审计": {
+    "en": "Enable task audit",
+    "existing": {
+      "en": "Record operation history",
+      "ja": "操作履歴を記録する",
+      "ko": "작업 기록 사용",
+      "de": "Vorgangsverlauf aufzeichnen",
+      "es": "Registrar historial de operaciones",
+      "fr": "Enregistrer l'historique des opérations",
+      "it": "Registra cronologia delle operazioni",
+      "pt": "Registrar histórico de operações",
+      "zh-TW": "開啟操作稽核"
+    }
+  },
+  "开始截图": {
+    "en": "Start capture",
+    "existing": {
+      "en": "Start capture",
+      "ja": "キャプチャを開始",
+      "ko": "캡처 시작",
+      "de": "Erfassung starten",
+      "es": "Iniciar captura",
+      "fr": "Démarrer la capture",
+      "it": "Avvia cattura",
+      "pt": "Iniciar captura",
+      "zh-TW": "開始截圖"
+    }
+  },
+  "当前可视区域": {
+    "en": "Visible area",
+    "existing": {
+      "en": "Visible area",
+      "ja": "表示範囲",
+      "ko": "현재 보이는 영역",
+      "de": "Sichtbarer Bereich",
+      "es": "Área visible",
+      "fr": "Zone visible",
+      "it": "Area visibile",
+      "pt": "Área visível",
+      "zh-TW": "目前可視範圍"
+    }
+  },
+  "当前页面": {
+    "en": "Current page",
+    "existing": null
+  },
+  "录制完成": {
+    "en": "Recording complete",
+    "existing": null
+  },
+  "手动录制正在运行的任务": {
+    "en": "Record a running task manually",
+    "existing": {
+      "en": "Record a running task manually",
+      "ja": "Record a running task manually",
+      "ko": "Record a running task manually",
+      "de": "Record a running task manually",
+      "es": "Record a running task manually",
+      "fr": "Record a running task manually",
+      "it": "Record a running task manually",
+      "pt": "Record a running task manually",
+      "zh-TW": "Record a running task manually"
+    }
+  },
+  "打开录制页": {
+    "en": "Open recording page",
+    "existing": null
+  },
+  "操作主题（可选）": {
+    "en": "Action theme (optional)",
+    "existing": {
+      "en": "Topic (optional)",
+      "ja": "トピック(任意)",
+      "ko": "작업 주제(선택 사항)",
+      "de": "Thema (optional)",
+      "es": "Tema (opcional)",
+      "fr": "Sujet (facultatif)",
+      "it": "Argomento (facoltativo)",
+      "pt": "Tópico (opcional)",
+      "zh-TW": "操作主題（選填）"
+    }
+  },
+  "整页 · 自动滚动": {
+    "en": "Full page · Auto scroll",
+    "existing": {
+      "en": "Full page · Automatic",
+      "ja": "ページ全体・自動",
+      "ko": "전체 페이지 · 자동 스크롤",
+      "de": "Ganze Seite · Automatisch",
+      "es": "Página completa · Automático",
+      "fr": "Page complète · Automatique",
+      "it": "Pagina intera · Automatica",
+      "pt": "Página inteira · Automático",
+      "zh-TW": "整頁 · 自動捲動"
+    }
+  },
+  "时长上限（1–600 秒）": {
+    "en": "Max duration (1–600 s)",
+    "existing": {
+      "en": "Limit (1–600 seconds)",
+      "ja": "Limit (1–600 seconds)",
+      "ko": "Limit (1–600 seconds)",
+      "de": "Limit (1–600 seconds)",
+      "es": "Limit (1–600 seconds)",
+      "fr": "Limit (1–600 seconds)",
+      "it": "Limit (1–600 seconds)",
+      "pt": "Limit (1–600 seconds)",
+      "zh-TW": "Limit (1–600 seconds)"
+    }
+  },
+  "标准 1280/15": {
+    "en": "Standard 1280/15",
+    "existing": null
+  },
+  "标准 · 1280 / 15 帧": {
+    "en": "Standard · 1280/15 fps",
+    "existing": {
+      "en": "Standard · 1280 / 15 fps",
+      "ja": "Standard · 1280 / 15 fps",
+      "ko": "Standard · 1280 / 15 fps",
+      "de": "Standard · 1280 / 15 fps",
+      "es": "Standard · 1280 / 15 fps",
+      "fr": "Standard · 1280 / 15 fps",
+      "it": "Standard · 1280 / 15 fps",
+      "pt": "Standard · 1280 / 15 fps",
+      "zh-TW": "Standard · 1280 / 15 fps"
+    }
+  },
+  "正在停止…": {
+    "en": "Stopping…",
+    "existing": null
+  },
+  "正在开始录制…": {
+    "en": "Starting recording…",
+    "existing": null
+  },
+  "正在截取…": {
+    "en": "Capturing…",
+    "existing": null
+  },
+  "清晰 1920/30": {
+    "en": "Clear 1920/30",
+    "existing": null
+  },
+  "清晰 · 1920 / 30 帧": {
+    "en": "Clear · 1920/30 fps",
+    "existing": {
+      "en": "Clear · 1920 / 30 fps",
+      "ja": "Clear · 1920 / 30 fps",
+      "ko": "Clear · 1920 / 30 fps",
+      "de": "Clear · 1920 / 30 fps",
+      "es": "Clear · 1920 / 30 fps",
+      "fr": "Clear · 1920 / 30 fps",
+      "it": "Clear · 1920 / 30 fps",
+      "pt": "Clear · 1920 / 30 fps",
+      "zh-TW": "Clear · 1920 / 30 fps"
+    }
+  },
+  "长图 · 我来滚动": {
+    "en": "Full page · I will scroll",
+    "existing": {
+      "en": "Long image · I scroll",
+      "ja": "長い画像・自分でスクロール",
+      "ko": "긴 이미지 · 직접 스크롤",
+      "de": "Langbild · Ich scrolle",
+      "es": "Imagen larga · Yo me desplazo",
+      "fr": "Longue image · Je fais défiler",
+      "it": "Immagine lunga · Scorro io",
+      "pt": "Imagem longa · Eu rolo",
+      "zh-TW": "長圖 · 我來捲動"
+    }
+  },
+  "需要 ws:// 或 wss:// 地址": {
+    "en": "A ws:// or wss:// address is required",
+    "existing": null
+  },
+  "非本机连接必须使用 wss://": {
+    "en": "Non-local connections must use wss://",
+    "existing": null
+  },
+  "配对保存失败": {
+    "en": "Pairing save failed",
+    "existing": null
+  },
+  "配对恢复失败": {
+    "en": "Pairing restore failed",
+    "existing": null
+  },
+  "配对链接解析失败": {
+    "en": "Pairing link parse failed",
+    "existing": null
+  },
+  "本机 · ws://127.0.0.1:": {
+    "en": "Local · ws://127.0.0.1:",
+    "existing": null
+  },
+  "最近录制（": {
+    "en": "Recent recordings (",
+    "existing": null
+  },
+  "录制中…": {
+    "en": "Recording…",
+    "existing": null
+  },
+  "录制中 ·": {
+    "en": "Recording ·",
+    "existing": null
+  },
+  "开始失败：": {
+    "en": "Failed to start: ",
+    "existing": null
+  },
+  "停止失败：": {
+    "en": "Failed to stop: ",
+    "existing": null
+  },
+  "保存失败：": {
+    "en": "Save failed: ",
+    "existing": null
+  },
+  "截图失败：": {
+    "en": "Screenshot failed: ",
+    "existing": null
+  },
+  "已保存：": {
+    "en": "Saved: ",
+    "existing": null
+  },
+  "例如：工作账号": {
+    "en": "e.g. Work account",
+    "existing": {
+      "en": "e.g. Work profile",
+      "ja": "例：仕事用プロファイル",
+      "ko": "예: 업무 프로필",
+      "de": "z. B. Arbeitsprofil",
+      "es": "p. ej., Perfil de trabajo",
+      "fr": "ex. : Profil professionnel",
+      "it": "es. Profilo di lavoro",
+      "pt": "ex.: Perfil de trabalho",
+      "zh-TW": "例如：工作帳號"
+    }
+  },
+  "名字": {
+    "en": "name",
+    "existing": null
+  },
+  "读取，可在弹窗关闭。": {
+    "en": "to read it; turn it off in the popup.",
+    "existing": null
+  },
+  "可在弹窗关闭。": {
+    "en": "it can be turned off in the popup.",
+    "existing": null
+  },
+  "记录请求、异常与页面上下文": {
+    "en": "Capture requests, errors and page context",
+    "existing": null
+  },
+  "从网页顶部截到底部，预览并保存": {
+    "en": "Capture from top to bottom, preview and save",
+    "existing": null
+  },
+  "查看任务操作审计": {
+    "en": "View task audit",
+    "existing": null
+  },
+  "启用操作审计": {
+    "en": "Enable task audit",
+    "existing": null
+  },
+  "读取中…": {
+    "en": "Reading…",
+    "existing": null
+  },
+  "打开完整审计": {
+    "en": "Open full audit",
+    "existing": null
+  },
+  "自动滚动并拼接当前标签页，完成后可在完整页预览保存。": {
+    "en": "Auto-scroll and stitch this tab, then preview and save on the full page.",
+    "existing": null
+  },
+  "模式": {
+    "en": "Mode",
+    "existing": null
+  },
+  "自动整页": {
+    "en": "Auto full page",
+    "existing": null
+  },
+  "仅可见区域": {
+    "en": "Visible area only",
+    "existing": null
+  },
+  "打开完整页": {
+    "en": "Open full page",
+    "existing": null
+  },
+  "录制当前标签页为 MP4；停止后文件写入视频库。": {
+    "en": "Record this tab as MP4; the file is saved to the video library after stopping.",
+    "existing": null
+  },
+  "停止": {
+    "en": "Stop",
+    "existing": null
+  },
+  "历史": {
+    "en": "History",
+    "existing": {
+      "en": "History",
+      "ja": "履歴",
+      "ko": "이전 기록",
+      "de": "Verlauf",
+      "es": "Historial",
+      "fr": "Historique",
+      "it": "Cronologia",
+      "pt": "Histórico",
+      "zh-TW": "歷史紀錄"
+    }
+  },
+  "记录当前标签页的操作步骤，供 Agent 参考。": {
+    "en": "Record actions in this tab as a reference for the agent.",
+    "existing": null
+  },
+  "版本不一致": {
+    "en": "Version mismatch",
+    "existing": null
+  },
+  "复制命令": {
+    "en": "Copy command",
+    "existing": {
+      "en": "Copy command",
+      "ja": "コマンドをコピー",
+      "ko": "명령 복사",
+      "de": "Befehl kopieren",
+      "es": "Copiar comando",
+      "fr": "Copier la commande",
+      "it": "Copia comando",
+      "pt": "Copiar comando",
+      "zh-TW": "複製指令"
+    }
+  },
+  "由": {
+    "en": "by",
+    "existing": null
+  },
+  "生成；保存前核对命令输出的 6 位配对码。": {
+    "en": "generated; verify the 6-digit pairing code before saving.",
+    "existing": null
+  },
+  "保存配对": {
+    "en": "Save pairing",
+    "existing": {
+      "en": "Save pairing",
+      "ja": "ペアリングを保存",
+      "ko": "페어링 저장",
+      "de": "Kopplung speichern",
+      "es": "Guardar emparejamiento",
+      "fr": "Enregistrer le couplage",
+      "it": "Salva associazione",
+      "pt": "Salvar pareamento",
+      "zh-TW": "儲存配對"
+    }
+  },
+  "切换到本机": {
+    "en": "Switch to local",
+    "existing": {
+      "en": "Switch to local",
+      "ja": "ローカルに切り替え",
+      "ko": "로컬로 전환",
+      "de": "Zu lokal wechseln",
+      "es": "Cambiar a local",
+      "fr": "Basculer en local",
+      "it": "Passa a locale",
+      "pt": "Mudar para local",
+      "zh-TW": "切換至本機"
+    }
+  },
+  "高级：手动填写地址与 token": {
+    "en": "Advanced: enter address and token manually",
+    "existing": null
+  },
+  "配对设备": {
+    "en": "Paired devices",
+    "existing": null
+  },
+  "全部撤销": {
+    "en": "Revoke all",
+    "existing": null
+  },
+  "接管时阻止页面点击/滚动": {
+    "en": "Block page clicks/scroll while controlling",
+    "existing": null
+  },
+  "开启后，Agent 接管期间页面点击和滚动会被阻止（键盘不拦截）；点浮层的暂停/收起会立即放开。默认关闭。": {
+    "en": "When on, page clicks and scrolling are blocked while the agent controls (keyboard is not blocked). Pause/minimize releases it immediately. Off by default.",
+    "existing": null
+  },
+  "--browser <名字>": {
+    "en": "--browser <name>",
+    "existing": null
+  },
+  "--browser &lt;名字&gt;": {
+    "en": "--browser <name>",
+    "existing": null
+  },
+  "开启后，接管期间页面点击和滚动会被阻止（键盘不拦截）；点浮层的暂停/收起会立即放开。默认关闭。": {
+    "en": "When on, page clicks and scrolling are blocked while controlling (keyboard is not blocked). Pause/minimize releases it immediately. Off by default.",
+    "existing": null
+  },
+  "中文": {
+    "en": "Chinese",
+    "existing": null
+  },
+  "繁體中文": {
+    "en": "Traditional Chinese",
+    "existing": null
+  },
+  "日本語": {
+    "en": "Japanese",
+    "existing": null
+  },
+  "返回": {
+    "en": "Back",
+    "existing": {
+      "en": "Back",
+      "ja": "戻る",
+      "ko": "뒤로",
+      "de": "Zurück",
+      "es": "Atrás",
+      "fr": "Retour",
+      "it": "Indietro",
+      "pt": "Voltar",
+      "zh-TW": "返回"
+    }
+  },
+  "BridgeDeck 连接": {
+    "en": "BridgeDeck connection",
+    "existing": null
+  },
+  "修改浏览器名称": {
+    "en": "Change browser name",
+    "existing": {
+      "en": "Rename browser",
+      "ja": "ブラウザ名を変更",
+      "ko": "브라우저 이름 변경",
+      "de": "Browser umbenennen",
+      "es": "Cambiar nombre del navegador",
+      "fr": "Renommer le navigateur",
+      "it": "Rinomina browser",
+      "pt": "Renomear navegador",
+      "zh-TW": "修改瀏覽器名稱"
+    }
+  },
+  "复制后发给 Agent，指定当前浏览器": {
+    "en": "Copy and send to the agent to target this browser",
+    "existing": null
+  },
+  "未配对：连接身份未验证，建议 bridge daemon pair": {
+    "en": "Unpaired: connection identity is unverified; run bridge daemon pair",
+    "existing": null
+  },
+  "粘贴配对链接（含端口与凭据）": {
+    "en": "Paste pairing link (with port and credential)",
+    "existing": null
+  },
+  "6 位配对码（bridge daemon pair 显示）": {
+    "en": "6-digit pairing code (shown by bridge daemon pair)",
+    "existing": null
+  },
+  "配对 token": {
+    "en": "Pairing token",
+    "existing": null
+  },
+  "控制提示说明": {
+    "en": "Control hint description",
+    "existing": {
+      "en": "About control hints",
+      "ja": "操作ヒントについて",
+      "ko": "제어 표시에 관하여",
+      "de": "Über Steuerungshinweise",
+      "es": "Acerca de los indicadores de control",
+      "fr": "À propos des indices de contrôle",
+      "it": "Informazioni sugli indicatori di controllo",
+      "pt": "Sobre os indicadores de controle",
+      "zh-TW": "控制提示說明"
+    }
+  },
+  "借用标签页确认说明": {
+    "en": "Borrow confirmation description",
+    "existing": {
+      "en": "About tab borrowing confirmation",
+      "ja": "タブ借用の確認について",
+      "ko": "탭 빌리기 확인 안내",
+      "de": "Über die Bestätigung des Tab-Ausleihens",
+      "es": "Acerca de la confirmación para tomar prestadas pestañas",
+      "fr": "À propos de la confirmation d'emprunt d'onglet",
+      "it": "Informazioni sulla conferma del prestito di schede",
+      "pt": "Sobre a confirmação de empréstimo de guia",
+      "zh-TW": "借用分頁確認說明"
+    }
+  },
+  "允许人工协助说明": {
+    "en": "Allow human help description",
+    "existing": null
+  },
+  "输入锁说明": {
+    "en": "Input lock description",
+    "existing": null
+  },
+  "Agent 控制时锁定页面输入": {
+    "en": "Block page input while the agent controls",
+    "existing": null
+  },
+  "复制实例 ID": {
+    "en": "Copy instance ID",
+    "existing": {
+      "en": "Copy instance ID",
+      "ja": "インスタンス ID をコピー",
+      "ko": "인스턴스 ID 복사",
+      "de": "Instanz-ID kopieren",
+      "es": "Copiar ID de instancia",
+      "fr": "Copier l'ID d'instance",
+      "it": "Copia ID istanza",
+      "pt": "Copiar ID da instância",
+      "zh-TW": "複製執行個體 ID"
+    }
+  }
+}

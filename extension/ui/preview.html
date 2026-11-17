@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Preview · BridgeDeck</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f7f9fc; --surface: #fff; --fg: #1c2230; --muted: #667085; --line: #dbe4f5; --accent: #2f6fed; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #151922; --surface: #1c2230; --fg: #e6eaf2; --muted: #98a2b3; --line: #2a3140; --accent: #5b8cff; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; }
+    header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; }
+    h1 { font-size: 14px; margin: 0; flex: 1; }
+    button { height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--fg); cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    main { padding: 16px; }
+    #meta { color: var(--muted); font-size: 12px; margin-bottom: 10px; overflow-wrap: anywhere; }
+    #shotWrap { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px; overflow: auto; }
+    #shot { display: block; max-width: 100%; height: auto; margin: auto; }
+    #empty { color: var(--muted); padding: 40px; text-align: center; }
+    #status { font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>BridgeDeck Preview</h1>
+    <span id="status">…</span>
+    <button id="refresh">刷新</button>
+    <button id="focus" class="primary">聚焦标签页</button>
+  </header>
+  <main>
+    <div id="meta"></div>
+    <div id="shotWrap"><div id="empty">正在截取…</div><img id="shot" alt="" hidden></div>
+  </main>
+  <script type="module" src="./preview.js"></script>
+</body>
+</html>

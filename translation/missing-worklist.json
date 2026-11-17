@@ -1,0 +1,80 @@
+{
+  "性能指标": {
+    "en": "Performance metrics"
+  },
+  "先选一个目标标签页": {
+    "en": "Select a target tab first"
+  },
+  "请求规则": {
+    "en": "Request rules"
+  },
+  "给当前标签页加临时规则：fulfill / block / modify（URL 支持 *）。规则只在本浏览器本地生效，刷新后自动重注入。": {
+    "en": "Add a temporary rule to this tab: fulfill / block / modify (URL supports *). Rules apply only in this browser and are re-injected after refresh."
+  },
+  "添加": {
+    "en": "Add"
+  },
+  "清空": {
+    "en": "Clear"
+  },
+  "当前标签页没有规则": {
+    "en": "No rules for this tab"
+  },
+  "操作时间线": {
+    "en": "Action timeline"
+  },
+  "还没有操作记录": {
+    "en": "No actions recorded yet"
+  },
+  "URL pattern，例如 */api/*": {
+    "en": "URL pattern, e.g. */api/*"
+  },
+  "fulfill 的响应正文（block/modify 可留空）": {
+    "en": "Response body for fulfill (can be empty for block/modify)"
+  },
+  "复现步骤。": {
+    "en": "Reproduction steps."
+  },
+  "录制记录": {
+    "en": "Recordings"
+  },
+  "还没有录制记录": {
+    "en": "No recordings yet"
+  },
+  "JSON 预览": {
+    "en": "JSON preview"
+  },
+  "聚焦标签页": {
+    "en": "Focus tab"
+  },
+  "隐私说明 · BridgeDeck": {
+    "en": "Privacy notice · BridgeDeck"
+  },
+  "数据默认只在本机流转": {
+    "en": "Data stays on this machine by default"
+  },
+  "保存什么": {
+    "en": "What is stored"
+  },
+  "调试记录、长截图、视频和操作录制默认保存在当前浏览器的本地存储中，不会上传到服务器。\n        调试记录保留最近 30 天，最多 50 份、总计 50 MiB；凭据类字段会脱敏，正文有大小上限。": {
+    "en": ""
+  },
+  "不保存什么": {
+    "en": "What is not stored"
+  },
+  "不保存输入框密码值、页面完整正文和截图内容到调试历史。操作录制会把密码框的值记成": {
+    "en": ""
+  },
+  "。远程配对令牌只保存在扩展私有存储中，不写入普通偏好设置。": {
+    "en": ""
+  },
+  "你的控制": {
+    "en": "Your controls"
+  },
+  "你可以在弹窗或设置页关闭连接、控制提示、自动化设置；可以随时清空调试历史、录制和视频。\n        本扩展只连接": {
+    "en": ""
+  },
+  "上的本地 daemon；远程连接必须由你主动配置并授权。": {
+    "en": ""
+  }
+}

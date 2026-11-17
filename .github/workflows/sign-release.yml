@@ -65,6 +65,7 @@ jobs:
           esac
           node tools/release.mjs --sign-ed25519 "$RUNNER_TEMP/release-private.pem"
           node -e "const m=require('./dist/release.json'); const id='c7b5e21301f91a2d'; if(!m.signature||m.signature.keyId!==id){console.error('unexpected keyId',m.signature);process.exit(1)}"
+          node tools/release-preflight.mjs
 
       - name: Upload signed manifest
         env:

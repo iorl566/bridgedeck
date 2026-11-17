@@ -288,6 +288,7 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `E_INPUT_BUSY` | 输入通道被占用 |
 | `E_NO_TAB` | tabId 不存在（tab 被关闭） |
 | `E_NO_BROWSER` | 没有可用的浏览器实例 |
+| `E_BROWSER_AMBIGUOUS` | 浏览器选择器匹配到多个实例或同名名称 |
 | `E_START_PENDING` | 会话启动中，操作尚未就绪 |
 | `E_START_NOT_READY` | 会话尚未就绪，稍后重试 |
 | `E_OBSERVATION_STALE` | 观测结果已过期，需重新 observe |
@@ -343,6 +344,11 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `E_TARGET_NOT_FILLABLE` | 目标不可填写（不是输入框/可编辑区） |
 | `E_NOT_SELECT` | 目标不是 select 元素 |
 | `E_BROWSER` | 浏览器侧操作失败 |
+| `E_SCREENSHOT` | 远程预览截图失败 |
+| `E_PREVIEW_META` | 远程预览读取页面尺寸失败 |
+| `E_CLICK` | 远程预览点击失败 |
+| `E_KEY` | 远程预览按键失败 |
+| `E_FOCUS` | 远程预览聚焦标签页失败 |
 | `E_PAGE_ERROR` | 页面内执行出错 |
 | `E_OBSERVE_FAILED` | 观察采集失败 |
 | `E_FOLLOW_FAILED` | 跟随新标签页失败 |
@@ -353,6 +359,7 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `E_TRANSFER_NOT_FOUND` | 传输任务不存在 |
 | `E_TRANSFER_STATE` | 传输任务状态不允许该操作 |
 | `E_BORROW_DENIED` | 借用标签页被拒绝 |
+| `E_BORROW_CONFLICT` | 同一标签页已被其他会话借用或正在确认中 |
 | `E_BORROW_TIMEOUT` | 借用标签页超时 |
 | `E_HELP_DISABLED` | 人工协助不可用 |
 | `E_NO_DOWNLOAD` | 没有可用的下载 |
@@ -713,8 +720,9 @@ bridge click "a" --expect-revision 3  --session <id>   # → E_OBSERVATION_CHANG
 | `tab.list` | `{ scope?: "agent"\|"user"\|"all" }` | `{ tabs: [ { tabId, windowId, url, title, active, owned: "agent"\|"user", controlled: bool } ] }`
 
 * 借用只**标记**，不移动窗口：标签页留在原窗口原位，`session.stop` 时自动 `tab.return`（只清标记，不关闭）。
+* 目标标签在前台时显示模态确认；目标在后台时在当前活动标签显示右下角 Toast，不抢前台；多个后台请求可堆叠。
 * `borrowConfirm: true` 时，扩展在目标标签页顶部注入确认条（固定定位、白底、两个按钮，
-  30s 无响应视为拒绝），用户点「允许」才完成借用；拒绝回 `E_BORROW_DENIED`，超时回 `E_BORROW_TIMEOUT`。
+  60s 无响应视为拒绝），用户点「允许」才完成借用；拒绝回 `E_BORROW_DENIED`，超时回 `E_BORROW_TIMEOUT`。同一标签页已由其他会话借用/确认中时回 `E_BORROW_CONFLICT`。
 * 借用期间该 tab 的关闭事件会通知 daemon（`event: tab-removed`），session 随之失效。
 
 ### 16.2 人工协助
@@ -844,7 +852,7 @@ bridge install-skill [--harness dsh|claude|cursor] [--dir <path>] [--force] [--l
 | --- | --- |
 | `E_DEBUGGER_BUSY` | 目标 tab 已被其它 debugger 会话占用 |
 | `E_BORROW_DENIED` | 用户拒绝借用标签页 |
-| `E_BORROW_TIMEOUT` | 借用确认条 30s 内无响应 |
+| `E_BORROW_TIMEOUT` | 借用确认条 60s 内无响应 |
 | `E_HELP_DISABLED` | 设置里关闭了人工协助 |
 | `E_NO_DOWNLOAD` | 超时内没有观测到下载 |
 | `E_DOWNLOAD_FAILED` | 下载中断（`state: interrupted`） |

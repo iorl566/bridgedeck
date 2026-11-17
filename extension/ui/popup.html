@@ -120,8 +120,13 @@
   <section class="card">
     <div class="row">
       <div class="status"><span id="stateDot" class="dot"></span><span id="stateLabel" class="state-label">未连接</span></div>
-      <p id="stateError" class="hint hidden" style="margin:4px 0 0;color:#c2410c"></p>
       <button type="button" id="connToggle" class="sw on" role="switch" aria-checked="true" aria-label="BridgeDeck 连接"></button>
+    </div>
+    <p id="stateError" class="hint hidden" style="margin:4px 0 0;color:#c2410c"></p>
+    <div id="upgradeNotice" class="notice hidden" role="status" aria-live="polite">
+      <div class="notice-head"><strong id="upgradeTitle">版本不一致</strong><span id="upgradeVersion" class="hint"></span></div>
+      <p id="upgradeDesc" class="hint" style="margin:4px 0 6px"></p>
+      <div class="notice-actions"><code id="upgradeCommand">bridge update apply</code><button type="button" id="copyUpgrade" class="btn subtle sm">复制命令</button></div>
     </div>
     <p id="localAuthBadge" class="hint hidden" style="margin:6px 0 0"></p>
     <div class="profile">
@@ -232,6 +237,18 @@
             </span>
           </div>
           <button type="button" id="allowHelp" class="sw on" role="switch" aria-checked="true"></button>
+        </div>
+        <div class="row">
+          <div class="setting-row" style="flex:1">
+            <label for="cooperationGuard">接管时阻止页面点击/滚动</label>
+            <span class="info">
+              <button type="button" class="icon-btn" style="width:18px;height:18px" aria-label="输入锁说明" aria-describedby="tip-cooperation">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-5h2v2h-2v-2zm0-8h2v6h-2V7z"/></svg>
+              </button>
+              <span class="tip" id="tip-cooperation" role="tooltip">开启后，Agent 接管期间页面点击和滚动会被阻止（键盘不拦截）；点浮层的暂停/收起会立即放开。默认关闭。</span>
+            </span>
+          </div>
+          <button type="button" id="cooperationGuard" class="sw" role="switch" aria-checked="false" aria-label="Agent 控制时锁定页面输入"></button>
         </div>
       </div>
   </section>

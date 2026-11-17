@@ -1,0 +1,218 @@
+{
+  "borrowTitle": {
+    "zh": "允许借用标签页？",
+    "en": "Allow tab borrowing?"
+  },
+  "borrowBody": {
+    "zh": "AI Agent 希望临时接管此标签页，在你的浏览器中操作。您可以拒绝或允许借用。",
+    "en": "The agent wants to move this tab into its workspace. You can deny or allow it."
+  },
+  "borrowTarget": {
+    "zh": "目标标签页：",
+    "en": "Target tab: "
+  },
+  "borrowDeny": {
+    "zh": "拒绝",
+    "en": "Deny"
+  },
+  "borrowAllow": {
+    "zh": "允许",
+    "en": "Allow"
+  },
+  "borrowAutoDeny": {
+    "zh": " 秒后自动拒绝",
+    "en": "Auto-deny in "
+  },
+  "toastTitle": {
+    "zh": "Agent 想借用标签页",
+    "en": "Agent wants to borrow a tab"
+  },
+  "toastTarget": {
+    "zh": "目标：",
+    "en": "Target: "
+  },
+  "toastAllow": {
+    "zh": "允许",
+    "en": "Allow"
+  },
+  "toastDeny": {
+    "zh": "拒绝",
+    "en": "Deny"
+  },
+  "toastClose": {
+    "zh": "关闭",
+    "en": "Close"
+  },
+  "helpTitle": {
+    "zh": "Agent 需要你的帮助",
+    "en": "Agent needs your help"
+  },
+  "helpReason": {
+    "zh": "Agent 需要你完成页面上的操作后继续。",
+    "en": "Finish the page action, then hand control back to the agent."
+  },
+  "helpCollapse": {
+    "zh": "折叠",
+    "en": "Collapse"
+  },
+  "helpPlaceholder": {
+    "zh": "给 Agent 留言（可选）",
+    "en": "Message for the agent (optional)"
+  },
+  "helpCancel": {
+    "zh": "取消请求",
+    "en": "Cancel request"
+  },
+  "helpDone": {
+    "zh": "完成并交还控制权",
+    "en": "Done, hand back control"
+  },
+  "helpExpand": {
+    "zh": "展开",
+    "en": "Expand"
+  },
+  "takeoverReadyTitle": {
+    "zh": "Agent 已就绪",
+    "en": "Agent ready"
+  },
+  "takeoverReadySub": {
+    "zh": "你可以随时接手",
+    "en": "You can take over anytime"
+  },
+  "takeoverActingTitle": {
+    "zh": "Agent 正在操作",
+    "en": "Agent is working"
+  },
+  "takeoverActingSub": {
+    "zh": "你可以随时接手",
+    "en": "You can take over anytime"
+  },
+  "takeoverSyncingTitle": {
+    "zh": "Agent 正在同步",
+    "en": "Agent is syncing"
+  },
+  "takeoverSyncingSub": {
+    "zh": "正在读取最新页面状态",
+    "en": "Reading the latest page state"
+  },
+  "takeoverHeldTitle": {
+    "zh": "Agent 已暂停",
+    "en": "Agent paused"
+  },
+  "takeoverHeldSub": {
+    "zh": "准备好后交给 Agent",
+    "en": "Hand back when you are ready"
+  },
+  "takeoverHumanTitle": {
+    "zh": "现在由你操作",
+    "en": "You are in control"
+  },
+  "takeoverHumanSub": {
+    "zh": "停止操作后，Agent 会继续",
+    "en": "The agent continues when you stop"
+  },
+  "takeoverEditingTitle": {
+    "zh": "你正在编辑",
+    "en": "You are editing"
+  },
+  "takeoverEditingSub": {
+    "zh": "完成编辑后交给 Agent",
+    "en": "Hand back when done"
+  },
+  "takeoverYieldingTitle": {
+    "zh": "Agent 正在停手",
+    "en": "Agent is stopping"
+  },
+  "takeoverYieldingSub": {
+    "zh": "等待当前操作结束",
+    "en": "Waiting for the current action"
+  },
+  "takeoverUnavailableTitle": {
+    "zh": "页面暂不可观察",
+    "en": "Page not observable"
+  },
+  "takeoverUnavailableSub": {
+    "zh": "Agent 已停手",
+    "en": "Agent has stopped"
+  },
+  "takeoverBorrowed": {
+    "zh": "正在借用此标签页执行任务",
+    "en": "Working on this borrowed tab"
+  },
+  "takeoverPause": {
+    "zh": "暂停 Agent",
+    "en": "Pause Agent"
+  },
+  "takeoverResume": {
+    "zh": "交给 Agent",
+    "en": "Hand to Agent"
+  },
+  "takeoverStop": {
+    "zh": "停止任务",
+    "en": "Stop task"
+  },
+  "takeoverConfirmStop": {
+    "zh": "再点一次停止",
+    "en": "Click again to stop"
+  },
+  "takeoverStopConfirmSub": {
+    "zh": "3 秒内再点一次。只想暂停请用暂停。",
+    "en": "Click Stop task again within 3s; use Pause if you only want to pause."
+  },
+  "takeoverStopping": {
+    "zh": "正在停止任务…",
+    "en": "Stopping…"
+  },
+  "takeoverMini": {
+    "zh": "Agent 控制中",
+    "en": "Agent in control"
+  },
+  "takeoverProject": {
+    "zh": "项目",
+    "en": "Project"
+  },
+  "takeoverSession": {
+    "zh": "会话",
+    "en": "Session"
+  },
+  "takeoverBadge": {
+    "zh": "人机协作",
+    "en": "Human + agent"
+  },
+  "takeoverControlling": {
+    "zh": "Agent 正在控制",
+    "en": "Agent in control"
+  },
+  "takeoverReading": {
+    "zh": "正在读取最新页面状态",
+    "en": "Reading the latest page state"
+  },
+  "recordLabel": {
+    "zh": "正在录制你的操作",
+    "en": "Recording your actions"
+  },
+  "recordFinish": {
+    "zh": "结束",
+    "en": "Finish"
+  },
+  "manualLabel": {
+    "zh": "手动长截图",
+    "en": "Manual full-page"
+  },
+  "manualFrame": {
+    "zh": "拍一帧",
+    "en": "Capture frame"
+  },
+  "manualDone": {
+    "zh": "完成",
+    "en": "Done"
+  },
+  "manualCancel": {
+    "zh": "取消",
+    "en": "Cancel"
+  },
+  "manualFrames": {
+    "zh": " 帧",
+    "en": " frames"
+  }
+}

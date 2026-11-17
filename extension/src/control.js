@@ -5,6 +5,7 @@ import { getHumanState } from './human-state.js';
 import { log } from './log.js';
 import { sleep } from './tabs.js';
 import { getTakeoverState } from './takeover.js';
+import { readCooperation } from './cooperation.js';
 
 const TAB_METHODS = new Set([
   'click', 'click-backend', 'click-point', 'shadow.click', 'hover', 'fill', 'press', 'select', 'focus', 'blur', 'scroll-to',
@@ -70,6 +71,8 @@ export async function cooperateSync(params = {}) {
   state.policy = requested;
   const observation = await execPage(tabId, 'observe', { probeHover: params.probeHover === true });
   const media = await execPage(tabId, 'media-progress', {}).catch(() => null);
+  // 协作读取：字段/媒体/焦点/文本尾部；内容脚本不可用时返回 null，不阻断 sync。
+  const cooperation = await readCooperation(tabId).catch(() => null);
   state.contextId = uuid();
   state.observationId = uuid();
   state.generation += 1;
@@ -84,6 +87,7 @@ export async function cooperateSync(params = {}) {
     url: observation.url,
     title: observation.title,
     media,
+    cooperation,
     evidence: {
       observedAt: state.observedAt,
       url: observation.url,

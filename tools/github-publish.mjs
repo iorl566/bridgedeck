@@ -82,9 +82,10 @@ const tree = await api(`/repos/${repo}/git/trees`, {
   body: JSON.stringify({ tree: entries }),
 });
 const message = option('--message', 'BridgeDeck ' + version);
+const currentRef = await api(`/repos/${repo}/git/ref/heads/main`);
 const commit = await api(`/repos/${repo}/git/commits`, {
   method: 'POST',
-  body: JSON.stringify({ message, tree: tree.sha, parents: [] }),
+  body: JSON.stringify({ message, tree: tree.sha, parents: [currentRef.object.sha] }),
 });
 try {
   await api(`/repos/${repo}/git/refs`, {

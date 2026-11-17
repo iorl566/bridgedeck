@@ -3,12 +3,13 @@ import { DEFAULT_SETTINGS, normalizeSettings, readSettings, writeSettings } from
 import { getLang, setLang, whenReady } from './i18n.js';
 import { $, toast } from './common.js';
 
-const FIELDS = ['instanceLabel', 'borrowConfirm', 'allowHelp', 'longShotMode', 'pageGuard'];
+const FIELDS = ['instanceLabel', 'borrowConfirm', 'allowHelp', 'cooperationGuard', 'longShotMode', 'pageGuard'];
 
 function render(settings) {
   $('instanceLabel').value = settings.instanceLabel || '';
   $('borrowConfirm').checked = settings.borrowConfirm === true;
   $('allowHelp').checked = settings.allowHelp === true;
+  $('cooperationGuard').checked = settings.cooperationGuard === true;
   $('pageGuard').checked = settings.pageGuard === true;
   $('longShotMode').value = settings.longShotMode === 'manual' ? 'manual' : 'auto';
   renderCommand(settings.instanceLabel);
@@ -24,6 +25,7 @@ function collect() {
     instanceLabel: $('instanceLabel').value,
     borrowConfirm: $('borrowConfirm').checked,
     allowHelp: $('allowHelp').checked,
+    cooperationGuard: $('cooperationGuard').checked,
     pageGuard: $('pageGuard').checked,
     longShotMode: $('longShotMode').value,
   });

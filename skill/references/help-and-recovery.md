@@ -7,7 +7,7 @@ bridge tab borrow <tabId> --session <id>
 bridge tab return <tabId> --session <id>
 ```
 
-设置里开启“借用前确认”时，目标标签页顶部会出现确认条；30s 无响应视为拒绝。拒绝返回 `E_BORROW_DENIED`，超时返回 `E_BORROW_TIMEOUT`。不要绕过、不要反复重试，先和用户确认再借。
+设置里开启“借用前确认”时，目标标签页顶部会出现确认条；60s 无响应视为拒绝。拒绝返回 `E_BORROW_DENIED`，超时返回 `E_BORROW_TIMEOUT`。不要绕过、不要反复重试，先和用户确认再借。
 
 ## 协助请求
 

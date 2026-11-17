@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS = {
   pageGuard: true,
   connectionEnabled: true,
   controlHint: true,
+  cooperationGuard: false,
   auditEnabled: false,
   daemonUrl: '',
   daemonToken: '',
@@ -46,6 +47,7 @@ export function normalizeSettings(raw) {
     pageGuard: input.pageGuard !== false,
     connectionEnabled: input.connectionEnabled !== false,
     controlHint: input.controlHint !== false,
+    cooperationGuard: input.cooperationGuard === true,
     auditEnabled: input.auditEnabled === true,
     daemonUrl: sanitizeDaemonUrl(input.daemonUrl),
     daemonToken: typeof input.daemonToken === 'string' ? input.daemonToken.trim().slice(0, 128) : '',
@@ -94,7 +96,7 @@ export async function settingsGet() {
 }
 
 /** 只能由浏览器扩展设置页修改的字段：CLI/Agent 一侧写入一律拒绝。 */
-const HUMAN_ONLY_KEYS = ['borrowConfirm', 'daemonUrl', 'daemonToken', 'daemonCode'];
+const HUMAN_ONLY_KEYS = ['borrowConfirm', 'cooperationGuard', 'daemonUrl', 'daemonToken', 'daemonCode'];
 
 /** settings.set：局部更新扩展设置。 */
 export async function settingsSet(params = {}) {

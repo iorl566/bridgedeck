@@ -9,7 +9,10 @@ import { listCredentials, revokeAllCredentials, revokeCredential } from './trans
 import { showTakeover, hideTakeover, setTakeoverState, getTakeoverState, clearTakeoverState, syncControlHintsVisible } from './takeover.js';
 import { capture, hideManualOverlay, manualFrame, manualSave, manualStart, popupState, saveDataUrl, saveDataUrlImage, showManualOverlay } from './quick.js';
 import { readSettings, subscribeSettings, writeSettings } from './settings.js';
-import { consumeSelfCreated, markControlledTab, markSelfCreated, readAgentWindows, isSelfCreatedWindow, refreshTakeoverForTab, resolveHumanDecision } from './tabs.js';
+import { setCooperationBlocked } from './cooperation.js';
+import { showTargetMarker } from './target-marker-client.js';
+import { consumeSelfCreated, markControlledTab, markSelfCreated, readAgentWindows, isSelfCreatedWindow, refreshTakeoverForTab, rehomeBorrowUi, resolveHumanDecision } from './tabs.js';
+import { clearActionNotification, clearActionNotificationById, getActionNotification, notifyActionRequest, systemNotification } from './action-notifications.js';
 import { dialogAccept, dialogDismiss, dialogStatus, onDialogOpened, pendingDialog } from './dialogs.js';
 import { awaitOperation, cancelOperation, registerOperation, settleOperation } from './operations.js';
 import { noteNavigation } from './control.js';
@@ -273,15 +276,21 @@ const MESSAGE_HANDLERS = {
   'bb.takeover.stop': (message, sender) => {
     const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : null;
     if (tabId == null) return { ok: false, error: '没有标签页上下文' };
+    void setCooperationBlocked(tabId, false);
     getClient().sendJson({ type: 'event', event: 'takeover.stop', params: { tabId } });
     return { ok: true };
   },
-  'bb.takeover.pause': (message, sender) => {
+  'bb.takeover.pause': async (message, sender) => {
     const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : null;
     if (tabId == null) return { ok: false, error: '没有标签页上下文' };
-    getClient().sendJson({ type: 'event', event: 'takeover.pause', params: { tabId, paused: message.paused === true } });
-    setTakeoverState(tabId, { paused: message.paused === true });
-    return { ok: true, paused: message.paused === true };
+    const paused = message.paused === true;
+    getClient().sendJson({ type: 'event', event: 'takeover.pause', params: { tabId, paused } });
+    setTakeoverState(tabId, { paused });
+    const settings = await readSettings().catch(() => null);
+    if (settings && settings.cooperationGuard === true) {
+      void setCooperationBlocked(tabId, !paused);
+    }
+    return { ok: true, paused };
   },
   'bb.takeover.minimized': async (message, sender) => {
     const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : null;
@@ -402,12 +411,22 @@ const MESSAGE_HANDLERS = {
         allowHelp: currentSettings.allowHelp,
         pageGuard: currentSettings.pageGuard,
         controlHint: currentSettings.controlHint,
+        cooperationGuard: currentSettings.cooperationGuard,
         auditEnabled: currentSettings.auditEnabled,
         connectionEnabled: currentSettings.connectionEnabled,
         longShotMode: currentSettings.longShotMode,
       },
     });
     return { ok: true, settings: currentSettings };
+  },
+  'bb.cooperation.point': (message, sender) => {
+    const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : null;
+    if (tabId == null) return { ok: false };
+    const x = Number(message && message.x);
+    const y = Number(message && message.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return { ok: false };
+    void showTargetMarker(tabId, x, y).catch(() => {});
+    return { ok: true };
   },
   'bb.human.input': (message, sender) => reportHumanEvent('human.input', message, sender),
   'bb.human.blur': (message, sender) => reportHumanEvent('human.blur', message, sender),
@@ -475,6 +494,10 @@ const MESSAGE_HANDLERS = {
     return { ok: true };
   },
   'bb.borrow.request': (message) => notifyActionRequest('borrow', message),
+  'bb.borrow.clear': (message) => {
+    clearActionNotification('borrow', message && message.requestId);
+    return { ok: true };
+  },
   'bb.help.request': (message) => notifyActionRequest('help', message),
   'bb.notifications': async (message) => {
     const stored = await chrome.storage.local.get('bb.notifications').catch(() => ({}));
@@ -486,44 +509,6 @@ const MESSAGE_HANDLERS = {
     return { ok: true, notifications: list };
   },
 };
-
-const ACTION_NOTIFICATIONS = new Map(); // notificationId -> { kind, requestId, tabId }
-const NOTIFICATION_ICON = 'icons/icon128.png';
-
-function systemNotification(id, options) {
-  if (!chrome.notifications || typeof chrome.notifications.create !== 'function') return;
-  try {
-    const result = chrome.notifications.create(id, {
-      type: 'basic',
-      iconUrl: NOTIFICATION_ICON,
-      title: 'BridgeDeck',
-      priority: 2,
-      ...options,
-    });
-    if (result && typeof result.catch === 'function') result.catch(() => {});
-  } catch {
-    // 通知失败不影响命令
-  }
-}
-
-async function notifyActionRequest(kind, message) {
-  const tabId = Number(message && message.tabId);
-  const requestId = String((message && message.requestId) || '');
-  if (!Number.isInteger(tabId) || !requestId) return { ok: false };
-  const id = 'bb-' + kind + '-' + requestId;
-  let tabTitle = '';
-  try { const tab = await chrome.tabs.get(tabId); tabTitle = tab.title || tab.url || ''; } catch { /* 标签页可能已关闭 */ }
-  ACTION_NOTIFICATIONS.set(id, { kind, requestId, tabId });
-  systemNotification(id, {
-    title: kind === 'borrow' ? 'BridgeDeck · 借用标签页' : 'BridgeDeck · 需要协助',
-    message: kind === 'borrow'
-      ? 'Agent 想在标签页「' + String(tabTitle).slice(0, 80) + '」上操作，是否允许？'
-      : 'Agent 请求你在标签页「' + String(tabTitle).slice(0, 80) + '」上协助完成一步。',
-    buttons: kind === 'borrow' ? [{ title: '拒绝' }, { title: '允许' }] : [{ title: '跳过' }, { title: '完成' }],
-    requireInteraction: true,
-  });
-  return { ok: true, notificationId: id };
-}
 
 async function clearHumanOverlay(tabId, kind) {
   if (!Number.isInteger(tabId)) return;
@@ -549,22 +534,21 @@ async function clearHumanOverlay(tabId, kind) {
 function installNotificationActions() {
   if (!chrome.notifications) return;
   chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
-    const entry = ACTION_NOTIFICATIONS.get(notificationId);
+    const entry = getActionNotification(notificationId);
     if (!entry) return;
-    ACTION_NOTIFICATIONS.delete(notificationId);
-    chrome.notifications.clear(notificationId).catch(() => {});
+    clearActionNotificationById(notificationId);
     if (entry.kind === 'help') {
       resolveHumanDecision({ requestId: entry.requestId, action: buttonIndex === 1 ? 'done' : 'skip' });
     } else {
-      resolveHumanDecision({ requestId: entry.requestId, allow: buttonIndex === 1 });
+      // 按钮顺序与系统通知一致：Allow 是第 0 个，Deny 是第 1 个。
+      resolveHumanDecision({ requestId: entry.requestId, allow: buttonIndex === 0 });
     }
     clearHumanOverlay(entry.tabId, entry.kind).catch(() => {});
   });
   chrome.notifications.onClicked.addListener((notificationId) => {
-    const entry = ACTION_NOTIFICATIONS.get(notificationId);
+    const entry = getActionNotification(notificationId);
     if (entry) {
-      ACTION_NOTIFICATIONS.delete(notificationId);
-      chrome.notifications.clear(notificationId).catch(() => {});
+      clearActionNotificationById(notificationId);
       chrome.tabs.update(entry.tabId, { active: true }).catch(() => {});
       chrome.tabs.get(entry.tabId).then((tab) => chrome.windows.update(tab.windowId, { focused: true })).catch(() => {});
       return;
@@ -613,6 +597,7 @@ function installMessageBridge() {
       return false;
     }
     if (type === 'bb.borrow.decision') {
+      clearActionNotification('borrow', message && message.requestId);
       const handled = resolveHumanDecision(message);
       pushNotification(message.allow ? 'info' : 'warn', message.allow ? '已允许接管标签页' : '已拒绝接管标签页');
       sendResponse({ ok: handled });
@@ -730,6 +715,7 @@ function installSettingsSync() {
         longShotMode: settings.longShotMode,
         connectionEnabled: settings.connectionEnabled,
         controlHint: settings.controlHint,
+        cooperationGuard: settings.cooperationGuard,
         daemonUrl: settings.daemonUrl,
       },
     });
@@ -799,7 +785,10 @@ function registerListeners() {
 
   // 录制中切换标签页：记 tab-switch 步骤（原标签页的记录器继续保留）
   chrome.tabs.onActivated.addListener((info) => {
-    if (info && Number.isInteger(info.tabId)) recordTabSwitch(info.tabId).catch(() => {});
+    if (!info) return;
+    if (Number.isInteger(info.tabId)) recordTabSwitch(info.tabId).catch(() => {});
+    // 借用确认面跟随当前活动标签：模态 ↔ Toast。
+    if (Number.isInteger(info.windowId)) void rehomeBorrowUi(info.windowId);
   });
 
   // tab 关闭事件上报 daemon（PROTOCOL.md §3.4）

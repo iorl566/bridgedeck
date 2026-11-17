@@ -23,6 +23,7 @@ export async function uiDiagnostics() {
   };
   const popup = await checkPage('ui/popup.html', ['popup.js', 'popup.css', 'connToggle']);
   const options = await checkPage('ui/options.html', ['options.js', 'ui.css', 'instanceLabel']);
+  const preview = await checkPage('ui/preview.html', ['preview.js', 'shot', 'status']);
   const quick = await checkPage('ui/quick.html', ['quick.js', '视频录制', '网站调试', '长截图', '操作录制', '操作审计']);
   const record = await checkPage('ui/record.html', ['record.js', 'MP4']);
   const debugPage = await checkPage('ui/debug.html', ['debug.js', '网站调试']);
@@ -33,9 +34,9 @@ export async function uiDiagnostics() {
   for (const size of [16, 32, 48, 128]) {
     icons.push({ size, ...(await checkAsset('icons/icon' + size + '.png')) });
   }
-  const pages = { popup, options, quick, record, debug: debugPage, longshot, ops, audit };
+  const pages = { popup, options, preview, quick, record, debug: debugPage, longshot, ops, audit };
   const ok = Object.values(pages).every((page) => page.ok) && icons.every((icon) => icon.ok);
-  return { ok, popup, options, quick, record, debug: debugPage, longshot, ops, audit, icons, axLease: axLeaseSnapshot(), packageVersion: chrome.runtime.getManifest().version };
+  return { ok, popup, options, preview, quick, record, debug: debugPage, longshot, ops, audit, icons, axLease: axLeaseSnapshot(), packageVersion: chrome.runtime.getManifest().version };
 }
 
 import { markSelfCreated } from './tabs.js';
@@ -45,6 +46,7 @@ export async function uiOpen(params = {}) {
   const PAGES = {
     popup: 'ui/popup.html',
     options: 'ui/options.html',
+    preview: 'ui/preview.html',
     quick: 'ui/quick.html',
     record: 'ui/record.html',
     debug: 'ui/debug.html',
