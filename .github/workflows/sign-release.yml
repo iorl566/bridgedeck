@@ -1,0 +1,83 @@
+name: Sign release manifest
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Draft release id containing the unsigned artifacts
+        required: true
+        type: string
+      version:
+        description: Version (for example 0.1.8)
+        required: true
+        type: string
+      publish:
+        description: Publish the release after signing
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Download draft artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --paginate \
+            --jq '.[] | [.id,.name] | @tsv' > assets.tsv
+          while IFS=$'\t' read -r id name; do
+            gh api -H 'Accept: application/octet-stream' \
+              "repos/$GITHUB_REPOSITORY/releases/assets/$id" > "dist/$name"
+          done < assets.tsv
+          ls -lh dist
+
+      - name: Set manifest version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version=process.env.VERSION;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+
+      - name: Sign manifest with Actions secret
+        env:
+          SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SIGNING_PRIVATE_KEY:-}" ]; then
+            echo 'RELEASE_SIGNING_PRIVATE_KEY is empty' >&2
+            exit 1
+          fi
+          case "$SIGNING_PRIVATE_KEY" in
+            -----BEGIN*) printf '%s' "$SIGNING_PRIVATE_KEY" > "$RUNNER_TEMP/release-private.pem" ;;
+            *) printf '%s' "$SIGNING_PRIVATE_KEY" | base64 -d > "$RUNNER_TEMP/release-private.pem" ;;
+          esac
+          node tools/release.mjs --sign-ed25519 "$RUNNER_TEMP/release-private.pem"
+          node -e "const m=require('./dist/release.json'); const id='c7b5e21301f91a2d'; if(!m.signature||m.signature.keyId!==id){console.error('unexpected keyId',m.signature);process.exit(1)}"
+          node tools/release-preflight.mjs
+
+      - name: Upload signed manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release upload "v$VERSION" dist/release.json dist/SHA256SUMS dist/release-public.pem --clobber
+
+      - name: Publish release
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: |
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -f draft=false
