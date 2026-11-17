@@ -1,4 +1,4 @@
-# Test status — 0.1.10
+# Test status — 0.1.11
 
 Last run: 2026-11-17, Windows Edge 157.
 
@@ -6,7 +6,7 @@ Last run: 2026-11-17, Windows Edge 157.
 
 | Lane | Result |
 | --- | --- |
-| `node --test tests/unit/*.test.mjs` | **476/476** |
+| `node --test tests/unit/*.test.mjs` | **477/477** |
 | `node --test tests/reference/*.test.mjs` | **507/507** |
 | `node --test tests/integration/remote-device.test.mjs` | **1/1** |
 | `tests/cli/selftest.mjs` | **155/155** |
@@ -20,12 +20,12 @@ Last run: 2026-11-17, Windows Edge 157.
 
 ## Release
 
-- GitHub v0.1.10: public, signed (keyId `c7b5e21301f91a2d`).
-- Edge 0.1.10: submitted for review (2026-11-17), screenshot `docs/assets/ui/edge-store-0.1.10-review.png`.
-- Extension: **434,002 B**, sha256 `79c98e2bad81806b7eb8b3eac0cac25d21813078684602be9ccb6fc34f9ba666`.
-- 0.1.9 artifacts archived under `dist/archive-0.1.9/`.
+- GitHub v0.1.11: public, signed (keyId `c7b5e21301f91a2d`).
+- Edge 0.1.11: submitted for review (2026-11-17), screenshot `docs/assets/ui/edge-store-0.1.11-review.png`.
+- Extension: **434,037 B**, sha256 `52a2942a75c4bff0558b61a6569d688902f6bccfcebf331969b9e34e9c3cfef4`.
+- 0.1.10 artifacts archived under `dist/archive-0.1.10/`.
 
-## 0.1.10 focus
+## 0.1.11 focus
 
 - `observe.layers` + layered text (`L1`/`L2`, blocker role/coverage/bounds);
 - `observe.refDetails` (`ref` + `backendNodeId` + `frameId` + `documentId` + `revision`);

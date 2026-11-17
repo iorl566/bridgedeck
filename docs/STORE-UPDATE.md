@@ -73,3 +73,10 @@ EDGE_API_KEY=... EDGE_CLIENT_ID=... EDGE_PRODUCT_ID=... \
 - 0.1.9 制品归档到 `dist/archive-0.1.9/`。
 - 0.1.10 扩展 434,002 B，sha256 `79c98e2bad81806b7eb8b3eac0cac25d21813078684602be9ccb6fc34f9ba666`。
 - vendor leak 与 release preflight 均 PASS。
+
+## 0.1.11（2026-11-17）
+
+- UI：控制呼吸框恢复到 0.1.7 时代的清晰度（常驻 3px 内环 + 48px 呼吸光晕，无限循环，reduced-motion 关闭）。
+- GitHub：**v0.1.11 已公开并签名**，且标记 latest：<https://github.com/iorl566/bridgedeck/releases/tag/v0.1.11>
+- Edge：0.1.10 已取消；**0.1.11 已提交，状态“正在审阅”**；证据 [edge-store-0.1.11-review.png](assets/ui/edge-store-0.1.11-review.png)。
+- 0.1.10 制品归档到 `dist/archive-0.1.10/`。
