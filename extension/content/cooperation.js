@@ -1,8 +1,8 @@
 // content/cooperation.js —— 协作输入层：可选的页面点击/滚动锁 + 协作读取。
 //
-// 设计（对齐 bsk 的 ControlInputBlocker）：
+// 设计：
 // - 默认不启用；只有设置 cooperationGuard=true 且接管浮层显示时才锁点击/滚动。
-// - 锁只拦指针/滚轮/touchmove，不拦键盘（与 bsk 一致）；接管浮层卡片在其上，
+// - 锁只拦指针/滚轮/touchmove，不拦键盘；接管浮层卡片在其上，
 //   所以暂停/停止按钮仍可点。
 // - Agent 自己派发输入前，后台会发 bb.cooperation.passthrough 临时把覆盖层
 //   pointer-events 设为 none，避免锁住自己；结束后恢复。
@@ -86,7 +86,7 @@
     blocker.style.pointerEvents = pass ? 'none' : 'auto';
     blocker.style.display = blocked ? 'block' : 'none';
     // passthrough 是"这一次 Agent 点击要穿透"，接管卡片也必须让开，否则
-    // 点击落在卡片上仍会命中浮层（bsk 的 data-bsk-input-passthrough 同样
+    // 点击落在卡片上仍会命中浮层（浮层 passthrough 同样
     // 会禁用 card/stop 的 pointer-events）。
     for (const card of takeoverCards()) card.style.pointerEvents = pass ? 'none' : '';
     if (blocked && !pass) addListeners(); else removeListeners();

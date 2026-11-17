@@ -59,3 +59,9 @@ EDGE_API_KEY=... EDGE_CLIENT_ID=... EDGE_PRODUCT_ID=... \
 - release.json 由 GitHub Actions Secret `RELEASE_SIGNING_PRIVATE_KEY` 在 CI 内签名，私钥未落到本机。
 
 > API key / PAT 不写入仓库；只通过环境变量传入。
+
+## 0.1.9（2026-11-17）
+
+- GitHub：**v0.1.9 已公开并签名**（keyId `c7b5e21301f91a2d`）：<https://github.com/iorl566/bridgedeck/releases/tag/v0.1.9>
+- Edge：0.1.8 已取消提交；**0.1.9 已提交，状态“正在审阅”**（预计 7 个工作日）；证据 [edge-store-0.1.9-review.png](assets/ui/edge-store-0.1.9-review.png）。
+- 0.1.8 制品已归档到 `dist/archive-0.1.8/`；0.1.9 为当前发布版本。

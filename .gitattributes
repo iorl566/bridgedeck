@@ -1,4 +1,4 @@
-# 生成的协议/技能文件必须保持 LF，否则 Windows checkout 会把生成物转成 CRLF，
+# Reference implementation and study material are excluded from source archives
 # 让 `tools/gen-protocol.mjs --check` 在 CI 里误报 stale。
 extension/src/generated/protocol.js text eol=lf
 cli/embedded-skill.mjs text eol=lf
@@ -8,3 +8,10 @@ docs/PROTOCOL.md text eol=lf
 sdk/index.mjs text eol=lf
 sdk/index.d.ts text eol=lf
 sdk/python/browser_bridge.py text eol=lf
+
+# Reference implementation and study material are excluded from source archives
+/ref export-ignore
+/reference export-ignore
+/docs/bsk-study export-ignore
+/docs/BSK-0.5.0-STUDY.md export-ignore
+/docs/GAP-ANALYSIS-BSK* export-ignore

@@ -7,7 +7,9 @@ import { acquire, release, send as cdpSend } from '../debugger.js';
 import { hideTakeover, showTakeover } from '../takeover.js';
 import { ensureFrameGraph } from '../frame-graph.js';
 import { matchBrowserFrame, readBrowserFrames } from './frame-identity.js';
-import { takeTokenChunk } from '../tokens.js';
+import { estimateTokens, takeTokenChunk } from '../tokens.js';
+import { formatLayerSummary } from '../lib/layer-summary.js';
+import { buildRefDetails } from '../lib/ref-details.js';
 import { diffObservation, observationId } from '../lib/observation-delta.js';
 import { captureDomSnapshot, captureDomSnapshotFacts } from '../dom-snapshot.js';
 import { annotateHiddenRefs, collectHiddenRefs } from '../lib/facts-annotate.js';
@@ -554,6 +556,12 @@ export async function observe(params = {}) {
     }
   }
 
+  // 分层文档：即使没有 AX 事实，也用页面侧命中检测给出 L2 提示。
+  const layerFacts = blockingLayers.length
+    ? blockingLayers.map((layer) => ({ level: 'L2', role: layer.role, name: layer.name, backendNodeId: layer.backendNodeId, bounds: layer.bounds, coverage: layer.coverage }))
+    : (base.blocking ? [{ level: 'L2', role: base.blocking.role || base.blocking.tag, name: base.blocking.label || '', coverage: null }] : []);
+  if (layerFacts.length) observation += '\n\n' + formatLayerSummary(base.url || '', layerFacts);
+
   // 双跑对照（诊断）：独立跑一次 AX+DOMSnapshot 管线，量化覆盖率与耗时，不影响主输出。
   let pipelineCompare = null;
   if (params.compareAx === true) {
@@ -617,6 +625,8 @@ export async function observe(params = {}) {
     backendMarked = false;
   }
 
+  const refDetails = buildRefDetails(base.nodes, { frameId: 0, revision: base.revision, documentId: base.documentId });
+
   const budget = Number(params.maxTokens) > 0 ? Math.min(Math.max(Math.round(Number(params.maxTokens)), 200), 20000) : 0;
   let cache = observationCache.get(tabId);
   let offset = 0;
@@ -667,6 +677,8 @@ export async function observe(params = {}) {
       title: base.title || '',
       blocking: base.blocking || null,
       revision: typeof base.revision === 'number' ? base.revision : null,
+      refDetails,
+      layers: layerFacts,
       at: Date.now(),
       id: observationId(tabId),
     };
@@ -677,6 +689,9 @@ export async function observe(params = {}) {
   return {
     observation: chunk.text,
     refs: cache.refs,
+    refDetails: Array.isArray(cache.refDetails) ? cache.refDetails : [],
+    layers: Array.isArray(cache.layers) ? cache.layers : [],
+    tokenEstimate: estimateTokens(cache.text),
     observationId: cache.id,
     ...(baselineReason ? { baselineReason } : {}),
     ...(base && base.mutations ? { mutations: base.mutations } : {}),
@@ -898,7 +913,7 @@ export async function observeFrames(params = {}) {
     }
   }
   const aliasMap = new Map();
-  for (const entry of aliases) aliasMap.set(entry.ref, { frameId: entry.frameId, localRef: entry.localRef });
+  for (const entry of aliases) aliasMap.set(entry.ref, { frameId: entry.frameId, localRef: entry.localRef, url: entry.url, documentId: entry.documentId });
   setFrameAliases(tabId, aliasMap);
   const text = frames.map((frame) => 'frame ' + frame.frameId + ' ' + frame.url + '\n' + frame.observation).join('\n\n');
   const mainRevision = typeof list[0]?.result?.revision === 'number' ? list[0].result.revision : null;

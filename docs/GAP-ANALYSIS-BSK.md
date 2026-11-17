@@ -170,3 +170,6 @@
 
 
 > 与 BSK 0.5.0 的量化能力差异见 [CAPABILITY-DELTA-BSK-0.5.0](CAPABILITY-DELTA-BSK-0.5.0.md)。
+
+
+> 完整版（0.1.9 对照，含观察/输入/协作/frame/捕获/协议/测试矩阵）：[GAP-ANALYSIS-BSK-0.5.0-FULL](GAP-ANALYSIS-BSK-0.5.0-FULL.md)。

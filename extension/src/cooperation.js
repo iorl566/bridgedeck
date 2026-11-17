@@ -47,7 +47,7 @@ export async function endCooperationPassthrough(tabId, lease) {
   await send(tabId, { type: 'bb.cooperation.passthrough', token: lease, active: false });
 }
 
-/** 清掉该 tab 所有 passthrough 租约（录制开始/结束时与 bsk 对齐）。 */
+/** 清掉该 tab 所有 passthrough 租约（录制开始/结束时）。 */
 export async function clearCooperationPassthroughs(tabId) {
   await send(tabId, { type: 'bb.cooperation.passthrough-clear' });
 }

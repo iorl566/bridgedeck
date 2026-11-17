@@ -1663,7 +1663,7 @@
       if (current && current !== el) pageError('E_NOT_ACTIONABLE', '目标在聚焦时被替换（selector 指向新节点），未重放点击');
     }
     if (!el.isConnected) {
-      // BSK 的安全契约：动作前目标被替换就 fail closed，不把旧动作重放到新节点。
+      // 安全契约：动作前目标被替换就 fail closed，不把旧动作重放到新节点。
       pageError('E_NOT_ACTIONABLE', '目标在聚焦时被替换（detached），未重放点击');
     }
     // 有些站点把真正的按钮嵌在外层 custom button 里（例如 SSO 登录按钮），
@@ -1722,6 +1722,32 @@
     const el = resolveElement(args);
     const rect = el.getBoundingClientRect();
     return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+  }
+
+  /** 把子 frame 的本地坐标投影到当前文档；只做几何，不做动作。 */
+  function frameProjectPoint(args) {
+    if (typeof args.url !== 'string' || !args.url) return null;
+    let target = null;
+    try { target = new URL(args.url, location.href).href; } catch { target = String(args.url); }
+    const x = Number(args.x);
+    const y = Number(args.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    for (const owner of document.querySelectorAll('iframe,frame')) {
+      let src = '';
+      try { src = new URL(owner.getAttribute('src') || '', location.href).href; } catch { src = String(owner.getAttribute('src') || ''); }
+      if (src !== target) continue;
+      const rect = owner.getBoundingClientRect();
+      const style = getComputedStyle(owner);
+      const left = Number.parseFloat(style.borderLeftWidth) || 0;
+      const top = Number.parseFloat(style.borderTopWidth) || 0;
+      return {
+        x: rect.left + left + x,
+        y: rect.top + top + y,
+        frameUrl: src,
+        owner: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+      };
+    }
+    return null;
   }
 
   function actionPoint(args) {
@@ -3210,6 +3236,8 @@
           return ok(actionScrollTo(input));
         case 'point':
           return ok(actionPoint(input));
+        case 'frame-project-point':
+          return ok(frameProjectPoint(input));
         case 'rect':
           return ok(actionRect(input));
         case 'auto-scroll':

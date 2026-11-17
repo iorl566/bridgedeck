@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,6 +28,9 @@ try {
 } catch (error) {
   blockers.push('release.json 不存在或不是合法 JSON：' + ((error && error.message) || error));
 }
+
+const leak = spawnSync(process.execPath, [path.join(ROOT, 'tools', 'check-vendor-leak.mjs')], { cwd: ROOT, encoding: 'utf8' });
+if (leak.status !== 0) blockers.push('发布目录/扩展包存在参考实现标识（vendor leak）');
 
 const artifacts = [];
 if (manifest) {

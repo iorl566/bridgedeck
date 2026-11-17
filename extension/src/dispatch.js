@@ -294,6 +294,8 @@ async function dispatchCommand(method, params) {
     const aliased = /^@e\d+$/.test(input.ref) ? resolveFrameAlias(input.tabId, input.ref) : null;
     if (aliased) {
       input.frameId = aliased.frameId;
+      if (aliased.url) input.frameUrl = aliased.url;
+      if (aliased.documentId) input.documentId = aliased.documentId;
       input.ref = aliased.localRef;
     }
     const framed = /^@f(\d+)e(\d+)$/.exec(input.ref);

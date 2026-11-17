@@ -1,4 +1,4 @@
-// ui/locales.js —— 由 translation/*.json 合并的 10 语言词条（BSK 0.5.0 术语对齐）。
+// ui/locales.js —— 由 translation/*.json 合并的 10 语言词条。
 export const LOCALE_TEXT = {
   "未连接": {
     "en": "Disconnected",

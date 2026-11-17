@@ -77,8 +77,23 @@ async function ensureInputFocus(tabId) {
 
 async function trustedOrFallback(kind, params, fallback) {
   const tabId = requireTabId(params);
-  // 复合 frame ref 的坐标是 frame-local；没有投影前不能把 local point 当顶层坐标派发。
-  if (Number.isInteger(Number(params.frameId)) && Number(params.frameId) > 0) return fallback(params);
+  // 复合 frame ref 的坐标是 frame-local；先投影到顶层，再派发 trusted 点击。
+  if (Number.isInteger(Number(params.frameId)) && Number(params.frameId) > 0) {
+    if (kind === 'click' && params.frameUrl) {
+      try {
+        const local = await execPage(tabId, 'point', params, Number(params.frameId));
+        const projected = await execPage(tabId, 'frame-project-point', { url: params.frameUrl, x: local.x, y: local.y }, 0);
+        if (projected && Number.isFinite(projected.x) && Number.isFinite(projected.y)) {
+          const lease = acquireInputLease(tabId, 'trusted:frame-click');
+          try { await trustedClickPoint(tabId, projected); } finally { releaseInputLease(tabId, lease.token); }
+          return { ok: true, trusted: true, via: 'frame-projected', x: projected.x, y: projected.y, frameUrl: projected.frameUrl };
+        }
+      } catch {
+        // 投影失败时回退 frame 内 page-lib 点击。
+      }
+    }
+    return fallback(params);
+  }
   if (kind === 'click' && params && params.ref) {
     const map = shadowRefs.get(tabId);
     const entry = map && map.get(params.ref);
