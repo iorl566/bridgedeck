@@ -567,8 +567,8 @@ export function installTakeover(info, lang, version, theme, texts) {
   const style = document.createElement('style');
   style.textContent = [
     ':host{--bb-font:system-ui,-apple-system,"Segoe UI","PingFang SC","Noto Sans CJK SC",sans-serif}',
-    '.glow{position:fixed;inset:0;z-index:2147483646;box-shadow:inset 0 0 20px 4px var(--bb-accent-soft,#e8f0ff);pointer-events:none}',
-    '.glow::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 40px 8px var(--bb-accent-soft,#e8f0ff);opacity:0;animation:bbp 3s ease-in-out infinite;pointer-events:none}',
+    '.glow{position:fixed;inset:0;z-index:2147483646;box-shadow:inset 0 0 20px 4px color-mix(in srgb,var(--bb-accent,#2f6fed) 28%,transparent),inset 0 0 0 3px color-mix(in srgb,var(--bb-accent,#2f6fed) 55%,transparent);pointer-events:none}',
+    '.glow::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 48px 10px color-mix(in srgb,var(--bb-accent,#2f6fed) 55%,transparent);opacity:0;animation:bbp 3s ease-in-out infinite;pointer-events:none}',
     '@keyframes bbp{0%,100%{opacity:.15}50%{opacity:1}}',
     '.glow.paused::after{animation:none;opacity:0}',
     '@media (prefers-reduced-motion: reduce){.glow::after{animation:none;opacity:0}}',
