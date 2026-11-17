@@ -59,6 +59,10 @@ function ensure(tabId) {
 }
 
 /** cooperate.sync：观测一次并签发 context_id / observation_id。 */
+export function controlGeneration(tabId) {
+  try { return ensure(Number(tabId)).generation; } catch { return 0; }
+}
+
 export async function cooperateSync(params = {}) {
   const tabId = params.tabId;
   if (!Number.isInteger(tabId)) throw bridgeError('E_BAD_ARG', 'cooperate.sync 需要 tabId');

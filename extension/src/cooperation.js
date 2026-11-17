@@ -29,15 +29,15 @@ export async function readCooperation(tabId) {
 }
 
 /** 打开/关闭页面输入锁；返回内容脚本确认的状态。 */
-export async function setCooperationBlocked(tabId, blocked) {
-  const reply = await send(tabId, { type: 'bb.cooperation.block', blocked: Boolean(blocked) });
+export async function setCooperationBlocked(tabId, blocked, generation) {
+  const reply = await send(tabId, { type: 'bb.cooperation.block', blocked: Boolean(blocked), generation: Number.isInteger(generation) ? generation : null });
   return reply && reply.ok === true ? reply.blocked === true : false;
 }
 
 /** 为一次 Agent 输入打开 passthrough（锁失效），返回 token；失败返回 null。 */
-export async function beginCooperationPassthrough(tabId) {
+export async function beginCooperationPassthrough(tabId, generation) {
   const lease = token();
-  const reply = await send(tabId, { type: 'bb.cooperation.passthrough', token: lease, active: true });
+  const reply = await send(tabId, { type: 'bb.cooperation.passthrough', token: lease, active: true, generation: Number.isInteger(generation) ? generation : null });
   return reply && reply.ok === true ? lease : null;
 }
 

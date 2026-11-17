@@ -15,7 +15,7 @@ import { consumeSelfCreated, markControlledTab, markSelfCreated, readAgentWindow
 import { clearActionNotification, clearActionNotificationById, getActionNotification, notifyActionRequest, systemNotification } from './action-notifications.js';
 import { dialogAccept, dialogDismiss, dialogStatus, onDialogOpened, pendingDialog } from './dialogs.js';
 import { awaitOperation, cancelOperation, registerOperation, settleOperation } from './operations.js';
-import { noteNavigation } from './control.js';
+import { controlGeneration, noteNavigation } from './control.js';
 import { clearInputLeases } from './input-lease.js';
 import { clearObservationCache } from './tools/observation.js';
 import { clearFrameAliases } from './tools/frames.js';
@@ -276,7 +276,7 @@ const MESSAGE_HANDLERS = {
   'bb.takeover.stop': (message, sender) => {
     const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : null;
     if (tabId == null) return { ok: false, error: '没有标签页上下文' };
-    void setCooperationBlocked(tabId, false);
+    void setCooperationBlocked(tabId, false, controlGeneration(tabId));
     getClient().sendJson({ type: 'event', event: 'takeover.stop', params: { tabId } });
     return { ok: true };
   },
@@ -288,7 +288,7 @@ const MESSAGE_HANDLERS = {
     setTakeoverState(tabId, { paused });
     const settings = await readSettings().catch(() => null);
     if (settings && settings.cooperationGuard === true) {
-      void setCooperationBlocked(tabId, !paused);
+      void setCooperationBlocked(tabId, !paused, controlGeneration(tabId));
     }
     return { ok: true, paused };
   },

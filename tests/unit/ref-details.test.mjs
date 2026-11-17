@@ -9,9 +9,10 @@ const details = buildRefDetails([
 
 assert.equal(details.length, 2);
 assert.deepEqual(details[0], {
-  ref: '@e1', backendNodeId: 42, role: 'button', name: '提交', frameId: 7, documentId: 'doc-1', revision: 9,
+  ref: '@e1', backendNodeId: 42, role: 'button', name: '提交', stableRef: 's-42', frameId: 7, documentId: 'doc-1', revision: 9,
 });
 assert.equal(details[1].backendNodeId, null);
+assert.match(details[1].stableRef, /^s-[a-z0-9]+$/);
 assert.equal(details[1].name.length, 120);
 assert.deepEqual(buildRefDetails(null), []);
 

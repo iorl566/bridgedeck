@@ -19,6 +19,13 @@
   const activity = { lastHumanAt: 0, lastKind: '', editing: false, events: [] };
   let agentUntil = 0;
   let revision = 0;
+  let authorityGeneration = 0;
+  const acceptGeneration = (generation) => {
+    if (!Number.isInteger(Number(generation))) return true;
+    if (Number(generation) < authorityGeneration) return false;
+    authorityGeneration = Number(generation);
+    return true;
+  };
   const bump = () => { revision += 1; };
   const frameState = { mutations: 0, childList: 0, attributes: 0, text: 0, scroll: 0, pointer: 0, keyboard: 0, human: 0, startedAt: Date.now() };
   const bumpFrame = (kind, by = 1) => {
@@ -256,7 +263,7 @@
       textLength: text.length,
       textTail: text.slice(-500),
       revision,
-      authority: { revision },
+      authority: { revision, generation: authorityGeneration },
       mode: modeFor(),
       frameState: {
         mutations: frameState.mutations,
@@ -289,11 +296,13 @@
       return false;
     }
     if (message.type === 'bb.cooperation.block') {
-      sendResponse({ ok: true, blocked: setBlocked(message.blocked === true) });
+      if (!acceptGeneration(message.generation)) { sendResponse({ ok: false, stale: true, generation: authorityGeneration }); return false; }
+      sendResponse({ ok: true, blocked: setBlocked(message.blocked === true), generation: authorityGeneration });
       return false;
     }
     if (message.type === 'bb.cooperation.passthrough') {
-      sendResponse({ ok: true, pending: passThrough(message.token, message.active !== false) });
+      if (!acceptGeneration(message.generation)) { sendResponse({ ok: false, stale: true, generation: authorityGeneration }); return false; }
+      sendResponse({ ok: true, pending: passThrough(message.token, message.active !== false), generation: authorityGeneration });
       return false;
     }
     if (message.type === 'bb.cooperation.passthrough-clear') {

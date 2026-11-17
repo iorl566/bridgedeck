@@ -574,6 +574,18 @@ export async function observe(params = {}) {
     } catch { visualRegions = null; visualRefs = null; }
   }
 
+  const visualObjects = [];
+  if (visualRegions && Array.isArray(visualRegions.candidates)) {
+    for (const region of visualRegions.candidates) {
+      visualObjects.push({ kind: 'region', index: region.index, tag: region.tag, id: region.id || null, rect: region.rect });
+    }
+  }
+  if (visualRefs && Array.isArray(visualRefs.refs)) {
+    for (const ref of visualRefs.refs) {
+      visualObjects.push({ kind: 'ref', ref: ref.ref, role: ref.role || null, name: ref.name || null, rect: { x: ref.x, y: ref.y, width: ref.width, height: ref.height } });
+    }
+  }
+
   // 双跑对照（诊断）：独立跑一次 AX+DOMSnapshot 管线，量化覆盖率与耗时，不影响主输出。
   let pipelineCompare = null;
   if (params.compareAx === true) {
@@ -670,6 +682,9 @@ export async function observe(params = {}) {
     if (!cache || cache.at !== decoded.at) {
       throw bridgeError('E_CURSOR_STALE', 'cursor 已过期（页面重新观察过），请重新 observe');
     }
+    if (decoded.r != null && cache.revision != null && Number(decoded.r) !== Number(cache.revision)) {
+      throw bridgeError('E_CURSOR_STALE', 'cursor 的 revision 已变化，请重新 observe');
+    }
     offset = Math.max(0, Number(decoded.o) || 0);
   } else {
     const requestDelta = params.delta === true && typeof params.baseline === 'string' && params.baseline;
@@ -702,10 +717,12 @@ export async function observe(params = {}) {
       title: base.title || '',
       blocking: base.blocking || null,
       revision: typeof base.revision === 'number' ? base.revision : null,
+      documentId: base.url || '',
       refDetails,
       layers: layerFacts,
       visualRegions,
       visualRefs,
+      visualObjects,
       at: Date.now(),
       id: observationId(tabId),
     };
@@ -720,6 +737,7 @@ export async function observe(params = {}) {
     layers: Array.isArray(cache.layers) ? cache.layers : [],
     ...(cache.visualRegions ? { visualRegions: cache.visualRegions } : {}),
     ...(cache.visualRefs ? { visualRefs: cache.visualRefs } : {}),
+    ...(Array.isArray(cache.visualObjects) && cache.visualObjects.length ? { visualObjects: cache.visualObjects } : {}),
     tokenEstimate: estimateTokens(cache.text),
     observationId: cache.id,
     ...(baselineReason ? { baselineReason } : {}),

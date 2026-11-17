@@ -1,5 +1,7 @@
 /** Inline auto/visible long-screenshot panel; the full page keeps manual stitching. */
 
+import { buildCaptureManifest, pruneManifests } from '../../src/lib/capture-manifest.js';
+
 const $ = (id) => document.getElementById(id);
 
 function setStatus(text, error = false) {
@@ -30,6 +32,10 @@ export async function captureActiveTab() {
       return;
     }
     await chrome.storage.session.set({ 'bb.longshot.last': { dataUrl: result.dataUrl, width: result.width, height: result.height } });
+    const stored = await chrome.storage.local.get('bb.capture.manifests');
+    const list = Array.isArray(stored && stored['bb.capture.manifests']) ? stored['bb.capture.manifests'] : [];
+    const manifest = buildCaptureManifest({ id: 'longshot-' + Date.now(), width: result.width, height: result.height, tiles: result.tiles || 0, url: tab.url || '' });
+    await chrome.storage.local.set({ 'bb.capture.manifests': pruneManifests([manifest, ...list]) });
     setStatus(`完成：${result.width} × ${result.height} px`);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : '截图失败', true);

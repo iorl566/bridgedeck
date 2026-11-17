@@ -1,4 +1,4 @@
-# Test status — 0.1.12
+# Test status — 0.2.0
 
 Last run: 2026-11-17, Windows Edge 157.
 
@@ -20,10 +20,10 @@ Last run: 2026-11-17, Windows Edge 157.
 
 ## Release
 
-- GitHub v0.1.12: public, signed (keyId `c7b5e21301f91a2d`).
-- Edge 0.1.12: submitted for review (2026-11-17), screenshot `docs/assets/ui/edge-store-0.1.12-review.png`.
-- Extension: **438,216 B**, sha256 `60dfbf04b7030a5e71f9954402a3d3865d39a580a13942cea75575097913bd64`.
-- 0.1.10 artifacts archived under `dist/archive-0.1.10/`.
+- GitHub v0.2.0: public, signed (keyId `c7b5e21301f91a2d`).
+- Edge 0.2.0: submitted for review (2026-11-17), screenshot `docs/assets/ui/edge-store-0.2.0-review.png`.
+- Extension: **441,717 B**, sha256 `2b2919a5dc6d5174898206fc878343f76823ba5a6fa45fe103bb002b58ada389`.
+- 0.1.12 artifacts archived under `dist/archive-0.1.12/`.
 
 ## 0.1.11 focus
 
@@ -47,5 +47,14 @@ Last run: 2026-11-17, Windows Edge 157.
 - Authority: `cooperate sync` returns generation/revision/context/observation; E2E asserts it.
 - RefKey auto-backend: page selector -> DOM.querySelector -> backendNodeId -> CDP click; E2E 7 asserts `via=cdp-backend`.
 - Real OOPIF: `23p3` verifies `via=cdp-frame-owner` through `Page.getFrameTree` + `DOM.getFrameOwner`.
-- Current full E2E: **150/150**, 0 skipped; unit **486/486**; eval corpus **passed**.\n- `23p3` real OOPIF passes via `cdp-frame-owner`.
+- Current full E2E: **150/150**, 0 skipped; unit **487/487**; eval corpus **passed**.\n- `23p3` real OOPIF passes via `cdp-frame-owner`.
 - Not released; 0.1.12 remains latest.
+
+## 0.3.0 WIP (2026-11-18)
+
+- VOM: `visualObjects` fusion, `stableRef` metadata (backend/hash), revision-bound cursor.
+- Capture: longshot writes capture manifest index (id/size/tiles/url/createdAt).
+- Eval: 27-case real Edge corpus; `node tools/eval-from-e2e.mjs` status=passed.
+- Cooperation authority: stale generation rejection in content; authority generation/revision returned.
+- Current full E2E: 150/150, 0 skipped; unit 487/487.
+- Not released; 0.2.0 remains latest.

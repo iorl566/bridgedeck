@@ -6,6 +6,7 @@ import { installTakeover } from './overlay-ui.js';
 import { overlayTexts } from './overlay-texts.js';
 import { OVERLAY_THEME } from './overlay-theme.js';
 import { setCooperationBlocked } from './cooperation.js';
+import { controlGeneration } from './control.js';
 
 const takeoverStates = new Map();
 const takeoverVersions = new Map();
@@ -74,7 +75,7 @@ export async function showTakeover(tabId, info = {}) {
     // 收起后立即放开。设置默认关闭，避免无提示地改变现有交互。
     const guard = settings && settings.cooperationGuard === true &&
       info.paused !== true && info.minimized !== true;
-    await setCooperationBlocked(tabId, guard);
+    await setCooperationBlocked(tabId, guard, controlGeneration(tabId));
   } catch (error) {
     log('接管浮层注入失败 tab=' + tabId + '：' + ((error && error.message) || error));
   }
@@ -83,7 +84,7 @@ export async function showTakeover(tabId, info = {}) {
 /** 只移除页面上的浮层 DOM，保留 tab 的接管状态（供重新打开控制提示时恢复）。 */
 export async function removeTakeoverDom(tabId) {
   takeoverVersions.set(tabId, (takeoverVersions.get(tabId) || 0) + 1);
-  await setCooperationBlocked(tabId, false);
+  await setCooperationBlocked(tabId, false, controlGeneration(tabId));
   try {
     await chrome.scripting.executeScript({ target: { tabId }, func: () => { window.__bbTakeoverVersion = (Number(window.__bbTakeoverVersion) || 0) + 1; const n = document.querySelector('[data-bb-ui="takeover"]') || document.getElementById('__bb_takeover_host'); if (n) n.remove(); } });
   } catch {

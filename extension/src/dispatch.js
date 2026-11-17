@@ -14,7 +14,7 @@ import { download } from './files.js';
 import { manualFrame, manualSave, manualStart } from './quick.js';
 import { dialogAccept, dialogArm, dialogDisarm, dialogDismiss, dialogHandle, dialogList, dialogStatus, forgetDialogTab } from './dialogs.js';
 import { awaitOperation, cancelOperation } from './operations.js';
-import { checkControl, cooperateHandback, cooperateSync, cooperateWait, TAB_METHODS } from './control.js';
+import { checkControl, controlGeneration, cooperateHandback, cooperateSync, cooperateWait, TAB_METHODS } from './control.js';
 import { refRegistry } from './tools/state.js';
 import { attachReceipt, buildActionReceipt } from './lib/action-receipt.js';
 import { isFullRefKey } from './refs/ref-registry.js';
@@ -371,13 +371,13 @@ async function dispatchCommand(method, params) {
   try {
     result = await handler(input);
   } catch (error) {
-    if (error && typeof error === 'object' && AGENT_INPUT_METHODS.has(method)) {
+    if (error && typeof error === 'object' && RECEIPT_METHODS.has(method)) {
       const errorReceipt = buildActionReceipt({ method, ref: input.ref, frameId: input.frameId || 0, revision: entry ? entry.key.revision : (input.expectRevision != null ? Number(input.expectRevision) : null), effectState: error.data && error.data.effect_state ? error.data.effect_state : 'unknown' });
       error.data = { ...(error.data && typeof error.data === 'object' ? error.data : {}), receipt: errorReceipt };
     }
     throw error;
   }
-  const receipt = AGENT_INPUT_METHODS.has(method)
+  const receipt = RECEIPT_METHODS.has(method)
     ? buildActionReceipt({ method, ref: input.ref, frameId: input.frameId || 0, revision: entry ? entry.key.revision : (input.expectRevision != null ? Number(input.expectRevision) : null), effectState: result && result.effectState, via: result && result.via })
     : null;
   const withReceipt = receipt ? attachReceipt(result, receipt) : result;
@@ -399,6 +399,10 @@ async function dispatchCommand(method, params) {
 // Agent 自己通过 CDP 派发的可信鼠标/键盘事件也会触发页面 isTrusted=true，
 // 记下这些命令的执行窗口，后台据此忽略“自产”的 human.input，避免误自动暂停会话。
 const agentInputWindows = new Map(); // tabId -> { start, end }
+const RECEIPT_METHODS = new Set([
+  'click', 'click-backend', 'hover', 'fill', 'press', 'select', 'drag', 'wheel', 'upload', 'download', 'click-point', 'shadow.click',
+  'navigate', 'reload', 'navigate-back', 'navigate-forward', 'focus', 'scroll-to',
+]);
 const AGENT_INPUT_METHODS = new Set([
   'click', 'click-backend', 'hover', 'fill', 'press', 'select', 'drag', 'wheel', 'upload', 'download', 'click-point', 'shadow.click',
 ]);
@@ -438,7 +442,7 @@ export function runSerialized(method, params) {
     if (tabId == null || !AGENT_INPUT_METHODS.has(method)) return;
     agentInputWindows.set(tabId, { start: Date.now(), end: Infinity });
     try {
-      const lease = await beginCooperationPassthrough(tabId);
+      const lease = await beginCooperationPassthrough(tabId, controlGeneration(tabId));
       if (lease) passthroughTokens.set(tabId, lease);
     } catch { /* 内容脚本不可用时按无锁继续 */ }
   };
