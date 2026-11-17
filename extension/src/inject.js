@@ -116,6 +116,15 @@ async function runInjection(tabId, world, func, args, frameId = 0) {
   return first.result;
 }
 
+/** 等页面完成两帧渲染；用于输入前证明可见性已真正提交，而不是只读到 visibilityState。 */
+export async function waitForPaint(tabId, frameId = 0) {
+  const result = await runInjection(tabId, 'ISOLATED', async () => new Promise((resolve) => {
+    const done = () => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)));
+    done();
+  }), [], frameId);
+  return result === true;
+}
+
 /** 补注入页面侧能力库（content script 缺失时，例如扩展重载后的旧页面）。 */
 export async function injectPageLib(tabId, frameId = 0) {
   try {

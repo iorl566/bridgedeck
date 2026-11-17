@@ -133,7 +133,7 @@ const VALUE_FLAGS = new Set([
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
 for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force']) BOOL_FLAGS.add(name);
 for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before', 'allow-domains', 'deny-domains', 'secret', 'by', 'min-interval']) VALUE_FLAGS.add(name);
-for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'quiet', 'verbose', 'diagnostics', 'cdp-frames', 'commands', 'actions', 'heal', 'insight', 'synthetic']) BOOL_FLAGS.add(name);
+for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'synthetic', 'quiet', 'verbose', 'diagnostics', 'cdp-frames', 'commands', 'actions', 'heal', 'insight', 'synthetic']) BOOL_FLAGS.add(name);
 VALUE_FLAGS.add('request-id');
 VALUE_FLAGS.add('steps-file');VALUE_FLAGS.add('until');
 VALUE_FLAGS.add('backend');
@@ -2380,6 +2380,7 @@ async function cmdPage(command, flags, pos) {
       const target = resolveTarget(flags, pos, 1, { required: true });
       let params = withControl(flags, { ...target });
       params = defaultInputMode(params, flags);
+      if (flags.synthetic === true) { params.synthetic = true; params.trusted = false; }
       if (flags.force === true) params.force = true;
       if (flags['expect-revision'] !== undefined) {
         const revision = Number(flags['expect-revision']);

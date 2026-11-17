@@ -1,23 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareProtocol } from '../../lib/protocol.mjs';
-import { FEATURE_MIN_PROTOCOL, featureShortfall, featuresForCall } from '../../lib/protocol-features.mjs';
+import { FEATURE_MIN_PROTOCOL, featureMatrix, featuresForCall, featureShortfall } from '../../lib/protocol-features.mjs';
 
-test('按方法与参数推导特性', () => {
-  assert.deepEqual(featuresForCall('click', {}), []);
-  assert.deepEqual(featuresForCall('evaluate', { unverified: true }), ['unverified']);
-  assert.deepEqual(featuresForCall('click', { expect: [{ target: '@e1' }] }), ['expect']);
-  assert.deepEqual(featuresForCall('read', {}), ['read']);
-  assert.deepEqual(featuresForCall('plan', {}), ['plan']);
-  assert.deepEqual(featuresForCall('observe', { delta: true }), ['observe-delta']);
+const compare = (a, b) => {
+  const pa = String(a || '').split('.').map(Number);
+  const pb = String(b || '').split('.').map(Number);
+  if (!Number.isFinite(pa[0]) || !Number.isFinite(pb[0])) return null;
+  return pa[0] - pb[0] || (pa[1] || 0) - (pb[1] || 0);
+};
+
+test('feature matrix exposes every gated feature with availability', () => {
+  const old = featureMatrix({ protocol: '1.8' }, compare);
+  assert.equal(old.unverified.available, false);
+  assert.equal(old.unverified.required, FEATURE_MIN_PROTOCOL.unverified);
+  assert.equal(old.unverified.actual, '1.8');
+  const current = featureMatrix({ protocol: '1.9' }, compare);
+  for (const feature of Object.keys(FEATURE_MIN_PROTOCOL)) assert.equal(current[feature].available, true, feature);
+  assert.equal(featureMatrix({}, compare).unverified.available, false);
 });
 
-test('旧扩展缺特性时返回缺口，1.9 放行', () => {
-  assert.equal(featureShortfall({ protocol: '1.9' }, ['unverified'], compareProtocol).length, 0);
-  const older = featureShortfall({ protocol: '1.8' }, ['unverified', 'expect'], compareProtocol);
-  assert.deepEqual(older.map((item) => item.feature), ['unverified', 'expect']);
-  assert.equal(older[0].required, FEATURE_MIN_PROTOCOL.unverified);
-  assert.equal(older[0].actual, '1.8');
-  // 未知/缺失协议按缺特性处理，不静默放行。
-  assert.equal(featureShortfall({}, ['read'], compareProtocol).length, 1);
+test('a call derives only the features it actually requests', () => {
+  assert.deepEqual(featuresForCall('read', {}), ['read']);
+  assert.deepEqual(featuresForCall('observe', { unverified: true, expect: [{}], delta: true }).sort(), ['expect', 'observe-delta', 'unverified']);
+  assert.deepEqual(featuresForCall('click', {}), []);
+});
+
+test('featureShortfall names the missing feature and both protocols', () => {
+  const missing = featureShortfall({ protocol: '1.8' }, ['read'], compare);
+  assert.deepEqual(missing, [{ feature: 'read', required: '1.9', actual: '1.8' }]);
 });

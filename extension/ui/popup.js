@@ -575,8 +575,9 @@ if (new URL(location.href).searchParams.has('reload')) {
 // 视觉自检/演示：?mode=remote 直接展示远程配对表单
 if (new URL(location.href).searchParams.get('mode') === 'remote') uiMode = 'remote';
 // 诊断：?coopState=<tabId> 直接询问内容脚本输入锁状态，避免暂停时不能用 evaluate。
-const coopStateTab = Number(new URL(location.href).searchParams.get('coopState'));
-if (Number.isInteger(coopStateTab)) {
+const coopStateRaw = new URL(location.href).searchParams.get('coopState');
+const coopStateTab = coopStateRaw == null || coopStateRaw === '' ? null : Number(coopStateRaw);
+if (Number.isInteger(coopStateTab) && coopStateTab > 0) {
   chrome.tabs.sendMessage(coopStateTab, { type: 'bb.cooperation.state' }, { frameId: 0 })
     .then((reply) => { document.title = 'COOP:' + JSON.stringify(reply && reply.state ? reply.state : null); })
     .catch(() => { document.title = 'COOP:fail'; });

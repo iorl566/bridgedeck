@@ -192,7 +192,7 @@
     if (!state || !state.active) return;
     state.seq += 1;
     const seq = state.seq;
-    const agentAt = Number(document.documentElement.getAttribute('data-bb-agent-input') || 0);
+    const agentAt = Number(globalThis.__bbAgentInputAt || 0) || Number(document.documentElement.getAttribute('data-bb-agent-input') || 0);
     // 标记可能是 performance.now（新）或 Date.now（旧），两种都认。
     const agentRecent = agentAt > 0 && (agentAt > 1e11 ? Date.now() - agentAt < 10000 : (performance.now() >= agentAt && performance.now() - agentAt < 10000));
     const actor = agentRecent ? 'agent' : 'human';

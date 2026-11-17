@@ -31,6 +31,7 @@ import { domainAllowed, normalizeDomains } from '../lib/domain-policy.mjs';
 import { decodeTextFrame } from '../lib/transport-frame.mjs';
 import { isSessionExpired, sessionPublicView } from '../lib/session-model.mjs';
 import { createSessionRecord, markSessionDisconnected, rebindSessionRecord, setSessionPaused } from '../lib/session-lifecycle.mjs';
+import { TabReservations } from '../lib/tab-reservations.mjs';
 import { fetchManifest, fetchArtifact } from '../lib/update-source.mjs';
 import { readUpdateState, writeUpdateState } from '../lib/update-state.mjs';
 import { verifyReleaseSignature } from '../lib/release-sign.mjs';
@@ -43,7 +44,7 @@ import { createDeviceStore } from '../lib/device-store.mjs';
 import { createStartJournal, normalizeStartToken } from '../lib/start-journal.mjs';
 import { LOCAL_METHODS, SESSION_METHODS, EXT_METHODS, SESSION_QUEUE_BYPASS, isMutating, remoteScopeAllows } from '../lib/methods.mjs';
 import { resolveSessionByScope } from '../lib/session-scope.mjs';
-import { FEATURE_RECOVERY, featureShortfall, featuresForCall } from '../lib/protocol-features.mjs';
+import { FEATURE_RECOVERY, featureMatrix, featureShortfall, featuresForCall } from '../lib/protocol-features.mjs';
 import { serverProof as makeServerProof } from '../lib/local-proof.mjs';
 import { normalizePlanSteps } from '../lib/plan-steps.mjs';
 
@@ -429,6 +430,7 @@ let shuttingDown = false;
 const instances = new Map();
 /** sessionId -> { sessionId, instanceId, tabId, windowId, url, title, startedAt } */
 const sessions = new Map();
+const tabReservations = new TabReservations();
 const inflight = new Map();
 // 每个 session 一条串行队列：同一会话的命令按提交顺序执行，避免扩展侧
 // ref-store / debugger / 输入状态在并发工具调用下互相踩踏。
@@ -1604,6 +1606,14 @@ function buildStatus() {
     inflight: inflightList(),
     queues: sessionQueue.snapshot(),
     auth: authGuard.snapshot(),
+    compatibility: {
+      daemon: { protocol: PROTOCOL_VERSION, features: featureMatrix({ protocol: PROTOCOL_VERSION }, compareProtocol) },
+      browsers: browserList().map((item) => ({
+        instanceId: item.instanceId,
+        protocol: item.protocol,
+        features: featureMatrix(item, compareProtocol),
+      })),
+    },
   };
 }
 
@@ -1673,6 +1683,21 @@ async function startRequestStatus(params) {
   return { requestId, entry: startJournal.get(requestId) };
 }
 
+function tabOwnerSession(tabId, exceptSessionId) {
+  for (const [sessionId, session] of sessions) {
+    if (sessionId !== exceptSessionId && Number(session.tabId) === Number(tabId)) return sessionId;
+  }
+  return null;
+}
+
+function claimTab(tabId, owner) {
+  const active = tabOwnerSession(tabId, owner);
+  if (active) throw new BridgeError('E_BORROW_CONFLICT', '该标签页已被其他会话占用', { tabId, owner: active });
+  const claim = tabReservations.reserve(tabId, owner);
+  if (!claim.ok) throw new BridgeError('E_BORROW_CONFLICT', '该标签页已有借用确认进行中', { tabId, owner: claim.owner });
+  return claim;
+}
+
 async function startSession(params, timeoutMs) {  const traceStart = Date.now();
   const traceStep = (label) => {
     if (process.env.BB_DAEMON_TRACE === '1') log(`session.start ${label} +${Date.now() - traceStart}ms`);
@@ -1710,6 +1735,7 @@ async function startSession(params, timeoutMs) {  const traceStart = Date.now();
     }
     startJournal.begin(requestToken, { browser: params.browser ?? null, noFocus: params.noFocus === true });
   }
+  let claim = null;
   try {
   let instance;
   let tabId = null;
@@ -1723,9 +1749,19 @@ async function startSession(params, timeoutMs) {  const traceStart = Date.now();
     if (!Number.isInteger(wanted)) throw new BridgeError('E_BAD_ARG', 'session.start 的 tab 需要整数 tabId');
     instance = await findInstanceForTab(wanted);
     if (!instance) throw new BridgeError('E_NO_TAB', `tabId ${wanted} 不属于任何已连接的浏览器`);
+    const ownerToken = 'start:' + crypto.randomUUID();
+    claim = { tabId: wanted, owner: ownerToken };
+    claimTab(wanted, ownerToken);
     const borrowParams = { tabId: wanted };
     if (typeof globalBorrowConfirm === 'boolean') borrowParams.borrowConfirm = globalBorrowConfirm;
-    const info = await sendCommand(instance, 'tab.borrow', borrowParams, timeoutMs);
+    let info;
+    try {
+      info = await sendCommand(instance, 'tab.borrow', borrowParams, timeoutMs);
+    } catch (error) {
+      tabReservations.release(wanted, ownerToken);
+      claim = null;
+      throw error;
+    }
     tabId = wanted;
     borrowed = true;
     windowId = info && Number.isInteger(info.windowId) ? info.windowId : 0;
@@ -1760,6 +1796,10 @@ async function startSession(params, timeoutMs) {  const traceStart = Date.now();
     minIntervalMs: Math.max(0, Math.min(Number(params.minIntervalMs) || 0, 5000)),
   }));
   saveSessions();
+  if (claim) {
+    tabReservations.transfer(claim.tabId, claim.owner, sessionId);
+    claim = null;
+  }
   log(`session ${sessionId} 创建 instance=${instance.instanceId} tab=${tabId}${borrowed ? '（借用）' : ''}`);
   // 自动挂载对话框拦截（queue 策略）：动作触发原生弹窗时先回 dialog_pending，由调用方决策。
   // 同一 tab 的命令按队列串行，因此这里不等待 arm 完成也不会让后续动作抢在拦截器之前。
@@ -1783,6 +1823,7 @@ async function startSession(params, timeoutMs) {  const traceStart = Date.now();
   if (requestToken) startJournal.ready(requestToken, started);
   return started;
   } catch (error) {
+    if (claim) tabReservations.release(claim.tabId, claim.owner);
     if (requestToken) startJournal.fail(requestToken, (error && error.message) || error);
     throw error;
   }
@@ -1795,6 +1836,7 @@ async function rebindSession(params, timeoutMs) {
   if (!Number.isInteger(wanted)) throw new BridgeError('E_BAD_ARG', 'session.rebind 需要 --tab <tabId>');
   const target = await findInstanceForTab(wanted);
   if (!target) throw new BridgeError('E_NO_TAB', `tabId ${wanted} 不属于任何已连接的浏览器`);
+  if (wanted !== Number(session.tabId)) claimTab(wanted, session.sessionId);
 
   const previous = instances.get(session.instanceId);
   const oldTabId = session.tabId;
@@ -1809,6 +1851,10 @@ async function rebindSession(params, timeoutMs) {
     }
   }
 
+  if (wanted !== Number(oldTabId)) {
+    tabReservations.release(oldTabId, session.sessionId);
+    tabReservations.reserve(wanted, session.sessionId);
+  }
   rebindSessionRecord(session, {
     instanceId: target.instanceId,
     tabId: wanted,
@@ -1850,6 +1896,7 @@ async function pauseSession(params, timeoutMs) {
 async function stopSession(params, timeoutMs) {
   const session = resolveSession(params.session !== undefined ? params.session : params.sessionId);
   aliases.clear(session.sessionId);
+  tabReservations.release(session.tabId, session.sessionId);
   if (sessionState.requestStop(session.sessionId) === false) {
     return { ok: true, alreadyStopping: true, borrowed: session.borrowed === true };
   }
@@ -2143,7 +2190,24 @@ async function dispatchExtension(method, params, timeoutMs) {
   await enforceSessionPolicy(route, method, route.params);
   requireFeatures(route.instance, method, route.params);
   verifyDecision(route, method);
-  return submitRouted(route, method, params, timeoutMs);
+  const result = await submitRouted(route, method, params, timeoutMs);
+  // handback 是人工把控制权交回：daemon 必须同步解除暂停，否则下一条命令仍被 E_SESSION_PAUSED 拒绝。
+  if (method === 'cooperate.handback' && route.session && route.session.paused === true) {
+    route.session.paused = false;
+    route.session.pausedBy = null;
+    route.session.pausedAt = null;
+    saveSessions();
+    sendInstanceEvent(route.instance, 'takeover.state', {
+      tabId: route.session.tabId,
+      sessionId: route.session.sessionId,
+      paused: false,
+      pausedBy: null,
+      borrowed: route.session.borrowed === true,
+      controller: route.session.controller ?? null,
+      project: route.session.controller?.project ?? null,
+    });
+  }
+  return result;
 }
 
 /** 给失败结果补 effect_state：未派发=none，其余无法证明时=unknown（保守语义）。 */

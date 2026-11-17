@@ -349,21 +349,40 @@ async function execFuncAllFrames(tabId, func, args) {
   return Array.isArray(results) ? results : [];
 }
 
-async function activateContentRecorder(tabId, startedAt, includeAgent) {
+async function sendToAllFrames(tabId, message) {
+  let frames = [{ frameId: 0 }];
   try {
-    const reply = await chrome.tabs.sendMessage(tabId, { type: 'bb.record.activate', startedAt, includeAgent: includeAgent === true });
-    return !!(reply && reply.ok === true);
-  } catch {
-    return false;
-  }
+    if (chrome.webNavigation && typeof chrome.webNavigation.getAllFrames === 'function') {
+      const all = await chrome.webNavigation.getAllFrames({ tabId });
+      if (Array.isArray(all) && all.length) frames = all;
+    }
+  } catch { /* 保持主文档兜底 */ }
+  let replied = false;
+  await Promise.all(frames.map(async (frame) => {
+    try {
+      const reply = await chrome.tabs.sendMessage(tabId, message, { frameId: Number(frame.frameId) || 0 });
+      if (reply && reply.ok === true) replied = true;
+    } catch { /* 某帧未注入不阻塞其他帧 */ }
+  }));
+  return replied;
+}
+
+async function activateContentRecorder(tabId, startedAt, includeAgent) {
+  const replied = await sendToAllFrames(tabId, { type: 'bb.record.activate', startedAt, includeAgent: includeAgent === true });
+  // 跨源 iframe 的 tabs.sendMessage 可能拿不到接收者；直接在所有 frame 调内容脚本暴露的 start。
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: (at, agent) => { try { globalThis.__bb_record_capture?.start({ startedAt: at, includeAgent: agent }); } catch { /* ignore */ } },
+      args: [startedAt, includeAgent === true],
+    });
+  } catch { /* 某些 frame 不可注入 */ }
+  return replied;
 }
 
 async function deactivateContentRecorder(tabId) {
-  try {
-    return await chrome.tabs.sendMessage(tabId, { type: 'bb.record.deactivate' });
-  } catch {
-    return null;
-  }
+  await sendToAllFrames(tabId, { type: 'bb.record.deactivate' });
+  return { ok: true };
 }
 
 function pushEvent(tabId, event) {

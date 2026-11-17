@@ -318,7 +318,8 @@
 
   /** Agent 输入标记：用单调时钟（performance.now）而不是墙钟，睡眠/改系统时间不会误判人工接管。 */
   function markAgentInput() {
-    // 不写页面 DOM：Agent 输入由 background 的命令窗口过滤，避免 10s 盲区和页面伪造。
+    // 只写隔离世界全局：record-capture 与 page-lib 同处扩展 isolated world，页面脚本不可见/不可伪造。
+    globalThis.__bbAgentInputAt = performance.now();
   }
 
   function agentInputRecent() {
@@ -1646,7 +1647,7 @@
   // ---------- 页面动作 ----------
 
   async function actionClick(args) {
-    const el = resolveElement(args);
+    let el = resolveElement(args);
     scrollIntoView(el);
     await ensureActionable(el, args, 'click');
     markAgentInput();
@@ -1655,7 +1656,16 @@
     } catch {
       // 忽略 focus 失败
     }
-    if (!el.isConnected) pageError('E_NOT_ACTIONABLE', '目标在聚焦时被替换（detached）');
+    await sleepMs(20);
+    if (args.selector && !args.ref) {
+      let current = null;
+      try { current = document.querySelector(args.selector); } catch { current = null; }
+      if (current && current !== el) pageError('E_NOT_ACTIONABLE', '目标在聚焦时被替换（selector 指向新节点），未重放点击');
+    }
+    if (!el.isConnected) {
+      // BSK 的安全契约：动作前目标被替换就 fail closed，不把旧动作重放到新节点。
+      pageError('E_NOT_ACTIONABLE', '目标在聚焦时被替换（detached），未重放点击');
+    }
     // 有些站点把真正的按钮嵌在外层 custom button 里（例如 SSO 登录按钮），
     // 直接 el.click() 只触发外层，页面不会提交。优先点击视口中心命中的子元素。
     let target = el;
@@ -1879,6 +1889,17 @@
     return { ok: true };
   }
 
+  /** 与 src/tools/focus-state.js 同语义：document.activeElement 只看 shadow host，必须逐层查 shadow root。 */
+  function isElementFocused(node) {
+    let current = node;
+    while (current) {
+      const root = typeof current.getRootNode === 'function' ? current.getRootNode() : null;
+      if (root && root.activeElement === current) return true;
+      current = root && root.host ? root.host : null;
+    }
+    return false;
+  }
+
   function fillFastTarget(args) {
     const el = resolveElement(args);
     if (!el) pageError('E_NOT_FOUND', '页面没有可填写元素');
@@ -1902,13 +1923,13 @@
     }
     if (occluding) {
       try { el.focus({ preventScroll: false }); } catch { /* 忽略 */ }
-      try { if (typeof el.select === 'function') el.select(); } catch { /* 忽略 */ }
-      return { ok: true, textLike: true, occluded: true, reason: 'occluded' };
+      try { if (args.noClear !== true && typeof el.select === 'function') el.select(); } catch { /* 忽略 */ }
+      return { ok: true, textLike: true, occluded: true, reason: 'occluded', focused: isElementFocused(el) };
     }
     markAgentInput();
     try { el.focus({ preventScroll: false }); } catch { /* 忽略 */ }
-    try { if (typeof el.select === 'function') el.select(); } catch { /* 忽略 */ }
-    return { ok: true, textLike: true, tag: tag, type: type, hadValue: String(el.value == null ? '' : el.value).length > 0 };
+    try { if (args.noClear !== true && typeof el.select === 'function') el.select(); } catch { /* 忽略 */ }
+    return { ok: true, textLike: true, tag: tag, type: type, focused: isElementFocused(el), hadValue: String(el.value == null ? '' : el.value).length > 0 };
   }
 
   function fillVerify(args) {

@@ -489,7 +489,7 @@ const MESSAGE_HANDLERS = {
     setHumanState(tabId, {
       ...(message && message.state && typeof message.state === 'object' ? message.state : {}),
       frameId: sender && Number.isInteger(sender.frameId) ? sender.frameId : 0,
-      at: Number(message && message.at) || Date.now(),
+      at,
     });
     return { ok: true };
   },
@@ -589,7 +589,9 @@ function installMessageBridge() {
     if (type === 'bb.ops.event') {
       const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : null;
       if (tabId != null) {
-        collectEvent(tabId, Object.assign({}, message, {
+        // 事件可能来自 CDP trusted 路径，page-lib 未必能打标；命令窗口是权威归因。
+        const actor = isAgentInputWindow(tabId) ? 'agent' : (message && message.actor);
+        collectEvent(tabId, Object.assign({}, message, actor ? { actor } : {}, {
           frameId: sender && Number.isInteger(sender.frameId) ? sender.frameId : 0,
         }));
       }

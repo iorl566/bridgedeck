@@ -1,6 +1,6 @@
 // src/tools/interaction.js —— 点击/输入/按键/选择/拖拽/滚轮/滚动。
 import { bridgeError } from '../errors.js';
-import { execPage } from '../inject.js';
+import { execPage, waitForPaint } from '../inject.js';
 import { sleep } from '../tabs.js';
 import { acquire, isTabArmed, release, send as cdpSend } from '../debugger.js';
 import { withForegroundTab } from '../background-execution.js';
@@ -61,7 +61,12 @@ async function ensureInputFocus(tabId) {
     }
     try {
       const state = await evalInMain(tabId, 'document.visibilityState');
-      if (state && state.value === 'visible') return true;
+      if (state && state.value === 'visible') {
+        // visibilityState 可能在合成器尚未提交时仍为 visible；等两帧后再确认一次。
+        await waitForPaint(tabId).catch(() => sleep(32));
+        const settled = await evalInMain(tabId, 'document.visibilityState').catch(() => null);
+        if (settled && settled.value === 'visible') return true;
+      }
     } catch {
       // 注入失败时按不可见处理，继续重试
     }
@@ -72,6 +77,8 @@ async function ensureInputFocus(tabId) {
 
 async function trustedOrFallback(kind, params, fallback) {
   const tabId = requireTabId(params);
+  // 复合 frame ref 的坐标是 frame-local；没有投影前不能把 local point 当顶层坐标派发。
+  if (Number.isInteger(Number(params.frameId)) && Number(params.frameId) > 0) return fallback(params);
   if (kind === 'click' && params && params.ref) {
     const map = shadowRefs.get(tabId);
     const entry = map && map.get(params.ref);
@@ -433,10 +440,12 @@ async function trustedFillFast(params) {
     if (!focused) return null;
     inputFocusCache.set(tabId, now);
   }
-  const raw = await execPage(tabId, 'fill-focus', target).catch((error) => { throw error; });
+  const raw = await execPage(tabId, 'fill-focus', { ...target, noClear: params.noClear === true }).catch((error) => { throw error; });
   const prep = raw && raw.value && typeof raw.value === 'object' ? raw.value : raw;
   if (prep && prep.textLike === false) return { __programmatic: true, reason: prep.reason || 'programmatic-only', inputType: prep.inputType || '' };
   if (!prep || prep.textLike !== true) return null;
+  // 焦点没有真正落到目标上（常见于 closed shadow / 页面抢焦点）：不要 insertText 到错误元素，回退 trusted 点选路径。
+  if (prep.focused === false) return null;
   if (prep.occluded === true && params.force !== true) {
     throw bridgeError('E_NOT_ACTIONABLE', '目标被遮挡（occluded），可用 --force 强制填写');
   }

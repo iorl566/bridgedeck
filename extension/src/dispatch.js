@@ -289,6 +289,7 @@ async function dispatchCommand(method, params) {
     throw bridgeError('E_UNKNOWN_METHOD', `未知方法: ${method}`);
   }
   const input = normalizeParams(method, params || {});
+  if (input.synthetic === true) { input.trusted = false; }
   if (typeof input.ref === 'string') {
     const aliased = /^@e\d+$/.test(input.ref) ? resolveFrameAlias(input.tabId, input.ref) : null;
     if (aliased) {

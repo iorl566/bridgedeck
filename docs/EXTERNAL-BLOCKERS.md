@@ -4,7 +4,7 @@
 
 ## 1. 发布签名
 
-- Ed25519 私钥（或签名服务）；本机未找到与公钥 `c7b5e21301f91a2d` 对应的私钥；
+- **已解决**：release.json 由 GitHub Actions Secret `RELEASE_SIGNING_PRIVATE_KEY` 签名，keyId `c7b5e21301f91a2d`，preflight PASS；私钥未落到本机。
 - 私钥口令（如使用加密 PEM）；
 - 允许写入 `dist/release-public.pem` 并同步 `lib/release-public-key.mjs`。
 
@@ -17,10 +17,8 @@ blocker: release.json 缺少签名
 
 ## 2. 商店/仓库上架
 
-- GitHub release 写权限；
-- Edge Partner Center 账号与产品权限。
-
-没有权限时只能生成制品、清单和预检结果，不能上传。
+- **已执行**：GitHub v0.1.8 已公开；Edge 0.1.8 已提交审核（7 个工作日）。
+- 后续版本仍需 Partner Center / GitHub 权限。
 
 ## 3. 交互式远程 viewer（非阻塞）
 

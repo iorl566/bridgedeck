@@ -6,6 +6,7 @@ import { log } from '../log.js';
 import { acquire, release, send as cdpSend } from '../debugger.js';
 import { hideTakeover, showTakeover } from '../takeover.js';
 import { ensureFrameGraph } from '../frame-graph.js';
+import { matchBrowserFrame, readBrowserFrames } from './frame-identity.js';
 import { takeTokenChunk } from '../tokens.js';
 import { diffObservation, observationId } from '../lib/observation-delta.js';
 import { captureDomSnapshot, captureDomSnapshotFacts } from '../dom-snapshot.js';
@@ -792,17 +793,26 @@ export async function observeFrames(params = {}) {
   }
   const graph = await ensureFrameGraph(tabId).catch(() => []);
   const graphById = new Map(graph.map((item) => [item.frameId, item]));
+  const browserFrames = await readBrowserFrames(tabId);
   const metaList = await execPageAllFrames(tabId, 'frame-meta', {}).catch(() => []);
   const metaById = new Map(metaList.filter((item) => item && item.result).map((item) => [item.frameId, item.result]));
   const frames = [];
   const aliases = [];
   const mutationTotals = { text: 0, added: 0, removed: 0, attributes: 0, total: 0, layout: false, interaction: false };
   let aliasSeq = 0;
-  for (const item of list) {
+  for (let item of list) {
+    const resultUrl = item && item.result ? item.result.url : '';
+    const canonical = matchBrowserFrame(browserFrames, { frameId: item.frameId, url: resultUrl });
+    const frameId = canonical ? canonical.frameId : item.frameId;
+    const documentId = canonical ? canonical.documentId : undefined;
+    if ((item.error || !item.result) && Number(item.frameId) > 0) {
+      const retried = await execPage(tabId, 'observe', { ...listArgs, force: true }, frameId).catch(() => null);
+      if (retried && retried.observation) item = { frameId, result: retried };
+    }
     if (item.error || !item.result) {
       const meta = graphById.get(item.frameId) || {};
       const visibility = metaById.get(item.frameId) || {};
-      frames.push({ frameId: item.frameId, parentFrameId: meta.parentFrameId, url: meta.url || '', title: '', refs: 0, hidden: visibility.hidden === true, hiddenReason: visibility.reason || null, observation: '（该 frame 不可观察：' + (item.error || 'no result') + '）', error: item.error || 'no result' });
+      frames.push({ frameId, parentFrameId: (canonical && canonical.parentFrameId) || meta.parentFrameId, documentId, url: meta.url || '', title: '', refs: 0, hidden: visibility.hidden === true, hiddenReason: visibility.reason || null, observation: '（该 frame 不可观察：' + (item.error || 'no result') + '）', error: item.error || 'no result' });
       continue;
     }
     let result = item.result;
@@ -824,12 +834,13 @@ export async function observeFrames(params = {}) {
     const observation = String(result.observation || '').replace(/\[@e(\d+)\]/g, (match, n) => {
       aliasSeq += 1;
       const alias = '@e' + aliasSeq;
-      aliases.push({ ref: alias, frameId: item.frameId, localRef: '@e' + n });
+      aliases.push({ ref: alias, frameId, localRef: '@e' + n, url: String(result.url || '') });
       return '[' + alias + ']';
     });
     frames.push({
-      frameId: item.frameId,
-      parentFrameId: meta.parentFrameId,
+      frameId,
+      parentFrameId: (canonical && canonical.parentFrameId) || meta.parentFrameId,
+      documentId,
       url: result.url || meta.url || '',
       title: result.title || '',
       refs: typeof result.refs === 'number' ? result.refs : 0,

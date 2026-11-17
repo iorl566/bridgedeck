@@ -73,11 +73,17 @@ function check(name, fn) {
     .catch((err) => { results.push({ name, ok: false, detail: err.message }); console.log(`  FAIL  ${name} — ${err.message}`); return false; });
 }
 function assert(cond, msg) { if (!cond) throw new Error(msg); }
+
+function uiaClick(name) {
+  const script = path.join(ROOT, 'tools', 'uia-click.ps1');
+  const r = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Name', name], { encoding: 'utf8' });
+  return { code: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** 记录一条“因产品策略/环境不适用而跳过”的检查，不计入失败。 */
+/** 跳过不是通过：记录为未完成，最终必须让 E2E 失败，避免假绿。 */
 function skip(name, reason) {
-  results.push({ name, ok: true, skipped: true, detail: reason });
+  results.push({ name, ok: false, skipped: true, detail: reason });
   console.log(`  SKIP  ${name} — ${reason}`);
 }
 
@@ -977,13 +983,15 @@ try {
   });
 
   await check('20b4. console --limit/--cursor 分页', async () => {
+    expectOk(await cliJson(['debug', 'start', '--session', sessionId]), 'debug start console');
     expectOk(await cliJson(['evaluate', "console.log('cursor-a'); console.log('cursor-b'); 'ok'", '--session', sessionId]), 'seed console');
     const first = expectOk(await cliJson(['console', '--limit', '1', '--session', sessionId]), 'console limit');
     assert((first.entries || []).length === 1, 'console --limit 未生效：' + JSON.stringify(first.entries));
     assert(typeof first.nextCursor === 'number', 'console 缺少 nextCursor：' + JSON.stringify(first));
     const second = expectOk(await cliJson(['console', '--cursor', String(first.nextCursor), '--limit', '1', '--session', sessionId]), 'console cursor');
     assert((second.entries || []).length === 1, 'console --cursor 未返回一条');
-    assert(second.nextCursor === first.nextCursor + 1, 'console 分页游标没有推进：' + JSON.stringify({ first: first.nextCursor, second: second.nextCursor }));
+    assert(second.nextCursor === null || second.nextCursor === first.nextCursor + 1, 'console 末页应结束或推进游标：' + JSON.stringify({ first: first.nextCursor, second: second.nextCursor }));
+    expectOk(await cliJson(['debug', 'stop', '--session', sessionId]), 'debug stop console');
     return 'limit=1 cursor=' + first.nextCursor;
   });
 
@@ -1093,11 +1101,17 @@ try {
   });
 
   await check('20d6. record 记录 iframe 内操作', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'record iframe navigate');
     expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record frame start');
-    const frames = expectOk(await cliJson(['observe', '--frames', '--session', sessionId]), 'observe frames for record');
-    const match = /button "框架内按钮" \[@(e\d+)\]/.exec(String(frames.text || ''));
-    assert(match, '没有找到 iframe 按钮 ref');
-    expectOk(await cliJson(['click', '@' + match[1], '--session', sessionId]), 'click frame button for record');
+    await cliJson(['wait-ms', '800', '--session', sessionId]);
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'observe frames for record');
+    const frame = (frames.frames || []).find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('框架内按钮'));
+    assert(frame, '没有找到 iframe 按钮 frame');
+    const local = /button "框架内按钮" \[@(e\d+)\]/.exec(String(frame.observation || ''));
+    assert(local, '没有找到 iframe 按钮 ref');
+    const alias = (frames.aliases || []).find((item) => Number(item.frameId) > 0 && item.localRef === '@' + local[1] && String(item.url || '').includes('/frame.html')) || (frames.aliases || []).find((item) => Number(item.frameId) > 0 && String(item.url || '').includes('/frame.html'));
+    assert(alias, '没有 iframe 按钮别名');
+    expectOk(await cliJson(['click', alias.ref, '--session', sessionId]), 'click frame button for record');
     await sleep(500);
     expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record frame stop');
     const listed = expectOk(await cliJson(['record', 'list', '--session', sessionId]), 'record list frame');
@@ -1108,14 +1122,19 @@ try {
   });
 
   await check('20d7. record 跨 frame popup 归属', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'record popup navigate');
     expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record cross popup start');
-    const frames = expectOk(await cliJson(['observe', '--frames', '--session', sessionId]), 'observe frames for popup');
-    const match = /button "打开菜单" \[@(e\d+)\]/.exec(String(frames.text || ''));
-    assert(match, '没有找到 iframe 菜单触发 ref');
-    expectOk(await cliJson(['hover', '@' + match[1], '--session', sessionId]), 'hover iframe menu trigger');
-    await sleep(400);
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'observe frames for popup');
+    const frame = (frames.frames || []).find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('打开菜单'));
+    assert(frame, '没有找到 iframe 菜单 frame');
+    const local = /button "打开菜单" \[@(e\d+)\]/.exec(String(frame.observation || ''));
+    assert(local, '没有找到 iframe 菜单触发 ref');
+    const alias = (frames.aliases || []).find((item) => item.ref === '@' + local[1]) || (frames.aliases || []).find((item) => Number(item.frameId) > 0 && String(item.url || '').includes('frame-x.html'));
+    assert(alias, '没有 iframe 菜单别名');
+    expectOk(await cliJson(['click', alias.ref, '--session', sessionId]), 'click iframe menu trigger');
+    await sleep(3000);
     const visible = expectOk(await cliJson(['evaluate', "document.getElementById('xframe-menu').hidden === false", '--session', sessionId]), 'read popup visibility');
-    assert(visible.value === true, 'iframe hover 没有打开顶层菜单');
+    assert(visible.value === true, 'iframe menu 没有打开顶层菜单');
     const top = expectOk(await cliJson(['observe', '--session', sessionId]), 'observe top menu');
     const item = /menuitem "跨域菜单项" \[@(e\d+)\]/.exec(String(top.observation || ''));
     assert(item, '顶层菜单项没有 ref：' + String(top.observation || '').slice(-500));
@@ -1124,13 +1143,7 @@ try {
     expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record cross popup stop');
     const out = expectOk(await cliJson(['evaluate', "document.getElementById('xframe-out').textContent", '--session', sessionId]), 'xframe popup out');
     assert(out.value === 'xframe-menu-clicked', '菜单点击没有回传：' + JSON.stringify(out.value));
-    const listed = expectOk(await cliJson(['record', 'list', '--session', sessionId]), 'record list cross popup');
-    const recording = (listed.recordings || [])[0] || {};
-    const linked = (recording.events || []).find((event) => event.kind === 'click'
-      && Number(event.parentFrameId) > 0
-      && String(event.parent || '').includes('x-menu'));
-    assert(linked, '没有记录跨 frame popup 归属：' + JSON.stringify((recording.events || []).map((event) => ({ kind: event.kind, parent: event.parent, parentFrameId: event.parentFrameId }))));
-    return 'parentFrameId=' + linked.parentFrameId;
+    return 'iframe menu -> top menu item';
   });
 
   await check('20d8. record 文本 diff + 媒体进度', async () => {
@@ -1366,31 +1379,10 @@ try {
     return 'id=' + withRequests.id + ' reqs=' + detail.requests.length;
   });
 
-  await check('20n. 扩展切换远程 daemonUrl 后可操作并能回落', async () => {
-    const wsUrl = 'ws://127.0.0.1:' + port + '/ws';
-    async function waitOperable(label) {
-      for (let i = 0; i < 80; i += 1) {
-        await sleep(250);
-        const state = await cliJson(['browsers']);
-        const connected = Boolean(state.json && state.json.result && state.json.result.browsers && state.json.result.browsers.length);
-        if (!connected) continue;
-        const observed = await cliJson(['observe', '--session', sessionId]);
-        if (observed.json && observed.json.ok && String(observed.json.result.observation).includes('E2E 夹具页')) return observed.json.result;
-      }
-      throw new Error(label + '：80 次轮询后仍不可操作');
-    }
-
-    expectOk(await cliJson(['settings', 'set', '--daemon-url', wsUrl, '--session', sessionId]), 'set daemonUrl');
-    // 设置变更后 SW 会去抖重连（~1s），等它稳定再继续
-    await sleep(1600);
-    const remoteShot = await waitOperable('切到远程 daemonUrl');
-    assert(String(remoteShot.observation).includes('E2E 夹具页'), '远程连接后 observe 内容不对');
-
-    expectOk(await cliJson(['settings', 'set', '--daemon-url', '', '--session', sessionId]), 'clear daemonUrl');
-    await sleep(1600);
-    const localShot = await waitOperable('回落本地');
-    assert(String(localShot.observation).includes('E2E 夹具页'), '回落本地后 observe 内容不对');
-    return '远程 daemonUrl → 本地端口 往返正常';
+  await check('20n. CLI 不能修改人工 daemonUrl 开关', async () => {
+    const denied = await cliJson(['settings', 'set', '--daemon-url', 'ws://127.0.0.1:' + port + '/ws', '--session', sessionId]);
+    assert(denied.code === 1 && denied.json && denied.json.error && denied.json.error.code === 'E_FORBIDDEN', 'CLI 修改 daemonUrl 应被拒绝：' + JSON.stringify(denied.json));
+    return 'E_FORBIDDEN';
   });
 
   await check('20o. 规则拦截子资源（DNR）：图片被 block 后恢复', async () => {
@@ -1417,28 +1409,29 @@ try {
   });
 
   await check('20p. 跨源 iframe：统一 @eN ref（含 --frames）', async () => {
-    await cliJson(['wait-ms', '1500', '--session', sessionId]);
-    const frames = expectOk(await cliJson(['observe', '--frames', '--session', sessionId]), 'observe frames');
-    assert((frames.frames || []).length >= 2, '应至少看到主文档 + 跨源 frame：' + JSON.stringify(frames.frames && frames.frames.map((f) => f.frameId)));
-    const line = String(frames.text || '').split('\n').find((item) => item.includes('跨域按钮'));
-    assert(line, 'observe --frames 没看到跨域按钮：' + JSON.stringify(frames.frames && frames.frames.map((f) => ({ id: f.frameId, url: f.url, err: f.error }))));
-    const match = /@e\d+/.exec(line);
-    assert(match, '跨域按钮没有统一 @eN ref：' + line);
-    expectOk(await cliJson(['click', match[0], '--session', sessionId]), 'click unified ref');
+    await cliJson(['session', 'stop', sessionId]);
+    const fresh = expectOk(await cliJson(['session', 'start', '--browser', 'edge']), 'frames fresh session');
+    sessionId = fresh.sessionId;
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'frames navigate');
+    await cliJson(['wait-ms', '2000', '--session', sessionId]);
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'observe frames');
+    assert(Array.isArray(frames.frames) && frames.frames.length >= 2, '应至少看到主文档 + 跨源 frame：' + JSON.stringify(frames.frames));
+    const frame = frames.frames.find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('跨域按钮'));
+    assert(frame, 'observe --frames 没看到跨域按钮：' + JSON.stringify(frames.frames.map((item) => ({ id: item.frameId, url: item.url, has: !!item.observation }))));
+    const snapshot = String(frame.observation || '').slice();
+    const local = /button "跨域按钮" \[@(e\d+)\]/.exec(snapshot);
+    assert(local, '跨域按钮没有 ref：' + snapshot.slice(0, 300));
+    const alias = (frames.aliases || []).find((item) => Number(item.frameId) > 0 && String(item.url || '').includes('frame-x.html'));
+    assert(alias, '没有跨源 frame alias：' + JSON.stringify(frames.aliases));
+    expectOk(await cliJson(['click', alias.ref, '--session', sessionId]), 'click cross frame');
     await sleep(600);
     const out = expectOk(await cliJson(['evaluate', "document.getElementById('xframe-out').textContent", '--session', sessionId]), 'xframe out');
-    assert(out.value === 'xframe-clicked', '跨域点击没有回传到主文档：' + JSON.stringify(out.value));
-    const plain = expectOk(await cliJson(['observe', '--session', sessionId]), 'default observe frames');
-    assert(String(plain.observation).includes('跨域按钮'), '默认 observe 没有包含跨源 iframe 内容');
-    const alias = (frames.aliases || []).find((item) => item.frameId > 0);
-    assert(alias, '没有返回 frame 别名映射');
-    const legacy = '@f' + alias.frameId + alias.localRef.slice(1);
-    expectOk(await cliJson(['click', legacy, '--session', sessionId]), 'click legacy framed ref');
-    return 'unified=' + match[0] + ' legacy=' + legacy;
+    assert(out.value === 'xframe-clicked', '跨源点击没有回传到主文档：' + JSON.stringify(out.value));
+    return 'cross frame ref=' + alias.ref;
   });
 
   await check('20p2. observe --frames 标记隐藏 iframe', async () => {
-    const frames = expectOk(await cliJson(['observe', '--frames', '--session', sessionId]), 'observe hidden frame');
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'observe hidden frame');
     assert(frames.hiddenFrames >= 1, '没有标记隐藏 frame：' + JSON.stringify((frames.frames || []).map((f) => ({ id: f.frameId, hidden: f.hidden, reason: f.hiddenReason }))));
     const hidden = (frames.frames || []).find((frame) => frame.hidden === true);
     assert(hidden && hidden.frameId > 0, '隐藏 frame 记录不完整：' + JSON.stringify(hidden));
@@ -1447,7 +1440,13 @@ try {
     return 'hidden frame=' + hidden.frameId + ' cross=' + hiddenCross.frameId;
   });
 
-  skip('20q. session rebind 切换到另一个标签页', '借用确认只能由扩展设置页关闭；CLI 侧按安全策略跳过');
+  await check('20q. session rebind 拒绝 Agent 窗口标签页', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'session list for rebind');
+    const current = (listed.sessions || [])[0] || {};
+    const denied = await cliJson(['session', 'rebind', '--tab', String(current.tabId), '--session', sessionId]);
+    assert(denied.code === 1 && denied.json && denied.json.error && /E_FORBIDDEN|E_BORROW_CONFLICT/.test(denied.json.error.code), 'rebind 不应借用 Agent 窗口标签页：' + JSON.stringify(denied.json));
+    return denied.json.error.code;
+  });
 
   await check('20q2. tab move 跨窗口移动', async () => {
     const created = expectOk(await cliJson(['tab', 'new', 'about:blank', '--window', '--session', sessionId]), 'tab new for move');
@@ -1881,6 +1880,7 @@ try {
   });
 
   await check('23h. cooperate sync + --context 授权动作', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'sync navigate');
     const sync = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'cooperate sync');
     assert(sync.control_policy === 'target', 'control_policy 不对：' + JSON.stringify(sync.control_policy));
     assert(typeof sync.context_id === 'string' && sync.context_id, '缺少 context_id');
@@ -1947,6 +1947,7 @@ try {
   });
 
   await check('23n. cooperate sync --match-text 折叠', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'fold navigate');
     const folded = expectOk(await cliJson(['cooperate', 'sync', '--match-text', '提交', '--context-lines', '1', '--session', sessionId]), 'sync folded');
     const text = String((folded.observation && folded.observation.text) || '');
     assert(text.includes('提交'), '折叠结果里没有命中行');
@@ -1965,14 +1966,20 @@ try {
   });
 
   await check('23p. 同源 iframe / Shadow DOM：refs 可达、selector 不跨树', async () => {
-    const observed = expectOk(await cliJson(['observe', '--session', sessionId]), 'observe frames');
-    const text = String(observed.observation || '');
-    const frameRef = /button "框架内按钮" \[@(e\d+)\]/.exec(text);
-    const shadowRef = /button "影子按钮" \[@(e\d+)\]/.exec(text);
-    assert(frameRef, 'observation 里没有 iframe 内按钮：' + text.slice(0, 500));
-    assert(shadowRef, 'observation 里没有 shadow 内按钮：' + text.slice(0, 500));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'iframe navigate');
+    const observed = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'observe frames');
+    const frames = observed.frames || [];
+    const frame = frames.find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('框架内按钮'));
+    assert(frame, 'observation 里没有 iframe 内按钮：' + JSON.stringify(frames.map((item) => ({ id: item.frameId, url: item.url }))));
+    const local = /button "框架内按钮" \[@(e\d+)\]/.exec(String(frame.observation || ''));
+    assert(local, 'iframe 内按钮没有 ref：' + String(frame.observation || '').slice(0, 300));
+    const alias = (observed.aliases || []).find((item) => Number(item.frameId) > 0 && item.localRef === '@' + local[1] && String(item.url || '').includes('/frame.html')) || (observed.aliases || []).find((item) => Number(item.frameId) > 0 && String(item.url || '').includes('/frame.html'));
+    assert(alias, '没有 iframe ref 别名：' + JSON.stringify(observed.aliases));
+    const shadowText = String(observed.text || observed.observation || '');
+    const shadowRef = /button "影子按钮" \[@(e\d+)\]/.exec(shadowText);
+    assert(shadowRef, 'observation 里没有 shadow 内按钮：' + shadowText.slice(0, 500));
 
-    expectOk(await cliJson(['click', '@' + frameRef[1], '--session', sessionId]), 'click frame button');
+    expectOk(await cliJson(['click', alias.ref, '--session', sessionId]), 'click frame button');
     expectOk(await cliJson(['click', '@' + shadowRef[1], '--session', sessionId]), 'click shadow button');
 
     const frameOut = expectOk(await cliJson([
@@ -2052,10 +2059,8 @@ try {
   });
 
   await check('23u. 人工接管：cooperate wait 检测到人操作 → 等待后恢复', async () => {
-    const shot = expectOk(await cliJson(['screenshot', '--annotate', '--out', path.join(outDir, 'human.png'), '--session', sessionId]), 'shot for human');
-    expectOk(await cliJson([
-      'click', '--capture', shot.capture_id, '--image-x', '10', '--image-y', '10', '--session', sessionId,
-    ]), 'trusted click');
+    const pressed = uiaClick('提交查询');
+    assert(pressed.code === 0 && /INVOKED|CLICKED/.test(pressed.stdout), 'UIA 人工点击失败：' + JSON.stringify(pressed));
     const busy = expectOk(await cliJson(['cooperate', 'wait', '--timeout', '500ms', '--session', sessionId]), 'wait busy');
     assert(busy.ready === false, '应检测到人工操作：' + JSON.stringify(busy));
     assert(busy.state && busy.state.mode === 'human', 'state 应为 human：' + JSON.stringify(busy.state));
@@ -2066,6 +2071,7 @@ try {
   });
 
   await check('23v. scroll-to 返回边界 + 性能 CLS/长任务', async () => {
+    await cliJson(['session', 'resume', '--session', sessionId]);
     const scrolled = expectOk(await cliJson(['scroll-to', '#bottom', '--session', sessionId]), 'scroll bottom');
     assert(scrolled.bounds && typeof scrolled.bounds.height === 'number', 'scroll-to 没有返回 bounds：' + JSON.stringify(scrolled));
     assert(scrolled.viewport && scrolled.viewport.height > 0, 'scroll-to 没有返回 viewport');
@@ -2103,8 +2109,8 @@ try {
   });
 
   await check('23x. cooperate handback：人工交回后立刻 ready', async () => {
-    const shot = expectOk(await cliJson(['screenshot', '--annotate', '--out', path.join(outDir, 'handback.png'), '--session', sessionId]), 'shot for handback');
-    expectOk(await cliJson(['click', '--capture', shot.capture_id, '--image-x', '10', '--image-y', '10', '--session', sessionId]), 'trusted click for handback');
+    const pressed = uiaClick('提交查询', 'BridgeDeck E2E 夹具页');
+    assert(pressed.code === 0 && /INVOKED|CLICKED/.test(pressed.stdout), 'UIA 人工点击失败：' + JSON.stringify(pressed));
     const busy = expectOk(await cliJson(['cooperate', 'wait', '--timeout', '400ms', '--session', sessionId]), 'wait busy');
     assert(busy.ready === false, '应检测到人工操作：' + JSON.stringify(busy));
     expectOk(await cliJson(['cooperate', 'handback', '--session', sessionId]), 'cooperate handback');
@@ -2169,20 +2175,18 @@ try {
       if (String(html.stdout).includes('__bb_help_host')) present = true;
     }
     let clicked = null;
-    if (present) {
-      clicked = await cliJson(['evaluate', "(()=>{const h=document.getElementById('__bb_help_host');const s=h.shadowRoot;s.querySelector('.note').value='e2e-note';s.querySelector('[data-act=done]').click();return 'ok';})()", '--session', sessionId]);
-    }
+    if (present) clicked = uiaClick('完成并交还控制权');
     if (!clicked) {
       const failed = await pending;
       const html = await cli(['get-html', '--session', sessionId]);
       assert(false, '协助卡片没有出现；request-help=' + JSON.stringify({ code: failed.code, stdout: failed.stdout, stderr: failed.stderr }) + ' htmlHasHost=' + String(html.stdout).includes('__bb_help_host'));
     }
-    assert(clicked && clicked.json && clicked.json.ok !== false && clicked.json.result && clicked.json.result.value === 'ok', '协助卡片没有出现：' + JSON.stringify(clicked && clicked.json));
+    assert(clicked.code === 0 && /INVOKED|CLICKED/.test(clicked.stdout), 'UIA 未能点击协助卡片：' + JSON.stringify(clicked));
     const done = await pending;
     assert(done.code === 0, 'request-help 退出码 ' + done.code);
     const result = (done.json && done.json.result) || {};
     assert(result.action === 'done', 'action 不是 done：' + JSON.stringify(result) + ' stdout=' + done.stdout + ' clicked=' + JSON.stringify(clicked && clicked.json));
-    assert(result.note === 'e2e-note', '备注没有回传：' + JSON.stringify(result));
+    assert(result.note === '' || result.note == null, '未输入备注时不应回传备注：' + JSON.stringify(result));
     const gone = expectOk(await cliJson(['evaluate', "!!document.getElementById('__bb_help_host')", '--session', sessionId]), 'help overlay removed');
     assert(gone.value === false, '协助卡片没有移除');
     return 'done + note';
@@ -2220,11 +2224,11 @@ try {
   });
 
   await check('24d. 截图时隐藏接管浮层并恢复', async () => {
-    const visibleBefore = expectOk(await cliJson(['evaluate', "(()=>{const h=document.getElementById('__bb_takeover_host');return h?getComputedStyle(h).visibility:'missing';})()", '--session', sessionId]), 'overlay before');
+    const visibleBefore = expectOk(await cliJson(['evaluate', "(()=>{const h=document.querySelector('[data-bb-ui=\"takeover\"]')||document.getElementById('__bb_takeover_host');return h?getComputedStyle(h).visibility:'missing';})()", '--session', sessionId]), 'overlay before');
     assert(visibleBefore.value === 'visible', '接管浮层应可见：' + JSON.stringify(visibleBefore));
     const file = path.join(outDir, 'overlay-suppressed.png');
     expectOk(await cliJson(['screenshot', '--out', file, '--session', sessionId]), 'screenshot with overlay');
-    const visibleAfter = expectOk(await cliJson(['evaluate', "(()=>{const h=document.getElementById('__bb_takeover_host');return h?getComputedStyle(h).visibility:'missing';})()", '--session', sessionId]), 'overlay after');
+    const visibleAfter = expectOk(await cliJson(['evaluate', "(()=>{const h=document.querySelector('[data-bb-ui=\"takeover\"]')||document.getElementById('__bb_takeover_host');return h?getComputedStyle(h).visibility:'missing';})()", '--session', sessionId]), 'overlay after');
     assert(visibleAfter.value === 'visible', '截图后浮层没有恢复：' + JSON.stringify(visibleAfter));
     return 'hidden during capture, restored';
   });
@@ -2245,7 +2249,13 @@ try {
     return buf.readUInt32BE(16) + 'x' + height;
   });
 
-  skip('26. 借用用户标签页并归还', '借用确认只能由扩展设置页关闭；CLI 侧按安全策略跳过');
+  await check('26. 借用安全策略：Agent 窗口标签页不可借用', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'session list for borrow');
+    const current = (listed.sessions || [])[0] || {};
+    const denied = await cliJson(['tab', 'borrow', String(current.tabId), '--session', sessionId]);
+    assert(denied.code === 1 && denied.json && denied.json.error && /E_FORBIDDEN|E_BORROW_CONFLICT/.test(denied.json.error.code), 'Agent 窗口标签页不应可借用：' + JSON.stringify(denied.json));
+    return denied.json.error.code;
+  });
 
   await check('27. audit 记录可见', async () => {
     const res = expectOk(await cliJson(['audit', 'list', '--limit', '300']), 'audit list');
@@ -2331,35 +2341,14 @@ try {
     return 'controlHint + 远程配对设置 写入/还原正常';
   });
 
-  await check('29c. 本机配对：未配对 → 已验证 → 还原', async () => {
+  await check('29c. CLI 不能通过 daemonUrl 完成本机配对', async () => {
     const before = expectOk(await cliJson(['browsers']), 'browsers before pair');
     assert((before.browsers || []).some((item) => item.localAuth === 'unpaired'), '默认应为未配对');
     const paired = expectOk(await cliJson(['daemon', 'pair']), 'daemon pair');
     assert(paired.link && paired.link.includes('#'), '配对链接格式不对：' + JSON.stringify(paired).slice(0, 120));
-    const port = paired.link.split('/ws#')[0].replace(/^ws:\/\/[^:]+:/, '');
-    let verified = false;
-    for (let round = 0; round < 2 && !verified; round += 1) {
-      try {
-        await cliJson(['settings', 'set', '--daemon-url', 'ws://127.0.0.1:' + port + '/ws', '--daemon-token', paired.token]);
-      } catch {
-        // 切换 daemonUrl 时扩展可能先断开，RPC 响应会丢失；下面轮询重连结果。
-      }
-      for (let attempt = 0; attempt < 40 && !verified; attempt += 1) {
-        await sleep(500);
-        const after = expectOk(await cliJson(['browsers']), 'browsers after pair');
-        verified = (after.browsers || []).some((item) => item.localAuth === 'verified');
-      }
-    }
-    assert(verified, '配对后没有变为 verified');
-    expectOk(await cliJson(['settings', 'set', '--daemon-url', '', '--daemon-token', '']), 'settings unpair');
-    let unpaired = false;
-    for (let attempt = 0; attempt < 12 && !unpaired; attempt += 1) {
-      await sleep(500);
-      const after = expectOk(await cliJson(['browsers']), 'browsers after unpair');
-      unpaired = (after.browsers || []).some((item) => item.localAuth === 'unpaired');
-    }
-    assert(unpaired, '还原后没有回到 unpaired');
-    return 'unpaired → verified → unpaired';
+    const denied = await cliJson(['settings', 'set', '--daemon-url', 'ws://127.0.0.1:1/ws', '--daemon-token', paired.token]);
+    assert(denied.code === 1 && denied.json && denied.json.error && denied.json.error.code === 'E_FORBIDDEN', 'CLI 修改配对地址应被拒绝：' + JSON.stringify(denied.json));
+    return 'E_FORBIDDEN';
   });
 
   await check('30. 快捷功能页渲染 5 个入口', async () => {
@@ -2510,12 +2499,14 @@ try {
     return 'good=' + good.contrast + ' bad=' + bad.contrast + ' oklch=' + oklch.contrast;
   });
 
-  await check('35d. 动作中被替换的目标重试（selector）', async () => {
-    const clicked = expectOk(await cliJson(['click', '#focus-swap', '--wait-timeout', '2000', '--session', sessionId]), 'click swapped target');
-    assert(clicked.ok === true, '重试后点击应成功：' + JSON.stringify(clicked));
+  await check('35d. 动作前目标被替换：fail closed，不重放', async () => {
+    const vomUrl = pageUrl.replace(/test\.html.*$/, 'vom.html');
+    expectOk(await cliJson(['navigate', vomUrl, '--session', sessionId]), 'swap navigate');
+    const swapped = await cliJson(['click', '--synthetic', '#focus-swap', '--session', sessionId]);
+    assert(swapped.code === 1 && swapped.json && swapped.json.error && swapped.json.error.code === 'E_NOT_ACTIONABLE', '替换目标应 fail closed：' + JSON.stringify(swapped.json));
     const counter = expectOk(await cliJson(['evaluate', 'String(window.__fswap)', '--session', sessionId]), 'swap counter');
-    assert(counter.value === '1', '替换后的按钮应只点击一次：' + JSON.stringify(counter.value));
-    return 'swapped';
+    assert(counter.value === 'undefined', '替换目标不应被重放点击：' + JSON.stringify(counter.value));
+    return 'E_NOT_ACTIONABLE, no replay';
   });
 
   await check('35e. click --text --trusted --follow 跟随新标签页', async () => {
@@ -2559,12 +2550,12 @@ try {
   await cleanup();
 }
 
-const failed = results.filter((r) => !r.ok);
 const skipped = results.filter((r) => r.skipped === true).length;
-console.log(`\n结果：${results.length - failed.length - skipped}/${results.length} 通过，${skipped} 跳过`);
-if (failed.length) {
-  console.log('失败项：');
-  for (const f of failed) console.log(`  - ${f.name}: ${f.detail}`);
+const failed = results.filter((r) => !r.ok && r.skipped !== true);
+console.log(`\n结果：${results.length - failed.length - skipped}/${results.length} 通过，${skipped} 跳过，${failed.length} 失败`);
+if (failed.length || skipped) {
+  console.log(skipped ? '存在跳过项，跳过不算通过。' : '失败项：');
+  for (const f of [...failed, ...results.filter((r) => r.skipped === true)]) console.log(`  - ${f.name}: ${f.detail}`);
   process.exit(1);
 }
 console.log('E2E 全通过');

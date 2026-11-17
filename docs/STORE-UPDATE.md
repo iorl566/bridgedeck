@@ -55,7 +55,7 @@ EDGE_API_KEY=... EDGE_CLIENT_ID=... EDGE_PRODUCT_ID=... \
 - 0.1.8 已通过 Partner Center 提交，状态 **正在审阅**（预计 7 个工作日）；
 - 0.1.7 的审核已取消（取消生效后由 0.1.8 接管）；
 - 证据截图：[edge-store-0.1.8-review.png](assets/ui/edge-store-0.1.8-review.png)；
-- GitHub 已创建 **draft** release（9 个制品已上传，未签名，未公开）：release id `448322439`，tag 目标 `v0.1.8`；
-- 仍缺 Ed25519 私钥；没有私钥不能把 release.json 签名后公开 GitHub release。
+- GitHub **v0.1.8 已公开**（signature keyId `c7b5e21301f91a2d`，preflight PASS）：<https://github.com/iorl566/bridgedeck/releases/tag/v0.1.8>
+- release.json 由 GitHub Actions Secret `RELEASE_SIGNING_PRIVATE_KEY` 在 CI 内签名，私钥未落到本机。
 
 > API key / PAT 不写入仓库；只通过环境变量传入。
