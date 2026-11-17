@@ -22,7 +22,7 @@ Last run: 2026-11-17, Windows Edge 157.
 
 - GitHub v0.1.12: public, signed (keyId `c7b5e21301f91a2d`).
 - Edge 0.1.12: submitted for review (2026-11-17), screenshot `docs/assets/ui/edge-store-0.1.12-review.png`.
-- Extension: **437,092 B**, sha256 `1987845deda3688f639385999d158e180dafa49cdd57235ed3dd72b43a99cc3f`.
+- Extension: **437,117 B**, sha256 `717ffd284e40e15a373d0c64ddd7a10357ba533a46ba71bba56bdad6b1e308ea`.
 - 0.1.10 artifacts archived under `dist/archive-0.1.10/`.
 
 ## 0.1.11 focus
