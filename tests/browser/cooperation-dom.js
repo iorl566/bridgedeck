@@ -63,7 +63,7 @@ test('block 显示覆盖层并阻止滚动，不吞键盘', async () => {
   assert(node, '覆盖层未创建');
   assert(node.style.position === 'fixed' && node.style.pointerEvents === 'auto', '覆盖层样式不对');
   assert(wheel() === true, '滚轮没有被阻止');
-  assert(key('a') === false, '键盘不应被输入锁吞掉（与 bsk ControlInputBlocker 对齐）');
+  assert(key('a') === false, '键盘不应被输入锁吞掉（与输入锁语义一致）');
   const point = document.elementFromPoint(20, 20);
   assert(point === node, '覆盖层没有成为点击命中目标');
   const snapshot = globalThis.__bbCooperation.snapshot();

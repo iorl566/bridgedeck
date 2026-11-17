@@ -65,3 +65,11 @@ EDGE_API_KEY=... EDGE_CLIENT_ID=... EDGE_PRODUCT_ID=... \
 - GitHub：**v0.1.9 已公开并签名**（keyId `c7b5e21301f91a2d`）：<https://github.com/iorl566/bridgedeck/releases/tag/v0.1.9>
 - Edge：0.1.8 已取消提交；**0.1.9 已提交，状态“正在审阅”**（预计 7 个工作日）；证据 [edge-store-0.1.9-review.png](assets/ui/edge-store-0.1.9-review.png）。
 - 0.1.8 制品已归档到 `dist/archive-0.1.8/`；0.1.9 为当前发布版本。
+
+## 0.1.10（2026-11-17）
+
+- GitHub：**v0.1.10 已公开并签名**（keyId `c7b5e21301f91a2d`）：<https://github.com/iorl566/bridgedeck/releases/tag/v0.1.10>
+- Edge：0.1.9 已取消；**0.1.10 已提交，状态“正在审阅”**；证据 [edge-store-0.1.10-review.png](assets/ui/edge-store-0.1.10-review.png)。
+- 0.1.9 制品归档到 `dist/archive-0.1.9/`。
+- 0.1.10 扩展 434,002 B，sha256 `79c98e2bad81806b7eb8b3eac0cac25d21813078684602be9ccb6fc34f9ba666`。
+- vendor leak 与 release preflight 均 PASS。

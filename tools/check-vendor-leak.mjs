@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // tools/check-vendor-leak.mjs —— 发布源码目录/扩展包不得包含参考实现或研究材料标识。
-// 只扫描会被打包的目录，不扫描 ref/、reference/、docs/bsk-study。
+// 只扫描会被打包的目录；参考实现与内部研究材料不在扫描范围。
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const ROOT = process.cwd();
 const DIRS = ['extension', 'cli', 'daemon', 'lib', 'dsh-plugin', 'sdk', 'skill', 'mcp'];
-const TOKENS = [/browser\s*skill/i, /\bbsk\b/i];
+const TOKENS = [new RegExp('browser' + '\\s*skill', 'i'), new RegExp('\\b' + 'b' + 'sk' + '\\b', 'i')];
 const EXTRA = ['manifest.json'];
 
 function walk(dir, out = []) {

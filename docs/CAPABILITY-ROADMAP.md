@@ -107,7 +107,7 @@
 发布包（extension、CLI、Setup、DSH plugin、skill）不得包含：
 
 - 参考实现源码、镜像、研究笔记；
-- `bsk` / `BrowserSkill` 等标识；
+- 参考实现的名称、源码或镜像标识；
 - 内部 gap/study 文档；
 - 任何第三方源码片段。
 
