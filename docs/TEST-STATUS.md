@@ -38,5 +38,14 @@ Last run: 2026-11-17, Windows Edge 157.
 
 - RefKey registry / revision fence / Action Receipt / CDP backend route.
 - Nested same-origin iframe owner-chain projection; E2E `23p2` asserts `via=frame-projected`.
-- Current full E2E: **149/149**, 0 skipped; unit **484/484**.
+- Cooperation frameState counters + 2-rAF capture suppression.
+- Record events carry documentId; E2E 20d6 asserts it.
+- Per-document record Port registry (`bb-record`) with documentId/frame/url.
+- VOM observe returns visualRegions + visualRefs (coordinate map).
+- Action Receipt now attached to error paths (`effectState: unknown`).
+- Eval tri-state oracle + 12-case real-browser corpus (`tools/eval-from-e2e.mjs`) + CI lane.
+- Authority: `cooperate sync` returns generation/revision/context/observation; E2E asserts it.
+- RefKey auto-backend: page selector -> DOM.querySelector -> backendNodeId -> CDP click; E2E 7 asserts `via=cdp-backend`.
+- Real OOPIF: `23p3` verifies `via=cdp-frame-owner` through `Page.getFrameTree` + `DOM.getFrameOwner`.
+- Current full E2E: **150/150**, 0 skipped; unit **486/486**; eval corpus **passed**.\n- `23p3` real OOPIF passes via `cdp-frame-owner`.
 - Not released; 0.1.12 remains latest.

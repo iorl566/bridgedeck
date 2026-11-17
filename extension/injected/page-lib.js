@@ -1724,30 +1724,80 @@
     return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
   }
 
-  /** 把子 frame 的本地坐标投影到当前文档；只做几何，不做动作。 */
+  /** 把子 frame 的本地坐标逐层投影到当前文档；只做几何，不做动作。 */
   function frameProjectPoint(args) {
     if (typeof args.url !== 'string' || !args.url) return null;
-    let target = null;
-    try { target = new URL(args.url, location.href).href; } catch { target = String(args.url); }
+    const normalize = (value, base) => {
+      try { return new URL(String(value || ''), base).href; } catch { return String(value || ''); }
+    };
+    const target = normalize(args.url, location.href);
     const x = Number(args.x);
     const y = Number(args.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    for (const owner of document.querySelectorAll('iframe,frame')) {
-      let src = '';
-      try { src = new URL(owner.getAttribute('src') || '', location.href).href; } catch { src = String(owner.getAttribute('src') || ''); }
-      if (src !== target) continue;
-      const rect = owner.getBoundingClientRect();
-      const style = getComputedStyle(owner);
+    const chain = [];
+    const find = (doc, base) => {
+      if (!doc || !doc.querySelectorAll) return false;
+      for (const owner of doc.querySelectorAll('iframe,frame')) {
+        const src = normalize(owner.getAttribute('src'), base);
+        if (src === target) {
+          chain.push({ owner, doc });
+          return true;
+        }
+        // 同源嵌套：继续在子文档里找；跨源拿不到 contentDocument，保持单层回退。
+        try {
+          if (owner.contentDocument && find(owner.contentDocument, src)) {
+            chain.push({ owner, doc });
+            return true;
+          }
+        } catch {
+          // 跨源 frame 不可读；由直接 src 匹配处理。
+        }
+      }
+      return false;
+    };
+    if (!find(document, location.href)) return null;
+    let px = x;
+    let py = y;
+    const owners = [];
+    // chain 是「目标在内、外层在后」，从内往外加 owner 的 viewport rect。
+    for (const entry of chain) {
+      const rect = entry.owner.getBoundingClientRect();
+      const style = entry.doc.defaultView.getComputedStyle(entry.owner);
       const left = Number.parseFloat(style.borderLeftWidth) || 0;
       const top = Number.parseFloat(style.borderTopWidth) || 0;
-      return {
-        x: rect.left + left + x,
-        y: rect.top + top + y,
-        frameUrl: src,
-        owner: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
-      };
+      const width = Number(entry.owner.clientWidth) || rect.width;
+      const height = Number(entry.owner.clientHeight) || rect.height;
+      const scaleX = width > 0 ? rect.width / width : 1;
+      const scaleY = height > 0 ? rect.height / height : 1;
+      px = rect.left + left + px * scaleX;
+      py = rect.top + top + py * scaleY;
+      owners.push({
+        url: normalize(entry.owner.getAttribute('src'), entry.doc.location ? entry.doc.location.href : location.href),
+        rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+        scale: { x: scaleX, y: scaleY },
+      });
     }
-    return null;
+    return { x: px, y: py, frameUrl: target, owners };
+  }
+
+  function refSelector(args) {
+    const el = resolveElement(args);
+    if (!el || !el.tagName) return null;
+    if (el.id) return { selector: '#' + CSS.escape(el.id), frameUrl: location.href };
+    const parts = [];
+    let node = el;
+    for (let depth = 0; node && node.nodeType === 1 && depth < 8; depth += 1) {
+      let part = node.tagName.toLowerCase();
+      const parent = node.parentElement;
+      if (parent) {
+        const same = [...parent.children].filter((child) => child.tagName === node.tagName);
+        if (same.length > 1) part += ':nth-of-type(' + (same.indexOf(node) + 1) + ')';
+      }
+      parts.unshift(part);
+      if (node === document.body || node === document.documentElement) break;
+      node = parent;
+    }
+    return { selector: parts.join(' > '), frameUrl: location.href };
   }
 
   function actionPoint(args) {
@@ -3236,6 +3286,8 @@
           return ok(actionScrollTo(input));
         case 'point':
           return ok(actionPoint(input));
+        case 'ref-selector':
+          return ok(refSelector(input));
         case 'frame-project-point':
           return ok(frameProjectPoint(input));
         case 'rect':

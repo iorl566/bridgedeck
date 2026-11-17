@@ -1,0 +1,14 @@
+[
+  { "id": "20d6", "title": "record iframe 事件（frameId + documentId）" },
+  { "id": "20d7", "title": "record 跨 frame popup 归属" },
+  { "id": "20p", "title": "跨源 iframe 统一 ref" },
+  { "id": "20q", "title": "rebind 拒绝 Agent 窗口" },
+  { "id": "23p", "title": "同源 iframe + Shadow 树隔离" },
+  { "id": "23p2", "title": "嵌套 iframe owner 链投影" },
+  { "id": "23p3", "title": "真正 OOPIF CDP owner 投影" },
+  { "id": "24d", "title": "接管浮层 closed shadow 点击" },
+  { "id": "26", "title": "借用安全策略" },
+  { "id": "35d", "title": "replaced target fail-closed" },
+  { "id": "35e", "title": "click --text --trusted --follow" },
+  { "id": "37", "title": "内嵌技能安装" }
+]

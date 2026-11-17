@@ -84,6 +84,12 @@ export async function cooperateSync(params = {}) {
     context_id: state.contextId,
     observation_id: state.observationId,
     generation: state.generation,
+    authority: {
+      generation: state.generation,
+      revision: cooperation && Number.isInteger(cooperation.revision) ? cooperation.revision : null,
+      contextId: state.contextId,
+      observationId: state.observationId,
+    },
     url: observation.url,
     title: observation.title,
     media,

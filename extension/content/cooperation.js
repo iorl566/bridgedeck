@@ -256,6 +256,7 @@
       textLength: text.length,
       textTail: text.slice(-500),
       revision,
+      authority: { revision },
       mode: modeFor(),
       frameState: {
         mutations: frameState.mutations,

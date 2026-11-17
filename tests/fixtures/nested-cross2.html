@@ -1,0 +1,4 @@
+﻿<!doctype html><meta charset="utf-8"><title>真正跨源嵌套夹具</title>
+<iframe id="outer" src="http://127.0.0.1:__XFRAME_PORT__/nested-cross2-outer.html" style="width:600px;height:300px"></iframe>
+<p id="cross2-out">none</p>
+<script>addEventListener('message', (event) => { if (event.data === 'cross2-click') document.getElementById('cross2-out').textContent = 'cross2-clicked'; });</script>

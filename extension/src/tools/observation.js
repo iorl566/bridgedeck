@@ -562,6 +562,18 @@ export async function observe(params = {}) {
     : (base.blocking ? [{ level: 'L2', role: base.blocking.role || base.blocking.tag, name: base.blocking.label || '', coverage: null }] : []);
   if (layerFacts.length) observation += '\n\n' + formatLayerSummary(base.url || '', layerFacts);
 
+  // VOM 观察同时返回视觉候选区域（canvas/图片/自绘区域），供截图/按图动作直接引用。
+  let visualRegions = null;
+  let visualRefs = null;
+  if (params.vom === true) {
+    try {
+      [visualRegions, visualRefs] = await Promise.all([
+        visualScan({ tabId }).catch(() => null),
+        execPage(tabId, 'visual-refs', {}).catch(() => null),
+      ]);
+    } catch { visualRegions = null; visualRefs = null; }
+  }
+
   // 双跑对照（诊断）：独立跑一次 AX+DOMSnapshot 管线，量化覆盖率与耗时，不影响主输出。
   let pipelineCompare = null;
   if (params.compareAx === true) {
@@ -692,6 +704,8 @@ export async function observe(params = {}) {
       revision: typeof base.revision === 'number' ? base.revision : null,
       refDetails,
       layers: layerFacts,
+      visualRegions,
+      visualRefs,
       at: Date.now(),
       id: observationId(tabId),
     };
@@ -704,6 +718,8 @@ export async function observe(params = {}) {
     refs: cache.refs,
     refDetails: Array.isArray(cache.refDetails) ? cache.refDetails : [],
     layers: Array.isArray(cache.layers) ? cache.layers : [],
+    ...(cache.visualRegions ? { visualRegions: cache.visualRegions } : {}),
+    ...(cache.visualRefs ? { visualRefs: cache.visualRefs } : {}),
     tokenEstimate: estimateTokens(cache.text),
     observationId: cache.id,
     ...(baselineReason ? { baselineReason } : {}),

@@ -17,6 +17,9 @@ import { awaitOperation, cancelOperation } from './operations.js';
 import { checkControl, cooperateHandback, cooperateSync, cooperateWait, TAB_METHODS } from './control.js';
 import { refRegistry } from './tools/state.js';
 import { attachReceipt, buildActionReceipt } from './lib/action-receipt.js';
+import { isFullRefKey } from './refs/ref-registry.js';
+import { resolveBackendId } from './refs/resolve-backend.js';
+import { execPage } from './inject.js';
 import { activeRecordings, listRecordings, startRecording, stopRecording } from './ops.js';
 import { debugCapabilities, debugCurrent, debugDelete, debugHistory, debugHistoryDetail, debugPerformance, debugPin, debugPinned, debugRequest, debugStart, debugStop } from './debug.js';
 import { discardVideo, fetchVideo, listVideos, recoverVideo, startVideo, stopVideo, videoPrune, videoState, videoStatus } from './video.js';
@@ -24,7 +27,6 @@ import { emulate, forgetEmulateTab } from './emulate.js';
 import { networkDetail, networkList, networkReplay, networkStart, networkStop, forgetNetworkTab } from './network.js';
 import { detach, simulateExternalDetach } from './debugger.js';
 import { uiDiagnostics, uiOpen } from './diagnostics.js';
-import { execPage } from './inject.js';
 import { log } from './log.js';
 
 export const HANDLERS = {
@@ -345,8 +347,36 @@ async function dispatchCommand(method, params) {
       }
     }
   }
-  const result = await handler(input);
+  if (typeof input.ref === 'string' && /^@e\d+$/.test(input.ref)) {
+    const entry = refRegistry.get(input.tabId, input.ref);
+    if (entry && isFullRefKey(entry.key)) {
+      input.backendNodeId = entry.key.backendNodeId;
+      input.refKey = entry.key;
+    } else if (entry && method === 'click' && !input.synthetic && Number(input.frameId || 0) === 0) {
+      // 自动补 backend：先用页面侧生成稳定 selector，再由 CDP 解析真实 backendNodeId。
+      try {
+        const meta = await execPage(input.tabId, 'ref-selector', { ref: input.ref }, 0);
+        if (meta && meta.selector) {
+          const backendNodeId = await resolveBackendId(input.tabId, meta.selector);
+          if (backendNodeId) {
+            const key = refRegistry.upgradeBackend(input.tabId, input.ref, backendNodeId);
+            if (key) { input.backendNodeId = key.backendNodeId; input.refKey = key; }
+          }
+        }
+      } catch { /* 补全失败走 page-lib 回退 */ }
+    }
+  }
   const entry = typeof input.ref === 'string' ? refRegistry.get(input.tabId, input.ref) : null;
+  let result;
+  try {
+    result = await handler(input);
+  } catch (error) {
+    if (error && typeof error === 'object' && AGENT_INPUT_METHODS.has(method)) {
+      const errorReceipt = buildActionReceipt({ method, ref: input.ref, frameId: input.frameId || 0, revision: entry ? entry.key.revision : (input.expectRevision != null ? Number(input.expectRevision) : null), effectState: error.data && error.data.effect_state ? error.data.effect_state : 'unknown' });
+      error.data = { ...(error.data && typeof error.data === 'object' ? error.data : {}), receipt: errorReceipt };
+    }
+    throw error;
+  }
   const receipt = AGENT_INPUT_METHODS.has(method)
     ? buildActionReceipt({ method, ref: input.ref, frameId: input.frameId || 0, revision: entry ? entry.key.revision : (input.expectRevision != null ? Number(input.expectRevision) : null), effectState: result && result.effectState, via: result && result.via })
     : null;

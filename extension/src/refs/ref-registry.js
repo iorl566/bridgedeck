@@ -109,6 +109,15 @@ export class RefRegistry {
     return { ok: true, key: entry.key, meta: entry };
   }
 
+  upgradeBackend(tabId, ref, backendNodeId) {
+    const entry = this.get(tabId, ref);
+    if (!entry || !Number.isInteger(Number(backendNodeId)) || Number(backendNodeId) <= 0) return null;
+    const map = this.byTab.get(Number(tabId));
+    const key = makeFenceKey({ ...entry.key, backendNodeId: Number(backendNodeId) });
+    map.set(ref, { ...entry, key });
+    return key;
+  }
+
   invalidateDocument(tabId, documentId) {
     const map = this.byTab.get(Number(tabId));
     if (!map) return 0;

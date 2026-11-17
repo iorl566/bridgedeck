@@ -655,6 +655,7 @@ try {
       clickResult = expectOk(r, 'click');
     }
     assert(clickResult.effectState === 'committed', '成功动作应带 effectState=committed：' + JSON.stringify(clickResult));
+    assert(clickResult.via === 'cdp-backend', '主文档 ref 未自动补 backendNodeId：' + JSON.stringify(clickResult));
     return `${selectNote} click=@${buttonRef} effect=committed`;
   });
 
@@ -1118,7 +1119,9 @@ try {
     const recording = (listed.recordings || [])[0] || {};
     const framed = (recording.events || []).find((event) => event.kind === 'click' && Number(event.frameId) > 0);
     assert(framed, '没有记录 iframe 内点击：' + JSON.stringify((recording.events || []).map((event) => ({ kind: event.kind, frameId: event.frameId }))));
-    return 'frameId=' + framed.frameId;
+    assert(framed.documentId, 'iframe 事件缺少 documentId：' + JSON.stringify({ frameId: framed.frameId, documentId: framed.documentId }));
+    assert(framed.boundary && framed.boundary.documentId === framed.documentId, 'iframe 事件缺少 replay boundary：' + JSON.stringify(framed.boundary));
+    return 'frameId=' + framed.frameId + ' documentId=' + String(framed.documentId).slice(0, 12);
   });
 
   await check('20d7. record 跨 frame popup 归属', async () => {
@@ -1882,6 +1885,8 @@ try {
   await check('23h. cooperate sync + --context 授权动作', async () => {
     expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'sync navigate');
     const sync = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'cooperate sync');
+    assert(sync.cooperation && sync.cooperation.frameState && Number.isInteger(sync.cooperation.frameState.revision), 'cooperate sync 缺少 frameState：' + JSON.stringify(sync.cooperation && sync.cooperation.frameState));
+    assert(sync.authority && sync.authority.generation >= 1 && Number.isInteger(sync.authority.revision), 'cooperate sync 缺少 authority：' + JSON.stringify(sync.authority));
     assert(sync.control_policy === 'target', 'control_policy 不对：' + JSON.stringify(sync.control_policy));
     assert(typeof sync.context_id === 'string' && sync.context_id, '缺少 context_id');
     assert(typeof sync.observation_id === 'string' && sync.observation_id, '缺少 observation_id');
@@ -1995,6 +2000,40 @@ try {
     const miss = await cliJson(['click', '#shadow-btn', '--session', sessionId]);
     assert(miss.code === 1 && miss.json && miss.json.error.code === 'E_NOT_FOUND', 'selector 不应该跨 shadow：' + JSON.stringify(miss.json));
     return 'iframe/shadow refs 可用，selector 不跨树';
+  });
+
+  await check('23p2. 嵌套 iframe：owner 链逐层投影', async () => {
+    const nestedUrl = new URL('nested.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', nestedUrl, '--session', sessionId]), 'nested navigate');
+    await cliJson(['wait-ms', '800', '--session', sessionId]);
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'nested observe');
+    const frame = (frames.frames || []).find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('嵌套按钮'));
+    assert(frame, '没有找到嵌套按钮 frame：' + JSON.stringify((frames.frames || []).map((item) => ({ id: item.frameId, url: item.url }))));
+    const ref = /button "嵌套按钮" \[@(e\d+)\]/.exec(String(frame.observation || ''));
+    assert(ref, '嵌套按钮没有 ref');
+    const clicked = expectOk(await cliJson(['click', '@' + ref[1], '--session', sessionId]), 'nested click');
+    assert(clicked.via === 'frame-projected', '嵌套 frame 未走 owner 链投影：' + JSON.stringify(clicked));
+    await sleep(500);
+    const out = expectOk(await cliJson(['evaluate', "document.getElementById('nested-out').textContent", '--session', sessionId]), 'nested out');
+    assert(out.value === 'nested-clicked', '嵌套 iframe 点击没有回传：' + JSON.stringify(out.value));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'nested restore');
+    return 'nested projected via=' + clicked.via;
+  });
+
+  await check('23p3. 真正 OOPIF：CDP frame owner 投影', async () => {
+    const nestedUrl = new URL('nested-cross2.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', nestedUrl, '--session', sessionId]), 'oopif navigate');
+    await cliJson(['wait-ms', '1500', '--session', sessionId]);
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'oopif observe');
+    const alias = (frames.aliases || []).find((item) => String(item.url || '').includes('nested-cross2-inner.html'));
+    assert(alias, '没有 OOPIF alias：' + JSON.stringify((frames.frames || []).map((item) => ({ id: item.frameId, url: item.url }))));
+    const clicked = expectOk(await cliJson(['click', alias.ref, '--session', sessionId]), 'oopif click');
+    assert(clicked.via === 'cdp-frame-owner', 'OOPIF 未走 CDP owner 投影：' + JSON.stringify(clicked));
+    await sleep(500);
+    const out = expectOk(await cliJson(['evaluate', "document.getElementById('cross2-out').textContent", '--session', sessionId]), 'oopif out');
+    assert(out.value === 'cross2-clicked', 'OOPIF 点击没有回传：' + JSON.stringify(out.value));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'oopif restore');
+    return 'oopif via=' + clicked.via;
   });
 
   await check('23q. screenshot --annotate + 按图坐标点击', async () => {
@@ -2502,8 +2541,10 @@ try {
   await check('35d. 动作前目标被替换：fail closed，不重放', async () => {
     const vomUrl = pageUrl.replace(/test\.html.*$/, 'vom.html');
     expectOk(await cliJson(['navigate', vomUrl, '--session', sessionId]), 'swap navigate');
+    expectOk(await cliJson(['screenshot', '--out', path.join(ROOT, 'docs/assets/ui/breathing-glow-0.1.11.png'), '--session', sessionId]), 'breathing screenshot');
     const swapped = await cliJson(['click', '--synthetic', '#focus-swap', '--session', sessionId]);
     assert(swapped.code === 1 && swapped.json && swapped.json.error && swapped.json.error.code === 'E_NOT_ACTIONABLE', '替换目标应 fail closed：' + JSON.stringify(swapped.json));
+    assert(swapped.json.error.data && swapped.json.error.data.receipt && swapped.json.error.data.receipt.effectState === 'unknown', '失败动作缺少 receipt：' + JSON.stringify(swapped.json.error.data));
     const counter = expectOk(await cliJson(['evaluate', 'String(window.__fswap)', '--session', sessionId]), 'swap counter');
     assert(counter.value === 'undefined', '替换目标不应被重放点击：' + JSON.stringify(counter.value));
     return 'E_NOT_ACTIONABLE, no replay';

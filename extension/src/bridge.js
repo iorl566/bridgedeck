@@ -591,9 +591,17 @@ function installMessageBridge() {
       if (tabId != null) {
         // 事件可能来自 CDP trusted 路径，page-lib 未必能打标；命令窗口是权威归因。
         const actor = isAgentInputWindow(tabId) ? 'agent' : (message && message.actor);
-        collectEvent(tabId, Object.assign({}, message, actor ? { actor } : {}, {
+        const event = Object.assign({}, message, actor ? { actor } : {}, {
           frameId: sender && Number.isInteger(sender.frameId) ? sender.frameId : 0,
-        }));
+          documentId: (message && message.documentId) || (sender && sender.documentId) || null,
+          frameUrl: (message && message.frameUrl) || null,
+        });
+        event.boundary = {
+          documentId: event.documentId || null,
+          frameId: event.frameId || 0,
+          revision: Number.isInteger(event.revision) ? event.revision : null,
+        };
+        collectEvent(tabId, event);
       }
       sendResponse({ ok: true });
       return false;

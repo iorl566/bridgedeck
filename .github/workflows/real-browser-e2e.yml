@@ -1,0 +1,18 @@
+name: real-browser-e2e
+
+on:
+  workflow_dispatch:
+
+jobs:
+  edge:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run real Edge E2E
+        env:
+          BB_E2E_SYNC_DOCS: '0'
+        run: node tools/eval-from-e2e.mjs

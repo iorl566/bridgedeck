@@ -11,6 +11,7 @@ import { requireTabId } from './shared.js';
 import { shadowRefClick } from './shadow.js';
 import { inputFocusCache, recentFillFocus, shadowRefs } from './state.js';
 import { resolveCapturePoint, verifyVisualHit } from '../screenshot.js';
+import { projectCrossFramePoint } from '../cross-frame-geometry.js';
 import { log } from '../log.js';
 const rawClick = pageAction('click');
 const rawHover = pageAction('hover');
@@ -82,11 +83,12 @@ async function trustedOrFallback(kind, params, fallback) {
     if (kind === 'click' && params.frameUrl) {
       try {
         const local = await execPage(tabId, 'point', params, Number(params.frameId));
-        const projected = await execPage(tabId, 'frame-project-point', { url: params.frameUrl, x: local.x, y: local.y }, 0);
+        let projected = await execPage(tabId, 'frame-project-point', { url: params.frameUrl, x: local.x, y: local.y }, 0);
+        if (!projected) projected = await projectCrossFramePoint(tabId, { url: params.frameUrl, x: local.x, y: local.y });
         if (projected && Number.isFinite(projected.x) && Number.isFinite(projected.y)) {
           const lease = acquireInputLease(tabId, 'trusted:frame-click');
           try { await trustedClickPoint(tabId, projected); } finally { releaseInputLease(tabId, lease.token); }
-          return { ok: true, trusted: true, via: 'frame-projected', x: projected.x, y: projected.y, frameUrl: projected.frameUrl };
+          return { ok: true, trusted: true, via: projected.via || 'frame-projected', x: projected.x, y: projected.y, frameUrl: projected.frameUrl || params.frameUrl };
         }
       } catch {
         // 投影失败时回退 frame 内 page-lib 点击。
@@ -226,6 +228,8 @@ async function trustedDrag(params, fallback) {
 }
 
 export async function click(params = {}) {
+  // 复合 RefKey 命中 backendNodeId 时优先走 CDP 节点路由；页面内 @eN 只做回退。
+  if (Number.isInteger(params.backendNodeId) && params.backendNodeId > 0) return clickBackend(params);
   return retryTarget(params, () => {
     if (params && params.trusted === true && Number.isInteger(params.tabId)) {
       return withForegroundTab(params.tabId, () => withOverlaysHidden(params.tabId, () => trustedOrFallback('click', params, rawClick)));
@@ -241,7 +245,7 @@ export async function click(params = {}) {
  */
 export async function clickBackend(params = {}) {
   const tabId = requireTabId(params);
-  const backendId = Number(params.backendId);
+  const backendId = Number(params.backendId != null ? params.backendId : params.backendNodeId);
   if (!Number.isInteger(backendId) || backendId <= 0) {
     throw bridgeError('E_BAD_ARG', 'click-backend 需要 backendId 正整数');
   }

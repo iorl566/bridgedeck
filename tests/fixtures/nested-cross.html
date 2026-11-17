@@ -1,0 +1,4 @@
+﻿<!doctype html><meta charset="utf-8"><title>跨源嵌套夹具</title>
+<iframe id="outer" src="nested-cross-outer.html" style="width:600px;height:300px"></iframe>
+<p id="cross-nested-out">none</p>
+<script>addEventListener('message', (event) => { if (event.data === 'cross-nested-click') document.getElementById('cross-nested-out').textContent = 'cross-nested-clicked'; });</script>
