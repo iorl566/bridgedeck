@@ -20,7 +20,7 @@ import { computeBlockingLayers } from '../lib/blocking-layers.js';
 import { applyBlockingLayers, applyFactToNode } from '../lib/facts-apply.js';
 import { buildAxNodes } from '../lib/ax-pipeline.js';
 import { intersectsViewport, summarizePipeline } from '../lib/pipeline-compare.js';
-import { shadowRefs } from './state.js';
+import { refRegistry, shadowRefs } from './state.js';
 import { clearFrameAliases, setFrameAliases } from './frames.js';
 import { collectCdpFrames } from '../frame-cdp.js';
 import { closedShadowEntries } from './closed-shadow.js';
@@ -625,7 +625,20 @@ export async function observe(params = {}) {
     backendMarked = false;
   }
 
-  const refDetails = buildRefDetails(base.nodes, { frameId: 0, revision: base.revision, documentId: base.documentId });
+  const refDetails = buildRefDetails(base.nodes, { frameId: 0, revision: base.revision, documentId: base.url || 'main' });
+  refRegistry.invalidateTab(tabId);
+  for (const detail of refDetails) {
+    try {
+      refRegistry.register(tabId, detail.ref, {
+        backendNodeId: detail.backendNodeId,
+        frameId: 0,
+        documentId: detail.documentId,
+        revision: detail.revision,
+      }, { role: detail.role, name: detail.name });
+    } catch {
+      // 没有 documentId 的极早观察不注册；不阻塞 observe。
+    }
+  }
 
   const budget = Number(params.maxTokens) > 0 ? Math.min(Math.max(Math.round(Number(params.maxTokens)), 200), 20000) : 0;
   let cache = observationCache.get(tabId);

@@ -80,3 +80,10 @@ EDGE_API_KEY=... EDGE_CLIENT_ID=... EDGE_PRODUCT_ID=... \
 - GitHub：**v0.1.11 已公开并签名**，且标记 latest：<https://github.com/iorl566/bridgedeck/releases/tag/v0.1.11>
 - Edge：0.1.10 已取消；**0.1.11 已提交，状态“正在审阅”**；证据 [edge-store-0.1.11-review.png](assets/ui/edge-store-0.1.11-review.png)。
 - 0.1.10 制品归档到 `dist/archive-0.1.10/`。
+
+## 0.1.12（2026-11-18）
+
+- UI：按本地 0.1.7 的 ControlGlow 还原橙色呼吸框（20px/4px 外层 + 40px/8px 呼吸层）。
+- 内部：RefKey 注册表/Revision fence/Action Receipt 基础设施，为 0.2.0 准备。
+- 扩展 437,092 B，sha256 `1987845deda3688f639385999d158e180dafa49cdd57235ed3dd72b43a99cc3f`。
+- GitHub/Edge 发布状态以发布后 API/Partner Center 为准。

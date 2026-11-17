@@ -1,4 +1,4 @@
-# Test status — 0.1.11
+# Test status — 0.1.12
 
 Last run: 2026-11-17, Windows Edge 157.
 
@@ -6,7 +6,7 @@ Last run: 2026-11-17, Windows Edge 157.
 
 | Lane | Result |
 | --- | --- |
-| `node --test tests/unit/*.test.mjs` | **477/477** |
+| `node --test tests/unit/*.test.mjs` | **484/484** |
 | `node --test tests/reference/*.test.mjs` | **507/507** |
 | `node --test tests/integration/remote-device.test.mjs` | **1/1** |
 | `tests/cli/selftest.mjs` | **155/155** |
@@ -20,9 +20,9 @@ Last run: 2026-11-17, Windows Edge 157.
 
 ## Release
 
-- GitHub v0.1.11: public, signed (keyId `c7b5e21301f91a2d`).
-- Edge 0.1.11: submitted for review (2026-11-17), screenshot `docs/assets/ui/edge-store-0.1.11-review.png`.
-- Extension: **434,037 B**, sha256 `52a2942a75c4bff0558b61a6569d688902f6bccfcebf331969b9e34e9c3cfef4`.
+- GitHub v0.1.12: public, signed (keyId `c7b5e21301f91a2d`).
+- Edge 0.1.12: submitted for review (2026-11-17), screenshot `docs/assets/ui/edge-store-0.1.12-review.png`.
+- Extension: **437,092 B**, sha256 `1987845deda3688f639385999d158e180dafa49cdd57235ed3dd72b43a99cc3f`.
 - 0.1.10 artifacts archived under `dist/archive-0.1.10/`.
 
 ## 0.1.11 focus

@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://microsoftedge.microsoft.com/addons/detail/ieflpefpmlmmlfgmpfakaglhgmcbcnig"><img src="https://img.shields.io/badge/version-0.1.11-2f6fed" alt="version" />
+  <a href="https://microsoftedge.microsoft.com/addons/detail/ieflpefpmlmmlfgmpfakaglhgmcbcnig"><img src="https://img.shields.io/badge/version-0.1.12-2f6fed" alt="version" />
   <img src="https://img.shields.io/badge/Edge%20%E5%8A%A0%E8%BD%BD%E9%A1%B9-%E5%AE%89%E8%A3%85%E6%89%A9%E5%B1%95-2f6fed" alt="Edge 加载项" /></a>
   <a href="https://github.com/iorl566/bridgedeck/releases/latest"><img src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Windows%20%E5%AE%89%E8%A3%85%E5%8C%85-0b1220" alt="下载" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-64748b" alt="MIT" /></a>
@@ -24,7 +24,7 @@
   <a href="#第一个任务">第一个任务</a> ·
   <a href="#浏览器控制与隐私">隐私</a> ·
   <a href="#文档导航">文档</a> ·
-  <a href="docs/releases/0.1.11.md">更新日志</a>
+  <a href="docs/releases/0.1.12.md">更新日志</a>
 </p>
 
 **BridgeDeck 把你的 AI Agent 连接到 Chrome 或 Microsoft Edge，直接使用你已有的登录状态。** 交给它读取、点击、填表或排查问题；任务在独立的 **Agent Window** 中运行，需要时由你接手。已有标签页需要显式借用，任务结束后归还。默认只连接本机 daemon，不经过云端。
@@ -104,7 +104,7 @@ irm https://raw.githubusercontent.com/iorl566/bridgedeck/main/install-online.ps1
 .\install-online.ps1 -Dest D:\Apps\BridgeDeck -AddToPath
 ```
 
-也可以从 [Releases](https://github.com/iorl566/bridgedeck/releases/latest) 手动下载 `BridgeDeckSetup-0.1.11.exe` 或 `BridgeDeck-cli-0.1.11-win32-x64.zip`。安装器目前是自签名，Windows 会显示"未知发布者"；发布流水线支持 EV 签名，证书配置见 [Windows 签名](docs/windows-signing.md)。
+也可以从 [Releases](https://github.com/iorl566/bridgedeck/releases/latest) 手动下载 `BridgeDeckSetup-0.1.12.exe` 或 `BridgeDeck-cli-0.1.12-win32-x64.zip`。安装器目前是自签名，Windows 会显示"未知发布者"；发布流水线支持 EV 签名，证书配置见 [Windows 签名](docs/windows-signing.md)。
 
 ### 方案 B2：macOS / Linux
 
@@ -112,8 +112,8 @@ irm https://raw.githubusercontent.com/iorl566/bridgedeck/main/install-online.ps1
 
 ```sh
 # macOS（Apple Silicon / Intel）与 Linux（x64 / arm64）
-tar -xzf BridgeDeck-cli-0.1.11-darwin-arm64.tar.gz   # 或 darwin-x64 / linux-x64 / linux-arm64
-cd BridgeDeck-cli-0.1.11-darwin-arm64
+tar -xzf BridgeDeck-cli-0.1.12-darwin-arm64.tar.gz   # 或 darwin-x64 / linux-x64 / linux-arm64
+cd BridgeDeck-cli-0.1.12-darwin-arm64
 sh install.sh --add-to-path
 bridge status
 ```
@@ -224,7 +224,7 @@ CLI、daemon、扩展、DSH 插件应保持同一版本使用新功能。
 推荐用一条命令完成“装新 → 试跑 → 原端口重启”：
 
 ```sh
-bridge update install --from BridgeDeck-cli-0.1.11-linux-x64.tar.gz
+bridge update install --from BridgeDeck-cli-0.1.12-linux-x64.tar.gz
 ```
 
 它会先停旧 daemon、备份当前安装、覆盖 CLI/daemon/lib，再用**原端口**启动新 daemon 并校验版本；启动失败或版本不符会自动回滚并重启旧版本。备份保留在安装目录的 `.rollback/` 下，也可以手动回滚：
@@ -240,7 +240,7 @@ bridge update install --rollback .rollback/<timestamp>/
 3. 再更新扩展（商店更新，或重新加载解压目录）；
 4. 最后更新 DSH 插件并重启 profile。
 
-商店版本会因审核滞后于仓库；本 README 描述的是当前仓库能力。版本变化见 [更新日志](docs/releases/0.1.11.md) 与 [Releases](https://github.com/iorl566/bridgedeck/releases)。
+商店版本会因审核滞后于仓库；本 README 描述的是当前仓库能力。版本变化见 [更新日志](docs/releases/0.1.12.md) 与 [Releases](https://github.com/iorl566/bridgedeck/releases)。
 
 ## 文档导航
 
@@ -278,7 +278,7 @@ node tools/e2e.mjs                  # 端到端（默认同步 docs/assets 截�
 node tools/build-extension.mjs      # 重建扩展 zip（dist/BridgeDeck-extension-<version>.zip）
 node tools/package-portable.mjs     # 当前平台便携包（Windows zip / macOS+Linux tar.gz）
 node tools/package-portable.mjs --platform linux --arch arm64   # 交叉打包（下载对应 Node 运行时）
-bash tools/build-macos-pkg.sh --stage <dir> --version 0.1.11 --out dist/x.pkg   # 仅 macOS
+bash tools/build-macos-pkg.sh --stage <dir> --version 0.1.12 --out dist/x.pkg   # 仅 macOS
 node tools/release.mjs --check      # 发布产物一致性
 ```
 

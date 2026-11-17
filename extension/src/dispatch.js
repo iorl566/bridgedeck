@@ -15,6 +15,8 @@ import { manualFrame, manualSave, manualStart } from './quick.js';
 import { dialogAccept, dialogArm, dialogDisarm, dialogDismiss, dialogHandle, dialogList, dialogStatus, forgetDialogTab } from './dialogs.js';
 import { awaitOperation, cancelOperation } from './operations.js';
 import { checkControl, cooperateHandback, cooperateSync, cooperateWait, TAB_METHODS } from './control.js';
+import { refRegistry } from './tools/state.js';
+import { attachReceipt, buildActionReceipt } from './lib/action-receipt.js';
 import { activeRecordings, listRecordings, startRecording, stopRecording } from './ops.js';
 import { debugCapabilities, debugCurrent, debugDelete, debugHistory, debugHistoryDetail, debugPerformance, debugPin, debugPinned, debugRequest, debugStart, debugStop } from './debug.js';
 import { discardVideo, fetchVideo, listVideos, recoverVideo, startVideo, stopVideo, videoPrune, videoState, videoStatus } from './video.js';
@@ -304,6 +306,13 @@ async function dispatchCommand(method, params) {
       input.ref = '@e' + framed[2];
     }
   }
+  if (typeof input.ref === 'string' && /^@e\d+$/.test(input.ref) && input.expectRevision !== undefined) {
+    const entry = refRegistry.get(input.tabId, input.ref);
+    const expected = Number(input.expectRevision);
+    if (entry && Number.isInteger(expected) && entry.key.revision !== expected) {
+      throw bridgeError('E_STALE_REF', 'ref 与 expectRevision 不匹配，请重新 observe');
+    }
+  }
   if (TAB_METHODS.has(method)) {
     const unverified = method === 'evaluate' && input.unverified === true;
     if (unverified) {
@@ -337,15 +346,20 @@ async function dispatchCommand(method, params) {
     }
   }
   const result = await handler(input);
+  const entry = typeof input.ref === 'string' ? refRegistry.get(input.tabId, input.ref) : null;
+  const receipt = AGENT_INPUT_METHODS.has(method)
+    ? buildActionReceipt({ method, ref: input.ref, frameId: input.frameId || 0, revision: entry ? entry.key.revision : (input.expectRevision != null ? Number(input.expectRevision) : null), effectState: result && result.effectState, via: result && result.via })
+    : null;
+  const withReceipt = receipt ? attachReceipt(result, receipt) : result;
   const settleMs = Number(input.settleMs);
   if (Number.isFinite(settleMs) && settleMs > 0) {
     const wait = Math.min(Math.max(Math.round(settleMs), 0), 5000);
     await sleep(wait);
-    if (result && typeof result === 'object' && !Array.isArray(result)) {
-      return { ...result, settledMs: wait };
+    if (withReceipt && typeof withReceipt === 'object' && !Array.isArray(withReceipt)) {
+      return { ...withReceipt, settledMs: wait };
     }
   }
-  return result;
+  return withReceipt;
 }
 
 /**
