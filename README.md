@@ -46,8 +46,8 @@ BridgeDeck 不绑定模型，也不要求换 Agent。只要能调用本地命令
 | 接入方式 | 入口 | 适合 |
 | --- | --- | --- |
 | **CLI** | `bridge` / `node cli/bridge.mjs` | Codex、Claude Code、Cursor 等能跑 Shell 的 Agent |
-| **MCP** | `node mcp/server.mjs`（51 个工具） | 支持 MCP 的客户端 |
-| **DSH 插件** | `dsh-plugin/`（35 个工具） | DeepSeek Harness，带任务预览与截图结果 |
+| **MCP** | `node mcp/server.mjs`（92 个工具） | 支持 MCP 的客户端 |
+| **DSH 插件** | `dsh-plugin/`（37 个工具） | DeepSeek Harness，带任务预览与截图结果 |
 | **Node/Python SDK** | `import { connect } from 'browser-bridge/sdk'` / `sdk/python/browser_bridge.py` | 写 Node/TypeScript 或 Python 脚本、集成测试 |
 | **内嵌技能** | `bridge install-skill` | 支持 skill 的宿主，一条命令装上使用说明 |
 | **斜杠命令** | `bridge install-skill --harness <id> --commands` | Claude Code / Codex / Cursor 等把技能包装成 `/browser-bridge` |

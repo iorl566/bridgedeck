@@ -27,5 +27,5 @@
 
 - Chrome/Edge Chromium 111+ required.
 - Local daemon on 127.0.0.1 by default; no telemetry, no cloud dependency.
-- Privacy policy: https://iorl566.github.io/bridgedeck/privacy-policy.html
+- Privacy policy: https://iorl566.github.io/bridgedeck-privacy/privacy-policy.html
 - Support: https://github.com/iorl566/bridgedeck/issues
