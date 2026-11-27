@@ -13,35 +13,9 @@ import { spawn } from 'node:child_process';
 import { charWidth, textWidth, padEndWidth, truncateText, renderTable, formatUptime, formatTime, formatLease, formatBytes } from './lib/format.mjs';
 import { ArgError, intFlag, requirePos, parseDurationMs, parseOnOff } from './lib/args.mjs';
 import { remuxFaststartBase64 } from './lib/video-remux.mjs';
-import { createAuditCommand } from './commands/audit.mjs';
-import { createRecordCommand } from './commands/record.mjs';
-import { createTabCommand } from './commands/tab.mjs';
-import { createWindowCommand } from './commands/window.mjs';
-import { createDialogCommand } from './commands/dialog.mjs';
-import { createEmulateCommand } from './commands/emulate.mjs';
-import { createSessionCommand } from './commands/session.mjs';
-import { createExtractCommand } from './commands/extract.mjs';
-import { createDaemonCommand } from './commands/daemon.mjs';
 import { createBatchCommand } from './commands/batch.mjs';
 import { createLeaseCommand } from './commands/lease.mjs';
-import { downloadCommand, uploadCommand } from './commands/files.mjs';
-import { uiCommand, settingsCommand } from './commands/ui-settings.mjs';
-import { longshotCommand, refsCommand } from './commands/misc.mjs';
-import { traceCommand } from './commands/trace.mjs';
-import { createPlanCommands } from './commands/plan.mjs';
-import { createCooperateCommands } from './commands/cooperate.mjs';
-import { requestHelpCommand } from './commands/help.mjs';
-import { installSkillCommand } from './commands/install-skill.mjs';
-import { createReadDragCommands } from './commands/read-drag.mjs';
-import { createSchemaLedgerCommands } from './commands/schema-ledger.mjs';
-import { createAgentCommands } from './commands/agent.mjs';
-import { createStatusCommands } from './commands/status.mjs';
-import { createWebmcpCommands } from './commands/webmcp.mjs';
-import { mcpInstallCommand } from './commands/mcp-install.mjs';
 import { createReleaseHelpers } from './commands/release-helpers.mjs';
-import { createDoctorCommand } from './commands/doctor.mjs';
-import { createUpdateCommand } from './commands/update.mjs';
-import { createUpdateOps } from './commands/update-ops.mjs';
 import { createHelpCommand } from './help.mjs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -99,6 +73,33 @@ const VERSION = (() => {
 })();
 // 启动耗时诊断：BB_STARTUP_TRACE=1 时把关键阶段打到 stderr（不改变 stdout 的 JSON 输出）。
 const STARTUP_TRACE = process.env.BB_STARTUP_TRACE === '1';
+const downloadCommand = (...args) => import('./commands/files.mjs').then((mod) => mod.downloadCommand(...args));
+const uploadCommand = (...args) => import('./commands/files.mjs').then((mod) => mod.uploadCommand(...args));
+
+const uiCommand = (...args) => import('./commands/ui-settings.mjs').then((mod) => mod.uiCommand(...args));
+const settingsCommand = (...args) => import('./commands/ui-settings.mjs').then((mod) => mod.settingsCommand(...args));
+
+const longshotCommand = (...args) => import('./commands/misc.mjs').then((mod) => mod.longshotCommand(...args));
+const refsCommand = (...args) => import('./commands/misc.mjs').then((mod) => mod.refsCommand(...args));
+
+const traceCommand = (...args) => import('./commands/trace.mjs').then((mod) => mod.traceCommand(...args));
+
+const requestHelpCommand = (...args) => import('./commands/help.mjs').then((mod) => mod.requestHelpCommand(...args));
+
+const installSkillCommand = (...args) => import('./commands/install-skill.mjs').then((mod) => mod.installSkillCommand(...args));
+
+const mcpInstallCommand = (...args) => import('./commands/mcp-install.mjs').then((mod) => mod.mcpInstallCommand(...args));
+
+function lazyProxy(loader) {
+  let cache = null;
+  const resolve = () => cache || (cache = loader());
+  const fn = function (...args) { return resolve().then((mod) => mod(...args)); };
+  return new Proxy(fn, {
+    get: (target, prop) => (...args) => resolve().then((mod) => mod[prop](...args)),
+    apply: (target, thisArg, args) => resolve().then((mod) => mod(...args)),
+  });
+}
+
 function traceStartup(label) {
   if (!STARTUP_TRACE) return;
   process.stderr.write('[startup] ' + label + ' ' + Math.round(process.uptime() * 1000) + 'ms\n');
@@ -753,7 +754,7 @@ function readTailLines(file, maxBytes) {
 /** 浏览器表格：有实例名时多一列。 */
 
 
-const cmdDoctor = createDoctorCommand({
+const __cmdDoctorCtx = {
   HOME_DIR,
   DAEMON_JSON_PATH,
   LOG_PATH,
@@ -765,7 +766,8 @@ const cmdDoctor = createDoctorCommand({
   emitJson,
   isJson: () => jsonMode,
   print,
-});
+};
+const cmdDoctor = lazyProxy(() => import('./commands/doctor.mjs').then((mod) => mod.createDoctorCommand(__cmdDoctorCtx)));
 
 
 
@@ -818,7 +820,7 @@ const daemonLogCommands = {
   },
 };
 
-const cmdDaemon = createDaemonCommand({
+const __cmdDaemonCtx = {
   SERVER_PATH,
   REPO_ROOT,
   HOME_DIR,
@@ -841,7 +843,12 @@ const cmdDaemon = createDaemonCommand({
   cmdLease: createLeaseCommand({
     callRpc, timeoutOf, outputFailure, outputJsonBody, emitJson, isJson: () => jsonMode, print, ArgError,
   }),
-});
+};
+let __cmdDaemon = null;
+const cmdDaemon = async (...args) => {
+  if (!__cmdDaemon) __cmdDaemon = (await import('./commands/daemon.mjs')).createDaemonCommand(__cmdDaemonCtx);
+  return __cmdDaemon(...args);
+};
 
 
 
@@ -877,7 +884,7 @@ function cmdMcp() {
 // 命令：session start|stop|list
 // ---------------------------------------------------------------------------
 
-const cmdSession = createSessionCommand({
+const __cmdSessionCtx = {
   callRpc,
   timeoutOf,
   outputFailure,
@@ -885,9 +892,14 @@ const cmdSession = createSessionCommand({
   isJson: () => jsonMode,
   print,
   spec: COMMAND_SPECS.session,
-});
+};
+let __cmdSession = null;
+const cmdSession = async (...args) => {
+  if (!__cmdSession) __cmdSession = (await import('./commands/session.mjs')).createSessionCommand(__cmdSessionCtx);
+  return __cmdSession(...args);
+};
 
-const cmdTab = createTabCommand({
+const __cmdTabCtx = {
   withSession,
   callRpc,
   timeoutOf,
@@ -901,9 +913,14 @@ const cmdTab = createTabCommand({
   requirePos,
   ArgError,
   spec: COMMAND_SPECS.tab,
-});
+};
+let __cmdTab = null;
+const cmdTab = async (...args) => {
+  if (!__cmdTab) __cmdTab = (await import('./commands/tab.mjs')).createTabCommand(__cmdTabCtx);
+  return __cmdTab(...args);
+};
 
-const cmdWindow = createWindowCommand({
+const __cmdWindowCtx = {
   callRpc,
   timeoutOf,
   outputFailure,
@@ -914,7 +931,12 @@ const cmdWindow = createWindowCommand({
   requirePos,
   intFlag,
   ArgError,
-});
+};
+let __cmdWindow = null;
+const cmdWindow = async (...args) => {
+  if (!__cmdWindow) __cmdWindow = (await import('./commands/window.mjs')).createWindowCommand(__cmdWindowCtx);
+  return __cmdWindow(...args);
+};
 
 const __cmdPageCtx = {
   withControl,
@@ -1160,7 +1182,7 @@ function renderPageBody(body, humanRender) {
 
 
 
-const cmdExtract = createExtractCommand({
+const __cmdExtractCtx = {
   withControl,
   resolveTarget,
   callRpc,
@@ -1175,7 +1197,12 @@ const cmdExtract = createExtractCommand({
   intFlag,
   ArgError,
   spec: COMMAND_SPECS.extract,
-});
+};
+let __cmdExtract = null;
+const cmdExtract = async (...args) => {
+  if (!__cmdExtract) __cmdExtract = (await import('./commands/extract.mjs')).createExtractCommand(__cmdExtractCtx);
+  return __cmdExtract(...args);
+};
 
 
 
@@ -1246,35 +1273,56 @@ async function readTransferToFile(transferId, file) {
   fs.writeFileSync(file, Buffer.concat(chunks));
 }
 
-const webmcpCommands = createWebmcpCommands({
+const __webmcpCommandsCtx = {
   callRpc, withControl, timeoutOf, outputFailure, outputJsonBody, print, isJson: () => jsonMode, ArgError, renderTable, truncateText, requirePos, BridgeError, parseDurationMs, emitJson,
-});
+};
+const webmcpCommands = lazyProxy(() => import('./commands/webmcp.mjs').then((mod) => mod.createWebmcpCommands(__webmcpCommandsCtx)));
 
-const statusCommands = createStatusCommands({
+const __statusCommandsCtx = {
   callRpc, timeoutOf, outputFailure, outputJsonBody, print, isJson: () => jsonMode, requirePos, formatTime, formatUptime, indent, renderTable, truncateText,
-});
+};
+const statusCommands = lazyProxy(() => import('./commands/status.mjs').then((mod) => mod.createStatusCommands(__statusCommandsCtx)));
 
-const agentCommands = createAgentCommands({
+const __agentCommandsCtx = {
   withControl, callRpc, timeoutOf, outputFailure, emitJson, print, isJson: () => jsonMode, ArgError, summarizePageDiagnostics,
-});
+};
+const agentCommands = lazyProxy(() => import('./commands/agent.mjs').then((mod) => mod.createAgentCommands(__agentCommandsCtx)));
 
-const schemaLedgerCommands = createSchemaLedgerCommands({
+const __schemaLedgerCommandsCtx = {
   loadSchemaInfo, BridgeError, isJson: () => jsonMode, emitJson, print, callRpc, timeoutOf, outputFailure, outputJsonBody, ArgError, isControllerInfo,
   spec: COMMAND_SPECS.open,
-});
+};
+const schemaLedgerCommands = lazyProxy(() => import('./commands/schema-ledger.mjs').then((mod) => mod.createSchemaLedgerCommands(__schemaLedgerCommandsCtx)));
 
-const readDragCommands = createReadDragCommands({
+const __readDragCommandsCtx = {
   callRpc, withControl, timeoutOf, outputFailure, outputJsonBody, print, isJson: () => jsonMode, renderPageBody, renderTable, truncateText, resolveTarget, requirePos, targetOf, parseModifiers, parseDurationMs, intFlag, defaultInputMode, ArgError,
-});
+};
+const readDragCommands = lazyProxy(() => import('./commands/read-drag.mjs').then((mod) => mod.createReadDragCommands(__readDragCommandsCtx)));
 
-const planCommands = createPlanCommands({
+const __planCommandsCtx = {
   callRpc, withSession, timeoutOf, withControl, outputFailure, outputJsonBody, print, emitJson, isJson: () => jsonMode, renderTable, writeFileAtomic, resolveTarget, BridgeError, ArgError, intFlag, formatTime,
   spec: COMMAND_SPECS.plan,
-});
+};
+let __planCommands = null;
+const planCommands = {
+  async cmdView(...args) {
+    if (!__planCommands) __planCommands = (await import('./commands/plan.mjs')).createPlanCommands(__planCommandsCtx);
+    return __planCommands.cmdView(...args);
+  },
+  async cmdPlan(...args) {
+    if (!__planCommands) __planCommands = (await import('./commands/plan.mjs')).createPlanCommands(__planCommandsCtx);
+    return __planCommands.cmdPlan(...args);
+  },
+  async cmdReplay(...args) {
+    if (!__planCommands) __planCommands = (await import('./commands/plan.mjs')).createPlanCommands(__planCommandsCtx);
+    return __planCommands.cmdReplay(...args);
+  },
+};
 
-const cooperateCommands = createCooperateCommands({
+const __cooperateCommandsCtx = {
   callRpc, withControl, timeoutOf, outputFailure, outputJsonBody, print, isJson: () => jsonMode, intFlag, parseDurationMs, ArgError, BridgeError, requirePos,
-});
+};
+const cooperateCommands = lazyProxy(() => import('./commands/cooperate.mjs').then((mod) => mod.createCooperateCommands(__cooperateCommandsCtx)));
 
 const __cmdPairCtx = {
   callRpc,
@@ -1315,7 +1363,7 @@ function dialogPolicy(flags) {
   return policy;
 }
 
-const cmdDialog = createDialogCommand({
+const __cmdDialogCtx = {
   withControl,
   dialogPolicy,
   callRpc,
@@ -1329,7 +1377,12 @@ const cmdDialog = createDialogCommand({
   truncateText,
   requirePos,
   ArgError,
-});
+};
+let __cmdDialog = null;
+const cmdDialog = async (...args) => {
+  if (!__cmdDialog) __cmdDialog = (await import('./commands/dialog.mjs')).createDialogCommand(__cmdDialogCtx);
+  return __cmdDialog(...args);
+};
 
 
 
@@ -1380,7 +1433,7 @@ const cmdVideo = async (...args) => {
   return __videoCommand(...args);
 };
 
-const cmdRecord = createRecordCommand({
+const __cmdRecordCtx = {
   withControl,
   callRpc,
   timeoutOf,
@@ -1395,7 +1448,12 @@ const cmdRecord = createRecordCommand({
   renderTable,
   formatTime,
   truncateText,
-});
+};
+let __cmdRecord = null;
+const cmdRecord = async (...args) => {
+  if (!__cmdRecord) __cmdRecord = (await import('./commands/record.mjs')).createRecordCommand(__cmdRecordCtx);
+  return __cmdRecord(...args);
+};
 
 
 
@@ -1542,7 +1600,7 @@ const cmdNetwork = async (...args) => {
   return __cmdNetwork(...args);
 };
 
-const cmdEmulate = createEmulateCommand({
+const __cmdEmulateCtx = {
   withControl,
   callRpc,
   timeoutOf,
@@ -1550,7 +1608,12 @@ const cmdEmulate = createEmulateCommand({
   print,
   intFlag,
   ArgError,
-});
+};
+let __cmdEmulate = null;
+const cmdEmulate = async (...args) => {
+  if (!__cmdEmulate) __cmdEmulate = (await import('./commands/emulate.mjs')).createEmulateCommand(__cmdEmulateCtx);
+  return __cmdEmulate(...args);
+};
 
 // ---------------------------------------------------------------------------
 
@@ -1597,7 +1660,7 @@ const UPDATE_STATE_PATH = path.join(HOME_DIR, 'update-state.json');
 
 const releaseHelpers = createReleaseHelpers({ REPO_ROOT, VERSION, loadUpdate, BridgeError });
 
-const { cmdUpdateInstall, cmdUpdateFetch, cmdUpdateApply, cmdUpdateRollback } = createUpdateOps({
+const __updateOpsCtx = {
   REPO_ROOT,
   HOME_DIR,
   UPDATE_STATE_PATH,
@@ -1610,10 +1673,12 @@ const { cmdUpdateInstall, cmdUpdateFetch, cmdUpdateApply, cmdUpdateRollback } = 
   assertInside: releaseHelpers.assertInside,
   sha256File: releaseHelpers.sha256File,
   BridgeError,
-});
+};
+const __updateOps = lazyProxy(() => import('./commands/update-ops.mjs').then((mod) => mod.createUpdateOps(__updateOpsCtx)));
+const { cmdUpdateInstall, cmdUpdateFetch, cmdUpdateApply, cmdUpdateRollback } = __updateOps;
 
 
-const cmdUpdate = createUpdateCommand({
+const __cmdUpdateCtx = {
   REPO_ROOT,
   UPDATE_STATE_PATH,
   VERSION,
@@ -1629,7 +1694,8 @@ const cmdUpdate = createUpdateCommand({
   cmdUpdateApply,
   cmdUpdateRollback,
   BridgeError,
-});
+};
+const cmdUpdate = lazyProxy(() => import('./commands/update.mjs').then((mod) => mod.createUpdateCommand(__cmdUpdateCtx)));
 const AUDIT_DIR = path.join(HOME_DIR, 'audit');
 const SKILL_SOURCE = path.join(REPO_ROOT, 'skill');
 
@@ -1726,7 +1792,7 @@ function parseSince(text) {
   return parsed;
 }
 
-const cmdAudit = createAuditCommand({
+const __cmdAuditCtx = {
   auditDir: AUDIT_DIR,
   writeFileAtomic,
   parseSince,
@@ -1739,7 +1805,12 @@ const cmdAudit = createAuditCommand({
   renderTable,
   formatTime,
   truncateText,
-});
+};
+let __cmdAudit = null;
+const cmdAudit = async (...args) => {
+  if (!__cmdAudit) __cmdAudit = (await import('./commands/audit.mjs')).createAuditCommand(__cmdAuditCtx);
+  return __cmdAudit(...args);
+};
 
 function mcpCommand() {
   return { command: process.execPath, args: [path.join(REPO_ROOT, 'cli', 'bridge.mjs'), 'mcp'] };

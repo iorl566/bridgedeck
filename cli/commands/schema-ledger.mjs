@@ -152,6 +152,13 @@ export function createSchemaLedgerCommands(ctx) {
     const planned = buildOpenPlan(flags, pos);
     if (isDryRun(flags)) return outputDryRun(planned, io);
     const url = planned.steps.length > 1 ? planned.steps[1].params.url : '';
+    if (url && flags['reuse-window'] === true && flags.incognito !== true) {
+      // 复用已有 Agent Window：先确保窗口存在，再把会话直接绑定到它的标签页，省掉新建窗口的成本。
+      const ensured = await callRpc('window.ensureAgent', { focus: flags.focus === true }, Math.max(timeoutOf(flags), 15000)).catch(() => null);
+      if (ensured && ensured.ok && ensured.result && Number.isInteger(ensured.result.tabId)) {
+        planned.steps[0].params.tab = ensured.result.tabId;
+      }
+    }
     const started = await callStep(planned.steps[0], io);
     if (!started.ok) return outputFailure(started);
     const sessionId = (started.result || {}).sessionId;

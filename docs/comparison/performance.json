@@ -1,0 +1,155 @@
+{
+  "at": "2026-11-27T06:53:33.107Z",
+  "platform": "win32",
+  "node": "v24.22.3",
+  "cli": {
+    "version": {
+      "avgMs": 154.1,
+      "samples": [
+        135.1,
+        203.4,
+        144.7,
+        125.1,
+        162.1
+      ],
+      "code": 2
+    },
+    "observe": {
+      "avgMs": 178.6,
+      "samples": [
+        202.3,
+        159.8,
+        150.2,
+        202.5,
+        178.5
+      ],
+      "code": 0
+    },
+    "read": {
+      "avgMs": 160.8,
+      "samples": [
+        274.3,
+        136.1,
+        130.7,
+        127.2,
+        135.8
+      ],
+      "code": 0
+    },
+    "extract": {
+      "avgMs": 143.9,
+      "samples": [
+        145.7,
+        166.2,
+        140.1,
+        134.4,
+        133.2
+      ],
+      "code": 0
+    },
+    "click": {
+      "avgMs": 242.7,
+      "samples": [
+        245.2,
+        261.6,
+        258.8,
+        229,
+        218.9
+      ],
+      "code": 0
+    },
+    "screenshot": {
+      "avgMs": 303.3,
+      "samples": [
+        297.7,
+        295.9,
+        282.5,
+        340.5,
+        300
+      ],
+      "code": 0
+    },
+    "open(new)": {
+      "avgMs": 811.5,
+      "samples": [
+        790.5,
+        822.8,
+        821.2
+      ]
+    },
+    "open(reuse)": {
+      "avgMs": 218.9,
+      "samples": [
+        292.4,
+        190.9,
+        173.4
+      ]
+    }
+  },
+  "rpc": {
+    "observe": {
+      "avgMs": 37.4,
+      "samples": [
+        50.2,
+        34.9,
+        34.2,
+        35.1,
+        32.5
+      ]
+    },
+    "read": {
+      "avgMs": 18.9,
+      "samples": [
+        22.8,
+        15.3,
+        19.8,
+        18.2,
+        18.3
+      ]
+    },
+    "extract": {
+      "avgMs": 17.1,
+      "samples": [
+        15.6,
+        22.9,
+        15.1,
+        14,
+        18
+      ]
+    },
+    "click": {
+      "avgMs": 97.8,
+      "samples": [
+        95.1,
+        95.3,
+        85.5,
+        98.8,
+        114.4
+      ]
+    }
+  },
+  "plan": {
+    "lastCode": 0,
+    "lastOut": "{\"ok\":true,\"result\":{\"steps\":[{\"index\":0,\"method\":\"fill\",\"ok\":true,\"result\":{\"ok\":true,\"actual_value\":\"hello\",\"expected_value\":\"hello\",\"formatted\":false,\"matches\":true,\"effectState\":\"committed\",\"cleanupState\":\"ok\",\"phase\":\"pointer\",\"tx_id\":\"atx_00c\",\"journal_id\":\"aj_mwymkzww_wh5k_00c\",\"replayable\":f",
+    "avgMs": 614.1,
+    "samples": [
+      579.6,
+      592.6,
+      670.1
+    ]
+  },
+  "mcp": {
+    "initializeMs": 878.3,
+    "tools": 92,
+    "tool": "browser_extract",
+    "lastCode": "ok",
+    "avgMs": 95.9,
+    "samples": [
+      301.3,
+      77.1,
+      45.4,
+      37.4,
+      18.3
+    ]
+  }
+}
