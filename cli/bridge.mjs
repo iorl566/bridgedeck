@@ -14,7 +14,6 @@ import { charWidth, textWidth, padEndWidth, truncateText, renderTable, formatUpt
 import { ArgError, intFlag, requirePos, parseDurationMs, parseOnOff } from './lib/args.mjs';
 import { remuxFaststartBase64 } from './lib/video-remux.mjs';
 import { createPairCommand } from './commands/pair.mjs';
-import { createVideoCommand } from './commands/video.mjs';
 import { createAuditCommand } from './commands/audit.mjs';
 import { createRecipeCommand } from './commands/recipe.mjs';
 import { createRecordCommand } from './commands/record.mjs';
@@ -1327,7 +1326,7 @@ function writeVideoFile(base64, out, overwrite, options = {}) {
   return { target, buffer, trimmedBytes };
 }
 
-const cmdVideo = createVideoCommand({
+const __videoCtx = {
   withControl,
   callRpc,
   timeoutOf,
@@ -1347,7 +1346,15 @@ const cmdVideo = createVideoCommand({
   formatTime,
   renderTable,
   truncateText,
-});
+};
+let __videoCommand = null;
+const cmdVideo = async (...args) => {
+  if (!__videoCommand) {
+    const mod = await import('./commands/video.mjs');
+    __videoCommand = mod.createVideoCommand(__videoCtx);
+  }
+  return __videoCommand(...args);
+};
 
 const cmdRecord = createRecordCommand({
   withControl,

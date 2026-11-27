@@ -86,7 +86,11 @@ node tools/compare/report.mjs --run docs/comparison/runs/<id>
 
 **`click --accept-dialog` 一步式确认框（第 3 项）**：点击命中原生 confirm/alert/prompt 时，CLI 自动接受对话框并取回被挂起的原始点击结果（内部 `dialog.accept` + `operation.await`），不再需要手动两步。夹具页实测：`bridge click "#dlg-confirm" --accept-dialog` 返回 ok，随后 `#dlg-out` 读到 `accepted`。
 
-**待办（按优先级）**：
+**截图失败原因细分（第 4 项）**：`bridge screenshot` 失败现在带 `data.reason`——`capture` 表示扩展侧捕获失败，`write` 表示已捕获但本地写盘失败（附 `path` 与 `cause`，错误码 `E_SCREENSHOT`）。实测把 `--out` 指到不存在的 `Z:\\...`：返回 `E_SCREENSHOT`，`reason=write`，`cause=ENOENT`。
 
-1. `extract` 提速（目标接近 BSK 的 90–160ms；当前 211–289ms）；
-2. 截图落盘错误码细分（daemon 侧写盘失败 vs 扩展下载失败）。
+**`extract` 提速（第 1 项，进行中）**：已把最重的 `commands/video.mjs`（含 mediabunny 相关依赖）改为按需 `import()`，CLI 冷启动从 **156.5ms → 135.4ms**；extract 实测从 **211–289ms → 197–201ms**。剩余差距主要是 Node 进程启动（BSK 是原生二进制，`--version` 19.5ms vs node 156ms），下一轮继续 lazy-load 其余重模块（pair/batch/recipe/network/debug/trace，约 25–30ms），并把 RPC-only 延迟作为上限参考写进文档。
+
+**待办（下一轮）**：
+
+1. 继续 lazy-load 剩余重模块，目标把 extract 压到 ~170ms 内，并用 MCP/SDK 常驻进程的 RPC 延迟证明算法侧与 BSK 同量级；
+2. 复查截图 `reason=write` 在 daemon 侧写盘失败时的表现（当前 CLI 侧写盘路径已覆盖）。

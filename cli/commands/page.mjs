@@ -621,11 +621,27 @@ function normalizeWaitUntil(value) {
         params.region = { x: parts[0], y: parts[1], width: parts[2], height: parts[3] };
       }
       const body = await callRpc('screenshot', params, timeoutOf(flags));
-      if (!body.ok) return outputFailure(body);
+      if (!body.ok) {
+        // 细分：reason=capture 表示扩展侧捕获失败；reason=write 表示本地写盘失败。
+        if (body.error) body.error.data = { ...(body.error.data || {}), reason: 'capture' };
+        return outputFailure(body);
+      }
       const result = body.result || {};
-      const written = result.captureId
-        ? await writeStreamedCapture(out, result, flags)
-        : writeDataUrl(out, result.dataUrl);
+      let written;
+      try {
+        written = result.captureId
+          ? await writeStreamedCapture(out, result, flags)
+          : writeDataUrl(out, result.dataUrl);
+      } catch (error) {
+        return outputFailure({
+          ok: false,
+          error: {
+            code: 'E_SCREENSHOT',
+            message: '截图已捕获，但写入本地文件失败：' + ((error && error.message) || error),
+            data: { reason: 'write', path: out, cause: (error && error.code) || 'unknown' },
+          },
+        });
+      }
       const segmentPaths = [];
       if (Array.isArray(result.segments) && result.segments.length > 1) {
         const ext = path.extname(written.target);
