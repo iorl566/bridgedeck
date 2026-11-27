@@ -32,7 +32,7 @@
 ## 看看实际效果
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="BridgeDeck：弹窗、接管浮层、快捷功能" width="860" />
+  <img src="docs/assets/demo.gif" alt="BridgeDeck：弹窗、快捷功能、录制与网站调试" width="860" />
 </p>
 
 <p align="center">
