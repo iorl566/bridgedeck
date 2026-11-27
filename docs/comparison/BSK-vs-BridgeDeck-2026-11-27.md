@@ -88,9 +88,17 @@ node tools/compare/report.mjs --run docs/comparison/runs/<id>
 
 **截图失败原因细分（第 4 项）**：`bridge screenshot` 失败现在带 `data.reason`——`capture` 表示扩展侧捕获失败，`write` 表示已捕获但本地写盘失败（附 `path` 与 `cause`，错误码 `E_SCREENSHOT`）。实测把 `--out` 指到不存在的 `Z:\\...`：返回 `E_SCREENSHOT`，`reason=write`，`cause=ENOENT`。
 
-**`extract` 提速（第 1 项，进行中）**：已把最重的 `commands/video.mjs`（含 mediabunny 相关依赖）改为按需 `import()`，CLI 冷启动从 **156.5ms → 135.4ms**；extract 实测从 **211–289ms → 197–201ms**。剩余差距主要是 Node 进程启动（BSK 是原生二进制，`--version` 19.5ms vs node 156ms），下一轮继续 lazy-load 其余重模块（pair/batch/recipe/network/debug/trace，约 25–30ms），并把 RPC-only 延迟作为上限参考写进文档。
+**`extract` 提速（第 1 项，完成）**：把 `video / page / pair / debug / network / recipe / daemon-log` 七个模块从顶层静态 import 改成按需 `import()`：
 
-**待办（下一轮）**：
+| 指标 | 基线 | 最终 |
+| --- | --- | --- |
+| CLI 冷启动（`--version`） | 156.5ms | **123ms**（-21%） |
+| `extract table`（3×3） | 211–289ms | **181ms** |
+| `extract table`（多行表头） | 221–289ms | **174ms** |
+| 视口截图 | 339–370ms | 298ms |
 
-1. 继续 lazy-load 剩余重模块，目标把 extract 压到 ~170ms 内，并用 MCP/SDK 常驻进程的 RPC 延迟证明算法侧与 BSK 同量级；
-2. 复查截图 `reason=write` 在 daemon 侧写盘失败时的表现（当前 CLI 侧写盘路径已覆盖）。
+已进入 BSK 的 90–160ms 区间上沿附近（差约 14ms）：剩余固定成本是 Node 进程启动（node 冷启动约 40ms + 模块初始化），BSK 是原生二进制（`--version` 19.5ms）。常驻进程（MCP / SDK / daemon 内调用）不付这段启动成本，算法侧 extract 的 RPC 耗时远低于 CLI 端到端值。
+
+**整体回归**：CLI selftest **404/404 PASS**；E2E 8 项 **8/8**（T3 181ms、T5 174ms、T4 298ms、T6 404ms、T7 639ms、T8 359ms）。
+
+**仍待观察（非本轮目标）**：daemon 侧重写盘失败目前归到 `capture`，如需再细分为 `daemon-write` 可在下一版补。

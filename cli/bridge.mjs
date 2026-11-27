@@ -13,21 +13,17 @@ import { spawn } from 'node:child_process';
 import { charWidth, textWidth, padEndWidth, truncateText, renderTable, formatUptime, formatTime, formatLease, formatBytes } from './lib/format.mjs';
 import { ArgError, intFlag, requirePos, parseDurationMs, parseOnOff } from './lib/args.mjs';
 import { remuxFaststartBase64 } from './lib/video-remux.mjs';
-import { createPairCommand } from './commands/pair.mjs';
 import { createAuditCommand } from './commands/audit.mjs';
-import { createRecipeCommand } from './commands/recipe.mjs';
 import { createRecordCommand } from './commands/record.mjs';
 import { createTabCommand } from './commands/tab.mjs';
 import { createWindowCommand } from './commands/window.mjs';
 import { createDialogCommand } from './commands/dialog.mjs';
-import { createNetworkCommand } from './commands/network.mjs';
 import { createEmulateCommand } from './commands/emulate.mjs';
 import { createSessionCommand } from './commands/session.mjs';
 import { createExtractCommand } from './commands/extract.mjs';
 import { createDaemonCommand } from './commands/daemon.mjs';
 import { createBatchCommand } from './commands/batch.mjs';
 import { createLeaseCommand } from './commands/lease.mjs';
-import { createPageCommand } from './commands/page.mjs';
 import { downloadCommand, uploadCommand } from './commands/files.mjs';
 import { uiCommand, settingsCommand } from './commands/ui-settings.mjs';
 import { longshotCommand, refsCommand } from './commands/misc.mjs';
@@ -42,9 +38,7 @@ import { createAgentCommands } from './commands/agent.mjs';
 import { createStatusCommands } from './commands/status.mjs';
 import { createWebmcpCommands } from './commands/webmcp.mjs';
 import { mcpInstallCommand } from './commands/mcp-install.mjs';
-import { createDaemonLogCommands } from './commands/daemon-log.mjs';
 import { createReleaseHelpers } from './commands/release-helpers.mjs';
-import { createDebugCommand } from './commands/debug.mjs';
 import { createDoctorCommand } from './commands/doctor.mjs';
 import { createUpdateCommand } from './commands/update.mjs';
 import { createUpdateOps } from './commands/update-ops.mjs';
@@ -806,9 +800,23 @@ function parseModifiers(value) {
 
 
 
-const daemonLogCommands = createDaemonLogCommands({
+const __daemonLogCommandsCtx = {
   LOG_PATH, formatBytes, emitJson, isJson: () => jsonMode, print,
-});
+};
+let __daemonLog = null;
+const __getDaemonLog = async () => {
+  if (!__daemonLog) {
+    const mod = await import('./commands/daemon-log.mjs');
+    __daemonLog = mod.createDaemonLogCommands(__daemonLogCommandsCtx);
+  }
+  return __daemonLog;
+};
+const daemonLogCommands = {
+  async cmdDaemonLog(...args) {
+    const commands = await __getDaemonLog();
+    return commands.cmdDaemonLog(...args);
+  },
+};
 
 const cmdDaemon = createDaemonCommand({
   SERVER_PATH,
@@ -908,7 +916,7 @@ const cmdWindow = createWindowCommand({
   ArgError,
 });
 
-const cmdPage = createPageCommand({
+const __cmdPageCtx = {
   withControl,
   withSession,
   callRpc,
@@ -932,7 +940,15 @@ const cmdPage = createPageCommand({
   waitForNavigationAfterClick,
   withNavigationProbe,
   writeFileAtomic,
-});
+};
+let __cmdPage = null;
+const cmdPage = async (...args) => {
+  if (!__cmdPage) {
+    const mod = await import('./commands/page.mjs');
+    __cmdPage = mod.createPageCommand(__cmdPageCtx);
+  }
+  return __cmdPage(...args);
+};
 
 /**
  * 给页面命令补上 session：--session > --session-scope > BB_SESSION > BB_SESSION_SCOPE > daemon 单会话默认。
@@ -1260,7 +1276,7 @@ const cooperateCommands = createCooperateCommands({
   callRpc, withControl, timeoutOf, outputFailure, outputJsonBody, print, isJson: () => jsonMode, intFlag, parseDurationMs, ArgError, BridgeError, requirePos,
 });
 
-const cmdPair = createPairCommand({
+const __cmdPairCtx = {
   callRpc,
   timeoutOf,
   outputFailure,
@@ -1271,7 +1287,15 @@ const cmdPair = createPairCommand({
   formatTime,
   truncateText,
   BridgeError,
-});
+};
+let __cmdPair = null;
+const cmdPair = async (...args) => {
+  if (!__cmdPair) {
+    const mod = await import('./commands/pair.mjs');
+    __cmdPair = mod.createPairCommand(__cmdPairCtx);
+  }
+  return __cmdPair(...args);
+};
 
 
 
@@ -1466,7 +1490,7 @@ async function cmdHelpTopic(topic) {
 /** trace：CDP 性能追踪（start/stop/status）与 Trace v3 离线查看。 */
 
 
-const cmdDebug = createDebugCommand({
+const __cmdDebugCtx = {
   withControl,
   callRpc,
   timeoutOf,
@@ -1482,11 +1506,19 @@ const cmdDebug = createDebugCommand({
   pickJsonPointer,
   filterDebugEntries,
   HOME_DIR,
-});
+};
+let __cmdDebug = null;
+const cmdDebug = async (...args) => {
+  if (!__cmdDebug) {
+    const mod = await import('./commands/debug.mjs');
+    __cmdDebug = mod.createDebugCommand(__cmdDebugCtx);
+  }
+  return __cmdDebug(...args);
+};
 
 
 
-const cmdNetwork = createNetworkCommand({
+const __cmdNetworkCtx = {
   withControl,
   callRpc,
   timeoutOf,
@@ -1500,7 +1532,15 @@ const cmdNetwork = createNetworkCommand({
   requirePos,
   intFlag,
   ArgError,
-});
+};
+let __cmdNetwork = null;
+const cmdNetwork = async (...args) => {
+  if (!__cmdNetwork) {
+    const mod = await import('./commands/network.mjs');
+    __cmdNetwork = mod.createNetworkCommand(__cmdNetworkCtx);
+  }
+  return __cmdNetwork(...args);
+};
 
 const cmdEmulate = createEmulateCommand({
   withControl,
@@ -1645,7 +1685,7 @@ function copySkillDir(source, targetDir) {
   return out;
 }
 
-const cmdRecipe = createRecipeCommand({
+const __cmdRecipeCtx = {
   recipeDir: RECIPE_DIR,
   executeRecipeBlocks,
   isJson: () => jsonMode,
@@ -1661,7 +1701,15 @@ const cmdRecipe = createRecipeCommand({
   timeoutOf,
   renderTable,
   spec: COMMAND_SPECS.recipe,
-});
+};
+let __cmdRecipe = null;
+const cmdRecipe = async (...args) => {
+  if (!__cmdRecipe) {
+    const mod = await import('./commands/recipe.mjs');
+    __cmdRecipe = mod.createRecipeCommand(__cmdRecipeCtx);
+  }
+  return __cmdRecipe(...args);
+};
 
 function parseSince(text) {
   if (text === undefined) return 0;
