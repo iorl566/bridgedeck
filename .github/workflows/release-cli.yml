@@ -22,12 +22,13 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
     steps:
-      - name: Release brand scan
-        run: node tools/release-brand-scan.mjs
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
+
+      - name: Release brand scan
+        run: node tools/release-brand-scan.mjs
 
       - name: Resolve version
         id: version
