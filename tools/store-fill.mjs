@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const NODE = process.execPath;
 const BRIDGE = path.join(ROOT, 'cli', 'bridge.mjs');
-const LOGO = path.join(ROOT, 'docs', 'assets', 'store', 'icon-300.png');
+const LOGO = process.env.BRIDGEDECK_LOGO || path.join(ROOT, 'docs', 'assets', 'store', 'icon-300.png');
 const LISTINGS_URL = 'https://partner.microsoft.com/zh-cn/dashboard/microsoftedge/0fc99cde-b63d-40a6-9101-1849797a0d8f/listings';
 
 function arg(name, fallback = '') {
@@ -113,7 +113,7 @@ function panelState() {
       open: text.includes('保存草稿'),
       header: (text.split('\\n').find((line) => line.includes('的详细信息')) || '').trim(),
       descLen: area ? area.value.length : -1,
-      logoReady: logoImg || text.includes('为所有语言复制此徽标'),
+      logoReady: logoSection ? [...logoSection.querySelectorAll('img')].some((i) => /blob\\.core\\.windows\\.net/.test(i.src)) : false,
       saveDisabled: save ? save.hasAttribute('disabled') : null,
     });
   })()`;
@@ -158,6 +158,9 @@ function setDescription(text) {
     if (!area) return JSON.stringify({ ok: false, reason: 'no-textarea' });
     area.focus();
     const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    // 先写临时值再写最终值：强制触发 dirty，否则内容没变化时“保存草稿”是禁用的。
+    setter.call(area, ${JSON.stringify(text)} + ' ');
+    area.dispatchEvent(new Event('input', { bubbles: true }));
     setter.call(area, ${JSON.stringify(text)});
     area.dispatchEvent(new Event('input', { bubbles: true }));
     area.dispatchEvent(new Event('change', { bubbles: true }));
@@ -168,12 +171,14 @@ function setDescription(text) {
 }
 
 function tagLogoInput() {
+  // 走 UI 的“添加图像”按钮 + 文件选择器拦截，比直接给隐藏 input 赋值可靠
+  // （后者在 Partner Center 上会偶发服务端“文件上传已失败”）。
   const expression = `(() => {
-    const inputs = [...document.querySelectorAll('input[name="fileuploader"]')];
-    if (!inputs.length) return JSON.stringify({ ok: false });
-    inputs.forEach((e) => e.removeAttribute('id'));
-    inputs[0].id = 'bb-logo-input';
-    return JSON.stringify({ ok: true, total: inputs.length });
+    const adds = [...document.querySelectorAll('*')].filter((e) => e.tagName === 'V6_HE-BUTTON' && (e.textContent || '').trim() === '添加图像');
+    if (!adds.length) return JSON.stringify({ ok: false });
+    adds.forEach((e) => e.removeAttribute('id'));
+    adds[0].id = 'bb-logo-add';
+    return JSON.stringify({ ok: true, count: adds.length });
   })()`;
   return JSON.parse(evaluate(expression));
 }
@@ -252,14 +257,15 @@ async function fillOne(label, locale) {
   if (!(state.header || '').includes(label)) throw new Error(`面板语言不匹配：期望 ${label}，实际 ${state.header}`);
   console.log(`  面板：${state.header}`);
 
-  if (!SKIP_UPLOAD) {
+  if (!SKIP_UPLOAD && !state.logoReady) {
     const tagged = tagLogoInput();
-    if (!tagged.ok) throw new Error('找不到徽标 file input');
-    const upload = bridge(['upload', '#bb-logo-input', '--file', LOGO], 180000);
-    console.log('  上传：' + JSON.stringify((upload.result && upload.result.names) || upload.result));
-    const ready = await waitFor('徽标预览出现', () => panelState().logoReady, 30000);
-    console.log('  徽标预览：已出现');
-    if (!ready) throw new Error('徽标预览没出现');
+    if (!tagged.ok) throw new Error('找不到“添加图像”按钮');
+    const upload = bridge(['upload', '#bb-logo-add', '--file', LOGO], 180000);
+    console.log('  上传：' + JSON.stringify(upload.result && upload.result.via ? upload.result.via : upload.result));
+    await waitFor('徽标上传完成', () => panelState().logoReady, 60000);
+    console.log('  徽标：已上传');
+  } else {
+    console.log('  徽标：已有，跳过上传');
   }
 
   const set = setDescription(description);

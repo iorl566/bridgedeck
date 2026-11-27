@@ -11,8 +11,9 @@
 | 商店 ID（CRX） | `ieflpefpmlmmlfgmpfakaglhgmcbcnig` |
 | 线上版本 | 0.3.0（0.3.1 待提交） |
 | 0.3.1 draft 包 | 已上传，最近一次 operation `acfc5b64-b1f1-4149-84ae-d99c9da21cd5`，状态 `Succeeded` |
-| 提交审核 | 2026-11-27 10:40 试过 `POST /submissions` → `Failed`，`ModuleStateUnPublishable`，`errors: ["Invalid module : LISTING"]`：**包没问题，是 listing 没填完** |
-| 商店 listing | **未完成**：13 个语言行只有 en-US 有内容；Website 仍是 `example.com`；隐私 URL 是旧地址 |
+| 提交审核 | **已提交（2026-11-27 11:45）**：submission `1152921505702520664`，publish operation `5f5c3dd1-ca0f-43b1-a079-9ac3dc05cd1b`，状态 `Succeeded`；Partner Center 显示「正在审阅，预计 7 个工作日」 |
+| 商店 listing | **13 个语言行全部「已完成」**（描述 + 300×300 徽标）；Website 仍是 `example.com`（Properties 里可再改） |
+| 线上版本 | 审核通过前仍是 0.3.0 |
 | 凭证 | `D:\BridgeDeck-secrets\edge-api-key.txt`、`edge-client-id.txt`、`edge-product-id.txt`（均在仓库外） |
 
 已确认 API 链路可用：`POST /submissions/draft/package` 上传成功即说明 API Key、Client ID、产品 ID 三者匹配。
@@ -120,3 +121,13 @@ $j | Select-Object name,version,shortDescription,privacyUrl,publisherWebsiteUri,
 3. 更新 `docs/assets/store/certification-notes-<version>.md`，并把 `tools/publish-edge.ps1` 与 workflow
    里的路径一起改掉；
 4. 文案有变化时同步 `docs/store-listing/*.md` 并跑 `validate.mjs`。
+
+## 9. 本次实际执行记录（2026-11-27）
+
+全部由 BridgeDeck 自己驱动已登录的 Partner Center 完成（会话 `ecuv`），可复用的经验：
+
+- **13 个语言行来自包内 `_locales/`**：manifest 用 `__MSG_*` 占位符，上传 0.3.1 后 Partner Center 自动列出 13 行；少一行 `发布` 就灰着，API 也会回 `Invalid module : LISTING`。
+- **描述填写**：Angular formly 的 textarea 直接 `.value=` 不触发保存按钮；需要原生 setter + `input`/`change` + **blur**，再等「保存草稿」变可用。
+- **徽标上传**：给隐藏 `input[type=file]` 赋值会偶发服务端「文件上传已失败」；**必须点「添加图像」按钮走文件选择器拦截**（`bridge upload <按钮选择器> --file ...`，结果 `via: "chooser"`），等预览图变成 `*.blob.core.windows.net` 才算真上传。
+- **某语言行卡死时**：`移除` 该语言行 → 用「添加语言」重新加回来（重建行状态），再上传即可；西语行就是这么救回来的。
+- **发布**：13 行全 `已完成` 后，`tools\publish-edge.ps1` 直接返回 `Succeeded`，审核开始。脚本：`tools/store-fill.mjs`（填行）、`tools/publish-edge.ps1`（提交）。
