@@ -202,7 +202,19 @@ const adapters = {
       }, 120000);
     },
     async cli(args, options = {}) {
-      return run(BSK_EXE, args, { ...options, env: { ...this.env, ...(options.env || {}) } });
+      const first = await run(BSK_EXE, args, { ...options, env: { ...this.env, ...(options.env || {}) } });
+      if (first.code === 0 && !/observation_required|permission_denied/.test(first.stdout)) return first;
+      // bsk 默认 strict：每个动作都要一次未使用过的 cooperate sync 观察。
+      const sync = await run(BSK_EXE, ['sync', '--json'], { ...options, env: { ...this.env, ...(options.env || {}) } });
+      let observationId = null;
+      try {
+        const parsed = JSON.parse(sync.stdout.slice(sync.stdout.indexOf('{')));
+        observationId = parsed.observation_id || null;
+      } catch {
+        observationId = null;
+      }
+      if (!observationId) return first;
+      return run(BSK_EXE, [...args, '--observation', observationId], { ...options, env: { ...this.env, ...(options.env || {}) } });
     },
     async teardown() {
       try { await this.cli(['close'], { timeoutMs: 20000 }); } catch { /* ignore */ }
@@ -251,6 +263,7 @@ const FIXTURE = 'http://127.0.0.1:__FIXTURE_PORT__/test.html';
 const tasks = [
   {
     id: 'T1',
+    phase: 'e2e',
     title: '打开页面并读取结构',
     async run(tool, ctx) {
       const open = tool.name === 'bsk'
@@ -263,6 +276,7 @@ const tasks = [
   },
   {
     id: 'T2',
+    phase: 'e2e',
     title: '填表 + 提交 + 回读结果',
     async run(tool, ctx) {
       const steps = [];
@@ -273,35 +287,34 @@ const tasks = [
         total += result.ms;
         return result;
       };
-      async function doSteps() {
-        await call(['fill', '#kw', '--value', 'hello', '--json']);
-        await call(['select', '#kind', '--value', 'b', '--json']);
-        await call(['click', '#agree', '--json']);
-        await call(['click', '#submit-btn', '--json']);
-        return call(['read', '--selector', '#out', '--json']);
-      }
-      const read = await doSteps();
+      await call(['fill', '#kw', '--value', 'hello', '--json']);
+      await call(['select', '#kind', '--value', 'b', '--json']);
+      await call(['click', '#agree', '--json']);
+      await call(['click', '#submit-btn', '--json']);
+      const read = await call(['read', '--selector', '#out', '--json']);
       const ok = read.code === 0 && read.stdout.includes('clicked:hello:b:yes');
       return {
         ok,
         steps: steps.length,
         ms: total,
-        detail: ok ? '结果文本 clicked:hello:b:yes 与预期一致' : `回读失败：${read.stdout.slice(0, 400)} ${read.stderr.slice(0, 200)}`,
-        raw: steps.map((s) => `${s.args.join(' ')} -> ${s.code} (${s.ms}ms)`).join('\n') + '\n' + read.stdout.slice(0, 2000),
+        detail: ok ? '结果文本 clicked:hello:b:yes 与预期一致' : `回读失败：${read.stdout.slice(0, 300)}`,
+        raw: steps.map((s) => `${s.args.join(' ')} -> ${s.code} (${s.ms}ms)`).join('\n') + '\n' + read.stdout.slice(0, 1500),
       };
     },
   },
   {
     id: 'T3',
-    title: '表格提取（人员表 3×3）',
+    phase: 'e2e',
+    title: '基础表格提取（3×3）',
     async run(tool, ctx) {
       const result = await tool.cli(['extract', 'table', '--selector', '#people', '--json']);
       const ok = result.code === 0 && ['张三', '北京', '李四', '上海', '王五', '深圳'].every((value) => result.stdout.includes(value));
-      return { ok, steps: 1, ms: result.ms, detail: ok ? '6 个单元格值齐全' : `提取失败：${result.stdout.slice(0, 400)}`, raw: result.stdout.slice(0, 4000) };
+      return { ok, steps: 1, ms: result.ms, detail: ok ? '6 个单元格值齐全' : `提取失败：${result.stdout.slice(0, 300)}`, raw: result.stdout.slice(0, 3000) };
     },
   },
   {
     id: 'T4',
+    phase: 'e2e',
     title: '视口截图落盘',
     async run(tool, ctx) {
       const out = path.join(ctx.runDir, 'shots', `${tool.name}-viewport.png`);
@@ -314,10 +327,135 @@ const tasks = [
       if (source !== out && fs.existsSync(source)) fs.copyFileSync(source, out);
       const size = fs.existsSync(out) ? fs.statSync(out).size : 0;
       const ok = result.code === 0 && size > 5000;
-      return { ok, steps: 1, ms: result.ms, detail: ok ? `PNG ${size} 字节` : `截图失败：${result.stdout.slice(0, 300)}`, raw: result.stdout.slice(0, 1500) };
+      return { ok, steps: 1, ms: result.ms, detail: ok ? `PNG ${size} 字节` : `截图失败：${result.stdout.slice(0, 220)}`, raw: result.stdout.slice(0, 1200) };
+    },
+  },
+  {
+    id: 'T5',
+    phase: 'e2e',
+    title: '多行表头表格提取',
+    async run(tool, ctx) {
+      const result = await tool.cli(['extract', 'table', '--selector', '#multi-head', '--json']);
+      const needed = ['等级', '金额', '小', '大', 'A', '1', '2', '3', '4'];
+      const ok = result.code === 0 && needed.every((value) => result.stdout.includes(value));
+      return { ok, steps: 1, ms: result.ms, detail: ok ? 'rowspan/colspan 表头与单元格齐全' : `提取不完整：${result.stdout.slice(0, 300)}`, raw: result.stdout.slice(0, 3000) };
+    },
+  },
+  {
+    id: 'T6',
+    phase: 'e2e',
+    title: 'closed shadow 按钮点击',
+    async run(tool, ctx) {
+      let clicked;
+      if (tool.name === 'bsk') {
+        let ref = null;
+        for (const args of [['observe', '--json'], ['snapshot', '--json'], ['observe', '--closed-shadow', '--json']]) {
+          const probe = await tool.cli(args);
+          const parsed = parseJson(probe.stdout);
+          let vom = '';
+          if (parsed) {
+            vom = parsed.text || (parsed.result && parsed.result.text) || (parsed.data && parsed.data.text) || '';
+            if (!vom) vom = JSON.stringify(parsed);
+          }
+          const match = /(@e\d+)\s+button\s+"封闭按钮"/.exec(vom);
+          if (match) { ref = match[1]; break; }
+        }
+        clicked = ref ? await tool.cli(['click', ref, '--json']) : { code: null, ms: 0, stdout: 'VOM 里没找到封闭按钮 ref' };
+      } else {
+        clicked = await tool.cli(['click', '--closed-shadow-text', '封闭按钮', '--json']);
+      }
+      const read = await tool.cli(['read', '--selector', '#closed-result', '--json']);
+      const ok = read.code === 0 && read.stdout.includes('closed-clicked');
+      return { ok, steps: 2, ms: (clicked.ms || 0) + read.ms, detail: ok ? 'closed shadow 内按钮点击生效' : `点击/回读失败：${(clicked.stdout || '').slice(0, 200)} | ${read.stdout.slice(0, 200)}`, raw: ((clicked.stdout || '') + '\n' + read.stdout).slice(0, 2500) };
+    },
+  },
+  {
+    id: 'T7',
+    phase: 'e2e',
+    title: '原生 confirm 对话框',
+    async run(tool, ctx) {
+      const clicked = await tool.cli(['click', '#dlg-confirm', '--json']);
+      let dialogId = null;
+      let operationId = null;
+      const parsed = parseJson(clicked.stdout);
+      const data = parsed && parsed.data ? parsed.data : null;
+      if (data && data.dialog && data.dialog.id) {
+        dialogId = String(data.dialog.id);
+        operationId = data.operation_id || null;
+      }
+      if (!dialogId) {
+        const list = await tool.cli(['dialog', 'list', '--json']);
+        const parsedList = parseJson(list.stdout);
+        const dialogs = (parsedList && (parsedList.dialogs || (parsedList.result && parsedList.result.dialogs))) || [];
+        if (dialogs.length) dialogId = String(dialogs[0].id);
+      }
+      if (!dialogId) {
+        return { ok: false, steps: 2, ms: clicked.ms || 0, detail: '点击后没有检测到待处理对话框', raw: clicked.stdout.slice(0, 600) };
+      }
+      const accept = await tool.cli(['dialog', 'accept', dialogId, '--json']);
+      let opMs = 0;
+      if (operationId) {
+        const op = await tool.cli(['operation', 'await', operationId, '--json']);
+        opMs = op.ms || 0;
+      }
+      await sleep(600);
+      const read = await tool.cli(['read', '--selector', '#dlg-out', '--json']);
+      const ok = read.code === 0 && read.stdout.includes('accepted');
+      return { ok, steps: 3, ms: (clicked.ms || 0) + accept.ms + opMs + read.ms, detail: ok ? 'confirm 被接受，结果 accepted' : `对话框处理失败：${accept.stdout.slice(0, 200)} | ${read.stdout.slice(0, 200)}`, raw: ((clicked.stdout || '') + '\n' + accept.stdout + '\n' + read.stdout).slice(0, 2500) };
+    },
+  },
+  {
+    id: 'T8',
+    phase: 'e2e',
+    title: '文件上传',
+    async run(tool, ctx) {
+      const file = path.join(ctx.runDir, 'upload-sample.txt');
+      ensureDir(path.dirname(file));
+      fs.writeFileSync(file, 'bridgedeck compare upload\n', 'utf8');
+      const upload = tool.name === 'bsk'
+        ? await tool.cli(['upload', '--selector', '#file', '--file', file, '--json'])
+        : await tool.cli(['upload', '#file', '--file', file, '--json']);
+      await sleep(600);
+      const read = await tool.cli(['read', '--selector', '#file-out', '--json']);
+      const ok = upload.code === 0 && read.stdout.includes('upload-sample.txt');
+      return { ok, steps: 2, ms: upload.ms + read.ms, detail: ok ? 'file input 收到 upload-sample.txt' : `上传失败：${upload.stdout.slice(0, 200)} | ${read.stdout.slice(0, 200)}`, raw: (upload.stdout + '\n' + read.stdout).slice(0, 2500) };
+    },
+  },
+  {
+    id: 'R1',
+    phase: 'real',
+    title: '真实站点：example.com',
+    async run(tool, ctx) {
+      const args = tool.name === 'bsk' ? ['open', 'https://example.com/', '--json'] : ['open', 'https://example.com/', '--observe', '--json'];
+      const open = await tool.cli(args);
+      const ok = open.code === 0 && open.stdout.includes('Example Domain');
+      return { ok, steps: 1, ms: open.ms, detail: ok ? 'VOM 中读到 Example Domain' : `失败：${open.stdout.slice(0, 240)}`, raw: open.stdout.slice(0, 2500) };
+    },
+  },
+  {
+    id: 'R2',
+    phase: 'real',
+    title: '真实站点：GitHub 仓库页',
+    async run(tool, ctx) {
+      const args = tool.name === 'bsk' ? ['open', 'https://github.com/iorl566/bridgedeck', '--json'] : ['open', 'https://github.com/iorl566/bridgedeck', '--observe', '--json'];
+      const open = await tool.cli(args);
+      const ok = open.code === 0 && open.stdout.includes('BridgeDeck');
+      return { ok, steps: 1, ms: open.ms, detail: ok ? '仓库页标题/README 可读' : `失败：${open.stdout.slice(0, 240)}`, raw: open.stdout.slice(0, 3000) };
+    },
+  },
+  {
+    id: 'R3',
+    phase: 'real',
+    title: '真实站点：Microsoft Learn 文档',
+    async run(tool, ctx) {
+      const args = tool.name === 'bsk' ? ['open', 'https://learn.microsoft.com/en-us/microsoft-edge/extensions/', '--json'] : ['open', 'https://learn.microsoft.com/en-us/microsoft-edge/extensions/', '--observe', '--json'];
+      const open = await tool.cli(args);
+      const ok = open.code === 0 && open.stdout.includes('Microsoft Edge');
+      return { ok, steps: 1, ms: open.ms, detail: ok ? '文档页可读' : `失败：${open.stdout.slice(0, 240)}`, raw: open.stdout.slice(0, 3000) };
     },
   },
 ];
+
 
 // ---------------------------------------------------------------- 主流程
 
@@ -364,7 +502,9 @@ async function main() {
 
   try {
     await tool.setup();
-    for (const task of tasks) {
+    const phase = arg('--phase', 'all');
+    const selected = tasks.filter((task) => phase === 'all' || task.phase === phase);
+    for (const task of selected) {
       process.stdout.write(`  ${task.id} ${task.title} … `);
       let outcome;
       try {

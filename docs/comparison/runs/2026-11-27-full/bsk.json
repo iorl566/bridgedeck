@@ -1,0 +1,46 @@
+{
+  "tool": "bsk",
+  "display": "BSK 0.5.0",
+  "startedAt": "2026-11-27T04:01:22.292Z",
+  "url": "http://127.0.0.1:54794/test.html",
+  "tasks": [
+    {
+      "id": "R1",
+      "title": "真实站点：example.com",
+      "ok": true,
+      "steps": 1,
+      "ms": 1064,
+      "detail": "VOM 中读到 Example Domain",
+      "raw": "{\n  \"context_id\": \"2303f8ca-c3b8-4cfa-ac63-4e39a269d45b\",\n  \"ctx\": \"c1\",\n  \"history_complete\": false,\n  \"obs\": \"o1\",\n  \"observation_id\": \"5a4d48d2-80ad-4732-a362-48a25231977a\",\n  \"session_id\": \"sylg\",\n  \"tab_id\": 1769050108,\n  \"title\": \"\",\n  \"url\": \"https://example.com/\",\n  \"vom\": \"@vom 1\\n@view 1256x801\\n@layers 1 focus=L1\\nL1 page\\n  RootWebArea \\\"Example Domain\\\"\\n    paragraph \\\"该域名仅用于文档示例，无需获得许可。这并非一项服务，请勿将其用于测试和监控目的。\\\"\\n    paragraph \\\"This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.\\\"\\n    paragraph \\\"هذا النطاق مُخصص للاستخدام في أمثلة التوثيق دون الحاجة إلى إذن. هذه ليست خدمة، يُرجى تجنب الاعتماد عليها لأغراض الاختبار والمراقبة.\\\"\\n    paragraph \\\"L’usage de ce domaine est réservé à des exemples de documentation, sans autorisation préalable. Il ne s’agit pas d’un service ; son utilisation à des fins de test ou de surveillance est à éviter.\\\"\\n    paragraph \\\"Данный домен предназначен для использования в примерах документации без необходимости получения предварительного разрешения. Это не сервис; не рекомендуется его использование для тестирования и мониторинга.\\\"\\n    paragraph \\\"Este dominio está destinado al uso en ejemplos de documentación sin necesidad de permiso. Esto no es un servicio; evitar utilizarlo para realizar pruebas o monitoreos.\\\"\\n    @e1 link \\\"Learn more\\\" [→ iana.org]\"\n}"
+    },
+    {
+      "id": "R2",
+      "title": "真实站点：GitHub 仓库页",
+      "ok": false,
+      "steps": 1,
+      "ms": 31301,
+      "detail": "失败：{\n  \"code\": \"not_found\",\n  \"message\": \"Document changed during observation; observe again\",\n  \"hint\": \"rerun `bsk observe` for the current tab and use one of the returned refs\",\n  \"exit_code\": 1,\n  \"data\": {\n    \"reason\": \"ref_not_found\"\n  ",
+      "raw": "{\n  \"code\": \"not_found\",\n  \"message\": \"Document changed during observation; observe again\",\n  \"hint\": \"rerun `bsk observe` for the current tab and use one of the returned refs\",\n  \"exit_code\": 1,\n  \"data\": {\n    \"reason\": \"ref_not_found\"\n  }\n}"
+    },
+    {
+      "id": "R3",
+      "title": "真实站点：Microsoft Learn 文档",
+      "ok": false,
+      "steps": 1,
+      "ms": 784,
+      "detail": "失败：{\n  \"code\": \"permission_denied\",\n  \"message\": \"The strict observation changed before this action\",\n  \"hint\": \"For data, use read/extract (fixed passive DOM queries) without another sync. For a visual action, synchronize and reconsider; use ",
+      "raw": "{\n  \"code\": \"permission_denied\",\n  \"message\": \"The strict observation changed before this action\",\n  \"hint\": \"For data, use read/extract (fixed passive DOM queries) without another sync. For a visual action, synchronize and reconsider; use a DOM target with explicit expect facts when possible.\",\n  \"exit_code\": 1,\n  \"data\": {\n    \"effect_state\": \"none\",\n    \"observation_id\": \"01a5896e-420f-426b-8f85-fb54444d3d58\",\n    \"observed_change\": {\n      \"after\": \"Open more actions menu Latest commit BridgeDeck Dev failure 2 hours ago · 2 hou…\",\n      \"before\": \"Open more actions menu Latest commit BridgeDeck Dev failure 2 hours ago · 2 hou…\",\n      \"change\": \"changed\",\n      \"field\": \"name\",\n      \"name\": \"Open more actions menu Latest commit BridgeDeck Dev failure 2 hours ago · 2 hou…\",\n      \"part\": \"region\",\n      \"phase\": \"decision\",\n      \"role\": \"none\",\n      \"scope\": \"page\"\n    },\n    \"observed_changes\": {\n      \"added\": 65,\n      \"changed\": 64,\n      \"examples\": [\n        {\n          \"after\": \"relative-time\",\n          \"before\": \"\",\n          \"change\": \"changed\",\n          \"field\": \"tag\",\n          \"name\": \"Nov 27, 2026, 08:23 GMT+8\",\n          \"part\": \"region\",\n          \"role\": \"generic\"\n        },\n        {\n          \"after\": \"relative-time\",\n          \"before\": \"\",\n          \"change\": \"changed\",\n          \"field\": \"tag\",\n          \"name\": \"Nov 27, 2026, 08:21 GMT+8\",\n          \"part\": \"region\",\n          \"role\": \"generic\"\n        },\n        {\n          \"after\": \"relative-time\",\n          \"before\": \"\",\n          \"change\": \"changed\",\n          \"field\": \"tag\",\n          \"name\": \"Nov 13, 2026, 18:05 GMT+8\",\n          \"part\": \"region\",\n          \"role\": \"generic\"\n        },\n        {\n          \"after\": \"relative-time\",\n          \"before\": \"\",\n          \"change\": \"changed\",\n          \"field\": \"tag\",\n          \"name\": \"Nov 27, 2026, 08:21 GMT+8\",\n          \"part\": \"region\",\n          \"role\": \"generic\"\n        },\n        {\n          \"after\": \"relative-time\",\n          \"before\": \"\",\n          \"change\": \"changed\",\n          \"field\": \"tag\",\n          \"name\": \"Nov 27, 2026, 08:21 GMT+8\",\n          \"part\": \"region\",\n          \"role\": \"generic\"\n        }\n      ],\n      \"removed\": 0\n    },\n    \"phase\": \"observation\",\n    \"reason\": \"observation_changed\",\n    \"recovery\": \"For data, use read/extract (fixed passive DOM queries) without another sync. For a visual action, synchronize and reconsider; use a DOM target with explicit expect facts when possible.\"\n  }\n}"
+    }
+  ],
+  "environment": {
+    "edge": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "node": "v24.22.3",
+    "os": "win32"
+  },
+  "finishedAt": "2026-11-27T04:01:59.692Z",
+  "summary": {
+    "ok": 1,
+    "total": 3,
+    "totalMs": 33149
+  }
+}
