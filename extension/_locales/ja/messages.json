@@ -1,0 +1,8 @@
+{
+  "extName": {
+    "message": "BridgeDeck"
+  },
+  "extDescription": {
+    "message": "BridgeDeck は、ログイン済みのブラウザを AI エージェントのワークスペースに変えます。ローカル daemon + MV3 拡張機能、テレメトリなし。"
+  }
+}

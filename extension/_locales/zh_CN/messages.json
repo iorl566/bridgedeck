@@ -1,0 +1,8 @@
+{
+  "extName": {
+    "message": "BridgeDeck"
+  },
+  "extDescription": {
+    "message": "BridgeDeck 把已登录的浏览器变成 AI Agent 的工作区：本地 daemon + MV3 扩展，数据只在本机流转。"
+  }
+}

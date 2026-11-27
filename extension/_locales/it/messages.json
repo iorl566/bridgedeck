@@ -1,0 +1,8 @@
+{
+  "extName": {
+    "message": "BridgeDeck"
+  },
+  "extDescription": {
+    "message": "BridgeDeck trasforma il browser già connesso in uno spazio di lavoro per il tuo agente IA. Daemon locale + estensione MV3, senza telemetria."
+  }
+}

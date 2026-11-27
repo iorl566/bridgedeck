@@ -1,0 +1,8 @@
+{
+  "extName": {
+    "message": "BridgeDeck"
+  },
+  "extDescription": {
+    "message": "BridgeDeck macht aus deinem bereits angemeldeten Browser einen Arbeitsbereich für deinen KI-Agenten. Lokaler Daemon + MV3-Erweiterung, keine Telemetrie."
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "extName": {
+    "message": "BridgeDeck"
+  },
+  "extDescription": {
+    "message": "BridgeDeck은 이미 로그인된 브라우저를 AI 에이전트의 작업 공간으로 바꿉니다. 로컬 daemon + MV3 확장 프로그램, 텔레메트리 없음."
+  }
+}

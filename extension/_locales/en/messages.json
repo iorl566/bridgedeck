@@ -1,0 +1,8 @@
+{
+  "extName": {
+    "message": "BridgeDeck"
+  },
+  "extDescription": {
+    "message": "BridgeDeck turns the browser you already use into a workspace for your AI agent. Local daemon + MV3 extension; no telemetry."
+  }
+}
