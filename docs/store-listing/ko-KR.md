@@ -37,7 +37,7 @@ CLI 하나, MCP 서버(도구 92개), DeepSeek Harness 플러그인(도구 37개
 
 필요한 환경
 
-- Microsoft Edge, Google Chrome 또는 기타 Chromium 기반 브라우저, 버전 111 이상.
+- Microsoft Edge 등 Chromium 기반 브라우저, 버전 111 이상.
 - 로컬 daemon과 CLI를 위해서는 Node.js 20 이상이 필요합니다.
 - daemon은 Windows, macOS, Linux에서 실행됩니다. Windows에는 그래픽 설치 프로그램이 있고, macOS와 Linux에서는 install.sh가 포함된 tar.gz 압축 파일을 사용합니다.
 

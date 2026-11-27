@@ -37,7 +37,7 @@ Short description (from manifest `_locales/ar/messages.json`, read-only):
 
 المتطلبات
 
-- Microsoft Edge أو Google Chrome أو أي متصفح آخر مبني على Chromium، الإصدار 111 أو أحدث.
+- Microsoft Edge أو أي متصفح آخر مبني على Chromium، الإصدار 111 أو أحدث.
 - Node.js 20 أو أحدث للخدمة المحلية وسطر الأوامر.
 - تعمل الخدمة على Windows وmacOS وLinux. يتوفّر على Windows مثبّت رسومي؛ أما macOS وLinux فيستخدمان أرشيف tar.gz مع install.sh.
 

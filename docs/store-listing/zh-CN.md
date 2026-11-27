@@ -37,7 +37,7 @@ BridgeDeck 把你已经在用的浏览器，变成 AI Agent 的工作区。
 
 环境要求
 
-- Microsoft Edge、Google Chrome 或其他 Chromium 内核浏览器，版本 111 及以上。
+- Microsoft Edge 或其他 Chromium 内核浏览器，版本 111 及以上。
 - Node.js 20 或更高版本（用于本机 daemon 与 CLI）。
 - daemon 支持 Windows、macOS 与 Linux；Windows 有图形安装器，macOS/Linux 使用 tar.gz 包内的 install.sh。
 

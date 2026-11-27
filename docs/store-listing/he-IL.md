@@ -37,7 +37,7 @@ CLI אחד, שרת MCP (92 כלים), תוסף DeepSeek Harness (37 כלים) ו
 
 דרישות
 
-- Microsoft Edge, ‏Google Chrome או דפדפן אחר מבוסס Chromium, גרסה 111 ואילך.
+- Microsoft Edge או דפדפן אחר מבוסס Chromium, גרסה 111 ואילך.
 - Node.js 20 ואילך עבור ה-daemon המקומי וה-CLI.
 - ה-daemon פועל ב-Windows, ב-macOS וב-Linux. ב-Windows יש מתקין גרפי; ב-macOS וב-Linux משתמשים בקובץ tar.gz עם install.sh.
 

@@ -37,7 +37,7 @@ LOKAL UND PRIVAT ALS STANDARD
 
 VORAUSSETZUNGEN
 
-- Microsoft Edge, Google Chrome oder ein anderer Chromium-basierter Browser, Version 111 oder neuer.
+- Microsoft Edge oder ein anderer Chromium-basierter Browser, Version 111 oder neuer.
 - Node.js 20 oder neuer für den lokalen Daemon und die CLI.
 - Der Daemon läuft unter Windows, macOS und Linux. Für Windows gibt es einen grafischen Installer; macOS und Linux nutzen ein tar.gz-Archiv mit install.sh.
 

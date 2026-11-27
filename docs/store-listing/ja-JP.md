@@ -37,7 +37,7 @@ CLI ひとつ、MCP サーバー（92 ツール）、DeepSeek Harness プラグ�
 
 動作環境
 
-- Microsoft Edge、Google Chrome、その他の Chromium ベースのブラウザ、バージョン 111 以降。
+- Microsoft Edge など Chromium ベースのブラウザ、バージョン 111 以降。
 - ローカル daemon と CLI には Node.js 20 以降が必要です。
 - daemon は Windows、macOS、Linux で動作します。Windows にはグラフィカルなインストーラーがあり、macOS と Linux では install.sh を含む tar.gz アーカイブを使います。
 

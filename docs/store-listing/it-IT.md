@@ -37,7 +37,7 @@ LOCALE E PRIVATO PER IMPOSTAZIONE PREDEFINITA
 
 REQUISITI
 
-- Microsoft Edge, Google Chrome o un altro browser basato su Chromium, versione 111 o successiva.
+- Microsoft Edge o un altro browser basato su Chromium, versione 111 o successiva.
 - Node.js 20 o successivo per il daemon locale e la CLI.
 - Il daemon funziona su Windows, macOS e Linux. Windows ha un installer grafico; macOS e Linux usano un archivio tar.gz con install.sh.
 
