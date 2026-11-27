@@ -71,3 +71,20 @@ node tools/compare/report.mjs --run docs/comparison/runs/<id>
 ```
 
 网络受限时真实站点会全部 000/超时，换可达域名再跑即可（任务定义在 `tools/compare/run.mjs` 的 `tasks` 数组）。
+
+## 六、已落地的改进（0.3.2 起）
+
+**导航等待策略（第 1 项）**：`bridge navigate` / `bridge open` 默认改为 `--wait-until domcontentloaded`：
+
+- 导航 RPC 只等 2s（`commit` 模式 0.8s），随后用 `wait-for-navigation --wait-until domcontentloaded` 精确等 DOM 就绪；
+- 需要整页 load 时显式 `--wait-until load`，行为与旧版一致；
+- 重页面不再卡满 60s：Microsoft Learn 实测 5057ms → **2819ms**；GitHub 从“60s 超时”变为 20s 内返回明确原因（本机该页面在 Edge 里报错误页，非导航逻辑问题）。
+
+回归：CLI selftest 404/404 PASS；E2E 8 项仍 8/8、耗时基本不变（T1 969ms、T2 1601ms、T3 211ms、T4 370ms、T5 220ms、T6 478ms、T7 772ms、T8 442ms）。
+
+**待办（按优先级）**：
+
+1. `extract` 提速（目标接近 BSK 的 90–160ms；当前 211–289ms）；
+2. ref 失效自动重观察一次（动态页）；
+3. `click --accept-dialog` 一步式确认框（当前 click → dialog accept 两步）；
+4. 截图落盘错误码细分（daemon 侧写盘失败 vs 扩展下载失败）。

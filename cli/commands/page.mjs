@@ -109,6 +109,14 @@ export function createPageCommand({
     });
   }
 
+function normalizeWaitUntil(value) {
+  if (value === undefined) return 'domcontentloaded';
+  const allowed = ['load', 'domcontentloaded', 'commit'];
+  const text = String(value);
+  if (!allowed.includes(text)) throw new ArgError('--wait-until 只接受 ' + allowed.join('|'));
+  return text;
+}
+
   return async function cmdPage(command, flags, pos, invocation) {
   if (!PAGE_COMMANDS.has(command)) throw new ArgError(`未知命令：${command}（运行 bridge -h 查看用法）`);
   planIo.flags = flags;
@@ -116,8 +124,16 @@ export function createPageCommand({
   switch (command) {
     case 'navigate': {
       const url = requirePos(pos, 1, '<url>');
+      const waitUntil = normalizeWaitUntil(flags['wait-until']);
       // PROTOCOL §5.2 的 navigate 没有 noFocus 参数；窗口聚焦由 session start --no-focus 决定。
-      const body = await callRpc('navigate', withControl(flags, { url }), timeoutOf(flags));
+      // CLI 默认在 domcontentloaded 就返回：重页面（GitHub 等）不再卡到 60s；需要完整 load 用 --wait-until load。
+      const navParams = { url };
+      if (waitUntil === 'commit') navParams.timeoutMs = 800;
+      else if (waitUntil === 'domcontentloaded') navParams.timeoutMs = 2000;
+      const body = await callRpc('navigate', withControl(flags, navParams), Math.max(timeoutOf(flags), 15000));
+      if (body.ok && waitUntil === 'domcontentloaded') {
+        await callRpc('wait-for-navigation', withControl(flags, { waitUntil: 'domcontentloaded', timeoutMs: 30000 }), 45000).catch(() => null);
+      }
       return renderPageBody(body, (result) => {
         const title = result && result.title ? `（${result.title}）` : '';
         print(`已导航：${(result && result.url) || url}${title}`);

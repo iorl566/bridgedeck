@@ -82,7 +82,7 @@ export function createHelpCommand({ print, VERSION, loadSchemaInfo }) {
                                     把控制权显式转交给同一 tab 上的另一个会话（主会话停止会自动转交）
 
 页面（省略 --session 且只有一个 session 时自动选用）：
-  navigate <url> | reload | back|navigate-back | forward|navigate-forward
+  navigate <url> [--wait-until load|domcontentloaded|commit] | reload | back|navigate-back | forward|navigate-forward
   observe [--probe-hover] [--max-depth N] [--debug-surfaces] [--cdp-frames] [--save-full <path>] [--max-tokens N] [--cursor <token>] [--frames] [--closed-shadow] [--vom] [--actions] [--ax] [--facts] [--fallback-ax] [--compare-ax] [--pipeline page-lib|ax]
           [--delta --baseline <observationId>] [--out <path>]
                                    只读观察；文本原地变化时可用增量补丁，未命中基线自动回退整页

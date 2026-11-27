@@ -159,7 +159,11 @@ export function createSchemaLedgerCommands(ctx) {
     let observation = null;
     let wait = null;
     if (url) {
-      const navStep = rpcStep('navigate', { session: sessionId, url }, {
+      const waitUntil = flags['wait-until'] === undefined ? 'domcontentloaded' : String(flags['wait-until']);
+      const navParams = { session: sessionId, url };
+      if (waitUntil === 'commit') navParams.timeoutMs = 800;
+      else if (waitUntil === 'domcontentloaded') navParams.timeoutMs = 2000;
+      const navStep = rpcStep('navigate', navParams, {
         description: '导航到 ' + url,
         target: { kind: 'tab', url },
         risk: RISK.BROWSER_MUTATION,
@@ -167,6 +171,15 @@ export function createSchemaLedgerCommands(ctx) {
       });
       const nav = await callStep(navStep, io);
       if (!nav.ok) return outputFailure(nav);
+      if (waitUntil === 'domcontentloaded') {
+        const waitStep = rpcStep('wait-for-navigation', { session: sessionId, waitUntil: 'domcontentloaded', timeoutMs: 30000 }, {
+          description: '等待导航到 domcontentloaded',
+          target: { kind: 'navigation', name: 'domcontentloaded' },
+          risk: RISK.READ_ONLY,
+          minTimeoutMs: 45000,
+        });
+        await callStep(waitStep, io).catch(() => null);
+      }
       title = (nav.result || {}).title || '';
       const observeParams = { session: sessionId };
       const maxTokens = Number(flags['max-tokens']);
