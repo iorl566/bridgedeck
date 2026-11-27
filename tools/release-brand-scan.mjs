@@ -54,7 +54,11 @@ if (fs.existsSync(dist)) {
     if (!/^BridgeDeck-(extension|cli|cli-bundle|dsh-plugin)-.*\.(zip|tar\.gz)$/.test(name)) continue;
     const archive = path.join(dist, name);
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-scan-'));
-    const r = spawnSync('tar', ['-xf', archive, '-C', tmp], { windowsHide: true });
+    let r = spawnSync('tar', ['-xf', archive, '-C', tmp], { windowsHide: true });
+    if (r.status !== 0 && /\.zip$/i.test(name)) {
+      // Linux runner 的 GNU tar 不支持 zip；回退到 unzip。
+      r = spawnSync('unzip', ['-q', archive, '-d', tmp], { windowsHide: true });
+    }
     if (r.status === 0) walk(tmp);
     else hits.push(`dist/${name}: 解压失败，无法扫描`);
     fs.rmSync(tmp, { recursive: true, force: true });
