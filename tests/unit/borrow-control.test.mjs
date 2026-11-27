@@ -97,7 +97,7 @@ test('tab.borrow 闸门：request/resolve/check 条件附加 contextId/policy/ep
   assert.equal(requested.ok, true);
   assert.ok(requested.control, 'request 返回条件控制面字段');
   assert.match(requested.control.contextId, /^ctx-/);
-  assert.equal(requested.control.policy, 'auto', '未协商时 policy=auto（BSK legacy 缺省）');
+  assert.equal(requested.control.policy, 'auto', '未协商时 policy=auto（兼容基线 legacy 缺省）');
   assert.equal(typeof requested.control.epoch, 'number', 'borrow 证据里的 epoch 是租约 epoch 标量');
   assert.equal(requested.control.decision, 'ask');
   assert.equal(requested.control.owner, 'human');
@@ -219,7 +219,7 @@ test('strict 策略单次消费：第一次 allow 后同一 context 再判定 de
   assert.equal(third.evidence.control.decision, 'allow');
 });
 
-test('借用旅程 begin：BSK 确认超时映射（默认 60s / 显式覆盖 / 超时 deny）进入证据', async () => {
+test('借用旅程 begin：兼容基线 确认超时映射（默认 60s / 显式覆盖 / 超时 deny）进入证据', async () => {
   const journeys = createBorrowJourneys({ now: () => 5000 });
   journeys.bindGate(null);
   const begun = journeys.begin(77, { requestId: 'ctl-77', source: 'test' });

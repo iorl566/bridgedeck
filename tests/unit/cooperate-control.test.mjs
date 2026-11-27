@@ -1,7 +1,7 @@
 // M6 P0③ 控制面语义单测：context_id / control_policy / allow-ask-deny / handoff 窗口 /
 // borrow 确认超时 / token ↔ context 双向映射。全部是真实模块 + 注入时钟，不复制实现。
 //
-// BSK 对照位置（实现里已注明）：crates/bsk-protocol/src/tools/cooperate.rs:29,36-43；
+// 兼容基线 对照位置（实现里已注明）：crates/bsk-protocol/src/tools/cooperate.rs:29,36-43；
 // crates/bsk-cli/src/cli/cooperate.rs:52-54,86-92,180-201；crates/bsk-protocol/src/compatibility.rs:139-145；
 // crates/bsk-cli/src/cli/tab.rs:233；apps/extension/src/cooperation/controller.ts:795-830,1023-1035。
 import test from 'node:test';
@@ -68,7 +68,7 @@ const RECORD = (overrides = {}) => ({
   ...overrides,
 });
 
-test('control_policy 规整：只接受 auto/strict/target（BSK ControlPolicy 三态，cooperate.rs:36-43）', () => {
+test('control_policy 规整：只接受 auto/strict/target（兼容基线 ControlPolicy 三态，cooperate.rs:36-43）', () => {
   assert.equal(normalizeControlPolicy('auto'), 'auto');
   assert.equal(normalizeControlPolicy('strict'), 'strict');
   assert.equal(normalizeControlPolicy('target'), 'target');
@@ -79,7 +79,7 @@ test('control_policy 规整：只接受 auto/strict/target（BSK ControlPolicy �
   assert.equal(normalizeControlAction('handback'), null);
 });
 
-test('--policy 只允许 sync/enable；缺省 auto（BSK cli/cooperate.rs:52-54,86-92）', () => {
+test('--policy 只允许 sync/enable；缺省 auto（兼容基线 cli/cooperate.rs:52-54,86-92）', () => {
   const sync = resolvePolicyRequest('sync', undefined);
   assert.equal(sync.ok, true);
   assert.equal(sync.policy, 'auto');
@@ -114,7 +114,7 @@ test('策略协商：auto→target / 保留 strict / 会话内固定（controlle
   assert.equal(fixed.fixed, true);
   assert.match(fixed.error, /Control policy is fixed for this session/);
   assert.equal(fixed.data.effect_state, 'none');
-  // legacy 缺省：请求面没有 policy 时不改变会话策略；本地缺省明确暴露（BridgeDeck target vs BSK strict）。
+  // legacy 缺省：请求面没有 policy 时不改变会话策略；本地缺省明确暴露（BridgeDeck target vs 兼容基线 strict）。
   const legacy = negotiateControlPolicy({ action: 'sync' });
   assert.equal(legacy.policy, 'target');
   assert.equal(legacy.localDefault, 'target');
@@ -210,7 +210,7 @@ test('租约 epoch 向量 + token ↔ context 双向映射（token 打码）', (
 test('borrow 确认超时映射：默认 60s / 覆盖 / 上限 / --no-confirm 废弃位 / 超时 deny', () => {
   const fallback = confirmationPlan({ now: 1000 });
   assert.equal(fallback.timeoutMs, DEFAULT_CONFIRMATION_TIMEOUT_MS);
-  assert.equal(fallback.timeoutMs, 60000, 'BSK tab borrow --timeout 默认 60s（tab.rs:233）');
+  assert.equal(fallback.timeoutMs, 60000, '兼容基线 tab borrow --timeout 默认 60s（tab.rs:233）');
   assert.equal(fallback.owner, CONTROL_OWNER.HUMAN);
   assert.equal(fallback.decision, CONTROL_DECISION.ASK);
   assert.equal(fallback.onTimeout, CONTROL_DECISION.DENY);

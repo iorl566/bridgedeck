@@ -1,5 +1,5 @@
 // M6 P0③ 交接窗口 owner 语义：handback 状态 → 控制权 owner / 窗口宽度。
-// 与 BSK cooperate control_policy（auto/strict/target）+ handoff 语义对齐的加法字段单测。
+// 与 兼容基线 cooperate control_policy（auto/strict/target）+ handoff 语义对齐的加法字段单测。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

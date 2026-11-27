@@ -54,7 +54,7 @@ const TRIGGERS = Object.freeze({
   'capture.stream': ['screenshot', { stream: true }],
   'debug.journal': ['debug.history', {}],
   har: ['network.replay', {}],
-  // ---- BSK 0.5.0 对齐的 6 个门 ----
+  // ---- 兼容基线对齐的 6 个门 ----
   borrow_confirmation_timeout: ['tab.borrow', { tabId: 123, confirmationTimeoutMs: 30000 }],
   interaction_policy: ['request-help', { reason: 'needs human' }],
   incognito_sessions: ['session.start', { incognito: true }],

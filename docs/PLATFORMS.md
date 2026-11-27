@@ -30,7 +30,7 @@
 
 ### Chrome 注意
 
-- Chrome Web Store **暂未上架**，Chrome 用户需在 `chrome://extensions` 开发者模式加载，或使用 Chrome for Testing。
+- 其他浏览器扩展商店 **暂未上架**，Chromium 内核浏览器用户需在 `chrome://extensions` 开发者模式加载，或使用对应的测试版浏览器。
 - Chrome 137+ 稳定版忽略 `--load-extension`；E2E 改用 **CDP pipe 的 `Extensions.loadUnpacked`** 自动加载扩展，需要 `--enable-unsafe-extension-debugging`。
 - Windows Chrome 157 已完成真实浏览器 E2E：145/147 通过（2 项按借用确认策略跳过）。
 - 扩展使用标准 MV3 API（`chrome.tabs`/`scripting`/`debugger`/`tabCapture`/`offscreen`/`tabGroups`/`notifications`），没有 Edge 专有 API。
@@ -48,6 +48,6 @@
 ## 结论
 
 - **Windows + Edge：完整支持**（安装器、商店扩展、真实浏览器 E2E）。
-- **Windows + Chrome：功能与 E2E 支持**；缺 Chrome Web Store 上架，用户需开发者模式加载。
+- **Windows + Chrome：功能与 E2E 支持**；缺其他浏览器扩展商店上架，用户需开发者模式加载。
 - **macOS / Linux + Edge/Chrome：CLI、daemon、扩展代码层面支持**，但没有和 Windows 等价的浏览器端自动验收。
-- **Chrome Web Store 上架**是当前最大发布缺口，不是代码兼容缺口。
+- **其他浏览器扩展商店上架**是当前最大发布缺口，不是代码兼容缺口。

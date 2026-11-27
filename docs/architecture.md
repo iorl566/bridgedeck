@@ -51,8 +51,8 @@ cli/bridge.mjs                    1,946 行（原 3,199）
 1. 继续拆 `cli/bridge.mjs` 的 plan/step/view/cooperate/operation/help 等；
 2. 拆 `extension/offscreen.js`（录制编码）与 `video.js`；
 3. 把 page-lib 的 4,168 行单文件注入改为可维护构建（受 MV3 单文件注入限制）；
-4. 追赶 BSK 的 semantic graph/o200k 之外的内部状态机；
+4. 追赶参考实现的 semantic graph/o200k 之外的内部状态机；
 5. Linux/macOS 真机、原生 fsync 属外部项。
 
-当前源码约 760 文件 / 91,016 行；BSK 约 953 / 329,630 行（约 1/4）。
+当前源码约 760 文件 / 91,016 行。
 “4x”不是本会话能完成的，需按上述路线分阶段重写。

@@ -99,11 +99,11 @@ test('所有 MCP inputSchema 都是封闭对象', () => {
 });
 
 // ---------------------------------------------------------------------------
-// M6-P0①：BSK MCP 直接动作入口（press/hover/select/drag/scroll_to/wheel/focus/blur、
+// M6-P0①：兼容基线 MCP 直接动作入口（press/hover/select/drag/scroll_to/wheel/focus/blur、
 // back/forward/reload/console、session.request_*、tab borrow/return）。
 // 这里用假 ctx 抓 RPC 调用，验证：
 //   1. 新工具分发到既有 canonical 目录方法（不新增未实现 RPC）；
-//   2. BSK 风格入参（source/target/delta/ref/selector/tab_id/request_id）换算成我方协议参数；
+//   2. 兼容基线 风格入参（source/target/delta/ref/selector/tab_id/request_id）换算成我方协议参数；
 //   3. schema 的必填/枚举与协议 schema 同源。
 // ---------------------------------------------------------------------------
 function fakeCtx() {
@@ -153,7 +153,7 @@ test('M6 直接入口：schema 必填项与协议 schema 同源', () => {
   }
 });
 
-test('M6 直接入口：分发到既有 RPC 并换算 BSK 风格参数', async () => {
+test('M6 直接入口：分发到既有 RPC 并换算 兼容基线 风格参数', async () => {
   const { calls, ctx } = fakeCtx();
   const tools = new Map(createBrowserTools(ctx).map((tool) => [tool.name, tool]));
   await tools.get('browser_press').run({ key: 'Enter', ref: '@e1' });

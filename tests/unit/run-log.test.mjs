@@ -75,7 +75,7 @@ test('snapshot limit 取最近 N 步；clear 清空', () => {
   assert.equal(run.snapshot().refs, 0);
 });
 
-test('默认上限符合 BSK 对齐值（200 步 / 8000 refs）', () => {
+test('默认上限符合 兼容对齐值（200 步 / 8000 refs）', () => {
   assert.equal(RUN_LOG_LIMITS.steps, 200);
   assert.equal(RUN_LOG_LIMITS.refs, 8000);
 });

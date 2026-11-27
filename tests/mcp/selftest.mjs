@@ -178,7 +178,7 @@ check('包含 network_waterfall 工具', tools.some((tool) => tool.name === 'bro
 check('包含 pdf 工具', tools.some((tool) => tool.name === 'browser_pdf'));
 check('每个工具都有 inputSchema', tools.every((tool) => tool.inputSchema && tool.inputSchema.type === 'object'));
 
-// M6-P0①：BSK MCP 直接动作入口（press/hover/select/drag/scroll_to/wheel/focus/blur、
+// M6-P0①：兼容基线 MCP 直接动作入口（press/hover/select/drag/scroll_to/wheel/focus/blur、
 // back/forward/reload/console、tracked session request_*、tab borrow/return）必须在
 // tools/list 里出现，且 schema/审批分级与 mcp/tool-policy.mjs 的派生一致。
 const M6_INPUT_TOOLS = ['browser_press', 'browser_hover', 'browser_select', 'browser_drag', 'browser_scroll_to', 'browser_wheel', 'browser_focus', 'browser_blur'];

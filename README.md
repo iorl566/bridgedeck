@@ -90,7 +90,7 @@ BridgeDeck 由三部分组成：**浏览器扩展 + 本机 daemon + CLI**。扩�
 
 扩展装好后打开弹窗，确认显示 **已连接**。daemon 会在第一次执行 `bridge` 命令时自动拉起。
 
-Chrome Web Store 暂未上架；Chrome 用户可先用开发者模式加载 `extension/`，或解压发布页的 `BridgeDeck-extension-*.zip` 后加载。
+其他浏览器扩展商店暂未上架；Chromium 内核浏览器用户可先用开发者模式加载 `extension/`，或解压发布页的 `BridgeDeck-extension-*.zip` 后加载。
 
 ### 方案 B：一行命令安装（Windows）
 

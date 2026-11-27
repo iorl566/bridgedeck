@@ -1,7 +1,7 @@
 // tests/unit/release-scale-gate.test.mjs —— 规模门禁（tools/scale-report.mjs）。
 //
 // 覆盖：扫描口径（目录/扩展名过滤）、分组汇总、绝对上限（文件/行/单文件/生成物宽限）、
-// 基线容差、BSK 对标百分比、阈值可配置（inline JSON / 环境变量），以及真实 CLI 的
+// 基线容差、参考实现对标百分比、阈值可配置（inline JSON / 环境变量），以及真实 CLI 的
 // “只报告 exit 0 / --check 超限 exit 1”。
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import {
-  BSK_REFERENCE_LINES,
+  REFERENCE_LINES,
   DEFAULT_LIMITS,
   SCALE_TARGET_LINES,
   UsageError,
@@ -42,8 +42,8 @@ function summaryOf(files, lines, largest = []) {
   return { files, lines, groups: { other: lines }, largest };
 }
 
-test('BSK 对标常量与默认阈值自洽', () => {
-  assert.equal(BSK_REFERENCE_LINES, 316463, 'BSK 0.5.0 代码行基线来自 BSK-PARITY-PROGRAM §1');
+test('参考实现对标常量与默认阈值自洽', () => {
+  assert.equal(REFERENCE_LINES, 316463, '参考实现代码行基线');
   assert.ok(SCALE_TARGET_LINES > 0);
   assert.ok(DEFAULT_LIMITS.maxFiles > 900, '默认文件上限不应低于当前仓库规模');
   assert.ok(DEFAULT_LIMITS.maxLines > 155552, '默认行数上限不应低于当前仓库规模');
@@ -67,7 +67,7 @@ test('scanRepository：只统计 .js/.mjs，跳过 node_modules/dist/.tmp 等目
     write('node_modules/dep/index.js', 'skip');
     write('dist/bundle.js', 'skip');
     write('.tmp/scratch.mjs', 'skip');
-    write('ref/bsk.js', 'skip');
+    write('ref/reference.js', 'skip');
     const rows = scanRepository(dir);
     assert.deepEqual(rows.map((row) => row.file), [
       'daemon/b.js',
@@ -102,7 +102,7 @@ test('summarizeScale：总数/分组排序/最大文件 topN', () => {
 });
 
 test('resolveLimits：默认 → inline → 环境变量覆盖', () => {
-  assert.deepEqual(resolveLimits({ env: {} }), { ...DEFAULT_LIMITS, bskLines: BSK_REFERENCE_LINES, targetLines: SCALE_TARGET_LINES });
+  assert.deepEqual(resolveLimits({ env: {} }), { ...DEFAULT_LIMITS, referenceLines: REFERENCE_LINES, targetLines: SCALE_TARGET_LINES });
   const fromFile = resolveLimits({ limits: { maxFiles: 2000, maxLines: 300000, minParityPct: 40 }, env: {} });
   assert.equal(fromFile.maxFiles, 2000);
   assert.equal(fromFile.maxLines, 300000);
@@ -110,11 +110,11 @@ test('resolveLimits：默认 → inline → 环境变量覆盖', () => {
   assert.equal(fromFile.maxFileLines, DEFAULT_LIMITS.maxFileLines, '未给的键沿用默认');
   const fromEnv = resolveLimits({
     limits: { maxFiles: 2000 },
-    env: { BB_SCALE_MAX_FILES: '1234', BB_SCALE_MAX_LINES: '456789', BB_SCALE_BSK_LINES: '100000', BB_SCALE_TARGET: '200000', BB_SCALE_MIN_PARITY: '75' },
+    env: { BB_SCALE_MAX_FILES: '1234', BB_SCALE_MAX_LINES: '456789', BB_SCALE_REFERENCE_LINES: '100000', BB_SCALE_TARGET: '200000', BB_SCALE_MIN_PARITY: '75' },
   });
   assert.equal(fromEnv.maxFiles, 1234, '环境变量优先于 inline');
   assert.equal(fromEnv.maxLines, 456789);
-  assert.equal(fromEnv.bskLines, 100000);
+  assert.equal(fromEnv.referenceLines, 100000);
   assert.equal(fromEnv.targetLines, 200000);
   assert.equal(fromEnv.minParityPct, 75);
 });
@@ -150,51 +150,51 @@ test('evaluateScale：上限内通过；文件/行/单文件/基线/对标分别
     summary: summaryOf(100, 1000, [{ file: 'lib/a.mjs', lines: 500, generated: false }]),
     limits,
     baseline: base,
-    bskLines: 10000,
+    referenceLines: 10000,
   });
   assert.equal(pass.ok, true, JSON.stringify(pass.violations));
   assert.equal(pass.parity.parityPct, 10);
   assert.equal(pass.parity.targetPct, Math.round((1000 / SCALE_TARGET_LINES) * 1000) / 10);
 
-  const tooManyFiles = evaluateScale({ summary: summaryOf(5000, 1000, []), limits, baseline: base, bskLines: 10000 });
+  const tooManyFiles = evaluateScale({ summary: summaryOf(5000, 1000, []), limits, baseline: base, referenceLines: 10000 });
   assert.equal(tooManyFiles.ok, false);
   assert.ok(tooManyFiles.violations.some((item) => item.id === 'limits.files'));
 
-  const tooManyLines = evaluateScale({ summary: summaryOf(10, 999999, []), limits, baseline: base, bskLines: 1000000 });
+  const tooManyLines = evaluateScale({ summary: summaryOf(10, 999999, []), limits, baseline: base, referenceLines: 1000000 });
   assert.equal(tooManyLines.ok, false);
   assert.ok(tooManyLines.violations.some((item) => item.id === 'limits.lines'));
 
   const bigHandwritten = evaluateScale({
     summary: summaryOf(10, 1000, [{ file: 'lib/huge.mjs', lines: limits.maxFileLines + 1, generated: false }]),
-    limits, baseline: base, bskLines: 10000,
+    limits, baseline: base, referenceLines: 10000,
   });
   assert.equal(bigHandwritten.ok, false);
   assert.match(bigHandwritten.violations.find((item) => item.id === 'limits.file-size').detail, /超单文件上限/);
 
   const bigGenerated = evaluateScale({
     summary: summaryOf(10, 1000, [{ file: 'extension/src/generated/protocol.js', lines: limits.maxFileLines + 1, generated: true }]),
-    limits, baseline: base, bskLines: 10000,
+    limits, baseline: base, referenceLines: 10000,
   });
   assert.equal(bigGenerated.ok, true, '生成物走更宽上限');
 
-  const noBaseline = evaluateScale({ summary: summaryOf(10, 1000, []), limits, baseline: null, bskLines: 10000 });
+  const noBaseline = evaluateScale({ summary: summaryOf(10, 1000, []), limits, baseline: null, referenceLines: 10000 });
   assert.equal(noBaseline.ok, false);
   assert.ok(noBaseline.violations.some((item) => item.id === 'baseline.present'));
 
-  const drifted = evaluateScale({ summary: summaryOf(200, 5000, []), limits, baseline: { files: 100, lines: 1000 }, bskLines: 10000 });
+  const drifted = evaluateScale({ summary: summaryOf(200, 5000, []), limits, baseline: { files: 100, lines: 1000 }, referenceLines: 10000 });
   assert.equal(drifted.ok, false);
   assert.ok(drifted.violations.some((item) => item.id === 'baseline.regression'));
 
-  const lowParity = evaluateScale({ summary: summaryOf(10, 1000, []), limits: { ...limits, minParityPct: 90 }, baseline: { files: 10, lines: 1000 }, bskLines: 10000 });
+  const lowParity = evaluateScale({ summary: summaryOf(10, 1000, []), limits: { ...limits, minParityPct: 90 }, baseline: { files: 10, lines: 1000 }, referenceLines: 10000 });
   assert.equal(lowParity.ok, false);
-  assert.ok(lowParity.violations.some((item) => item.id === 'bsk.parity'));
+  assert.ok(lowParity.violations.some((item) => item.id === 'reference.parity'));
 });
 
 test('formatReport：报告含对标百分比/分组/上限状态；check/报告模式措辞不同', () => {
-  const evaluated = evaluateScale({ summary: summaryOf(10, 1000, [{ file: 'lib/a.mjs', lines: 100, generated: false }]), limits: { ...DEFAULT_LIMITS, minParityPct: 1 }, baseline: { files: 10, lines: 1000 }, bskLines: 10000 });
+  const evaluated = evaluateScale({ summary: summaryOf(10, 1000, [{ file: 'lib/a.mjs', lines: 100, generated: false }]), limits: { ...DEFAULT_LIMITS, minParityPct: 1 }, baseline: { files: 10, lines: 1000 }, referenceLines: 10000 });
   const report = formatReport({ summary: summaryOf(10, 1000, [{ file: 'lib/a.mjs', lines: 100, generated: false }]), parity: evaluated.parity, checks: evaluated.checks, violations: evaluated.violations, ok: evaluated.ok, checkMode: false });
   assert.match(report, /BridgeDeck 规模/);
-  assert.match(report, /BSK 0\.5\.0 对标/);
+  assert.match(report, /参考实现对标/);
   assert.match(report, /SCALE REPORT/);
   const gate = formatReport({ summary: summaryOf(10, 1000, []), parity: evaluated.parity, checks: evaluated.checks, violations: [], ok: true, checkMode: true });
   assert.match(gate, /SCALE GATE PASS/);
@@ -227,8 +227,8 @@ test('真实 CLI：默认只报告 exit 0；--update-baseline 后 --check 通过
     assert.ok(result.summary.files > 500, '真实仓库文件数应 > 500');
     assert.ok(result.summary.lines > 100000, '真实仓库行数应 > 100000');
     assert.equal(result.checkMode, false);
-    assert.ok(result.parity.bskLines >= 300000);
-    // 对标百分比是相对 BSK 0.5.0 的体量比：>100% 表示已超过对照体量，仍属合理区间
+    assert.ok(result.parity.referenceLines >= 300000);
+    // 对标百分比是相对参考实现的体量比：>100% 表示已超过对照体量，仍属合理区间
     // （上限留出裕量，避免把“超过对标”误判为坏数据；下限防止真实行数读空）。
     assert.ok(result.parity.parityPct > 20 && result.parity.parityPct < 150, '对标百分比应在合理区间：' + result.parity.parityPct);
     assert.ok(result.summary.groups.extension > 10000);

@@ -1,8 +1,8 @@
-// tests/unit/protocol-bsk-floors.test.mjs —— BSK 0.5.0 对齐的 6 个 feature floor（M6-P0②）。
+// tests/unit/protocol-bsk-floors.test.mjs —— 兼容基线的 6 个 feature floor（M6-P0②）。
 //
 // 证明三件事（都是机械可复核的）：
-//   1) 6 个门在单一目录里存在，floor=1.9，且带 BSK 侧原始 floor/operation 证据；
-//   2) 触发面与 BSK compatibility.rs 的 FeatureWhen 同形（Present/True/Equals/ControlPolicy/Always）；
+//   1) 6 个门在单一目录里存在，floor=1.9，且带 基线侧原始 floor/operation 证据；
+//   2) 触发面与 参考实现的 FeatureWhen 同形（Present/True/Equals/ControlPolicy/Always）；
 //   3) 协议闸门在三处一致：1.8 拒绝（E_PROTOCOL_UNSUPPORTED，data.feature 精确）、
 //      1.9 放行、降级声明与生成物/文档都来自同一份目录。
 import test from 'node:test';
@@ -37,8 +37,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const OLD = Object.freeze({ protocol: PROTOCOL_BASELINE });
 const CURRENT = Object.freeze({ protocol: PROTOCOL_CURRENT });
 
-/** BSK 0.5.0 compatibility.rs 的 6 个门 → 我方位面与 BSK 原始证据。 */
-const BSK_FEATURES = Object.freeze({
+/** 6 个兼容门 → 我方位面与基线证据。 */
+const COMPAT_FEATURES = Object.freeze({
   borrow_confirmation_timeout: {
     compatFloor: '1.2',
     compatOperation: 'tab borrow --timeout',
@@ -87,13 +87,13 @@ const BSK_FEATURES = Object.freeze({
   },
 });
 
-test('6 个 BSK 门进入单一目录：floor=1.9 + BSK 原始 floor/operation 证据', () => {
-  for (const [feature, spec] of Object.entries(BSK_FEATURES)) {
+test('6 个兼容门进入单一目录：floor=1.9 + 基线 原始 floor/operation 证据', () => {
+  for (const [feature, spec] of Object.entries(COMPAT_FEATURES)) {
     assert.ok(FEATURE_NAMES.includes(feature), feature + ' 不在 FEATURE_NAMES');
     assert.equal(FEATURE_FLOORS[feature], '1.9', feature + ' 我方 floor');
     assert.equal(FEATURE_MIN_PROTOCOL[feature], '1.9', feature + ' 兼容表引用');
-    assert.equal(FEATURE_META[feature].compatFloor, spec.compatFloor, feature + ' BSK floor 证据');
-    assert.equal(FEATURE_META[feature].compatOperation, spec.compatOperation, feature + ' BSK operation 证据');
+    assert.equal(FEATURE_META[feature].compatFloor, spec.compatFloor, feature + ' floor 证据');
+    assert.equal(FEATURE_META[feature].compatOperation, spec.compatOperation, feature + ' operation 证据');
     assert.equal(typeof FEATURE_META[feature].label, 'string');
     // 三处一致：降级声明与迁移建议必须与目录同名同项。
     assert.equal(FEATURE_FALLBACKS[feature].kind, spec.fallbackKind, feature + ' 降级 kind');
@@ -104,8 +104,8 @@ test('6 个 BSK 门进入单一目录：floor=1.9 + BSK 原始 floor/operation �
   assert.equal(Object.keys(FEATURE_FLOORS).length, 15);
 });
 
-test('触发面与 BSK FeatureWhen 同形：每个门只由对应参数/方法触发', () => {
-  for (const [feature, spec] of Object.entries(BSK_FEATURES)) {
+test('触发面与 FeatureWhen 同形：每个门只由对应参数/方法触发', () => {
+  for (const [feature, spec] of Object.entries(COMPAT_FEATURES)) {
     const [method, params] = spec.trigger;
     assert.deepEqual(featuresForCall(method, params), [feature], feature + ' 正向触发表');
     const [negMethod, negParams] = spec.negative;
@@ -115,7 +115,7 @@ test('触发面与 BSK FeatureWhen 同形：每个门只由对应参数/方法�
     assert.deepEqual([...decision.features], [feature], feature);
     assert.equal(decision.sources.length, 1, feature + ' 来源唯一');
   }
-  // 参数级规则的 kind 覆盖 BSK 的 Present/True/Equals/ControlPolicy 四种形态。
+  // 参数级规则的 kind 覆盖 Present/True/Equals/ControlPolicy 四种形态。
   const kinds = new Set(FEATURE_PARAM_RULES.map((rule) => rule.kind));
   for (const kind of ['defined', 'true', 'equals']) assert.ok(kinds.has(kind), '缺少参数规则 kind：' + kind);
 });
@@ -135,7 +135,7 @@ test('门覆盖的方法/参数在 METHOD_FEATURE 反向表与参数规则表里
 });
 
 test('协议闸门三处一致：1.8 拒绝（精确 data）/ 1.9 放行 / 版本矩阵同步', () => {
-  for (const [feature, spec] of Object.entries(BSK_FEATURES)) {
+  for (const [feature, spec] of Object.entries(COMPAT_FEATURES)) {
     const [method, params] = spec.trigger;
     const denied = protocolGate(OLD, method, params);
     assert.equal(denied.ok, false, feature + ' 1.8 应拒绝');
@@ -185,7 +185,7 @@ test('可降级门给出可执行降级；不可降级门诚实标记 unresolved
 test('生成物与文档同步：6 个门出现在 generated/protocol.js 与 PROTOCOL-METHODS.md', () => {
   const generated = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'generated', 'protocol.js'), 'utf8');
   const docs = fs.readFileSync(path.join(ROOT, 'docs', 'PROTOCOL-METHODS.md'), 'utf8');
-  for (const feature of Object.keys(BSK_FEATURES)) {
+  for (const feature of Object.keys(COMPAT_FEATURES)) {
     assert.ok(generated.includes('"' + feature + '"'), feature + ' 未进入生成物 FEATURE_MIN_PROTOCOL');
     assert.ok(docs.includes('| `' + feature + '` | 1.9 |'), feature + ' 未进入特性门表');
   }

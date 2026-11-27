@@ -1660,10 +1660,10 @@ async function runTests() {
   );
 
   // -------------------------------------------------------------------------
-  section('7c-4. M6-P0②：通用 cancel / ledger.request + CLI 参数对齐（BSK 0.5.0）');
+  section('7c-4. M6-P0②：通用 cancel / ledger.request + CLI 参数对齐（兼容基线）');
   const genericCancelUnknown = await directRpc('cancel', { rpc_id: 'no-such-rpc-selftest' });
   check(
-    'cancel { rpc_id } 进入 daemon LOCAL 路由且未知 id 回 cancelled:false（BSK 语义，不报错）',
+    'cancel { rpc_id } 进入 daemon LOCAL 路由且未知 id 回 cancelled:false（兼容语义，不报错）',
     Boolean(genericCancelUnknown && genericCancelUnknown.ok === true
       && genericCancelUnknown.result
       && genericCancelUnknown.result.cancelled === false
@@ -1679,7 +1679,7 @@ async function runTests() {
   const ledgerRequestStatus = await directRpc('ledger.request', {});
   const ledgerRequestStatusPayload = (ledgerRequestStatus && ledgerRequestStatus.result) || {};
   check(
-    'ledger.request 默认 action=status：BSK 形状 + 既有 pending/recent/wal/durability',
+    'ledger.request 默认 action=status：兼容形状 + 既有 pending/recent/wal/durability',
     Boolean(ledgerRequestStatus && ledgerRequestStatus.ok === true
       && ledgerRequestStatusPayload.action === 'status'
       && Array.isArray(ledgerRequestStatusPayload.pending_unknown)
@@ -1722,7 +1722,7 @@ async function runTests() {
     `${cliLedgerStatusBsK.code} ${cliLedgerStatusBsK.stdout.slice(0, 300)}`,
   );
 
-  // CLI 参数对齐：BSK 的 6 组参数都能被解析，并在参数层拒绝非法取值（退出码 2）。
+  // CLI 参数对齐：兼容基线的 6 组参数都能被解析，并在参数层拒绝非法取值（退出码 2）。
   const cliClickBadButton = await runCli(['click', '--ref', '@e1', '--button', 'bogus', '--json']);
   check(
     'bridge click --button 只接受 left|middle|right（非法值退出 2）',

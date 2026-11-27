@@ -9,7 +9,7 @@
 //   - 基线回归：tools/scale-baseline.json 记录上一次确认的规模；超容差即失败，
 //     必须显式 `--update-baseline` 才会抬高上限（避免“越写越多顺手改基线”）；
 //   - 阈值可配置：--limits <file|json>、BB_SCALE_MAX_FILES / BB_SCALE_MAX_LINES /
-//     BB_SCALE_MAX_FILE_LINES / BB_SCALE_BSK_LINES / BB_SCALE_TARGET / BB_SCALE_MIN_PARITY。
+//     BB_SCALE_MAX_FILE_LINES / BB_SCALE_REFERENCE_LINES / BB_SCALE_TARGET / BB_SCALE_MIN_PARITY。
 //
 // 统计口径与旧版一致：只数 .js/.mjs，排除 node_modules/.git/dist/ref/reference/.tmp 等目录，
 // 这样跨轮次的数字可直接对比。
@@ -29,7 +29,7 @@ const BASELINE_PATH = path.join(ROOT, 'tools', 'scale-baseline.json');
 const SELF = fileURLToPath(import.meta.url);
 
 /** 上游 0.5.0 代码行基线（docs/上游-PARITY-PROGRAM.md §1，口径 rs/ts/tsx/js/mjs）。 */
-export const BSK_REFERENCE_LINES = 316463;
+export const REFERENCE_LINES = 316463;
 /** 路线 A 的 scale target（旧报告里的 329,000 行目标，可由 BB_SCALE_TARGET 覆盖）。 */
 export const SCALE_TARGET_LINES = 329000;
 
@@ -167,7 +167,7 @@ export function resolveLimits({ limits = null, env = process.env } = {}) {
     const raw = env && env[name];
     if (raw !== undefined && raw !== '' && Number.isFinite(Number(raw))) merged[key] = Number(raw);
   }
-  merged.bskLines = Number(env && env.BB_SCALE_BSK_LINES) > 0 ? Number(env.BB_SCALE_BSK_LINES) : BSK_REFERENCE_LINES;
+  merged.referenceLines = Number(env && env.BB_SCALE_REFERENCE_LINES) > 0 ? Number(env.BB_SCALE_REFERENCE_LINES) : REFERENCE_LINES;
   merged.targetLines = Number(env && env.BB_SCALE_TARGET) > 0 ? Number(env.BB_SCALE_TARGET) : SCALE_TARGET_LINES;
   return merged;
 }
@@ -211,8 +211,8 @@ export function writeScaleBaseline(summary, { file = BASELINE_PATH, recordedAt =
  * @param {{summary:object, records?:Array<{file:string,lines:number,generated?:boolean}>|null,
  *   limits?:object, baseline?:object|null, bskLines?:number}} input
  */
-export function evaluateScale({ summary, records = null, limits = null, baseline = null, bskLines = BSK_REFERENCE_LINES } = {}) {
-  const merged = { ...DEFAULT_LIMITS, ...(limits || {}), bskLines: Number(bskLines) || BSK_REFERENCE_LINES };
+export function evaluateScale({ summary, records = null, limits = null, baseline = null, referenceLines = REFERENCE_LINES } = {}) {
+  const merged = { ...DEFAULT_LIMITS, ...(limits || {}), referenceLines: Number(referenceLines) || REFERENCE_LINES };
   if (!(Number(merged.targetLines) > 0)) merged.targetLines = SCALE_TARGET_LINES;
   const checks = [];
   const violations = [];
@@ -253,15 +253,15 @@ export function evaluateScale({ summary, records = null, limits = null, baseline
         + formatNumber(maxFiles) + ' / ' + formatNumber(maxLines) + '；如确认是有意增长，运行 node tools/scale-report.mjs --update-baseline');
   }
 
-  const parityPct = merged.bskLines > 0 ? round((lines / merged.bskLines) * 100, 1) : 0;
+  const parityPct = merged.referenceLines > 0 ? round((lines / merged.referenceLines) * 100, 1) : 0;
   const targetPct = merged.targetLines > 0 ? round((lines / merged.targetLines) * 100, 1) : 0;
-  push('bsk.parity', parityPct >= Number(merged.minParityPct), 'BSK 对标 ' + parityPct + '%（下限 ' + merged.minParityPct + '%；BSK ' + formatNumber(merged.bskLines) + ' 行）');
+  push('reference.parity', parityPct >= Number(merged.minParityPct), '参考实现对标 ' + parityPct + '%（下限 ' + merged.minParityPct + '%；参考 ' + formatNumber(merged.referenceLines) + ' 行）');
 
   return {
     ok: violations.length === 0,
     checks,
     violations,
-    parity: { bskLines: merged.bskLines, targetLines: merged.targetLines, parityPct, targetPct },
+    parity: { referenceLines: merged.referenceLines, targetLines: merged.targetLines, parityPct, targetPct },
     limits: merged,
   };
 }
@@ -271,7 +271,7 @@ export function formatReport(result) {
   const lines = [];
   const summary = result.summary || { files: 0, lines: 0, groups: {}, largest: [] };
   lines.push('BridgeDeck 规模：' + formatNumber(summary.files) + ' 文件 / ' + formatNumber(summary.lines) + ' 行');
-  lines.push('  BSK 0.5.0 对标：' + result.parity.parityPct + '%（BSK ' + formatNumber(result.parity.bskLines) + ' 行）'
+  lines.push('  参考实现对标：' + result.parity.parityPct + '%（参考 ' + formatNumber(result.parity.referenceLines) + ' 行）'
     + '；scale target ' + formatNumber(result.parity.targetLines) + ' 行（' + result.parity.targetPct + '%）');
   lines.push('  分组：');
   for (const [group, count] of Object.entries(summary.groups || {})) {
@@ -339,7 +339,7 @@ function printUsageText() {
 
 默认阈值：${JSON.stringify(DEFAULT_LIMITS)}
 环境覆盖：BB_SCALE_MAX_FILES / BB_SCALE_MAX_LINES / BB_SCALE_MAX_FILE_LINES /
-          BB_SCALE_MIN_PARITY / BB_SCALE_BSK_LINES / BB_SCALE_TARGET`;
+          BB_SCALE_MIN_PARITY / BB_SCALE_REFERENCE_LINES / BB_SCALE_TARGET`;
 }
 
 /** 主流程（返回退出码，便于测试）。 */
@@ -370,7 +370,7 @@ export function main(argv = [], io = {}) {
     stdout('规模基线已更新：' + path.relative(ROOT, target).replace(/\\/g, '/') + '（' + summary.files + ' 文件 / ' + summary.lines + ' 行）');
     baseline = { files: summary.files, lines: summary.lines };
   }
-  const evaluated = evaluateScale({ summary, records, limits, baseline, bskLines: limits.bskLines });
+  const evaluated = evaluateScale({ summary, records, limits, baseline, referenceLines: limits.referenceLines });
   const result = {
     ok: evaluated.ok,
     summary,

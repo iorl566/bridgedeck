@@ -52,7 +52,7 @@ const TRIGGERS = Object.freeze({
   'capture.stream': ['screenshot', { stream: true }],
   'debug.journal': ['debug.history', {}],
   har: ['network.replay', {}],
-  // ---- BSK 0.5.0 对齐的 6 个门 ----
+  // ---- 兼容基线对齐的 6 个门 ----
   borrow_confirmation_timeout: ['tab.borrow', { tabId: 123, confirmationTimeoutMs: 30000 }],
   interaction_policy: ['request-help', { reason: 'needs human confirm' }],
   incognito_sessions: ['session.start', { incognito: true }],
@@ -82,7 +82,7 @@ test('FEATURE_FALLBACKS：15 个特性全部有降级声明，kind 合法、说�
     if (fallback.kind === 'param+verify') assert.ok(METHOD_NAMES.includes(fallback.method), feature + ' 校验方法不在目录');
     if (fallback.kind === 'none') assert.equal(fallback.method, null, feature + ' 不可降级不应给目标方法');
   }
-  // 可降级 11 个 / 不可降级 4 个（video、har 与 BSK 对齐的 interaction_policy、dialog_control）
+  // 可降级 11 个 / 不可降级 4 个（video、har 与 兼容对齐的 interaction_policy、dialog_control）
   assert.equal(DEGRADABLE.length, 11);
   assert.deepEqual([...FEATURE_NAMES].filter((feature) => FEATURE_FALLBACKS[feature].kind === 'none').sort(), ['dialog_control', 'har', 'interaction_policy', 'video']);
 });

@@ -1,4 +1,4 @@
-// tests/unit/daemon-generic-ops.test.mjs —— BSK 0.5.0 对齐的通用 RPC：
+// tests/unit/daemon-generic-ops.test.mjs —— 兼容基线对齐的通用 RPC：
 //   * cancel { rpc_id }      —— 按调用方 rpc_id（或内部命令 id）取消进行中的 daemon→扩展命令
 //   * ledger.request         —— action=status|resolve 的通用账本入口
 //
@@ -6,7 +6,7 @@
 //   1) 纯函数层：createGenericOps 的错误码/回包形状/转发链路（假 inflight + 假账本）；
 //   2) 真实 daemon 进程：两个方法都不再 404（进入 LOCAL 路由），ledger.request 真跑
 //      意图账本（status 默认载荷 + resolve 真解锁非幂等恢复动作），cancel 对未知 id
-//      回 cancelled:false 而不是报错（BSK “RPC 本身不报错”的语义）。
+//      回 cancelled:false 而不是报错（兼容基线 “RPC 本身不报错”的语义）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -151,7 +151,7 @@ test('cancel：缺 id / 取消 cancel 自身 / pending start-request 的语义',
   assert.deepEqual(calls.at(-1), ['cancelStartRequest', { requestId: 'req-1' }]);
 });
 
-test('ledger.request status：默认 action=status，返回 BSK 形状 + 既有字段', async () => {
+test('ledger.request status：默认 action=status，返回 兼容形状 + 既有字段', async () => {
   const { ops } = fakeOps();
   const reply = await ops.ledgerRequest({ limit: 5 });
   assert.equal(reply.action, 'status');
@@ -313,7 +313,7 @@ test('真实 daemon 进程：cancel / ledger.request 进入 LOCAL 路由并真�
     await waitForDaemon(port, child);
     const token = JSON.parse(fs.readFileSync(path.join(home, 'daemon.json'), 'utf8')).token;
 
-    // 1) cancel 已进入 LOCAL 路由（不再 404），未知 id 按 BSK 语义回 cancelled:false。
+    // 1) cancel 已进入 LOCAL 路由（不再 404），未知 id 按 兼容语义回 cancelled:false。
     const unknown = await httpJson(port, { method: 'cancel', params: { rpc_id: 'no-such-rpc' } }, token);
     assert.equal(unknown.status, 200);
     assert.equal(unknown.json.ok, true);
@@ -327,7 +327,7 @@ test('真实 daemon 进程：cancel / ledger.request 进入 LOCAL 路由并真�
     const status = await httpJson(port, { method: 'status', params: {}, rpc_id: 'rpc-77' }, token);
     assert.equal(status.json.ok, true);
 
-    // 2) ledger.request status：默认（action 省略）等于 status，带 BSK 形状 + 既有字段。
+    // 2) ledger.request status：默认（action 省略）等于 status，带 兼容形状 + 既有字段。
     const ledgerStatus = await httpJson(port, { method: 'ledger.request', params: {} }, token);
     assert.equal(ledgerStatus.json.ok, true);
     const statusReply = ledgerStatus.json.result;

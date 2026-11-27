@@ -29,7 +29,7 @@ test('CLI 阻塞流程：轮询 record.status，结束导出 trace.json + states
   assert.match(text, /trace-version|traceVersion/);
 });
 
-test('录制记录持久化 BSK 兼容字段（purpose/redact/version）', () => {
+test('录制记录持久化 兼容基线 兼容字段（purpose/redact/version）', () => {
   const ops = read('extension/src/ops.js');
   assert.match(ops, /purpose: typeof params\.purpose/);
   assert.match(ops, /redactValues: params\.redactValues === true/);

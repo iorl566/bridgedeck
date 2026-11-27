@@ -76,7 +76,7 @@ const FEATURE_TRIGGERS = Object.freeze({
   'capture.stream': ['screenshot', { stream: true }],
   'debug.journal': ['debug.history', {}],
   har: ['network.replay', {}],
-  // ---- BSK 0.5.0 对齐的 6 个门 ----
+  // ---- 兼容基线对齐的 6 个门 ----
   borrow_confirmation_timeout: ['tab.borrow', { tabId: 123, confirmationTimeoutMs: 30000 }],
   interaction_policy: ['request-help', { reason: 'needs human' }],
   incognito_sessions: ['session.start', { incognito: true }],
@@ -181,7 +181,7 @@ test('compatibilityReport：1.8 全拒绝但 11 个特性可降级，4 个只能
     const fallback = degradationForFeature(feature).fallback;
     return fallback && fallback.kind !== 'none';
   }).sort());
-  // 没有等价手段的特性必须诚实标记不可降级（video/har + BSK 对齐的 interaction_policy/dialog_control）。
+  // 没有等价手段的特性必须诚实标记不可降级（video/har + 兼容对齐的 interaction_policy/dialog_control）。
   assert.deepEqual([...report.denied].filter((feature) => !report.degradable.includes(feature)).sort(), ['dialog_control', 'har', 'interaction_policy', 'video']);
   assert.equal(report.verdict, 'incompatible');
   assert.equal(report.migration.upgradeRequired, true);

@@ -867,7 +867,7 @@ bridge read @e1 --observation ob1 --node-scope --session <id>    # 读取类同�
 
 ### 12.2.3 焦点策略（默认不抢用户焦点）
 
-对齐 BSK 与 OpenCode Browse 的行为：**默认后台执行，不主动把浏览器窗口/标签页置前**。
+对齐参考实现的行为：**默认后台执行，不主动把浏览器窗口/标签页置前**。
 
 - 会话标签页由 `debugger.armTab` 开启 `Emulation.setFocusEmulationEnabled`：页面自认可见/聚焦，
   CDP 原生鼠标/键盘输入可在后台 Agent Window 直接派发；
