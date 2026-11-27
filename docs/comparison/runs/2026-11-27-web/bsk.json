@@ -1,0 +1,73 @@
+{
+  "tool": "bsk",
+  "display": "BSK 0.5.0",
+  "startedAt": "2026-11-27T04:36:54.075Z",
+  "url": "http://127.0.0.1:50367/test.html",
+  "tasks": [
+    {
+      "id": "W1",
+      "title": "真实站点：example.com 读取标题",
+      "ok": true,
+      "steps": 2,
+      "ms": 943,
+      "detail": "页面包含 Example Domain",
+      "raw": "{\n  \"context_id\": \"f764e79e-8705-4fa3-ac4c-00eb7c8fae1d\",\n  \"ctx\": \"c1\",\n  \"history_complete\": false,\n  \"obs\": \"o1\",\n  \"observation_id\": \"f558e009-4e17-48c3-a1d8-0b9c8e1850ca\",\n  \"session_id\": \"gjdb\",\n  \"tab_id\": 1769050269,\n  \"title\": \"\",\n  \"url\": \"https://example.com/\",\n  \"vom\": \"@vom 1\\n@view 1241x760\\n@layers 1 focus=L1\\nL1 page\\n  RootWebArea \\\"Example Domain\\\"\\n    paragraph \\\"该域名仅用于文档示例，无需获得许可。这并非一项服务，请勿将其用于测试和监控目的。\\\"\\n    paragraph \\\"This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.\\\"\\n    paragraph \\\"هذا النطاق مُخصص للاستخدام في أمثلة التوثيق دون الحاجة إلى إذن. هذه ليست خدمة، يُرجى تجنب الاعتماد عليها لأغراض الاختبار والمراقبة.\\\"\\n    paragraph \\\"L’usage de ce domaine est réservé à des exemples de documentation, sans autorisation préalable. Il ne s’agit pas d’un service ; son utilisation à des fins de test ou de surveillance est à éviter.\\\"\\n    paragraph \\\"Данный домен предназначен для использования в примерах документации без необходимости получения предварительного разрешения. Это не сервис; не рекомендуется его использование для тестирования и мониторинга.\\\"\\n    paragraph \\\"Este dominio está destinado al uso en ejemplos de documentación sin necesidad de permiso. Esto no es un servicio; evitar utilizarlo para realizar pruebas o monitoreos.\\\"\\n    @e1 link \\\"Learn more\\\" [→ iana.org]\"\n}\n{\n  \"ok\": true,\n  \"tab_id\": 1769050269,\n  \"value\": false\n}"
+    },
+    {
+      "id": "W2",
+      "title": "真实站点：点击链接并跳转（example → iana）",
+      "ok": true,
+      "steps": 3,
+      "ms": 741,
+      "detail": "跳转到 iana.org",
+      "raw": "{\n  \"tab_id\": 1769050269,\n  \"used_ref\": \"e3\",\n  \"used_selector\": \"a\",\n  \"x\": 620.5,\n  \"y\": 735.828125\n}\n{\n  \"ok\": true,\n  \"tab_id\": 1769050269,\n  \"value\": \"https://www.iana.org/help/example-domains\"\n}"
+    },
+    {
+      "id": "W3",
+      "title": "真实站点：httpbin 表单填写并提交",
+      "ok": true,
+      "steps": 4,
+      "ms": 1604,
+      "detail": "提交后页面包含 BridgeDeck",
+      "raw": "{\n  \"tab_id\": 1769050269,\n  \"used_ref\": \"e51\",\n  \"used_selector\": \"input[name=\\\"custname\\\"]\",\n  \"value_length\": 10,\n  \"actual_value\": \"BridgeDeck\"\n}\n{\n  \"tab_id\": 1769050269,\n  \"used_ref\": \"e52\",\n  \"used_selector\": \"form button\",\n  \"x\": 54.15625,\n  \"y\": 664.1875\n}\n{\n  \"ok\": true,\n  \"tab_id\": 1769050269,\n  \"value\": true\n}"
+    },
+    {
+      "id": "W4",
+      "title": "真实站点：Microsoft Learn 整页截图",
+      "ok": false,
+      "steps": 2,
+      "ms": 15591,
+      "detail": "失败：{\n  \"code\": null,\n  \"message\": \"create screenshot temporary file C:\\\\Users\\\\CFT\\\\AppData\\\\Local\\\\Temp\\\\.bsk-screenshot-79e026ff84e54567a325a178cee67893.part: 拒绝访问。 (os error 5)\",\n  \"hint\": \"is the dae (size=0)",
+      "raw": "{\n  \"code\": null,\n  \"message\": \"create screenshot temporary file C:\\\\Users\\\\CFT\\\\AppData\\\\Local\\\\Temp\\\\.bsk-screenshot-79e026ff84e54567a325a178cee67893.part: 拒绝访问。 (os error 5)\",\n  \"hint\": \"is the daemon running? try `bsk daemon start` or `bsk status`\",\n  \"exit_code\": 2\n}"
+    },
+    {
+      "id": "W5",
+      "title": "真实站点：MDN 滚动 + 键盘",
+      "ok": false,
+      "steps": 3,
+      "ms": 8500,
+      "detail": "失败：{\n  \"ok\": true,\n  \"tab_id\": 1769050269,\n  \"value\": 0\n} | {\n  \"code\": \"permission_denied\",\n  \"message\": \"The strict observation changed before this action\",\n  \"hint\": \"For data, use read/extract (fixed passive DOM quer",
+      "raw": "{\n  \"ok\": true,\n  \"tab_id\": 1769050269,\n  \"value\": 0\n}\n{\n  \"code\": \"permission_denied\",\n  \"message\": \"The strict observation changed before this action\",\n  \"hint\": \"For data, use read/extract (fixed passive DOM queries) without another sync. For a visual action, synchronize and reconsider; use a DOM target with explicit expect facts when possible.\",\n  \"exit_code\": 1,\n  \"data\": {\n    \"effect_state\": \"none\",\n    \"observation_id\": \"5a5f67f4-b3c9-4df8-90a4-71ed0863f446\",\n    \"observed_change\": {\n      \"after\": \"true\",\n      \"before\": \"false\",\n      \"change\": \"changed\",\n      \"field\": \"visible\",\n      \"name\": \"Deprecated\",\n      \"part\": \"region\",\n      \"phase\": \"decision\",\n      \"role\": \"image\",\n      \"scope\": \"page\"\n    },\n    \"observed_changes\": {\n      \"added\": 0,\n      \"changed\": 1,\n      \"examples\": [\n        {\n          \"after\": \"true\",\n          \"before\": \"false\",\n          \"change\": \"changed\",\n          \"field\": \"visible\",\n          \"name\": \"Deprecated\",\n          \"part\": \"region\",\n          \"role\": \"image\"\n        }\n      ],\n      \"removed\": 0\n    },\n    \"phase\": \"observation\",\n    \"reason\": \"observation_changed\",\n    \"recovery\": \"For data, use read/extract (fixed passive DOM queries) without another sync. For a visual action, synchronize and reconsider; use a DOM target with explicit expect facts when possible.\"\n  }\n}"
+    },
+    {
+      "id": "W6",
+      "title": "真实站点：Edge 商店页读取",
+      "ok": false,
+      "steps": 2,
+      "ms": 579,
+      "detail": "失败：{\n  \"code\": \"cdp_failed\",\n  \"message\": \"{\\\"code\\\":-32000,\\\"message\\\":\\\"Not allowed\\\"}\",\n  \"hint\": \"Inspect the application result and synchronize before choosin | {\n  \"ok\": true,\n  \"tab_id\": 1769050269,\n  \"value\": false\n}",
+      "raw": "{\n  \"code\": \"cdp_failed\",\n  \"message\": \"{\\\"code\\\":-32000,\\\"message\\\":\\\"Not allowed\\\"}\",\n  \"hint\": \"Inspect the application result and synchronize before choosing another action. Never replay an uncertain submission.\",\n  \"exit_code\": 3,\n  \"data\": {\n    \"effect_state\": \"unknown\",\n    \"phase\": \"execution\",\n    \"recovery\": \"Inspect the application result and synchronize before choosing another action. Never replay an uncertain submission.\"\n  }\n}\n{\n  \"ok\": true,\n  \"tab_id\": 1769050269,\n  \"value\": false\n}"
+    }
+  ],
+  "environment": {
+    "edge": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "node": "v24.22.3",
+    "os": "win32"
+  },
+  "finishedAt": "2026-11-27T04:37:41.418Z",
+  "summary": {
+    "ok": 3,
+    "total": 6,
+    "totalMs": 27958
+  }
+}

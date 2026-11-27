@@ -102,3 +102,30 @@ node tools/compare/report.mjs --run docs/comparison/runs/<id>
 **整体回归**：CLI selftest **404/404 PASS**；E2E 8 项 **8/8**（T3 181ms、T5 174ms、T4 298ms、T6 404ms、T7 639ms、T8 359ms）。
 
 **仍待观察（非本轮目标）**：daemon 侧重写盘失败目前归到 `capture`，如需再细分为 `daemon-write` 可在下一版补。
+## 七、复跑 + 真实网站同站测试（2026-11-27 第二轮）
+
+### 7.1 E2E 复跑（确认上一轮的优化没有回退）
+
+BridgeDeck 8/8，耗时 4726ms：T1 937ms、T2 1461ms、T3 **186ms**、T4 295ms、T5 **184ms**、T6 502ms、T7 754ms、T8 407ms（`docs/comparison/runs/2026-11-27-rerun`）。
+
+### 7.2 同一批真实网站，两边跑同样 6 个任务
+
+站点全部在本机可达（example.com、httpbin.org、learn.microsoft.com、MDN、Edge 加载项商店页；HN/Wikipedia 仍不可达，未用）：
+
+| 任务 | 站点 | BSK 0.5.0 | BridgeDeck 0.3.1 |
+| --- | --- | --- | --- |
+| W1 读取标题 | example.com | ✅ 864ms | ✅ 1423ms |
+| W2 点击链接并跳转 | example.com → iana.org | ✅ 1130ms | ✅ 1627ms |
+| W3 填表并提交（POST） | httpbin.org/forms/post | ✅ 1372ms | ✅ 2416ms |
+| W4 整页截图 | learn.microsoft.com | ❌ strict observation 失效 | ✅ 4.1s / 1.21MB |
+| W5 滚动 + 键盘 | MDN | ❌ strict observation 失效 | ✅ 3718ms |
+| W6 读取商店页 | Edge 加载项详情页 | ❌ `cdp_failed: Not allowed` | ✅ 3554ms |
+| **通过率** | | **3/6**（27.9s） | **6/6**（15.9s） |
+
+原始数据与报告：`docs/comparison/runs/2026-11-27-web/`（`report.md`、`bsk.json`、`bridge.json`、`shots/`）。
+
+### 7.3 结论
+
+- 静态/简单页面（W1–W3）两边都稳定，BSK 略快（原生二进制启动优势）。
+- **动态或重页面是分水岭**：BSK 的 strict 观察在页面渲染中失效（连 `evaluate` 都会被 `cdp_failed` 挡住），BridgeDeck 的 target 策略 + 默认 domcontentloaded + 自动重观察把 6 项全过。
+- 整页截图这类重动作，BridgeDeck 现在 4.1s 出 1.21MB PNG，BSK 在本机受 strict 观察与 daemon 写盘双重限制。

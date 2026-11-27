@@ -260,6 +260,17 @@ const adapters = {
 
 const FIXTURE = 'http://127.0.0.1:__FIXTURE_PORT__/test.html';
 
+function webSession(stdout) {
+  const json = parseJson(stdout);
+  if (!json) return null;
+  return (json.result && json.result.sessionId) || json.session_id || json.sessionId || null;
+}
+
+function withSession(args, sessionId) {
+  if (!sessionId) return args;
+  return [...args, '--session', String(sessionId)];
+}
+
 const tasks = [
   {
     id: 'T1',
@@ -452,6 +463,97 @@ const tasks = [
       const open = await tool.cli(args);
       const ok = open.code === 0 && open.stdout.includes('Microsoft Edge');
       return { ok, steps: 1, ms: open.ms, detail: ok ? '文档页可读' : `失败：${open.stdout.slice(0, 240)}`, raw: open.stdout.slice(0, 3000) };
+    },
+  },
+
+  {
+    id: 'W1',
+    phase: 'web',
+    title: '真实站点：example.com 读取标题',
+    async run(tool, ctx) {
+      const open = await tool.cli(['open', 'https://example.com/', '--json']);
+      const sid = webSession(open.stdout);
+      const probe = await tool.cli(withSession(['evaluate', "document.body.innerText.includes('Example Domain')", '--json'], sid));
+      const ok = open.code === 0 && probe.stdout.includes('true');
+      return { ok, steps: 2, ms: open.ms + probe.ms, detail: ok ? '页面包含 Example Domain' : `失败：${open.stdout.slice(0, 160)} | ${probe.stdout.slice(0, 200)}`, raw: (open.stdout + '\n' + probe.stdout).slice(0, 2000) };
+    },
+  },
+  {
+    id: 'W2',
+    phase: 'web',
+    title: '真实站点：点击链接并跳转（example → iana）',
+    async run(tool, ctx) {
+      const open = await tool.cli(['open', 'https://example.com/', '--json']);
+      const sid = webSession(open.stdout);
+      const click = await tool.cli(withSession(['click', 'a', '--json'], sid));
+      await sleep(2000);
+      const href = await tool.cli(withSession(['evaluate', 'location.href', '--json'], sid));
+      const ok = open.code === 0 && click.code === 0 && /iana\.org/.test(href.stdout);
+      return { ok, steps: 3, ms: open.ms + click.ms + href.ms, detail: ok ? '跳转到 iana.org' : `失败：${click.stdout.slice(0, 160)} | ${href.stdout.slice(0, 200)}`, raw: (click.stdout + '\n' + href.stdout).slice(0, 2000) };
+    },
+  },
+  {
+    id: 'W3',
+    phase: 'web',
+    title: '真实站点：httpbin 表单填写并提交',
+    async run(tool, ctx) {
+      const open = await tool.cli(['open', 'https://httpbin.org/forms/post', '--json']);
+      const sid = webSession(open.stdout);
+      const fill = tool.name === 'bsk'
+        ? await tool.cli(withSession(['fill', '--selector', 'input[name="custname"]', '--value', 'BridgeDeck', '--json'], sid))
+        : await tool.cli(withSession(['fill', 'input[name="custname"]', '--value', 'BridgeDeck', '--json'], sid));
+      const click = await tool.cli(withSession(['click', 'form button', '--json'], sid));
+      await sleep(2500);
+      const probe = await tool.cli(withSession(['evaluate', "document.body.innerText.includes('BridgeDeck')", '--json'], sid));
+      const ok = open.code === 0 && fill.code === 0 && click.code === 0 && probe.stdout.includes('true');
+      return { ok, steps: 4, ms: open.ms + fill.ms + click.ms + probe.ms, detail: ok ? '提交后页面包含 BridgeDeck' : `失败：${fill.stdout.slice(0, 140)} | ${click.stdout.slice(0, 140)} | ${probe.stdout.slice(0, 160)}`, raw: (fill.stdout + '\n' + click.stdout + '\n' + probe.stdout).slice(0, 2500) };
+    },
+  },
+  {
+    id: 'W4',
+    phase: 'web',
+    title: '真实站点：Microsoft Learn 整页截图',
+    async run(tool, ctx) {
+      const url = 'https://learn.microsoft.com/en-us/microsoft-edge/extensions/';
+      const open = await tool.cli(['open', url, '--json']);
+      const sid = webSession(open.stdout);
+      const out = path.join(ctx.runDir, 'shots', `${tool.name}-full.png`);
+      ensureDir(path.dirname(out));
+      const tmpOut = path.join(os.tmpdir(), `web-${tool.name}-${Date.now()}.png`);
+      const shot = tool.name === 'bsk'
+        ? await tool.cli(withSession(['screenshot', '--full-page', '--timeout', '120s', '--out', tmpOut, '--json'], sid))
+        : await tool.cli(withSession(['screenshot', '--mode', 'auto', '--timeout', '120s', '--out', tmpOut, '--json'], sid));
+      const source = fs.existsSync(tmpOut) ? tmpOut : out;
+      if (source !== out && fs.existsSync(source)) fs.copyFileSync(source, out);
+      const size = fs.existsSync(out) ? fs.statSync(out).size : 0;
+      const ok = open.code === 0 && shot.code === 0 && size > 20000;
+      return { ok, steps: 2, ms: open.ms + shot.ms, detail: ok ? `整页 PNG ${size} 字节` : `失败：${shot.stdout.slice(0, 200)} (size=${size})`, raw: shot.stdout.slice(0, 1500) };
+    },
+  },
+  {
+    id: 'W5',
+    phase: 'web',
+    title: '真实站点：MDN 滚动 + 键盘',
+    async run(tool, ctx) {
+      const open = await tool.cli(['open', 'https://developer.mozilla.org/en-US/docs/Web/HTML/Element/table', '--json']);
+      const sid = webSession(open.stdout);
+      const scroll = await tool.cli(withSession(['evaluate', 'window.scrollTo(0, 1200); window.scrollY', '--json'], sid));
+      const press = await tool.cli(withSession(['press', 'Escape', '--json'], sid));
+      const ok = open.code === 0 && scroll.code === 0 && press.code === 0 && !/error/i.test(scroll.stdout);
+      return { ok, steps: 3, ms: open.ms + scroll.ms + press.ms, detail: ok ? '滚动与按键均成功' : `失败：${scroll.stdout.slice(0, 160)} | ${press.stdout.slice(0, 160)}`, raw: (scroll.stdout + '\n' + press.stdout).slice(0, 1500) };
+    },
+  },
+  {
+    id: 'W6',
+    phase: 'web',
+    title: '真实站点：Edge 商店页读取',
+    async run(tool, ctx) {
+      const url = 'https://microsoftedge.microsoft.com/addons/detail/ieflpefpmlmmlfgmpfakaglhgmcbcnig';
+      const open = await tool.cli(['open', url, '--json']);
+      const sid = webSession(open.stdout);
+      const probe = await tool.cli(withSession(['evaluate', "document.body.innerText.toLowerCase().includes('bridgedeck')", '--json'], sid));
+      const ok = open.code === 0 && probe.stdout.includes('true');
+      return { ok, steps: 2, ms: open.ms + probe.ms, detail: ok ? '商店页包含 BridgeDeck' : `失败：${open.stdout.slice(0, 160)} | ${probe.stdout.slice(0, 200)}`, raw: (open.stdout + '\n' + probe.stdout).slice(0, 2000) };
     },
   },
 ];
