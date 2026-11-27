@@ -42,7 +42,7 @@ bridge session start --tab 123 --share --control exclusive --json
 
 ### 两种模式
 
-- **open（默认）**：任何共享会话都能写，与 0.3.0 的“共享写”行为一致。租约只记录
+- **open（默认）**：任何共享会话都能写，与 0.3.x 的“共享写”行为一致。租约只记录
   “当前写者”（写动作会认领/续租），不拦动作，便于 `session control` 观察谁在写。
 - **exclusive**：同一时刻只有一个会话能写。
   - holder 是自己 → 续租并放行；

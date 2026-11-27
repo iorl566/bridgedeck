@@ -104,7 +104,7 @@ irm https://raw.githubusercontent.com/iorl566/bridgedeck/main/install-online.ps1
 .\install-online.ps1 -Dest D:\Apps\BridgeDeck -AddToPath
 ```
 
-也可以从 [Releases](https://github.com/iorl566/bridgedeck/releases/latest) 手动下载 `BridgeDeckSetup-0.3.0.exe` 或 `BridgeDeck-cli-0.3.0-win32-x64.zip`。安装器目前是自签名，Windows 会显示"未知发布者"；发布流水线支持 EV 签名，证书配置见 [Windows 签名](docs/windows-signing.md)。
+也可以从 [Releases](https://github.com/iorl566/bridgedeck/releases/latest) 手动下载 `BridgeDeckSetup-0.3.1.exe` 或 `BridgeDeck-cli-0.3.1-win32-x64.zip`。安装器目前是自签名，Windows 会显示"未知发布者"；发布流水线支持 EV 签名，证书配置见 [Windows 签名](docs/windows-signing.md)。
 
 ### 方案 B2：macOS / Linux
 
@@ -112,8 +112,8 @@ irm https://raw.githubusercontent.com/iorl566/bridgedeck/main/install-online.ps1
 
 ```sh
 # macOS（Apple Silicon / Intel）与 Linux（x64 / arm64）
-tar -xzf BridgeDeck-cli-0.3.0-darwin-arm64.tar.gz   # 或 darwin-x64 / linux-x64 / linux-arm64
-cd BridgeDeck-cli-0.3.0-darwin-arm64
+tar -xzf BridgeDeck-cli-0.3.1-darwin-arm64.tar.gz   # 或 darwin-x64 / linux-x64 / linux-arm64
+cd BridgeDeck-cli-0.3.1-darwin-arm64
 sh install.sh --add-to-path
 bridge status
 ```
@@ -268,7 +268,7 @@ CLI、daemon、扩展、DSH 插件应保持同一版本使用新功能。
 推荐用一条命令完成“装新 → 试跑 → 原端口重启”：
 
 ```sh
-bridge update install --from BridgeDeck-cli-0.3.0-linux-x64.tar.gz
+bridge update install --from BridgeDeck-cli-0.3.1-linux-x64.tar.gz
 ```
 
 它会先停旧 daemon、备份当前安装、覆盖 CLI/daemon/lib，再用**原端口**启动新 daemon 并校验版本；启动失败或版本不符会自动回滚并重启旧版本。备份保留在安装目录的 `.rollback/` 下，也可以手动回滚：
@@ -284,7 +284,7 @@ bridge update install --rollback .rollback/<timestamp>/
 3. 再更新扩展（商店更新，或重新加载解压目录）；
 4. 最后更新 DSH 插件并重启 profile。
 
-商店版本会因审核滞后于仓库；本 README 描述的是当前仓库能力。版本变化见 [更新日志](docs/releases/0.3.0.md) 与 [Releases](https://github.com/iorl566/bridgedeck/releases)。
+商店版本会因审核滞后于仓库；本 README 描述的是当前仓库能力。版本变化见 [更新日志](docs/releases/0.3.1.md) 与 [Releases](https://github.com/iorl566/bridgedeck/releases)。
 
 ## 文档导航
 
@@ -322,7 +322,7 @@ node tools/e2e.mjs                  # 端到端（默认同步 docs/assets 截�
 node tools/build-extension.mjs      # 重建扩展 zip（dist/BridgeDeck-extension-<version>.zip）
 node tools/package-portable.mjs     # 当前平台便携包（Windows zip / macOS+Linux tar.gz）
 node tools/package-portable.mjs --platform linux --arch arm64   # 交叉打包（下载对应 Node 运行时）
-bash tools/build-macos-pkg.sh --stage <dir> --version 0.3.0 --out dist/x.pkg   # 仅 macOS
+bash tools/build-macos-pkg.sh --stage <dir> --version 0.3.1 --out dist/x.pkg   # 仅 macOS
 node tools/release.mjs --check      # 发布产物一致性
 ```
 
@@ -348,7 +348,7 @@ docs/           用户文档与发布记录
 
 ## 质量与可验证性
 
-- **测试**：单测 5,051、CLI 自检 404、MCP 自检 216、Python 181、TS 649；真实 Edge E2E **222 条**（JS 与 TS 产物双栈，均含公开用例）。
+- **测试**：单测 5,052、CLI 自检 404、MCP 自检 216、Python 181、TS 649；真实 Edge E2E **222 条**（JS 与 TS 产物双栈，均含公开用例）。
 - **门禁**：协议 4 门禁、质量/长尾/性能预算/体量/依赖/文档/编码/模块加载等 15+ 类，全部可本地复跑。
 
 

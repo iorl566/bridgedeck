@@ -38,7 +38,7 @@
 | 项 | 值 |
 | --- | --- |
 | 状态目录 | `%USERPROFILE%\.browser-bridge`（可用 `BB_HOME` 覆盖） |
-| `daemon.json` | `{ "pid": 1234, "port": 52900, "token": "<32 hex>", "version": "0.2.0", "startedAt": 1700000000000 }` |
+| `daemon.json` | `{ "pid": 1234, "port": 52900, "token": "<32 hex>", "version": "0.3.1", "startedAt": 1700000000000 }` |
 | 日志 | `%USERPROFILE%\.browser-bridge\daemon.log`（追加写，超过 5MB 轮转为 `daemon.log.1`） |
 | 默认端口 | `52900`（可用 `BB_PORT` 或 `--port` 覆盖） |
 | 端口探测 | CLI 依次尝试 `BB_PORT` → 52900 → 52901 … 52909，读 `daemon.json` 里的 `port` 为准 |
@@ -55,7 +55,7 @@
 
 ### `GET /health`（无鉴权）
 ```json
-{ "ok": true, "service": "browser-bridge", "version": "0.2.0", "pid": 1234, "uptimeMs": 12345,
+{ "ok": true, "service": "browser-bridge", "version": "0.3.1", "pid": 1234, "uptimeMs": 12345,
   "port": 52900, "browsers": 1, "sessions": 0 }
 ```
 
@@ -90,11 +90,11 @@ HTTP 状态码恒为 200（只有 token 错误返回 401、方法不存在返回
 
 扩展连上后立刻发送：
 ```json
-{ "type": "hello", "extVersion": "0.2.0", "browser": "edge", "browserVersion": "156.0.4314.58", "userAgent": "..." }
+{ "type": "hello", "extVersion": "0.3.1", "browser": "edge", "browserVersion": "156.0.4314.58", "userAgent": "..." }
 ```
 daemon 回：
 ```json
-{ "type": "hello-ack", "instanceId": "a1b2c3d4", "daemonVersion": "0.2.0" }
+{ "type": "hello-ack", "instanceId": "a1b2c3d4", "daemonVersion": "0.3.1" }
 ```
 `instanceId` 由 daemon 生成（8 位 hex），同一浏览器实例在本次 daemon 生命周期内保持不变
 （重连时扩展可在 hello 里带上次的 `instanceId` 作为提示，但 daemon 以自己生成的为准）。
@@ -155,8 +155,8 @@ daemon → 扩展：
 
 ### `status`
 ```json
-{ "service": "browser-bridge", "version": "0.2.0", "pid": 1234, "port": 52900, "uptimeMs": 12345,
-  "browsers": [ { "instanceId": "a1b2c3d4", "browser": "edge", "browserVersion": "...", "extVersion": "0.2.0", "connectedAt": 1700000000000 } ],
+{ "service": "browser-bridge", "version": "0.3.1", "pid": 1234, "port": 52900, "uptimeMs": 12345,
+  "browsers": [ { "instanceId": "a1b2c3d4", "browser": "edge", "browserVersion": "...", "extVersion": "0.3.1", "connectedAt": 1700000000000 } ],
   "sessions": [ { "sessionId": "abcd", "instanceId": "a1b2c3d4", "tabId": 12, "windowId": 3, "url": "about:blank", "startedAt": 1700000000000 } ] }
 ```
 
@@ -670,7 +670,7 @@ bridge window resize --width <n> --height <n>
 
 ---
 
-## 10. 实现补充（v0.1.1，daemon/CLI 已按此实现）
+## 10. 实现补充（当前实现）
 
 以上正文是第一版契约；实现期间确定的细节统一记在这里，避免两侧再次跑偏。
 
@@ -1152,7 +1152,7 @@ bridge install-skill [--harness dsh|claude|cursor] [--dir <path>] [--force] [--l
 
 ## 23. 实现补充（v0.2 落地记录）
 
-1. **版本**：daemon / CLI / 扩展统一 `0.1.1`；`daemon.json`、`/health`、`/rpc status` 均报 0.1.1。
+1. **版本**：daemon / CLI / 扩展统一 `0.3.1`；`daemon.json`、`/health`、`/rpc status` 均报 0.3.1。
 2. **settings 的路由**：`settings.get` / `settings.set` 是扩展方法，daemon 在本地方法表里同名转发
    （`dispatch` 里调 `routeExtension`），因此 CLI 不需要 session 也能读写。
 3. **`ui.open`（扩展方法）**：`{ page?: "popup"|"options" }` → 在浏览器里打开扩展自己的页面，

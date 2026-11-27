@@ -23,15 +23,15 @@ bash tools/sign-macos.sh --dir "$STAGE" --identity "Developer ID Application: Yo
 
 # 3. 重新打包 tar.gz
 node tools/package-portable.mjs --pack-dir "$STAGE" --platform darwin --arch arm64 \
-  --out dist/BridgeDeck-cli-0.1.3-darwin-arm64.tar.gz
+  --out dist/BridgeDeck-cli-0.3.1-darwin-arm64.tar.gz
 
 # 4. 生成并签名 pkg
-bash tools/build-macos-pkg.sh --stage "$STAGE" --version 0.1.3 \
-  --out dist/BridgeDeck-0.1.3-darwin-arm64.pkg \
+bash tools/build-macos-pkg.sh --stage "$STAGE" --version 0.3.1 \
+  --out dist/BridgeDeck-0.3.1-darwin-arm64.pkg \
   --identity-installer "Developer ID Installer: Your Name (TEAMID)"
 
 # 5. 公证 + staple
-bash tools/notarize-macos.sh --file dist/BridgeDeck-0.1.3-darwin-arm64.pkg \
+bash tools/notarize-macos.sh --file dist/BridgeDeck-0.3.1-darwin-arm64.pkg \
   --apple-id you@example.com --team-id TEAMID --password '<app-specific-password>'
 ```
 
@@ -42,7 +42,7 @@ bash tools/notarize-macos.sh --file dist/BridgeDeck-0.1.3-darwin-arm64.pkg \
 ```sh
 codesign --verify --strict --verbose=2 "$STAGE/bin/node"
 spctl --assess --type execute --verbose=4 "$STAGE/bin/node"   # 公证后
-xcrun stapler validate dist/BridgeDeck-0.1.3-darwin-arm64.pkg
+xcrun stapler validate dist/BridgeDeck-0.3.1-darwin-arm64.pkg
 ```
 
 ## CI Secrets

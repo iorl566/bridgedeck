@@ -10,7 +10,7 @@ EV 证书只能由 CA 完成组织验证后签发，**不能用脚本“生成�
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\make-selfsigned-cert.ps1 `
   -OutDir .\dist\signing -Password '<test password>'
 
-.\tools\sign-windows.ps1 -File .\dist\BridgeDeckSetup-0.1.3.exe `
+.\tools\sign-windows.ps1 -File .\dist\BridgeDeckSetup-0.3.1.exe `
   -Pfx .\dist\signing\BridgeDeck-selfsigned.pfx `
   -Password '<test password>' -NoTimestamp -AllowUntrusted
 ```
@@ -33,7 +33,7 @@ EV 证书通常要求硬件令牌或云 HSM；CI 环境应使用可导入的 PFX
 node tools/build-setup-exe.mjs
 
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\sign-windows.ps1 `
-  -File .\dist\BridgeDeckSetup-0.1.3.exe `
+  -File .\dist\BridgeDeckSetup-0.3.1.exe `
   -Pfx .\dist\signing\BridgeDeck-ev.pfx `
   -Password '<password>' `
   -RequireTimestamp
@@ -42,7 +42,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\sign-windows.ps1 `
 也可以用证书库里的证书，不导出 PFX：
 
 ```powershell
-.\tools\sign-windows.ps1 -File .\dist\BridgeDeckSetup-0.1.3.exe `
+.\tools\sign-windows.ps1 -File .\dist\BridgeDeckSetup-0.3.1.exe `
   -Thumbprint '0123456789ABCDEF...' -RequireTimestamp
 ```
 
@@ -51,8 +51,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\sign-windows.ps1 `
 ## 校验
 
 ```powershell
-Get-AuthenticodeSignature .\dist\BridgeDeckSetup-0.1.3.exe | Format-List
-Get-FileHash .\dist\BridgeDeckSetup-0.1.3.exe -Algorithm SHA256
+Get-AuthenticodeSignature .\dist\BridgeDeckSetup-0.3.1.exe | Format-List
+Get-FileHash .\dist\BridgeDeckSetup-0.3.1.exe -Algorithm SHA256
 node tools/release.mjs --check
 ```
 
