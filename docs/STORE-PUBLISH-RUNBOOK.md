@@ -10,13 +10,15 @@
 | 产品 ID（Partner Center） | `0fc99cde-b63d-40a6-9101-1849797a0d8f` |
 | 商店 ID（CRX） | `ieflpefpmlmmlfgmpfakaglhgmcbcnig` |
 | 线上版本 | 0.3.0（0.3.1 待提交） |
-| 0.3.1 draft 包 | 已上传，最近一次 operation `f8a8093f-9daa-4d7c-9ef3-d42bed8b8799`，状态 `Succeeded` |
+| 0.3.1 draft 包 | 已上传，最近一次 operation `acfc5b64-b1f1-4149-84ae-d99c9da21cd5`，状态 `Succeeded` |
+| 提交审核 | 2026-11-27 10:40 试过 `POST /submissions` → `Failed`，`ModuleStateUnPublishable`，`errors: ["Invalid module : LISTING"]`：**包没问题，是 listing 没填完** |
 | 商店 listing | **未完成**：13 个语言行只有 en-US 有内容；Website 仍是 `example.com`；隐私 URL 是旧地址 |
 | 凭证 | `D:\BridgeDeck-secrets\edge-api-key.txt`、`edge-client-id.txt`、`edge-product-id.txt`（均在仓库外） |
 
 已确认 API 链路可用：`POST /submissions/draft/package` 上传成功即说明 API Key、Client ID、产品 ID 三者匹配。
 **注意**：Edge Add-ons API 只提供“上传包 / 查上传状态 / 提交 / 查提交状态”四个接口，**不能改 listing**；
-文案、图片、隐私页必须在 Partner Center 网页里填。
+文案、图片、隐私页必须在 Partner Center 网页里填。`ModuleStateUnPublishable` + `Invalid module : LISTING`
+就是这个限制的直接证据：listing 没填完，提交一定失败。
 
 ## 1. 前置检查
 
@@ -54,6 +56,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\publish-edge.ps1 -Draf
 4. **Privacy**：照 [STORE-REVIEW.md](STORE-REVIEW.md) 逐项粘贴（Single purpose、14 条权限理由、
    Remote code = No、Data usage 勾选、隐私 URL）。
 5. **Store listings**：13 个语言行逐个 `Edit details`：
+   - 先打开本地粘贴单 `docs/store-listing/paste-sheet.html`（浏览器直接打开，每段都有“复制”按钮）；
    - Description：从 `docs/store-listing/<locale>.md` 的 `## Description` 段整段粘贴（250–10,000 字符）；
    - Extension logo：`docs/assets/store/icon-300.png`，传完点 **Duplicate this logo for all languages**；
    - Small / Large promotional tile：`promo-small-440x280.png` / `promo-large-1400x560.png`，同样 Duplicate；
@@ -98,7 +101,8 @@ $j | Select-Object name,version,shortDescription,privacyUrl,publisherWebsiteUri,
 | `InProgressSubmission` | 已有一个提交在审 | 等审核结束再提交 |
 | `NoModulesUpdated` | 包与已发布版本等价，没有可提交的变更 | 确认 draft 里确实是 0.3.1 的包 |
 | `SubmissionValidationError` | listing 缺字段（Description <250、缺 Logo、语言行没 Complete） | 回到 Store listings 逐语言补 |
-| `ModuleStateUnPublishable` | 包本身校验不过 | 重跑 `build-extension.mjs` + `verify-extension-package.mjs` |
+| `ModuleStateUnPublishable`（`errors: ["Invalid module : LISTING"]`） | listing 模块不完整：某语言缺 Description / Logo，或没点 Save draft | 回 Store listings 逐语言补；用 `docs/store-listing/paste-sheet.html` 直接复制 |
+| `ModuleStateUnPublishable`（其它 module） | 包本身校验不过 | 重跑 `build-extension.mjs` + `verify-extension-package.mjs` |
 | `429` | 轮询过密 | 降低频率，间隔 ≥5 秒 |
 
 ## 7. 回滚与善后

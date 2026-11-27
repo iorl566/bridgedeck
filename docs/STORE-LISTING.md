@@ -10,6 +10,7 @@
 | --- | --- |
 | 各语言商店文案 | `docs/store-listing/<locale>.md`（13 个） |
 | 文案校验脚本 | `docs/store-listing/validate.mjs` |
+| 本地粘贴单（推荐填表时用） | `docs/store-listing/paste-sheet.html`，由 `build-paste-sheet.mjs` 生成，带“复制”按钮 |
 | 商店图片 | `docs/assets/store/`（logo、两种宣传图、5 张截图） |
 | 版本更新说明（API 提交用） | `docs/assets/store/release-notes-0.3.1.md` |
 | 隐私页填写答案 / 审核备注 | [STORE-REVIEW.md](STORE-REVIEW.md) |
@@ -19,6 +20,7 @@
 
 ```powershell
 & 'D:\tools\node\node.exe' docs\store-listing\validate.mjs
+& 'D:\tools\node\node.exe' docs\store-listing\build-paste-sheet.mjs   # 改完文案后重新生成粘贴单
 ```
 
 脚本检查：13 个文件齐全、Description 250–10,000 字符、搜索词 ≤7 条 / 单条 ≤30 字符 / 总词数 ≤21，
