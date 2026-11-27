@@ -1,34 +1,28 @@
-# 参考材料与逆向产物：不随发布
+﻿# 参考材料与逆向产物：不随发布
 .ref/
+ref/
 # 依赖与运行产物
 node_modules/
+**/node_modules/
 *.log
 .DS_Store
 Thumbs.db
 dist/
 tests/browser/dist-overlays/
-ref/
-# 会话恢复/临时截图，不随发布
+# 会话恢复/临时截图
 DSH-会话恢复-*.md
-t.slice(0
-
 # Python 缓存
 __pycache__/
 *.pyc
-
 # 临时分析文件
 .tmp-*
-
+.tmp/
 # 架构路线（TS/React/WXT）本地产物
 apps/extension/.wxt/
 apps/extension/.output/
 apps/extension/coverage/
 crates/*/target/
-
-# ������ʱ/��֤��Կ���ͼ
-.tmp/
-
-# 内部资料：商店运营/竞品对比/性能实测/日志，不随仓库发布（见 docs/REPO-POLICY.md）
+# 内部资料：商店运营/竞品对比/性能实测/日志，不随发布
 docs/comparison/
 docs/store-listing/
 docs/assets/store/
