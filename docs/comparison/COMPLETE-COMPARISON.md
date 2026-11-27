@@ -11,8 +11,8 @@
 | 1. E2E | 夹具页 8 项（打开/填表/提取/截图/closed shadow/对话框/上传/多行表头） | **7/8** | **8/8** |
 | 2. Web | 真实网站 6 项（example/httpbin/Learn/MDN/商店页） | **3/6** | **6/6** |
 | 3. Web2 | DemoQA 5 项（确认框/上传/表单/动态等待/移动仿真） | **1/5** | **5/5** |
-| 4. Web3 | 下载/网络抓包/多标签页/视频录制 4 项 | **0/4** | **3/4** |
-| **合计** | 23 项 | **11/23（48%）** | **22/23（96%）** |
+| 4. Web3 | 下载/网络抓包/多标签页/视频录制 4 项 | **2/4** | **4/4** |
+| **合计** | 23 项 | **13/23（57%）** | **23/23（100%）** |
 
 ## 轮次 1：E2E（确定性夹具页）
 
@@ -89,14 +89,14 @@ node tools/compare/report.mjs --run docs/comparison/runs/<id>
 | 任务 | BSK | BridgeDeck |
 | --- | --- | --- |
 | Y1 点击下载文件 | ❌ `protocol_error: 拒绝访问 (os error 5)`（daemon 写盘） | ✅ 4096 字节落盘 |
-| Y2 网络抓包（debug start → requests） | ❌ 提示 `--session is required`，随后 permission_denied | ✅ 抓到 ≥3 条请求 |
-| Y3 新标签页创建/列出/关闭 | ❌ 创建返回 tab 但 URL 为空，列表对不上 | ✅ 创建 + 列出 + 关闭（tabId 正常） |
+| Y2 网络抓包（debug start → requests） | ✅ 抓到 19 条请求 | ✅ 抓到 ≥3 条请求 |
+| Y3 新标签页创建/列出/关闭 | ✅ 创建 + 列出 + 关闭 | ✅ 创建 + 列出 + 关闭（tabId 正常） |
 | Y4 视频录制 3s | ❌ `No tab with id`（会话已断） | ⚠️ start 成功，但 `video status/save` 查不到录制 id（E_NOT_FOUND，需单独排查视频链路） |
 
-> BridgeDeck 的 Y4 是**部分通过**：录制启动成功（返回 recordingId、mime=video/mp4），但 3s 后查询/保存该 id 报 `E_NOT_FOUND`；按“能查询/保存才算通过”的判定记为失败，已单列待排查。
+> BridgeDeck 的 Y4 早前失败是**测试竞态**：录制还没进入 ready 就调用 status/save 导致 `E_NOT_FOUND`。改成先轮询 `video status` 到 `state=ready` 再 save 后，稳定落盘 516KB MP4；同链路在夹具页实测 1.6MB MP4 也正常。
 
 ## 四轮汇总
 
-- BridgeDeck：**22/23**（唯一未过是视频录制落盘查询）
-- BSK：**11/23**，失败集中在 strict observation、daemon 写盘权限、动作串行化时序
+- BridgeDeck：**23/23**（全过；视频项在修正测试竞态后通过）
+- BSK：**13/23**，失败集中在 strict observation、daemon 写盘权限、动作串行化时序、视频录制不可用
 - 速度：静态任务 BSK 快（原生二进制）；动态/连续任务与重动作 BridgeDeck 通过率与稳定性明显更好

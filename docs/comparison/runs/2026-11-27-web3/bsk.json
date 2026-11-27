@@ -1,44 +1,44 @@
 {
   "tool": "bsk",
   "display": "BSK 0.5.0",
-  "startedAt": "2026-11-27T05:42:43.079Z",
-  "url": "http://127.0.0.1:60115/test.html",
+  "startedAt": "2026-11-27T05:54:28.139Z",
+  "url": "http://127.0.0.1:59655/test.html",
   "tasks": [
     {
       "id": "Y1",
       "title": "DemoQA：点击下载文件",
       "ok": false,
       "steps": 3,
-      "ms": 32797,
+      "ms": 3956,
       "detail": "失败：{\n  \"code\": \"protocol_error\",\n  \"message\": \"拒绝访问。 (os error 5)\",\n  \"hint\": \"ensure CLI and daemon protocol versions match — check `protocol version` i size=0",
       "raw": "{\n  \"code\": \"protocol_error\",\n  \"message\": \"拒绝访问。 (os error 5)\",\n  \"hint\": \"ensure CLI and daemon protocol versions match — check `protocol version` in `bsk status`\",\n  \"exit_code\": 2\n}"
     },
     {
       "id": "Y2",
       "title": "DemoQA：网络抓包（debug start → requests）",
-      "ok": false,
+      "ok": true,
       "steps": 5,
-      "ms": 4432,
-      "detail": "失败：{\n  \"code\": null,\n  \"message\": \"--session is required except for offline capabilities\",\n  \"hint\": \"is the daemon running? try `bsk daemon start` or `b | {\n  \"code\": \"permission_denied\",\n  \"message\": \"The strict observation changed before this action\",\n  \"hint\": \"For data, use read/extract (fixed passiv | {\n  \"code\": null,\n  \"message\": \"--session is required except for offline capabilities\",\n  \"hint\": \"is the daemon running? try `bsk daemon start` or `b",
-      "raw": "{\n  \"code\": null,\n  \"message\": \"--session is required except for offline capabilities\",\n  \"hint\": \"is the daemon running? try `bsk daemon start` or `bsk status`\",\n  \"exit_code\": 2\n}\n{\n  \"code\": null,\n  \"message\": \"--session is required except for offline capabilities\",\n  \"hint\": \"is the daemon running? try `bsk daemon start` or `bsk status`\",\n  \"exit_code\": 2\n}"
+      "ms": 4516,
+      "detail": "抓到 ≥3 条请求",
+      "raw": "{\n  \"session_id\": \"btng\",\n  \"run\": {\n    \"id\": \"daf2bf84c1c32\",\n    \"session_id\": \"btng\",\n    \"tab_id\": 1769051065,\n    \"name\": \"web3\",\n    \"url\": \"https://demoqa.com/text-box\",\n    \"started_at\": 1795758879727.0,\n    \"state\": \"capturing\",\n    \"requests\": 0,\n    \"operations\": 0,\n    \"errors\": 0,\n    \"dropped_requests\": 0,\n    \"dropped_operations\": 0,\n    \"dropped_console\": 0,\n    \"coverage\": [\n      \"from_start\",\n      \"task_tab\",\n      \"text_bodies_bounded\",\n      \"time_window_not_causality\",\n      \"page_main_frame\",\n      \"worker_targets_not_captured\",\n      \"manual_main_frame_only\",\n      \"initial_load_not_recorded\"\n    ],\n    \"next_since\": 3,\n    \"active_rules\": 0,\n    \"saved_at\": 1795758879790.0,\n    \"environment\": {\n      \"extension_version\": \"0.5.0\",\n      \"user_agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0\"\n    }\n  },\n  \"output\": {\n    \"budget\": 65536,\n    \"truncated\": false,\n    \"omitted\": []\n  }\n}\n{\n  \"session_id\": \"btng\",\n  \"run\": {\n    \"id\": \"daf2bf84c1c32\",\n    \"session_id\": \"btng\",\n    \"tab_id\": 1769051065,\n    \"name\": \"web3\",\n    \"url\": \"https://demoqa.com/text-box\",\n    \"started_at\": 1795758879727.0,\n    \"state\": \"capturing\",\n    \"requests\": 19,\n    \"operations\": 2,\n    \"errors\": 0,\n    \"dropped_requests\": 0,\n    \"dropped_operations\": 0,\n    \"dropped_console\": 0,\n    \"coverage\": [\n      \"from_start\",\n      \"task_tab\",\n      \"text_bodies_bounded\",\n      \"time_window_not_causality\",\n      \"page_main_frame\",\n      \"worker_targets_not_captured\",\n      \"manual_main_frame_only\",\n      \"initial_load_not_recorded\"\n    ],\n    \"next_since\": 121,\n    \"active_rules\": 0,\n    \"saved_at\": 1795758882258.0,\n    \"storage\": {\n      \"requests\": 19,\n      \"bytes\": 242597,\n      \"dropped\": 0,\n      \"pins\": 0\n    },\n    \"environment\": {\n      \"extension_version\": \"0.5.0\",\n      \"user_agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0\"\n    }\n  },\n  \"requests\": [\n    {\n      \"id\": \"daf2bf84c1c32:n1\",\n      \"run_id\": \"daf2bf84c1c32\",\n      \"sequence\": 17,\n      \"started_at\": 1795758880365.0,\n      \"finished_at\": 1795758880638.0,\n      \"method\": \"GET\",\n      \"url\": \"https://demoqa.com/text-box\",\n      \"integrity\": {\n        \"url\": \"complete\",\n        \"metadata\": \"complete\",\n        \"response_headers\": \"complete\"\n      },\n      \"state\": \"complete\",\n      \"resource_type\": \"Document\",\n      \"frame_id\""
     },
     {
       "id": "Y3",
       "title": "多标签页：新开 + 列出 + 关闭",
-      "ok": false,
+      "ok": true,
       "steps": 4,
-      "ms": 3954,
-      "detail": "失败：{\n  \"tab_id\": 1769050838,\n  \"window_id\": 1769050835,\n  \"url\": \"\"\n} | {\n  \"tabs\": [\n    {\n      \"tab_id\": 1769050786,\n      \"title\": \"about:blank\",\n      \"url\": \"about:blank\",\n      \"window_id\": 1769050784,\n      \"active | {\n  \"tab_id\": 1769050838\n}",
-      "raw": "{\n  \"tab_id\": 1769050838,\n  \"window_id\": 1769050835,\n  \"url\": \"\"\n}\n{\n  \"tabs\": [\n    {\n      \"tab_id\": 1769050786,\n      \"title\": \"about:blank\",\n      \"url\": \"about:blank\",\n      \"window_id\": 1769050784,\n      \"active\": true,\n      \"scope\": \"user\"\n    },\n    {\n      \"tab_id\": 1769050836,\n      \"title\": \"demosite\",\n      \"url\": \"https://demoqa.com/upload-download\",\n      \"window_id\": 1769050835,\n      \"active\": false,\n      \"scope\": \"agent\"\n    },\n    {\n      \"tab_id\": 1769050838,\n      \"title\": \"\",\n      \"url\": \"\",\n      \"window_id\": 1769050835,\n      \"active\": true,\n      \"scope\": \"agent\"\n    }\n  ]\n}"
+      "ms": 602,
+      "detail": "新标签已创建并关闭（tabId=1769051067）",
+      "raw": "{\n  \"tab_id\": 1769051067,\n  \"window_id\": 1769051064,\n  \"url\": \"\"\n}\n{\n  \"tabs\": [\n    {\n      \"tab_id\": 1769051003,\n      \"title\": \"about:blank\",\n      \"url\": \"about:blank\",\n      \"window_id\": 1769051001,\n      \"active\": true,\n      \"scope\": \"user\"\n    },\n    {\n      \"tab_id\": 1769051065,\n      \"title\": \"Example Domain\",\n      \"url\": \"https://example.com/\",\n      \"window_id\": 1769051064,\n      \"active\": false,\n      \"scope\": \"agent\"\n    },\n    {\n      \"tab_id\": 1769051067,\n      \"title\": \"Overview of Microsoft Edge extensions - Microsoft Edge Developer documentation | Microsoft Learn\",\n      \"url\": \"https://learn.microsoft.com/en-us/microsoft-edge/extensions/\",\n      \"window_id\": 1769051064,\n      \"active\": true,\n      \"scope\": \"agent\"\n    }\n  ]\n}"
     },
     {
       "id": "Y4",
       "title": "DemoQA：视频录制 3s",
       "ok": false,
-      "steps": 3,
-      "ms": 164,
-      "detail": "失败：{\n  \"code\": \"not_found\",\n  \"message\": \"No tab with id: 1769050838.\",\n  \"hint\": \"the session, tab, or browser may have stopped; run `bsk session list`  |  | {\n  \"browser\": \"418146c0\",\n  \"recordings\": []\n}",
-      "raw": "{\n  \"code\": \"not_found\",\n  \"message\": \"No tab with id: 1769050838.\",\n  \"hint\": \"the session, tab, or browser may have stopped; run `bsk session list` / `bsk browsers` to see current state\",\n  \"exit_code\": 1\n}\n\n{\n  \"browser\": \"418146c0\",\n  \"recordings\": []\n}"
+      "steps": 2,
+      "ms": 167,
+      "detail": "失败：{\n  \"code\": \"not_found\",\n  \"message\": \"No tab with id: 1769051067.\",\n  \"hint\": \"the session, tab, or browser may have stopped; run `bsk session list`  | {\n  \"code\": null,\n  \"message\": \"Choose one recording with --recording (0 matches); use bsk video list\",\n  \"hint\": \"is the daemon running? try `bsk dae | ",
+      "raw": "{\n  \"code\": \"not_found\",\n  \"message\": \"No tab with id: 1769051067.\",\n  \"hint\": \"the session, tab, or browser may have stopped; run `bsk session list` / `bsk browsers` to see current state\",\n  \"exit_code\": 1\n}\n{\n  \"code\": null,\n  \"message\": \"Choose one recording with --recording (0 matches); use bsk video list\",\n  \"hint\": \"is the daemon running? try `bsk daemon start` or `bsk status`\",\n  \"exit_code\": 2\n}\n"
     }
   ],
   "environment": {
@@ -46,10 +46,10 @@
     "node": "v24.22.3",
     "os": "win32"
   },
-  "finishedAt": "2026-11-27T05:43:56.825Z",
+  "finishedAt": "2026-11-27T05:55:07.444Z",
   "summary": {
-    "ok": 0,
+    "ok": 2,
     "total": 4,
-    "totalMs": 41347
+    "totalMs": 9241
   }
 }

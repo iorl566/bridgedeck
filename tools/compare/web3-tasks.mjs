@@ -101,23 +101,21 @@ export const web3Tasks = [
       const start = await tool.cli(withSession(['video', 'start', '--duration', '3s', '--quality', 'standard', '--json'], sid), 120000);
       const startJson = parseJson(start.stdout);
       const recordingId = (startJson && ((startJson.result && startJson.result.recordingId) || startJson.recordingId)) || null;
-      await sleep(3500);
       let status = { code: null, stdout: '' };
-      let list = { code: null, stdout: '' };
-      if (recordingId) {
-        status = await tool.cli(withSession(['video', 'status', recordingId, '--json'], sid)).catch(() => ({ code: null, stdout: '' }));
-        await tool.cli(withSession(['video', 'stop', recordingId, '--json'], sid)).catch(() => null);
+      let ready = false;
+      for (let attempt = 0; attempt < 12 && !ready; attempt += 1) {
+        await sleep(1500);
+        status = await tool.cli(withSession(['video', 'status', '--json'], sid)).catch(() => ({ code: null, stdout: '' }));
+        ready = /"state":\s*"ready"/.test(status.stdout || '') && (!recordingId || status.stdout.includes(recordingId));
       }
-      list = await tool.cli(withSession(['video', 'list', '--json'], sid)).catch(() => ({ code: null, stdout: '' }));
       const out = path.join(ctx.runDir, 'videos', tool.name + '-3s.mp4');
       fs.mkdirSync(path.dirname(out), { recursive: true });
       fs.rmSync(out, { force: true });
       let save = { code: null, stdout: '' };
-      if (recordingId) save = await tool.cli(withSession(['video', 'save', recordingId, '--out', out, '--json'], sid), 120000).catch(() => ({ code: null, stdout: '' }));
+      if (recordingId && ready) save = await tool.cli(withSession(['video', 'save', recordingId, '--out', out, '--json'], sid), 120000).catch(() => ({ code: null, stdout: '' }));
       const size = fs.existsSync(out) ? fs.statSync(out).size : 0;
-      const finished = size > 0 || /completed|stopped|ready|saved|available/i.test(status.stdout + list.stdout) || (recordingId && list.stdout.includes(recordingId));
-      const ok = open.code === 0 && start.code === 0 && !!recordingId && finished;
-      return { ok, steps: 3, ms: open.ms + start.ms + (status.ms || 0) + (list.ms || 0), detail: ok ? '录制已结束并可查询' : `失败：${brief(start.stdout, status.stdout, list.stdout)}`, raw: (start.stdout + '\n' + status.stdout + '\n' + list.stdout).slice(0, 2500) };
+      const ok = open.code === 0 && start.code === 0 && !!recordingId && (ready || size > 0);
+      return { ok, steps: 2, ms: open.ms + start.ms + (status.ms || 0) + (save.ms || 0), detail: ok ? `录制就绪，落盘 ${size} 字节` : `失败：${brief(start.stdout, status.stdout, save.stdout)}`, raw: (start.stdout + '\n' + status.stdout + '\n' + save.stdout).slice(0, 2500) };
     },
   },
 ];
