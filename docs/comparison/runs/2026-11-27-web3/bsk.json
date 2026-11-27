@@ -1,0 +1,55 @@
+{
+  "tool": "bsk",
+  "display": "BSK 0.5.0",
+  "startedAt": "2026-11-27T05:42:43.079Z",
+  "url": "http://127.0.0.1:60115/test.html",
+  "tasks": [
+    {
+      "id": "Y1",
+      "title": "DemoQA：点击下载文件",
+      "ok": false,
+      "steps": 3,
+      "ms": 32797,
+      "detail": "失败：{\n  \"code\": \"protocol_error\",\n  \"message\": \"拒绝访问。 (os error 5)\",\n  \"hint\": \"ensure CLI and daemon protocol versions match — check `protocol version` i size=0",
+      "raw": "{\n  \"code\": \"protocol_error\",\n  \"message\": \"拒绝访问。 (os error 5)\",\n  \"hint\": \"ensure CLI and daemon protocol versions match — check `protocol version` in `bsk status`\",\n  \"exit_code\": 2\n}"
+    },
+    {
+      "id": "Y2",
+      "title": "DemoQA：网络抓包（debug start → requests）",
+      "ok": false,
+      "steps": 5,
+      "ms": 4432,
+      "detail": "失败：{\n  \"code\": null,\n  \"message\": \"--session is required except for offline capabilities\",\n  \"hint\": \"is the daemon running? try `bsk daemon start` or `b | {\n  \"code\": \"permission_denied\",\n  \"message\": \"The strict observation changed before this action\",\n  \"hint\": \"For data, use read/extract (fixed passiv | {\n  \"code\": null,\n  \"message\": \"--session is required except for offline capabilities\",\n  \"hint\": \"is the daemon running? try `bsk daemon start` or `b",
+      "raw": "{\n  \"code\": null,\n  \"message\": \"--session is required except for offline capabilities\",\n  \"hint\": \"is the daemon running? try `bsk daemon start` or `bsk status`\",\n  \"exit_code\": 2\n}\n{\n  \"code\": null,\n  \"message\": \"--session is required except for offline capabilities\",\n  \"hint\": \"is the daemon running? try `bsk daemon start` or `bsk status`\",\n  \"exit_code\": 2\n}"
+    },
+    {
+      "id": "Y3",
+      "title": "多标签页：新开 + 列出 + 关闭",
+      "ok": false,
+      "steps": 4,
+      "ms": 3954,
+      "detail": "失败：{\n  \"tab_id\": 1769050838,\n  \"window_id\": 1769050835,\n  \"url\": \"\"\n} | {\n  \"tabs\": [\n    {\n      \"tab_id\": 1769050786,\n      \"title\": \"about:blank\",\n      \"url\": \"about:blank\",\n      \"window_id\": 1769050784,\n      \"active | {\n  \"tab_id\": 1769050838\n}",
+      "raw": "{\n  \"tab_id\": 1769050838,\n  \"window_id\": 1769050835,\n  \"url\": \"\"\n}\n{\n  \"tabs\": [\n    {\n      \"tab_id\": 1769050786,\n      \"title\": \"about:blank\",\n      \"url\": \"about:blank\",\n      \"window_id\": 1769050784,\n      \"active\": true,\n      \"scope\": \"user\"\n    },\n    {\n      \"tab_id\": 1769050836,\n      \"title\": \"demosite\",\n      \"url\": \"https://demoqa.com/upload-download\",\n      \"window_id\": 1769050835,\n      \"active\": false,\n      \"scope\": \"agent\"\n    },\n    {\n      \"tab_id\": 1769050838,\n      \"title\": \"\",\n      \"url\": \"\",\n      \"window_id\": 1769050835,\n      \"active\": true,\n      \"scope\": \"agent\"\n    }\n  ]\n}"
+    },
+    {
+      "id": "Y4",
+      "title": "DemoQA：视频录制 3s",
+      "ok": false,
+      "steps": 3,
+      "ms": 164,
+      "detail": "失败：{\n  \"code\": \"not_found\",\n  \"message\": \"No tab with id: 1769050838.\",\n  \"hint\": \"the session, tab, or browser may have stopped; run `bsk session list`  |  | {\n  \"browser\": \"418146c0\",\n  \"recordings\": []\n}",
+      "raw": "{\n  \"code\": \"not_found\",\n  \"message\": \"No tab with id: 1769050838.\",\n  \"hint\": \"the session, tab, or browser may have stopped; run `bsk session list` / `bsk browsers` to see current state\",\n  \"exit_code\": 1\n}\n\n{\n  \"browser\": \"418146c0\",\n  \"recordings\": []\n}"
+    }
+  ],
+  "environment": {
+    "edge": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "node": "v24.22.3",
+    "os": "win32"
+  },
+  "finishedAt": "2026-11-27T05:43:56.825Z",
+  "summary": {
+    "ok": 0,
+    "total": 4,
+    "totalMs": 41347
+  }
+}

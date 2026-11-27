@@ -15,6 +15,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import { web2Tasks } from './web2-tasks.mjs';
+import { web3Tasks } from './web3-tasks.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -563,6 +564,7 @@ const tasks = [
   },
 ];
 tasks.push(...web2Tasks);
+tasks.push(...web3Tasks);
 
 
 // ---------------------------------------------------------------- 主流程

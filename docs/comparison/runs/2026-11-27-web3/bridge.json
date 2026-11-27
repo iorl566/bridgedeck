@@ -1,0 +1,55 @@
+{
+  "tool": "bridge",
+  "display": "BridgeDeck 0.3.1",
+  "startedAt": "2026-11-27T05:39:36.027Z",
+  "url": "http://127.0.0.1:53224/test.html",
+  "tasks": [
+    {
+      "id": "Y1",
+      "title": "DemoQA：点击下载文件",
+      "ok": true,
+      "steps": 3,
+      "ms": 32820,
+      "detail": "下载落盘 4096 字节",
+      "raw": "{\"ok\":true,\"result\":{\"downloadId\":3,\"filename\":\"C:\\\\Users\\\\CFT\\\\Downloads\\\\sampleFile (2).jpeg\",\"bytes\":4096,\"state\":\"complete\",\"url\":\"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxISEBUSEhAVFRUVFQ8VFRUVEA8VEBUPFRUWFhUVFRUYHSggGBolHRUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OFxAQGi0eHx8tLS0tLS0tKy0vKy0tLS0tLS0tLS0tLy0tLS0tLSstLS0tLS0tLS0tKy0rLS0rLS0rK//AABEIALcBEwMBIgACEQEDEQH/xAAbAAACAwEBAQAAAAAAAAAAAAACAwABBAUGB//EADcQAAICAQIDBQYEBgIDAAAAAAABAhEDBCESMUFRYXGBkQUTFCKhsULB0fAyUmJy4fEGojOCkv/EABoBAAMBAQEBAAAAAAAAAAAAAAABAgMEBQb/xAApEQACAgICAgEEAAcAAAAAAAAAAQIRAyESMQQTQRQiUWEyUoGh4fDx/9oADAMBAAIRAxEAPwD5nMUxkmKkdh5MQJC2HIFsRqgS6IEgGQtIlBIYmQoIECSFohaQxloKi0i6GIGg0ig0gEXFBxREg4oDRESCUQoxGRiAwVENQGQgHGIwsU4g8I+cQVEB2AomnToWoj8C3AjI9HRxR2KURuOPyhKBrejwPInTozS5mvSZDJlW4emdMhmM4XCzuQybC9RlpCFlMupz2ZxRx48LlKkIzTtmaQcpAUW2fRePgUIgNMhdFiOrieXkLkHJi2ZjQEgAmQDRFUWQsALRaKQQyWRlEZaACBwiCMxoYBLkVQxIFgAKDigUh0IgNIKMRsYlxgNjEBtgxiMjEtRGwgBLkVGI2MAoQHQgUYvJRmyRBUR+SJSgI0U9ClEfijuUoj8UQInk0bcS2GuOwOFDsipFTlR85lnc2c3JzJjdEZBWd0cfKCQx5BM5AtlMVnbg8eMCiFpF0B1FUQuiDA8gwJBSBZkWgCFlgUVRCyDERFkLARQSIkEhgUOxxAih8EAMlAMdJCpANFRRqxxE4VubcMAQN0XGI6MS4wGxiM5p5UgFEbGJSiacWKwRy5fJpAwgOjjNGLAaHg2LtI87J5Db7OTNblUMnHcnASzsXkUkgYodjiVDGa8OIXJIwy+Q2h+njsDq50hy2RztTltmHLlI48MHkmJBkyNlG1nv4oUiUQhAs3shCFjKIUWQAPGtglspEFELRVFgMjIQgCJRZC0hgXFBURIsLAKCNMEJxo040BMwMiFNDpi2gsqPQ3TR3OhigI0mM6OLHsP4OLPnq0BCA6OIdjxjlAiU6PMnltmeGI6Om04vHA6emiqM3kOTPldF4NMN1OKos14WjH7UzqqRPNtnBGUpTSOGsZfux6iFGA3kPQcwMWI0xjRNktzBqtd0RHJz6JhCeV1EPWajojA5AORDeMeKPb8fx1iQVlgl2VZ1pFosFFgUkWQhdDsZCBUQBniSEogiiEIWAEIQtIALSLSCoiAQUUWkWkHGIDRcYmnGtgIxNEYbCJkIkgFHc0SiBjjuDKukdHS4qjZstJIRllw44i8crYrs8OVzuTN8JjOMVGGxl1OWmZTV6Riocno62LcfHI0cnTamjbDUoyaaMMmJpm5ZpUL4G+Yh61CMvtHsElJmccUvhHQ4EuYnNrIx5HJzayT6ibNI4f5jrw+Hyf3s06jVuXgIKojN1SVI9TFjUFUUWiwUEkM6KLRaREgkhWUiJBJESCSCxlJBUWkEkFgVRAiBYHhSUXRKGWCFe1V279en78yUXQCKSGQiUkPhHYCXKgGiorcKQ3S47YEuVK2VwjcUBixbj8OEnkjKWekBDGaViNOn0jZq+D2J9iOWfmJaOVOAGKBtz4aMzQ+Vmq8jlEZrcv8ACuxF6LeRkyMbpM3C7F0jKU"
+    },
+    {
+      "id": "Y2",
+      "title": "DemoQA：网络抓包（debug start → requests）",
+      "ok": true,
+      "steps": 5,
+      "ms": 66789,
+      "detail": "抓到 ≥3 条请求",
+      "raw": "{\"ok\":true,\"result\":{\"ok\":true,\"tabId\":1779785133,\"startedAt\":1795758045900,\"receipt\":{\"method\":\"debug.start\",\"ref\":null,\"frameId\":0,\"revision\":0,\"effectState\":\"committed\",\"recovery\":null},\"effectState\":\"committed\"},\"schema\":\"bb.cli/1\",\"command\":\"debug\",\"subcommand\":\"start\"}\n{\"ok\":true,\"result\":{\"entries\":[{\"id\":1,\"requestId\":\"2C0F6A98CF2B5858D3D512A72344AD8A\",\"method\":\"GET\",\"url\":\"https://demoqa.com/text-box\",\"status\":200,\"type\":\"Document\",\"resourceType\":\"Document\",\"mime\":\"text/html\",\"protocol\":\"http/1.1\",\"startedAt\":1795758046568,\"durationMs\":1962,\"requestBytes\":203,\"responseBytes\":274,\"transferSize\":274,\"error\":null,\"fromCache\":false,\"pageUrl\":\"https://demoqa.com/text-box\",\"commandId\":\"79e75efb-a539-4d96-8f84-733268dc497b\",\"frameId\":\"99FBEF054EB7013A2F894F27373F5C7D\",\"frame\":{\"frameId\":\"99FBEF054EB7013A2F894F27373F5C7D\",\"parentFrameId\":null,\"depth\":0,\"path\":\"99FBEF054EB7013A2F894F27373F5C7D\",\"url\":\"https://demoqa.com/text-box\",\"detached\":false},\"finished\":true,\"streaming\":false,\"chunked\":false,\"chunkCount\":1,\"timings\":{\"queueingMs\":1.53,\"ttfbMs\":1892.2,\"contentDownloadMs\":64,\"totalMs\":1962}},{\"id\":2,\"requestId\":\"6660.52\",\"method\":\"GET\",\"url\":\"https://demoqa.com/assets/index-D_rDx8ml.js\",\"status\":304,\"type\":\"Script\",\"resourceType\":\"Script\",\"mime\":\"text/javascript\",\"protocol\":\"http/1.1\",\"startedAt\":1795758048492,\"durationMs\":1101,\"requestBytes\":247,\"responseBytes\":276,\"transferSize\":276,\"error\":null,\"fromCache\":false,\"pageUrl\":\"https://demoqa.com/text-box\",\"commandId\":\"79e75efb-a539-4d96-8f84-733268dc497b\",\"frameId\":\"99FBEF054EB7013A2F894F27373F5C7D\",\"frame\":{\"frameId\":\"99FBEF054EB7013A2F894F27373F5C7D\",\"parentFrameId\":null,\"depth\":0,\"path\":\"99FBEF054EB7013A2F894F27373F5C7D\",\"url\":\"https://demoqa.com/text-box\",\"detached\":false},\"finished\":true,\"streaming\":false,\"chunked\":false,\"chunkCount\":1,\"timings\":{\"queueingMs\":0.81,\"ttfbMs\":1050.74,\"contentDownloadMs\":0,\"totalMs\":1101}},{\"id\":3,\"requestId\":\"6660.53\",\"method\":\"GET\",\"url\":\"https://demoqa.com/assets/index-pe2EUVKA.css\",\"status\":304,\"type\":\"Stylesheet\",\"resourceType\":\"Stylesheet\",\"mime\":\"text/css\",\"protocol\":\"http/1.1\",\"startedAt\":1795758048495,\"durationMs\":1089,\"requestBytes\":247,\"responseBytes\":276,\"transferSize\":276,\"error\":null,\"fromCache\":false,\"pageUrl\":\"https://demoqa.com/text-box\",\"commandId\":\"79e75efb-a539-4d96-8f84-733268dc497b\",\"frameId\":\"99FBEF054EB7013A2F894F27373F5C7D\",\"frame\":{\"frameId\":\"99FBEF054EB7013A2F894F27373F5C7D\",\"parentFrameId\":null,\"depth\":0,\"path\":\"99FBEF054EB7013A2F894F27373F5C"
+    },
+    {
+      "id": "Y3",
+      "title": "多标签页：新开 + 列出 + 关闭",
+      "ok": true,
+      "steps": 4,
+      "ms": 2796,
+      "detail": "新标签已创建并关闭（tabId=1779785136）",
+      "raw": "{\"ok\":true,\"result\":{\"tabId\":1779785136,\"windowId\":1779785134,\"receipt\":{\"method\":\"tab.new\",\"ref\":null,\"frameId\":0,\"revision\":0,\"effectState\":\"committed\",\"recovery\":null},\"effectState\":\"committed\"},\"schema\":\"bb.cli/1\",\"command\":\"tab\",\"subcommand\":\"new\"}\n{\"ok\":true,\"result\":{\"tabs\":[{\"tabId\":1779785128,\"windowId\":1779785127,\"url\":\"https://demoqa.com/upload-download\",\"title\":\"demosite\",\"active\":true,\"owned\":\"agent\",\"controlled\":false,\"keepOpen\":false,\"groupId\":1516850502,\"group\":\"BridgeDeck\"},{\"tabId\":1779785133,\"windowId\":1779785132,\"url\":\"https://demoqa.com/text-box\",\"title\":\"demosite\",\"active\":true,\"owned\":\"agent\",\"controlled\":false,\"keepOpen\":false,\"groupId\":996085928,\"group\":\"BridgeDeck\"},{\"tabId\":1779785135,\"windowId\":1779785134,\"url\":\"https://example.com/\",\"title\":\"Example Domain\",\"active\":true,\"owned\":\"agent\",\"controlled\":false,\"keepOpen\":false,\"groupId\":468827841,\"group\":\"BridgeDeck\"},{\"tabId\":1779785136,\"windowId\":1779785134,\"url\":\"https://learn.microsoft.com/en-us/microsoft-edge/extensions/\",\"title\":\"learn.microsoft.com/en-us/microsoft-edge/extensions/\",\"active\":false,\"owned\":\"agent\",\"controlled\":false,\"keepOpen\":false,\"groupId\":468827841,\"group\":\"BridgeDeck\"}]},\"schema\":\"bb.cli/1\",\"command\":\"tab\",\"subcommand\":\"list\",\"page\":{\"returned\":4,\"total\":4,\"totalExact\":false,\"hasMore\":false}}"
+    },
+    {
+      "id": "Y4",
+      "title": "DemoQA：视频录制 3s",
+      "ok": false,
+      "steps": 3,
+      "ms": 66211,
+      "detail": "失败：{\"ok\":true,\"result\":{\"ok\":true,\"recordingId\":\"9a432018-91c3-4b8b-b91e-0d0bd0f112e7\",\"tabId\":1779785139,\"mime\":\"video/mp4\",\"startedAt\":1795758120349,\"m | {\"ok\":false,\"error\":{\"code\":\"E_NOT_FOUND\",\"message\":\"找不到录制 9a432018-91c3-4b8b-b91e-0d0bd0f112e7 trace=[]\",\"hint\":\"重新 observe 确认目标是否还在\",\"retry\":\"after- | {\"ok\":true,\"result\":{\"ok\":true,\"recordings\":[]},\"schema\":\"bb.cli/1\",\"command\":\"video\",\"subcommand\":\"list\",\"page\":{\"returned\":0,\"total\":0,\"totalExact\":",
+      "raw": "{\"ok\":true,\"result\":{\"ok\":true,\"recordingId\":\"9a432018-91c3-4b8b-b91e-0d0bd0f112e7\",\"tabId\":1779785139,\"mime\":\"video/mp4\",\"startedAt\":1795758120349,\"mode\":\"debugger\",\"durationMs\":3000,\"recording_state\":\"recording\",\"budget\":{\"version\":1,\"maxDurationMs\":600000,\"maxTotalBytes\":268435456,\"maxSegmentBytes\":67108864,\"maxConcurrent\":1,\"bitrateFloor\":1000000,\"downgradeRatio\":0.6,\"warnRatio\":0.9},\"budget_plan\":{\"ok\":true,\"action\":\"cap-duration\",\"level\":3,\"stop_reason\":null,\"steps\":2,\"actions\":[\"cap-duration\",\"downgrade-bitrate\"],\"projectedBytes\":300000000,\"projectedAfterBytes\":180000000,\"cap_ms\":536870,\"bitrate\":2400000,\"headroom\":{\"duration\":0,\"size\":0,\"segment\":0}},\"persistence\":{\"state\":\"recording\",\"segments\":0,\"bytes\":0,\"journal_state\":\"open\",\"journal_entries\":0,\"journal_chain\":\"\",\"journal_valid\":true,\"frames\":0,\"frames_playable\":null,\"frames_fps\":0,\"seal_ok\":null,\"seal_digest\":null,\"frame_axis\":{\"version\":1,\"ok\":true,\"action\":\"accept\",\"severity\":\"none\",\"fps\":30,\"durationMs\":0,\"counts\":{\"frames\":0,\"expected\":0,\"invalid\":0,\"gaps\":0,\"droppedMs\":0,\"droppedRatio\":0,\"duplicates\":0,\"nonMonotonic\":0,\"keyframes\":0,\"maxKeyframeGapMs\":0},\"coverage\":{\"ratio\":0,\"covered\":0,\"total\":0,\"gapCount\":0,\"gapLength\":0,\"seamless\":false},\"gaps\":[],\"findings\":[{\"code\":\"video.frames.empty\",\"severity\":\"info\",\"detail\":\"没有视频帧记录\"}],\"digest\":\"f9777db134f03c27\",\"text\":\"视频帧对账 ok：0 帧/0.0s 覆盖 0% 丢帧 0 段/0ms（none）\"},\"mux_budget\":{\"version\":1,\"ok\":true,\"action\":\"ok\",\"code\":\"video.mux.ok\",\"detail\":\"封装预算内\",\"container\":\"mp4\",\"durationMs\":0,\"fragmentMs\":2000,\"keyframeMs\":2000,\"fragmentCount\":0,\"overheadBytes\":1536,\"totalBytes\":1536,\"fragments\":[],\"alignment\":{\"keyframeMs\":2000,\"aligned\":true,\"fragmentsPerKeyframe\":1,\"requestedMs\":2000,\"adjusted\":false},\"suggestedFragmentMs\":2000,\"issues\":[\"video.mux.ok\"],\"text\":\"封装计划 ok：0 片×2000ms（keyframe 2000ms，开销 1.5KB）\"},\"segment_budget\":{\"version\":1,\"action\":\"keep\",\"ok\":true,\"segments\":0,\"uniqueSegments\":0,\"totalBytes\":0,\"dedupeSavedBytes\":0,\"projectedBytes\":0,\"reencode\":[],\"duplicates\":[],\"storage\":{\"version\":1,\"ok\":true,\"action\":\"accept\",\"code\":\"storage.ok\",\"kind\":\"video\",\"detail\":\"配额充足\",\"usage\":{\"captures\":0,\"totalBytes\":0,\"byKind\":{\"longshot\":{\"bytes\":0,\"captures\":0},\"video\":{\"bytes\":0,\"captures\":0},\"other\":{\"bytes\":0,\"captures\":0}}},\"pressure\":{\"pressure\":\"ok\",\"ratio\":0,\"remainingBytes\":536870912},\"incomingBytes\":0,\"projectedBytes\":0,\"projectedRatio\":0,\"evicted\":[],\"protectedCount\":0,\"text\":\"存储预算 accept：已用 0.0MB/512.0MB（配额充足）\"},\"issues\":[\"video.segment.ok\"],"
+    }
+  ],
+  "environment": {
+    "edge": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "node": "v24.22.3",
+    "os": "win32"
+  },
+  "finishedAt": "2026-11-27T05:42:42.791Z",
+  "summary": {
+    "ok": 3,
+    "total": 4,
+    "totalMs": 168616
+  }
+}
