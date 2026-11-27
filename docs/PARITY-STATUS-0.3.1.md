@@ -9,11 +9,10 @@
 - 剩余 partial/extra/unknown 为**契约形状/命名/超集**差异，不是缺失能力；逐项说明见 `docs/BSK-REMAINING-GAPS.md`。
 - 发布物与商店材料已准备：9 个 artifact（本地验证签名）、5 张 1280×800 截图 + 300×300 图标、listing/审核/隐私文档、CI 工作流与一键发布步骤。
 
-## 发布阻塞（仅凭证）
+## 发布状态
 
-1. 生产 Ed25519 私钥（当前 keyId `4ee9753d5d93f35d` 仅为本地验证）；
-2. GitHub 仓库写权限/token 或本机 gh 登录；
-3. Edge Partner Center 的 `EDGE_API_KEY` + `EDGE_PRODUCT_ID`；
-4. 此前对话中泄露的 PAT/Edge Key 已作废，需重建后只放 Secrets。
+- ✅ GitHub Release `v0.3.1` 已发布（生产密钥 `c7b5e21301f91a2d` 签名，12 个资产）。
+- ⏳ Edge 商店：API Key 已有；仍缺 `EDGE_CLIENT_ID` 与 `EDGE_PRODUCT_ID`（Partner Center Extension Identity 的小写 GUID）。
+- 本地凭证：`D:\BridgeDeck-secrets`（ACL 仅当前用户）；Edge 补齐两个文件后运行 `tools/publish-edge.ps1`。
 
 详见 `docs/RELEASE-READINESS-0.3.1.md`、`docs/STORE-PUBLISH-RUNBOOK.md`。

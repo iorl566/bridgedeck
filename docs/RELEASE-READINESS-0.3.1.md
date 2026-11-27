@@ -1,6 +1,8 @@
 # Release Readiness — BridgeDeck 0.3.1
 
 > 本文件记录发布候选（RC）证据与阻塞项。所有命令在本仓库根目录执行。
+>
+> **2026-11-27 更新：GitHub Release `v0.3.1` 已发布**（生产密钥签名，keyId `c7b5e21301f91a2d`，12 个资产）；Edge 商店仍缺 Client ID / Product ID。
 > **凭证安全**：不要把 PAT / Edge API Key / 签名私钥写入仓库；只放 GitHub Secrets 或本机环境变量。
 
 ## 1. 构件与签名（本地 RC）
@@ -52,10 +54,10 @@
 
 ## 5. 阻塞项（必须由持有者完成）
 
-1. **生产 Ed25519 私钥**：当前 RC 用本地验证密钥签名（keyId `4ee9753d5d93f35d`），不可对外；需生成生产密钥、公钥/ keyId 入库、私钥放 Secrets；
-2. **GitHub 仓库写权限**：需要有效 token 或本机 `gh` 登录；当前环境无 `.git` remote/凭证，不能 push/tag；
-3. **Edge Partner Center**：需要有效 `EDGE_API_KEY` + `EDGE_PRODUCT_ID`；
-4. **凭证轮换**：此前在对话中出现的 PAT/Edge Key 已视为泄露，必须吊销重建，新值只进 Secrets。
+1. **生产 Ed25519 私钥**：已由 GitHub Actions Secret `RELEASE_SIGNING_PRIVATE_KEY` 完成生产签名；本地私钥副本不在本机（无需再生成）；
+2. **GitHub 仓库写权限**：已完成（main + tag `v0.3.1` + Release 已发布）；
+3. **Edge Partner Center**：已有 API Key；仍缺 **`EDGE_CLIENT_ID`** 与 **`EDGE_PRODUCT_ID`**（Product ID 是 Extension Identity 的小写 GUID）；
+4. **凭证轮换**：本地已按授权存入 `D:\BridgeDeck-secrets`（ACL 仅当前用户）；建议后续轮换并以新值替换。
 
 ## 6. 一键执行顺序（凭证就绪后）
 
