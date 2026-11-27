@@ -1,0 +1,28 @@
+{
+  "tool": "bridge",
+  "display": "BridgeDeck 0.3.1",
+  "startedAt": "2026-11-27T06:01:22.015Z",
+  "url": "http://127.0.0.1:54403/test.html",
+  "tasks": [
+    {
+      "id": "D1",
+      "title": "网络抓包计数（同页面同序列）",
+      "ok": true,
+      "steps": 5,
+      "ms": 65945,
+      "detail": "captured=35",
+      "raw": "{\"ok\":true,\"result\":{\"entries\":[{\"id\":1,\"requestId\":\"A58CADD5B52BFCAD167E709D063F8D72\",\"method\":\"GET\",\"url\":\"https://demoqa.com/text-box?cmp=1795759284332\",\"status\":200,\"type\":\"Document\",\"resourceType\":\"Document\",\"mime\":\"text/html\",\"protocol\":\"http/1.1\",\"startedAt\":1795759318726,\"durationMs\":906,\"requestBytes\":203,\"responseBytes\":638,\"transferSize\":638,\"error\":null,\"fromCache\":false,\"pageUrl\":\"https://demoqa.com/text-box?cmp=1795759284332\",\"commandId\":\"6e36c8b5-3227-4367-a1ca-8a7f63cb3aa6\",\"frameId\":\"E2078DDA536F5180304C4AD913B434E9\",\"frame\":{\"frameId\":\"E2078DDA536F5180304C4AD913B434E9\",\"parentFrameId\":null,\"depth\":0,\"path\":\"E2078DDA536F5180304C4AD913B434E9\",\"url\":\"https://demoqa.com/text-box?cmp=1795759284332\",\"detached\":false},\"finished\":true,\"streaming\":false,\"chunked\":false,\"chunkCount\":1,\"timings\":{\"queueingMs\":2.06,\"ttfbMs\":823.72,\"contentDownloadMs\":72,\"totalMs\":906}},{\"id\":2,\"requestId\":\"18228.50\",\"method\":\"GET\",\"url\":\"https://demoqa.com/assets/index-D_rDx8ml.js\",\"status\":304,\"type\":\"Script\",\"resourceType\":\"Script\",\"mime\":\"text/javascript\",\"protocol\":\"http/1.1\",\"startedAt\":1795759319585,\"durationMs\":1088,\"requestBytes\":265,\"responseBytes\":276,\"transferSize\":276,\"error\":null,\"fromCache\":false,\"pageUrl\":\"https://demoqa.com/text-box?cmp=1795759284332\",\"commandId\":\"6e36c8b5-3227-4367-a1ca-8a7f63cb3aa6\",\"frameId\":\"E2078DDA536F5180304C4AD913B434E9\",\"frame\":{\"frameId\":\"E2078DDA536F5180304C4AD913B434E9\",\"parentFrameId\":null,\"depth\":0,\"path\":\"E2078DDA536F5180304C4AD913B434E9\","
+    }
+  ],
+  "environment": {
+    "edge": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "node": "v24.22.3",
+    "os": "win32"
+  },
+  "finishedAt": "2026-11-27T06:02:38.660Z",
+  "summary": {
+    "ok": 1,
+    "total": 1,
+    "totalMs": 65945
+  }
+}

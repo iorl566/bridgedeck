@@ -28,7 +28,54 @@ function withSession(args, sessionId) {
 
 const brief = (...texts) => texts.map((text) => String(text || '').slice(0, 150)).join(' | ');
 
+function analyzeRequests(stdout) {
+  const json = parseJson(stdout);
+  if (!json) return { count: -1, byType: {}, cached: 0 };
+  let list = null;
+  const walk = (node) => {
+    if (!node || typeof node !== 'object' || list) return;
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    for (const [key, value] of Object.entries(node)) {
+      if ((key === 'requests' || key === 'entries') && Array.isArray(value) && value.length > 0 && value[0] && typeof value[0] === 'object') list = value;
+      walk(value);
+    }
+  };
+  walk(json);
+  if (!list) return { count: 0, byType: {}, cached: 0 };
+  const byType = {};
+  let cached = 0;
+  for (const item of list) {
+    const type = item.resourceType || item.resource_type || item.type || 'unknown';
+    byType[type] = (byType[type] || 0) + 1;
+    if (item.fromCache === true || item.from_cache === true) cached += 1;
+  }
+  return { count: list.length, byType, cached };
+}
+
 export const web3Tasks = [
+  {
+    id: 'D1',
+    phase: 'debug',
+    title: '网络抓包计数（同页面同序列）',
+    async run(tool, ctx) {
+      const url = 'https://demoqa.com/text-box';
+      const unique = url + '?cmp=' + Date.now();
+      const open = await tool.cli(['open', url, '--json']);
+      const sid = webSession(open.stdout);
+      await sleep(600);
+      const start = await tool.cli(withSession(['debug', 'start', '--name', 'count', '--json'], sid));
+      await sleep(400);
+      const nav = await tool.cli(withSession(['navigate', unique, '--json'], sid));
+      await sleep(5000);
+      const req = await tool.cli(withSession(['debug', 'requests', '--json'], sid));
+      const stop = await tool.cli(withSession(['debug', 'stop', '--json'], sid)).catch(() => ({ code: null, stdout: '' }));
+      const analysis = analyzeRequests(req.stdout);
+      const count = analysis.count;
+      const ok = open.code === 0 && start.code === 0 && nav.code === 0 && req.code === 0 && count > 0;
+      return { ok, steps: 5, ms: open.ms + start.ms + nav.ms + req.ms + (stop.ms || 0), detail: 'captured=' + count + ' ' + JSON.stringify({ byType: analysis.byType, cached: analysis.cached }), raw: req.stdout.slice(0, 1500) };
+    },
+  },
+
   {
     id: 'Y1',
     phase: 'web3',
@@ -63,9 +110,9 @@ export const web3Tasks = [
       await sleep(1800);
       const requests = await tool.cli(withSession(['debug', 'requests', '--json'], sid));
       const stop = await tool.cli(withSession(['debug', 'stop', '--json'], sid)).catch(() => ({ code: 0, stdout: '' }));
-      const hasRequests = /"url"/.test(requests.stdout) && (requests.stdout.match(/"url"/g) || []).length >= 3;
-      const ok = open.code === 0 && start.code === 0 && nav.code === 0 && requests.code === 0 && hasRequests;
-      return { ok, steps: 5, ms: open.ms + start.ms + nav.ms + requests.ms + (stop.ms || 0), detail: ok ? '抓到 ≥3 条请求' : `失败：${brief(start.stdout, nav.stdout, requests.stdout)}`, raw: (start.stdout + '\n' + requests.stdout).slice(0, 2500) };
+      const analysis = analyzeRequests(requests.stdout);
+      const ok = open.code === 0 && start.code === 0 && nav.code === 0 && requests.code === 0 && analysis.count >= 3;
+      return { ok, steps: 5, ms: open.ms + start.ms + nav.ms + requests.ms + (stop.ms || 0), detail: ok ? '抓到 ' + analysis.count + ' 条请求 ' + JSON.stringify(analysis.byType) : '失败：' + brief(start.stdout, nav.stdout, requests.stdout), raw: (start.stdout + '\n' + requests.stdout).slice(0, 2500) };
     },
   },
   {

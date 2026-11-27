@@ -12,7 +12,7 @@
 | 2. Web | 真实网站 6 项（example/httpbin/Learn/MDN/商店页） | **3/6** | **6/6** |
 | 3. Web2 | DemoQA 5 项（确认框/上传/表单/动态等待/移动仿真） | **1/5** | **5/5** |
 | 4. Web3 | 下载/网络抓包/多标签页/视频录制 4 项 | **2/4** | **4/4** |
-| **合计** | 23 项 | **13/23（57%）** | **23/23（100%）** |
+| **合计** | 23 项 | **12–13/23（52–57%）** | **23/23（100%）** |
 
 ## 轮次 1：E2E（确定性夹具页）
 
@@ -89,7 +89,7 @@ node tools/compare/report.mjs --run docs/comparison/runs/<id>
 | 任务 | BSK | BridgeDeck |
 | --- | --- | --- |
 | Y1 点击下载文件 | ❌ `protocol_error: 拒绝访问 (os error 5)`（daemon 写盘） | ✅ 4096 字节落盘 |
-| Y2 网络抓包（debug start → requests） | ✅ 抓到 19 条请求 | ✅ 抓到 ≥3 条请求 |
+| Y2 网络抓包（debug start → requests） | ✅ 19 条（独立复测 30 条） | ✅ 23 条（独立复测 36 条） |
 | Y3 新标签页创建/列出/关闭 | ✅ 创建 + 列出 + 关闭 | ✅ 创建 + 列出 + 关闭（tabId 正常） |
 | Y4 视频录制 3s | ❌ `No tab with id`（会话已断） | ⚠️ start 成功，但 `video status/save` 查不到录制 id（E_NOT_FOUND，需单独排查视频链路） |
 
@@ -100,3 +100,26 @@ node tools/compare/report.mjs --run docs/comparison/runs/<id>
 - BridgeDeck：**23/23**（全过；视频项在修正测试竞态后通过）
 - BSK：**13/23**，失败集中在 strict observation、daemon 写盘权限、动作串行化时序、视频录制不可用
 - 速度：静态任务 BSK 快（原生二进制）；动态/连续任务与重动作 BridgeDeck 通过率与稳定性明显更好
+
+## 网络抓包计数口径（为什么早前显示 “BSK 19 / BridgeDeck 3”）
+
+那次数字是**统计口径问题，不是能力差异**：
+
+1. BridgeDeck 的 `debug requests --json` 返回的是 `result.entries` 数组，不是 `requests`；旧断言只数截断到 2500 字符的原始输出里 `"url"` 出现次数，于是显示成 “≥3”。
+2. 同一个 URL 重载会命中缓存，请求数随缓存/时序大幅波动（BSK 先测到 19、复测 8、再测 30）。
+3. BSK 的覆盖声明本身写着 `page_main_frame`、`worker_targets_not_captured`、`initial_load_not_recorded`，与 BridgeDeck 的 CDP 全量记录口径不同。
+
+用 **唯一 URL（cache-busting）+ 完整解析数组** 复测同一序列：
+
+| 口径 | BridgeDeck | BSK |
+| --- | --- | --- |
+| 请求总数 | **36** | **30** |
+| Document | 5 | 2 |
+| Script | 12 | 11 |
+| Stylesheet | 2 | 1 |
+| Image | 9 | 12 |
+| XHR | 2 | 1 |
+| Fetch | 4 | 2 |
+| 来自缓存 | 15 | 18 |
+
+结论：两边抓到的量级相当（36 vs 30），BridgeDeck 多出的是 iframe 文档/后续 Fetch，BSK 的 Image 更多（记录粒度不同）。web3 的 Y2 已改为解析真实数组，报告里显示为 23 条（Bridge）与 19 条（BSK），不再用截断文本判断。
