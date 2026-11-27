@@ -53,9 +53,8 @@ node tools/release.mjs --check --public-key dist/release-public.pem
 ## 4. 商店与 GitHub
 
 - GitHub Release：tag 触发 `release-extension.yml` / `release-cli.yml` / `release-dsh-plugin.yml` / `sign-release.yml`；
-- Edge 商店：`release-store.yml`（需 `EDGE_API_KEY`、`EDGE_PRODUCT_ID`），或按 `docs/STORE-PUBLISH-RUNBOOK.md` 手动 API；
-- Chrome Web Store：同一扩展 zip，按商店后台流程提交（如启用）；
-- 商店 listing 文案/截图/隐私见 `docs/STORE-LISTING.md`、`docs/STORE-REVIEW.md`。
+- Edge 商店：`release-store.yml`（需 `EDGE_API_KEY`、`EDGE_PRODUCT_ID`）；商店 listing/截图/提审备注属于内部资料，不随本仓库发布。
+- 其他商店按各自后台流程提交同一扩展 zip（如启用）。
 
 ## 5. 门禁清单（发布前）
 
@@ -63,6 +62,6 @@ node tools/release.mjs --check --public-key dist/release-public.pem
 - [ ] `release-preflight` PASS
 - [ ] `release --check` PASS
 - [ ] 9 个制品齐全（扩展/Setup/5 平台 CLI/CLI bundle/插件）
-- [ ] 商店截图与图标已更新（`docs/assets/store/store-01..05.png`、`icon-300.png`）
+- [ ] 商店素材（截图/图标）已在内部资料库更新（不随仓库发布）
 - [ ] 隐私政策 URL 可访问
 - [ ] 凭证未出现在仓库/日志；已吊销聊天中泄露的 PAT/API Key

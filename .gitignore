@@ -27,3 +27,17 @@ crates/*/target/
 
 # ������ʱ/��֤��Կ���ͼ
 .tmp/
+
+# 内部资料：商店运营/竞品对比/性能实测/日志，不随仓库发布（见 docs/REPO-POLICY.md）
+docs/comparison/
+docs/store-listing/
+docs/assets/store/
+docs/STORE-LISTING.md
+docs/STORE-PUBLISH-RUNBOOK.md
+docs/STORE-REVIEW.md
+docs/PERFORMANCE.md
+tools/compare/
+tools/store-fill.mjs
+tools/publish-edge.ps1
+tools/bench-perf.mjs
+i18n.fixed.js
