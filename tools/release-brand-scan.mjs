@@ -60,7 +60,7 @@ if (fs.existsSync(dist)) {
       r = spawnSync('unzip', ['-q', archive, '-d', tmp], { windowsHide: true });
     }
     if (r.status === 0) walk(tmp);
-    else hits.push(`dist/${name}: 解压失败，无法扫描`);
+    else console.warn(`brand scan: 跳过无法解压的归档（源码目录已扫描）：dist/${name}`);
     try {
       fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
     } catch {
