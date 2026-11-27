@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>COOP_CTRL_PENDING</title>
+<body>
+<script>
+  // headless --dump-dom 只稳定推进约一帧 rAF：给 rAF 加 setTimeout 兜底，
+  // 让 overlay-suppress 的“两帧 ack”在真实 DOM 里也能完成（语义仍是两帧）。
+  (function patchRaf() {
+    const realRaf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : null;
+    window.requestAnimationFrame = (callback) => {
+      let called = false;
+      const run = () => {
+        if (called) return;
+        called = true;
+        callback(performance.now());
+      };
+      if (realRaf) realRaf(run);
+      setTimeout(run, 30);
+      return 1;
+    };
+  })();
+  // 最小 chrome stub：过层抑制的 apply 走真实 executeScript 语义——直接在页面里执行 func，
+  // 这样断言的是真实 DOM 上的 visibility/attribute，而不是 stub 记录。
+  window.chrome = {
+    runtime: {
+      onMessage: { addListener(fn) { window.__coopHandler = fn; } },
+      sendMessage() { return Promise.resolve({ ok: true }); },
+    },
+    storage: {
+      session: { get: async () => ({}), set: async () => {} },
+      local: { get: async () => ({}), set: async () => {} },
+    },
+    scripting: {
+      async executeScript(options) {
+        const args = Array.isArray(options.args) ? options.args : [];
+        const result = await options.func(...args);
+        return [{ frameId: 0, result }];
+      },
+    },
+  };
+</script>
+<script type="module" src="./cooperation-controller.js"></script>
+</body>

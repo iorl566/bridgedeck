@@ -1,5 +1,7 @@
 /** Inline debug capture panel; the full page keeps rules, timelines and replay. */
 
+import { errorText } from '../common.js';
+
 const $ = (id) => document.getElementById(id);
 
 function setStatus(text, error = false) {
@@ -41,7 +43,7 @@ export function mountDebugPanel() {
     }
     const result = await chrome.runtime.sendMessage({ type: 'bb.debug.start', tabId: tab.id });
     if (!result?.ok) {
-      setStatus(result?.error || '开始采集失败', true);
+      setStatus(errorText(result?.error || '开始采集失败'), true);
       return;
     }
     await sync();
@@ -51,7 +53,7 @@ export function mountDebugPanel() {
     if (!tab?.id) return;
     const result = await chrome.runtime.sendMessage({ type: 'bb.debug.stop', tabId: tab.id });
     if (!result?.ok) {
-      setStatus(result?.error || '停止采集失败', true);
+      setStatus(errorText(result?.error || '停止采集失败'), true);
       return;
     }
     setStatus('已停止');

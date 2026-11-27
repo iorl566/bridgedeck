@@ -137,7 +137,7 @@
   "界面语言 / Language": "Idioma da interface / Language",
   "保存图片": "Salvar imagem",
   "停止并保存": "Parar e salvar",
-  "复制录制指令": "Copiar instruções de gravação",
+  "复制录制指令": "Copiar instrução de gravação",
   "复制给 Agent 的指令": "Copiar instruções para o Agent",
   "复制给 Agent 的提示词": "Copiar prompt para o Agent",
   "已打开手动长截图页": "Página de captura manual aberta",
@@ -149,7 +149,7 @@
   "录制完成": "Gravação concluída",
   "手动录制正在运行的任务": "Gravar manualmente uma tarefa em execução",
   "打开录制页": "Abrir página de gravação",
-  "操作主题（可选）": "Tema da ação (opcional)",
+  "操作主题（可选）": "Tema da operação (opcional)",
   "整页 · 自动滚动": "Página inteira · Rolagem automática",
   "时长上限（1–600 秒）": "Limite (1–600 segundos)",
   "标准 1280/15": "Padrão 1280/15",
@@ -223,5 +223,14 @@
   "允许人工协助说明": "Sobre as solicitações de ajuda humana",
   "输入锁说明": "Sobre o bloqueio de entrada da página",
   "Agent 控制时锁定页面输入": "Bloquear a entrada da página enquanto o Agent controla",
-  "复制实例 ID": "Copiar ID da instância"
+  "复制实例 ID": "Copiar ID da instância",
+  "起始网址（可选）": "URL inicial (opcional)",
+  "例如：发布一篇文章": "ex.: publicar um artigo",
+  "协议": "Protocolo",
+  "生成一段给 Agent 的录制指令：Agent 启动录制后你正常操作，结束后 Agent 读取写出的 trace 目录包，就能自动完成同类任务。": "Gera uma instrução de gravação para o Agent: após iniciar a gravação, opere normalmente; ao terminar, o Agent lê o diretório trace exportado e automatiza tarefas semelhantes.",
+  "录制给 Agent": "Gravar para o Agent",
+  "直接录制": "Gravar diretamente",
+  "录制指令预览": "Prévia da instrução de gravação",
+  "无障碍浮层（读屏可访问）": "Sobreposições acessíveis (compatíveis com leitores de tela)",
+  "开启后浮层使用开放 shadow DOM，并标注 role/aria-live，方便读屏与自动化审查；默认关闭。": "Usa shadow DOM aberto com role/aria-live para leitores de tela e ferramentas de auditoria. Desativado por padrão."
 }

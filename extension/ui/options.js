@@ -1,15 +1,16 @@
 // ui/options.js —— 设置页
 import { DEFAULT_SETTINGS, normalizeSettings, readSettings, writeSettings } from '../src/settings.js';
-import { getLang, setLang, whenReady } from './i18n.js';
+import { getLang, setLang, translate, whenReady } from './i18n.js';
 import { $, toast } from './common.js';
 
-const FIELDS = ['instanceLabel', 'borrowConfirm', 'allowHelp', 'cooperationGuard', 'longShotMode', 'pageGuard'];
+const FIELDS = ['instanceLabel', 'borrowConfirm', 'allowHelp', 'cooperationGuard', 'overlayA11y', 'longShotMode', 'pageGuard'];
 
 function render(settings) {
   $('instanceLabel').value = settings.instanceLabel || '';
   $('borrowConfirm').checked = settings.borrowConfirm === true;
   $('allowHelp').checked = settings.allowHelp === true;
   $('cooperationGuard').checked = settings.cooperationGuard === true;
+  $('overlayA11y').checked = settings.overlayA11y === true;
   $('pageGuard').checked = settings.pageGuard === true;
   $('longShotMode').value = settings.longShotMode === 'manual' ? 'manual' : 'auto';
   renderCommand(settings.instanceLabel);
@@ -26,6 +27,7 @@ function collect() {
     borrowConfirm: $('borrowConfirm').checked,
     allowHelp: $('allowHelp').checked,
     cooperationGuard: $('cooperationGuard').checked,
+    overlayA11y: $('overlayA11y').checked,
     pageGuard: $('pageGuard').checked,
     longShotMode: $('longShotMode').value,
   });
@@ -35,13 +37,13 @@ $('form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const settings = await writeSettings(collect());
   render(settings);
-  toast('已保存');
+  toast(translate('已保存'));
 });
 
 $('reset').addEventListener('click', async () => {
   const settings = await writeSettings({ ...DEFAULT_SETTINGS });
   render(settings);
-  toast('已恢复默认');
+  toast(translate('已恢复默认'));
 });
 
 $('instanceLabel').addEventListener('input', () => {
@@ -63,9 +65,9 @@ $('copyCmd').addEventListener('click', async () => {
   const command = 'bridge session start' + selector + ' --json';
   try {
     await navigator.clipboard.writeText(command);
-    toast('已复制：' + command);
+    toast(translate('已复制：') + command);
   } catch {
-    toast('复制失败，请手动复制：' + command);
+    toast(translate('复制失败，请手动复制：') + command);
   }
 });
 

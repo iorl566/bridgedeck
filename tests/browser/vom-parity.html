@@ -1,0 +1,64 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>VOM_PARITY_PENDING</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 12px; }
+  #vlist { width: 360px; height: 120px; overflow: auto; border: 1px solid #888; position: relative; }
+  .vrow { min-height: 36px; }
+  #clip-wrap { width: 60px; height: 20px; overflow: hidden; border: 1px solid #ccc; }
+  #clip-btn { margin-left: 240px; width: 120px; }
+  #dlg-overlay {
+    position: fixed; left: 0; top: 0; width: 900px; height: 700px; z-index: 900;
+    background: rgba(0, 0, 0, .35); border: 0;
+  }
+  #off-btn { position: absolute; left: -3000px; top: 0; }
+  .spacer { height: 40px; }
+</style>
+<body>
+  <main id="main1" role="main" aria-label="主区域">
+    <form id="f1" role="form" aria-label="联系人表单">
+      <label id="lbl1" for="f-input">姓名</label>
+      <input id="f-input" aria-label="姓名输入" aria-controls="panel" aria-labelledby="lbl1">
+      <button id="f-submit" aria-label="提交表单">提交</button>
+    </form>
+    <button id="main-btn" aria-label="主区域按钮">主区域按钮</button>
+  </main>
+  <div id="panel" role="menu" aria-label="选项面板">
+    <div id="panel-item" role="menuitem" aria-label="选项一">选项一</div>
+  </div>
+
+  <div id="vlist" aria-rowcount="50" aria-label="虚拟列表">
+    <div id="vr-11" class="vrow" role="row" aria-rowindex="11" data-index="11" data-row-key="row-11" style="transform: translateY(0px)">
+      <span aria-hidden="true">第 11 行文本</span>
+      <input id="vr-input-11" aria-label="第 11 行输入">
+    </div>
+    <div id="vr-12" class="vrow" role="row" aria-rowindex="12" data-index="12" data-row-key="row-12" style="transform: translateY(0px)">
+      <span aria-hidden="true">第 12 行文本</span>
+      <input id="vr-input-12" aria-label="第 12 行输入">
+    </div>
+    <div style="height:400px" aria-hidden="true"></div>
+  </div>
+
+  <table id="static-table">
+    <tbody>
+      <tr id="static-row">
+        <td><input id="static-input" aria-label="静态行输入"></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <button id="hid-btn" aria-label="隐藏按钮" style="display:none">隐藏</button>
+  <button id="opa-btn" aria-label="透明按钮" style="opacity:0">透明</button>
+  <button id="pe-btn" aria-label="穿透按钮" style="pointer-events:none">穿透</button>
+  <button id="off-btn" aria-label="屏外按钮">屏外</button>
+  <div id="clip-wrap"><button id="clip-btn" aria-label="被裁剪按钮">裁剪</button></div>
+
+  <div id="dlg-overlay" role="dialog" aria-label="遮挡对话框">
+    <button id="dlg-close" aria-label="关闭对话框">关闭</button>
+  </div>
+  <button id="behind-btn" aria-label="被遮挡按钮" style="position:fixed;left:8px;top:8px;z-index:1">被遮挡</button>
+
+  <div class="spacer"></div>
+  <script src="/extension/injected/page-lib.js"></script>
+  <script type="module" src="./vom-parity.js"></script>
+</body>

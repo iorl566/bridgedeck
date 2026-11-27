@@ -1,29 +1,37 @@
 // src/bridge.js —— service worker 生命周期、命令处理、alarm 兜底重连、弹窗消息、页面守卫
 import { BridgeSocket } from './ws-client.js';
-import { runSerialized, isAgentInputWindow } from './dispatch.js';
+import { runSerialized, isAgentInputWindow, forgetAgentInput } from './dispatch.js';
 import { toWireError } from './errors.js';
 import { redactUrl } from './redact.js';
 import { recordAudit, listAudit, clearAudit } from './audit.js';
 import { showRecordOverlay, hideRecordOverlay } from './record-overlay.js';
 import { listCredentials, revokeAllCredentials, revokeCredential } from './transport/local-credentials.js';
-import { showTakeover, hideTakeover, setTakeoverState, getTakeoverState, clearTakeoverState, syncControlHintsVisible } from './takeover.js';
+import { showTakeover, hideTakeover, setTakeoverState, getTakeoverState, clearTakeoverState, applyDaemonTakeoverState, syncControlHintsVisible } from './takeover.js';
 import { capture, hideManualOverlay, manualFrame, manualSave, manualStart, popupState, saveDataUrl, saveDataUrlImage, showManualOverlay } from './quick.js';
 import { readSettings, subscribeSettings, writeSettings } from './settings.js';
 import { setCooperationBlocked } from './cooperation.js';
 import { showTargetMarker } from './target-marker-client.js';
-import { consumeSelfCreated, markControlledTab, markSelfCreated, readAgentWindows, isSelfCreatedWindow, refreshTakeoverForTab, rehomeBorrowUi, resolveHumanDecision } from './tabs.js';
+import { consumeSelfCreated, markControlledTab, markSelfCreated, readAgentWindows, isSelfCreatedWindow, refreshTakeoverForTab } from './tabs.js';
+import { rehomeBorrowUi } from './borrow-ui.js';
+import { resolveHumanDecision } from './human-decisions.js';
 import { clearActionNotification, clearActionNotificationById, getActionNotification, notifyActionRequest, systemNotification } from './action-notifications.js';
 import { dialogAccept, dialogDismiss, dialogStatus, onDialogOpened, pendingDialog } from './dialogs.js';
 import { awaitOperation, cancelOperation, registerOperation, settleOperation } from './operations.js';
-import { controlGeneration, noteNavigation } from './control.js';
+import { noteNavigation } from './control.js';
+import { controlGeneration } from './control-generation.js';
+import { installRecordPorts } from './record-ports.js';
+import { forgetPointerPosition } from './tools/interaction.js';
+import { forgetScreenshotTab } from './screenshot.js';
+import { replayDebugCommand } from './replay.js';
+import { handleRecordEvent } from './record-events.js';
 import { clearInputLeases } from './input-lease.js';
 import { clearObservationCache } from './tools/observation.js';
 import { clearFrameAliases } from './tools/frames.js';
-import { shadowRefs } from './tools/state.js';
+import { shadowRefs, recentFillFocus, inputFocusCache } from './tools/state.js';
 import { forgetDialogTab } from './dialogs.js';
 import { forgetRules, reinjectRules } from './rules.js';
 import { ruleAdd, ruleClear, ruleExport, ruleImport, ruleList } from './rules.js';
-import { networkReplay } from './network.js';
+
 import { activeRecordings, collectEvent, deleteRecording, listRecordings, reattach, recordTabSwitch, startRecording, stopRecording } from './ops.js';
 import { debugCurrent, debugDelete, debugHistory, debugHistoryDetail, debugPerformance, debugRequest, debugStart, debugStop } from './debug.js';
 import { discardVideo, fetchVideo, handleRecDone, listVideos, startVideo, stopVideo, videoState } from './video.js';
@@ -34,6 +42,9 @@ import { beginCommand, endCommand } from './command-context.js';
 import { installFrameGraphInvalidation } from './frame-graph.js';
 import { hasHooks } from './page-hooks.js';
 import { setHumanState } from './human-state.js';
+import { registerDaemonEventSender } from './lib/daemon-events.js';
+
+installRecordPorts();
 
 const RECONNECT_ALARM = 'bb-reconnect';
 const ALARM_PERIOD_MINUTES = 0.5; // 30s；Chrome 120+ 允许的最小周期
@@ -244,8 +255,8 @@ async function handleDaemonEvent(message) {
   const event = message && message.event;
   const params = (message && message.params) || {};
   if (event === 'takeover.state' && Number.isInteger(params.tabId)) {
-    const state = { sessionId: params.sessionId || '', paused: params.paused === true, borrowed: params.borrowed === true, controller: params.controller || null, project: params.project || (params.controller && params.controller.project) || null };
-    setTakeoverState(params.tabId, state);
+    // takeover.state 的应用逻辑在 takeover.js（含“交还窗口内丢弃尾随 auto pause”）。
+    const { state } = applyDaemonTakeoverState(params.tabId, params);
     await showTakeover(params.tabId, state).catch(() => {});
     return;
   }
@@ -259,6 +270,12 @@ function getClient() {
   if (!client) client = new BridgeSocket({ onCommand: handleCommand, onEvent: handleDaemonEvent });
   return client;
 }
+
+// 其它模块（帮助完成 / cooperate handback / 接管恢复）通过这个出口向 daemon 发事件，
+// 避免它们直接依赖 bridge（会形成循环），也避免 MV3 里同上下文 sendMessage 不回传的问题。
+registerDaemonEventSender((event, params) => {
+  getClient().sendJson({ type: 'event', event, params: params && typeof params === 'object' ? params : {} });
+});
 
 /** 弹窗/设置页发来的消息（MV3 里必须同步返回 true 才能异步 sendResponse）。 */
 async function activeTabId() {
@@ -455,7 +472,7 @@ const MESSAGE_HANDLERS = {
   'bb.debug.rule_export': (message) => ruleExport({ tabId: message.tabId }),
   'bb.debug.rule_import': (message) => ruleImport({ tabId: message.tabId, rules: message.rules }),
   'bb.debug.replay': async (message) => {
-    const result = await networkReplay({ tabId: message.tabId, id: message.id, overrides: message.overrides });
+    const result = await replayDebugCommand({ tabId: message.tabId, id: message.id, overrides: message.overrides });
     return { ok: true, ...result };
   },
   'bb.rec.start': (message) => startVideo({
@@ -587,22 +604,7 @@ function installMessageBridge() {
       return false;
     }
     if (type === 'bb.ops.event') {
-      const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : null;
-      if (tabId != null) {
-        // 事件可能来自 CDP trusted 路径，page-lib 未必能打标；命令窗口是权威归因。
-        const actor = isAgentInputWindow(tabId) ? 'agent' : (message && message.actor);
-        const event = Object.assign({}, message, actor ? { actor } : {}, {
-          frameId: sender && Number.isInteger(sender.frameId) ? sender.frameId : 0,
-          documentId: (message && message.documentId) || (sender && sender.documentId) || null,
-          frameUrl: (message && message.frameUrl) || null,
-        });
-        event.boundary = {
-          documentId: event.documentId || null,
-          frameId: event.frameId || 0,
-          revision: Number.isInteger(event.revision) ? event.revision : null,
-        };
-        collectEvent(tabId, event);
-      }
+      handleRecordEvent(message, sender);
       sendResponse({ ok: true });
       return false;
     }
@@ -808,6 +810,11 @@ function registerListeners() {
     clearObservationCache(tabId);
     clearFrameAliases(tabId);
     shadowRefs.delete(tabId);
+    recentFillFocus.delete(tabId);
+    inputFocusCache.delete(tabId);
+    forgetAgentInput(tabId);
+    forgetPointerPosition(tabId);
+    forgetScreenshotTab(tabId);
     clearTakeoverState(tabId);
     forgetDialogTab(tabId);
     getClient().sendJson({ type: 'event', event: 'tab-removed', params: { tabId } });

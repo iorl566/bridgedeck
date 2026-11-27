@@ -1,0 +1,19 @@
+Stop the active session, return borrowed tabs, and detach the debugger immediately
+
+Usage: bsk.exe close [OPTIONS] [SESSION_ID]
+
+Arguments:
+  [SESSION_ID]  Optional positional session ID to close
+
+Options:
+      --session <SESSION>          Optional explicit session ID flag
+      --context <CONTEXT>          Control context returned by cooperate sync. Required for shared-tab actions
+      --scope <SCOPE>              Explicit caller scope name whose bound session should be closed
+      --all                        Close every active session across the daemon
+      --depends-on <DEPENDS_ON>    Legacy strict-policy decision regions. Target policy uses --expect instead
+      --observation <OBSERVATION>  Explicit observation ID for visual or untargeted actions; never inferred from cached state
+      --expect <EXPECT>            JSON array of target facts to check before input: [{"target":"@e1","field":"text","equals":"Save"}]
+      --json                       Emit machine-readable JSON output (when meaningful)
+      --quiet                      Suppress informational output
+  -v, --verbose...                 Increase log verbosity (`-v` debug, `-vv` trace)
+  -h, --help                       Print help

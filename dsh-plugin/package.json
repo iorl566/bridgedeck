@@ -1,6 +1,6 @@
 {
   "name": "dsh-browser-bridge",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "DeepSeek Harness 插件：把BridgeDeck CLI 包装成 browser_* 工具，让模型直接驱动用户已登录的 Edge/Chrome。",
   "type": "module",
   "license": "MIT",

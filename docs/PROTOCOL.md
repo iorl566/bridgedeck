@@ -100,9 +100,22 @@ daemon 回：
 （重连时扩展可在 hello 里带上次的 `instanceId` 作为提示，但 daemon 以自己生成的为准）。
 
 本机新配对（`local.pair` 生成的链接）同时有一个 6 位配对码。扩展的 hello 带
-`authChallenge: true`、`authKeyId`、`pairToken`，并在首次配对时带 `pairCode`；daemon 在发放
-`auth-challenge` 前校验配对码，缺失或不匹配返回 `E_PAIR_REQUIRED`。配对成功后 daemon 清除待配对码，
-后续重连带 token 即可。远程配对码（`pair.create`）走独立流程，不使用该字段。
+`authChallenge: true`、`authKeyId`、`pairToken`、`browserId`，并在首次配对时带 `pairCode`；daemon 在发放
+`auth-challenge` 前校验配对码，缺失或不匹配返回 `E_PAIR_REQUIRED`。首次激活成功后 daemon
+**立即作废旧链接 token**，通过 `hello-ack.deviceToken` 下发新的设备 token；扩展持久化后
+后续重连带新 token 即可。旧 token 再连接不再视为已配对（可选模式下为 `unpaired`，必需模式下被拒）。
+远程配对码（`pair.create`）走同一套“激活即换发设备 token”的流程，但使用独立配对码表。
+**browser_id 绑定**：激活时把设备 token 绑定到 hello 的 `browserId`（扩展首次生成后存
+`storage.local`）；之后用同一 token 但不同 `browserId` 连接会返回 `E_PAIR_REJECTED` 并关闭，
+防止 token 被复制到其它浏览器复用。
+
+**分阶段 commit（pending → active）**：首次激活时设备先进入 `pending`（`hello-ack.deviceStatus =
+"pending"`），同时下发 `commitTxn` + `commitProof`；扩展用（新）设备 token 计算
+`HMAC(token, "bridgedeck-commit-v1\n" + txn)` 并以 `{ type: "auth-commit", txn, proof }` 确认，
+daemon 验证后把设备置为 `active` 并回 `{ type: "commit-ack", txn }`。若扩展在 commit 前断开，
+带 pending token 重连会**重新拿到同一 commitTxn**（断点恢复）；pending 超过 10 分钟未 commit
+则 token 作废（远程设备被清理、本机 token 失效），必须重新配对。手动 `pair rotate`/`renew` 仍是
+立即生效（不进入 pending）。
 
 握手保护：daemon 要求 hello 在 **5s** 内到达，首帧不超过 **64KiB**；远程 IP 连续失败
 **10 次/60s** 后封禁 **60s**，期间返回 `hello-error { code: "E_RATE_LIMITED" }` 并关闭连接。
@@ -157,6 +170,14 @@ params: `{ "browser": "<instanceId 或 edge/chrome 前缀，可选>", "noFocus":
 若没有浏览器连上：`E_NO_BROWSER`（message 里提示"请在浏览器里加载/启用扩展"）。
 同一 session 重复 start 返回 `E_SESSION_BUSY`。
 
+**共享同一标签页**（`params.tab` + `params.share`）：`session start --tab <tabId> --share` 让新会话加入
+已有会话的 tab（同一 tabId/windowId），各自独立 context/observation；daemon 按 **tab 级队列**串行派发命令，
+避免两个 Agent 的原生输入并发。返回体额外带 `"shared": true`、`"ownerSession": "<主会话>"` 与
+`"control": { mode, epoch, holder, primary, shared, sessionCount }`。可选 `params.controlMode`
+（`open`｜`exclusive`）同时设定该 tab 的控制权仲裁模式（见下节 `session.control_*`）。
+共享 tab 上主会话停止时若还有共享会话存活，daemon **不关标签页**，把控制权与主会话身份转交最老的共享会话
+（见 `session.stop` 的 `handedOff`）。
+
 **可恢复启动**（`session.start_tracked`）：可选 `params.requestId`，形如
 `<expiry-unix-ms>:<8-80 位 id>`（最长 10 分钟内有效）。daemon 在创建窗口前把 token 写入
 `$BB_HOME/session-starts.json`（`starting`），成功写 `ready`（含 sessionId/tabId/windowId），失败写 `failed`。
@@ -178,10 +199,40 @@ CLI：`bridge session start --request-id <token>` 自动走该方法；DSH 插�
 状态机：`prepared → starting → ready → claimed`，任意可取消阶段可进 `cancelled`；墓碑 token 不能再启动。
 CLI：`bridge session prepare|claim|cancel|request --request-id <token>`。
 
-### `session.stop`
-params: `{ "session": "abcd" }` → 发扩展命令 `tab.close` 关闭 agent 窗口（除非 `keep=true`），删掉 session。
+### `session.stop` / `session.stop_all`
+
+`session.stop`：`{ "session": "abcd", "keep"?: false }` → 发扩展命令 `tab.close` 关闭 agent 窗口（除非 `keep=true`），删掉 session。
 重复 stop 返回 `{ ok: true, alreadyStopping: true }`。
-→ `{ "ok": true }`
+若该 tab 上还有共享会话（`--share`），**不关标签页**：控制权与主会话身份转交给最老的共享会话。
+→ `{ "ok": true, "borrowed": false, "handedOff": { "sessionId": "efgh", "tabId": 12 } | null }`
+
+`session.stop_all`：`{ "keep"?: false }` → 停止所有会话，单个失败不影响其它：
+→ `{ "ok": true, "stopped": ["abcd", ...], "failed": [{ "sessionId", "code" }], "count": N }`
+
+```powershell
+bridge session stop <id> [--keep]
+bridge session stop --all
+```
+
+### `session.run_log`
+
+会话级步骤日志（daemon 内存，≤200 步 / 8000 refs；会话停止即释放）：
+`{ "session": "abcd", "limit"?: 50 }` →
+`{ "sessionId", "steps": [...], "count", "total", "refs", "truncated", "dropped", "limits" }`
+
+- `kind:"navigate"`：只保存 `origin` + `path`（query/hash 丢弃，`dropped_query` 标记）。
+- `kind:"action"`：`method` + `target {ref?, stableRef?, role?, name?, selector?, text?}` + `frameId` + `revision` + `effectState`。
+- **绝不保存输入值**（fill 的 value、evaluate 的脚本、上传文件内容都不进日志）。
+- 用途：`bridge recipe draft` 把一次成功操作沉淀成 recipe 草稿。
+
+```powershell
+bridge session run-log <id> [--limit N]
+bridge recipe draft --name <name> --session <id> [--limit N] [--max-steps N]
+```
+
+`recipe draft` 只映射可回放步骤（navigate/reload/click/hover/focus），`fill/press/select/drag/wheel`
+因为需要输入值/坐标而**跳过**（结果里 `skipped` 给出原因），草稿仍是 `approved:false`，需要
+`recipe approve <name> --confirm-human` 后才能 `recipe run`。
 
 
 ### `session.pause` / `session.resume`
@@ -195,7 +246,40 @@ bridge session pause|resume <id>
 
 ### `session.list`
 → `{ "sessions": [ { "sessionId", "instanceId", "tabId", "windowId", "url", "title",
-     "phase": "starting|active|stopping|recovering|disconnected", "startedAt" } ] }`
+     "phase": "starting|active|stopping|recovering|disconnected", "startedAt",
+     "control": { "mode", "epoch", "holder", "primary", "shared", "sessionCount", "leaseRemainingMs" } } ] }`
+
+`control` 只在同一标签页有多个会话（`--share`）时有内容；单会话标签页为 `null`。
+
+### `session.control_status` / `session.claim_control` / `session.release_control` / `session.handoff` / `session.control_mode`
+
+共享 tab 的控制权/租约/handoff（详见 [SHARED-TAB.md](SHARED-TAB.md)）。全部是 daemon 本地方法。
+
+| 方法 | params | 行为 |
+| --- | --- | --- |
+| `session.control_status` | `{ session }` | 返回该 tab 的 `{tabId, mode, epoch, primary, holder, shared, sessions, leaseRemainingMs, holdsControl, control}` |
+| `session.claim_control` | `{ session, leaseMs?, expectEpoch? }` | holder 为空 → 认领；已是自己 → 续租；被他人持有 → `E_CONTROL_BUSY`；主会话可无条件收回（`preempted`） |
+| `session.release_control` | `{ session, expectEpoch? }` | 只有持有者能放弃；释放后 `holder=null`、`epoch+1` |
+| `session.handoff` | `{ session, to, leaseMs?, expectEpoch? }` | 只有持有者能发起；目标必须已在该 tab（`--share`）；成功即转移 holder |
+| `session.control_mode` | `{ session, mode: open\|exclusive }` | 切换该 tab 的仲裁模式并持久化到会话记录 |
+
+语义要点：
+
+- 记录按 tab 维护：`primary`（主会话）、`holder`（写控制权）、`epoch`（每次变化 +1）、`leaseMs`（默认 60s，1s–600s）、`history`（最近 5 次转移）。
+- `open`（默认）：任何共享会话都能写；租约只记录“当前写者”（写动作认领/续租），不拦动作。
+- `exclusive`：同一时刻只有一个会话能写；holder 为空时第一个写动作认领；非持有者的变更动作返回 `E_CONTROL_NOT_HELD`。
+  只读动作永远放行且不续租。
+- 租约到期 → `holder=null`、`epoch+1`、`lastTransition.reason=expire`。
+- `--expect-epoch` 是 CAS：不符 → `E_CONTROL_STALE`。
+- 判定在 daemon 的 **tab 队列内**执行（判定与派发串行），因此两个会话同时写时只有先到者通过。
+- 主会话停止时若有共享会话存活：不关标签页，控制权/主会话身份转交给最老的共享会话（`session.stop` 返回 `handedOff`）。
+
+```powershell
+bridge session control <id> [--mode open|exclusive]
+bridge session claim-control <id> [--lease 60s] [--expect-epoch N]
+bridge session release-control <id> [--expect-epoch N]
+bridge session handoff <id> --to <targetSessionId> [--lease 60s] [--expect-epoch N]
+```
 
 ### 需要 session 的方法（路由到扩展）
 CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发给该会话所属实例。
@@ -233,7 +317,9 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `observe` | `{ tabId, probeHover?: bool }` | `{ url, title, observation: "<multiline text>", refs: <int> }` |
 | `snapshot` | `{ tabId }` | `{ text, refs }`（带 @eN） |
 | `get-html` | `{ tabId, ref?: string, selector?: string }` | `{ html, url }` |
-| `screenshot` | `{ tabId, fullPage?: bool }` | `{ dataUrl, width, height }`（PNG base64，daemon/CLI 负责落盘） |
+| `screenshot` | `{ tabId, fullPage?: bool, stream?: bool }` | `{ dataUrl, width, height }`（PNG base64，daemon/CLI 负责落盘）；`stream:true` 或 dataUrl > ~1.5MB 时改为 `{ captureId, streamed:true, bytes, width, height }` |
+| `screenshot.read` | `{ tabId, captureId, offset?: int, length?: int }` | `{ dataBase64, offset, nextOffset, total, bytes, eof, width, height }`（按 base64 字符分块） |
+| `screenshot.release` | `{ tabId, captureId }` | `{ ok, released }` |
 | `click` | `{ tabId, ref?: string, selector?: string }` | `{ ok: true }` |
 | `hover` | `{ tabId, ref?, selector? }` | `{ ok: true }` |
 | `fill` | `{ tabId, ref?, selector?, value }` | `{ ok: true }` |
@@ -294,10 +380,58 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `E_OBSERVATION_STALE` | 观测结果已过期，需重新 observe |
 | `E_CURSOR_STALE` | 分页游标已过期 |
 | `E_CONTEXT_REQUIRED` | 该动作要求先提供上下文 |
-| `E_CONTEXT_STALE` | 上下文与当前页面不一致 |
+| `E_CONTEXT_STALE` | 上下文与当前页面不一致（或已被重新 sync 吊销） |
+| `E_COOPERATION_STALE` | 协作输入层 authority 已失效且无法重新对齐 |
+| `E_CONTROL_CONTEXT_INVALID` | 控制面 context_id 缺失/过期/与当前文档或帧不匹配 |
+| `E_UNSUPPORTED_FEATURE` | 对端扩展不支持所要求的 feature（协商未回执或版本过旧） |
 | `E_DEPENDS_FAILED` | 前置依赖步骤未成功 |
 | `E_EXPECT_FAILED` | expect 断言不匹配 |
 | `E_OBSERVATION_CHANGED` | 页面在观测后已变化（观测代数不符） |
+| `E_TARGET_DETACHED` | 观测时的目标节点已从文档中移除（节点级校验） |
+| `E_TOKEN_BAD_ARG` | passthrough 令牌参数非法（缺 token 或 grantee） |
+| `E_TOKEN_UNKNOWN` | passthrough 令牌不存在或已被清理 |
+| `E_TOKEN_EXPIRED` | passthrough 令牌已过期 |
+| `E_TOKEN_USED` | passthrough 令牌已被消费（一次性） |
+| `E_TOKEN_GRANTEE` | passthrough 令牌与调用方 grantee 不匹配 |
+| `E_TOKEN_CAPACITY` | passthrough 令牌存储已满且无法驱逐 |
+| `E_CAPTURE_BAD_TAB` | capture 抑制引用的 tabId 非法 |
+| `E_CAPTURE_LIMIT` | 同一 tab 的 capture 抑制引用超过上限 |
+| `E_SESSION_STATE` | 会话状态不允许该操作（状态机拒绝） |
+| `E_SESSION_TRANSITION` | 会话状态迁移非法 |
+| `E_LEDGER_IO` | 意图账本读写失败 |
+| `E_LEDGER_WAL_IO` | 意图账本 WAL 写入失败 |
+| `E_LEDGER_FSYNC` | 意图账本持久化（fsync）失败 |
+| `E_LEDGER_RECOVER` | 意图账本崩溃恢复失败 |
+| `E_LEDGER_CONFLICT` | 账本结论冲突（重复 resolve 且结论不一致） |
+| `E_LEDGER_RESOLVE_REQUIRED` | 非幂等动作的 UNKNOWN 必须显式 resolve(confirmed|not-applied) |
+| `E_TAB_LEASE_HELD` | tab 已被其它会话租用 |
+| `E_TAB_LEASE_NOT_HELD` | tab 租约不存在或已被释放 |
+| `E_SNAPSHOT_DISABLED` | MCP 快照持久化被关闭（BB_MCP_SNAPSHOT=off） |
+| `E_SNAPSHOT_WRITE` | MCP 快照写盘失败 |
+| `E_SNAPSHOT_CORRUPT` | MCP 快照文件损坏或格式不符 |
+| `E_UNSUPPORTED` | 不支持的请求（兼容别名；优先使用 E_UNSUPPORTED_CAPABILITY） |
+| `E_ARG_MISSING` | CLI 参数缺失（必填项未提供） |
+| `E_ARG_TYPE` | CLI 参数类型非法 |
+| `E_ARG_ENUM` | CLI 参数取值不在枚举内 |
+| `E_ARG_CONFLICT` | CLI 参数互斥组合冲突 |
+| `E_ARG_REQUIRES` | CLI 参数依赖缺失（如 --share 需要 --tab） |
+| `E_ARG_RANGE` | CLI 参数数值超出范围 |
+| `E_ARG_UNEXPECTED` | CLI 参数不被该子命令接受 |
+| `E_ARG_USAGE` | CLI 用法错误 |
+| `E_UNKNOWN_FLAG` | 未知命令行选项 |
+| `E_BAD_SUBCOMMAND` | 未知子命令 |
+| `E_HUMAN_GATE` | 需要人工确认后才能继续（human gate） |
+| `E_EVAL_CORPUS` | eval 语料格式/元数据非法 |
+| `E_EVAL_RUNNER` | eval 离线运行器执行失败 |
+| `E_EVAL_DOM` | eval DOM 层失败 |
+| `E_EVAL_DOM_ARGS` | eval DOM 运行参数非法 |
+| `E_EVAL_DOM_BAD_FACTS` | eval DOM 事实读取结果非法 |
+| `E_EVAL_DOM_BAD_JSON` | eval DOM 事实 JSON 解析失败 |
+| `E_EVAL_DOM_FIXTURE` | eval DOM 夹具缺失或不可读 |
+| `E_EVAL_DOM_NO_BROWSER` | eval DOM 需要真实浏览器但未找到 |
+| `E_EVAL_DOM_NO_FACTS` | eval DOM 未产出事实 |
+| `E_EVAL_DOM_NO_MARKER` | eval DOM 页面缺少完成标记 |
+| `E_EVAL_DOM_SPAWN` | eval DOM 浏览器进程启动失败 |
 | `E_OCCLUDED` | 目标被遮挡（浮层/弹窗） |
 | `E_OBSCURED` | 视觉坐标落点被铺满视口的元素遮住 |
 | `E_TARGET_MISMATCH` | 视觉坐标落点不属于预期的候选目标 |
@@ -315,6 +449,7 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `E_UNSUPPORTED_CAPABILITY` | 当前版本不支持该能力 |
 | `E_UNSUPPORTED_REMOTE` | 远程连接不支持该能力 |
 | `E_PROTOCOL_UNSUPPORTED` | 协议版本不兼容 |
+| `E_PROTOCOL_AUDIT` | 协议审计失败（proof obligations / 兼容矩阵 / 迁移计划自检不通过） |
 | `E_AUTH` | 本机鉴权失败 |
 | `E_AUTH_BUSY` | 鉴权通道正被另一请求占用 |
 | `E_AUTH_CHALLENGE` | 鉴权挑战无效 |
@@ -324,6 +459,7 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `E_AUTH_STATE` | 鉴权状态机不允许该操作 |
 | `E_PAIR_INVALID` | 配对码无效或已使用 |
 | `E_PAIR_REQUIRED` | 需要先完成本机配对 |
+| `E_PAIR_REJECTED` | 配对 token 已绑定到其它浏览器，请重新配对 |
 | `E_PAUSED_MANUAL` | 会话因人工接管而暂停 |
 | `E_LEDGER_PENDING` | 有未确认的意图账本记录 |
 | `E_DAEMON` | daemon 不可用（未启动或连接失败，客户端侧码） |
@@ -362,6 +498,9 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `E_BORROW_CONFLICT` | 同一标签页已被其他会话借用或正在确认中 |
 | `E_BORROW_TIMEOUT` | 借用标签页超时 |
 | `E_HELP_DISABLED` | 人工协助不可用 |
+| `E_CONTROL_NOT_HELD` | 共享标签页的控制权不在本会话（exclusive 模式下写动作被拒绝） |
+| `E_CONTROL_BUSY` | 共享标签页的控制权被其他会话持有，无法认领 |
+| `E_CONTROL_STALE` | 共享标签页的控制权已换代（epoch 不符，需重新读取） |
 | `E_NO_DOWNLOAD` | 没有可用的下载 |
 | `E_DOWNLOAD_FAILED` | 下载失败 |
 | `E_NO_FILE_CHOOSER` | 没有可用的文件选择器 |
@@ -372,8 +511,11 @@ CLI 传 `--session`，daemon 校验存在后把 `tabId` 注入 params 后转发�
 | `E_RECIPE_NOT_APPROVED` | 配方未获批 |
 | `E_RECIPE_CHANGED` | 配方内容已变更 |
 | `E_RECIPE_EXPIRED` | 配方已过期 |
+| `E_RECIPE_DRAFT_EMPTY` | 运行日志里没有可回放的步骤（recipe 草稿为空） |
 | `E_RECIPE_LOCKED` | 配方正在被另一个进程回放 |
 | `E_FORBIDDEN` | 当前策略禁止该操作 |
+| `E_READ_ONLY` | 会话是只读 scope，不能执行变更动作 |
+| `E_EXEC_FAILED` | exec 脚本执行失败或超时 |
 | `E_INTERNAL` | 其它异常 |
 <!-- error-codes:end -->
 
@@ -438,18 +580,23 @@ bridge browsers                      # 已连接浏览器实例
 bridge doctor                        # 环境自检（node/端口/扩展/daemon）
 bridge daemon start|stop|restart|status|log [--tail]
 
-bridge session start [--browser <id|名字|edge|chrome>] [--tab <tabId>] [--no-focus] [--request-id <token>]
+bridge session start [--browser <id|名字|edge|chrome>] [--tab <tabId>] [--share] [--control open|exclusive] [--no-focus] [--request-id <token>]
                      # 每个 session 新建并聚焦一个独立 Agent Window；--no-focus 才后台开窗
 bridge open [url] [--observe]   # 一步式：session + navigate（可同时返回 observation）
 bridge session stop <id> [--keep]
 bridge session list
+bridge session control <id> [--mode open|exclusive]
+bridge session claim-control <id> [--lease 60s] [--expect-epoch N]
+bridge session release-control <id> [--expect-epoch N]
+bridge session handoff <id> --to <targetSessionId> [--lease 60s] [--expect-epoch N]
 
 bridge navigate <url> [--no-focus]
 bridge reload | back | forward
 bridge observe [--probe-hover] [--json]      # --json 时 result 原样输出
 bridge snapshot
 bridge get-html [--ref @eN | --selector css]
-bridge screenshot --out <path> [--full]
+bridge screenshot --out <path> [--full] [--stream]
+bridge screenshot --out <path> --stitch
 bridge click <ref|selector>
 bridge hover <ref|selector>
 bridge fill <ref|selector> --value <text>
@@ -463,7 +610,7 @@ bridge wait-ms <ms>
 bridge console [--since N]
 
 bridge tab list [--scope agent|user]
-bridge tab new [url] [--no-focus]
+bridge tab new [url] [--focus] [--window]
 bridge tab close <tabId>
 bridge tab select <tabId>
 bridge window resize --width <n> --height <n>
@@ -474,6 +621,10 @@ bridge window resize --width <n> --height <n>
 * 退出码：成功 0；业务失败 1；参数错误 2。
 * `--json` 输出 `{"ok":true,"result":...}` / `{"ok":false,"error":{...}}` 原样；人类可读输出由 CLI 决定。
 * `screenshot --out` 由 CLI 写文件（daemon 不落盘；dataUrl 里的 `data:image/png;base64,` 前缀去掉后写字节）。
+  超大截图用 `--stream`：扩展把 base64 暂存（5 分钟 TTL，最多 4 份），CLI 按 `screenshot.read`
+  分块（512KB base64/块）取回拼文件，完成后 `screenshot.release`；单次 RPC 不再携带数 MB dataUrl。
+  dataUrl 超过约 1.5MB 时即使不带 `--stream` 也自动走流式（结果里 `streamed:true`）。
+* `screenshot` 默认后台抓取；只有在显式 `--focus` 时才临时把窗口/标签置前（见 §12.2.3）。
 * `observe` 人类可读输出：先打印 `url`/`title` 一行，再打印 observation 原文。
 
 `bin\bridge.cmd` 是 Windows 入口，内容：
@@ -490,7 +641,7 @@ bridge window resize --width <n> --height <n>
 * 只监听回环；token 保护 `/rpc`；WS 只认 `/ws` 且忽略来源（扩展不会带 Origin）。
 * 不读取/不导出 cookie、localStorage、密码管理器内容；`evaluate` 只做用户要求的页面操作。
 * 所有写操作默认只作用于 agent 窗口的 tab；`tab.list --scope user` 只列不借。
-* `screenshot` 需要把目标窗口临时置前：`no-focus` 会话结束后 focus 回原窗口。
+* `screenshot` 默认后台抓取，不置前窗口；显式 `--focus` 才临时置前（§12.2.3）。
 
 ---
 
@@ -505,7 +656,8 @@ bridge window resize --width <n> --height <n>
 5. `fill @eN --value hello` → `click @eN` → `get-html` 断言 `#out` 文本为 `clicked`。
 6. `screenshot --out tmp/shot.png` 断言 PNG 魔数 + 尺寸 > 100x100。
 7. `session stop` 后 daemon 里无残留 session。
-8. 全程无沙箱/权限报错，退出码 0。
+8. 多 Agent 共享 tab：`20q10`（共享写 + tab 队列）、`20q11`（exclusive 闸门 / 租约到期 / handoff / epoch CAS）、`20q12`（主会话停止 → 控制权与主会话身份转交，tab 存活）。
+9. 全程无沙箱/权限报错，退出码 0。
 
 > 实现注意：`tools/e2e.mjs` 的夹具页 HTTP 服务与 CLI 调用在同一个 Node 进程里。
 > CLI 必须用**异步** spawn（await 子进程结束），不能用 `spawnSync`：同步调用会堵死事件循环，
@@ -605,8 +757,8 @@ bridge settings [--json]` 与 `bridge settings set --label <名字> --borrow-con
 
 ### 12.2 `extract` — 表格/列表结构化导出
 
-`{ tabId, selector?, ref?, format?: "json"|"csv", maxRows?: 500 }` →
-`{ kind: "table"|"list", columns: [{ key, label }], rows: [ {...} ], rowCount, truncated, coverage, warnings: [...] }`
+`{ tabId, selector?, ref?, format?: "json"|"csv", maxRows?: 500, maxBytes?: 262144, maxCells?: 20000 }` →
+`{ kind: "table"|"list", columns: [{ key, label }], rows: [ {...} ], rowCount, cells, truncated, coverage, budget, warnings: [...] }`
 
 `coverage` 说明本次抽取到底覆盖了多少（`datasetComplete` 只表示"页面自己声明了总数且确实读满"，不代表页面内容真的完整）：
 
@@ -616,16 +768,58 @@ bridge settings [--json]` 与 `bridge settings set --label <名字> --borrow-con
 ```
 
 - `declared`：取自 `aria-rowcount` / `aria-setsize`；页面没声明就是 `null`（不猜）。
-- `stopReason`：`end`（读到末尾）/ `max-rows`（行数上限）/ `max-bytes`（字节上限）。
+- `omitted`：`declared - returned`（无声明为 `null`）。
+- `stopReason`：`end`（读到末尾）/ `max-rows`（行数上限）/ `max-cells`（单元格上限）/ `max-bytes`（字节上限）。
 - `datasetComplete`：`complete`（声明数已读满）｜`incomplete`（被截断）｜`unknown`（无声明）。
 - 只覆盖已加载的 DOM：分页、无限滚动、canvas 渲染、closed shadow 里的内容都不在范围内。
+
+结果里同时带 `budget`（本次预算证据）与 `cells`：
+
+```json
+{ "cells": 20,
+  "budget": { "maxRows": 500, "maxBytes": 262144, "maxCells": 20000,
+              "rows": 20, "cells": 20, "bytes": 1832, "stopReason": "end" } }
+```
+
+预算归一化（与页面侧一致）：`maxRows` 默认 500 / 上限 5000；`maxBytes` 默认 256 KiB / 范围 1 KiB–4 MiB；
+`maxCells` 默认 20000 / 范围 1–200000。`maxCells` 按“行 × 列”折算可返回行数（不足一行时返回 0 行并
+`stopReason:"max-cells"`），`maxBytes` 超限时从尾部丢行直到装下或没有行可丢。
+
+**多页游标（`--cursor`）**：分块提取返回 `hasMore:true` 时附带无状态游标 `cursor`（`x1.<base64url>`）：
+
+```powershell
+bridge extract --max-rows 100 --session <id> --json      # → { rows: [...], offset: 0, hasMore: true, cursor: "x1..." }
+bridge extract --cursor x1... --session <id> --json      # → { rows: [...], offset: 100, hasMore: true, cursor: "x1..." }
+```
+
+- 游标只记录 `(tabId, frameId, kind, offset, revision, target)`；续取时自动带上原 target/selector，
+  也按原 `maxRows` 分块（可显式覆盖）。
+- 以下情况返回 **`E_CURSOR_STALE`**：游标非法/版本不符、超过 10 分钟、跨 tab/frame、
+  kind 与本次子命令不符（table/list）、游标对应的 DOM `revision` 已变化。
+- 游标不持有页面对象；目标被删除/重渲染后请重新 `extract discover` 或重新提取。
+
+### 12.2.0 `extract discover` — 候选表格/列表
+
+```powershell
+bridge extract discover [--max-targets 32] [--preview-columns 8] --session <id> --json
+```
+
+返回 `{ targets, frameCount, framesScanned, framesSeen, truncated, limits }`：
+
+- 上限对齐：**16 帧**（主文档优先，其余按 frameId）、**32 个 target**（跨帧全局）、**8 列预览**；
+  超限时 `truncated:true`，`limits` 回显本次上限（`{maxFrames,maxTargets,previewColumns}`）。
+- 每个 target：`{ id, kind, label, rows, columns, preview: { columns: [...], sample: [...] }, frameId, frameUrl? }`；
+  `preview.columns` 是表头（≤8，每个 ≤60 字符），`preview.sample` 是首行样例（≤8，每个 ≤80 字符）。
+- `framesSeen` 是页面总帧数，`framesScanned` 是实际扫描的帧数（≤16）。
+- 取用仍按 `--target <id> --frame <frameId>`（target 句柄 5 分钟过期）；没有多帧信息时（单帧降级）
+  返回同样的结构，`frameId` 为 0。
 
 规则：
 1. 目标是 `table` 时按 thead 取列名；没有 thead 用首行 `th` 或首行 `td` 文本；列 key 为 `c1..cN`。
 2. 单元格带 `rowspan/colspan` 时在 `rows[i].__spans` 记录 `{ col: {rowspan, colspan} }`，不展开占位。
 3. 目标是 `ul/ol` 或带 `role=list` 时 `kind:"list"`，每项一行 `{ index, text }`；项内有 `a` 时附 `href`。
 4. 目标是其它元素且含 `table` 子节点时，取第一个 `table`。
-5. `maxRows` 默认 500、上限 5000；超出时 `truncated: true`，`coverage.stopReason = "max-rows"`。
+5. `maxRows` 默认 500、上限 5000；`maxCells` 默认 20000、`maxBytes` 默认 256 KiB。任一超限都 `truncated: true`，`coverage.stopReason` 与 `budget.stopReason` 标 `max-rows`/`max-cells`/`max-bytes`。
 6. `format:"csv"` 时 CLI 直接落盘 `--out`，扩展只返回 json 结构（CSV 由 CLI 生成，避免扩展侧编码差异）；CSV 模式也会打印一行覆盖度。
 
 ### 12.2.1 观测代数（`revision` / `expectRevision`）
@@ -646,6 +840,74 @@ bridge click "a" --expect-revision 3  --session <id>   # → E_OBSERVATION_CHANG
 **读和写用同一个代数**，就能表达"我读到的值到现在没变过"：先 `read` 拿 `revision`，接着带 `--expect-revision` 去点/填，中间页面若重渲染过会被挡下——避免把基于旧内容做的判断作用到新页面上。
 
 用途：SPA 自动刷新、轮播、无限滚动这类页面，从观测到动作之间内容可能整体换掉，此时 ref 指向的语义已经变了。默认不开启（不带 `expectRevision` 就不校验），避免误伤无关的 DOM 变化。
+
+### 12.2.2 节点级校验（`nodeScope`，`target_detached` / 节点级 `observed_changes`）
+
+整页 `revision` 只能回答"页面变没变"，回答不了"我要操作/读取的那个节点变没变"。`cooperate sync` 会为当前 ref 表记录一份**节点签名**（tag/id/name、文本哈希、值哈希、属性哈希、几何、disabled/checked；只输出摘要，不含文本内容）：
+
+```json
+{ "node_scope": { "count": 42, "unique": 40, "refs": 42, "revision": 16 } }
+```
+
+动作/读取可带 `nodeScope: true`（CLI `--node-scope`）+ `--observation`：
+
+- 目标节点仍在且签名未变 → **放行**，即使页面其他位置变了（这是与整页校验的核心差别）；
+- 目标节点已被移除 → `E_TARGET_DETACHED`，`data: { ref, scope:'node', reason, observed_revision, current_revision }`；
+- 目标节点自身的文本/值/属性/状态变了 → `E_OBSERVATION_CHANGED`，`data.observed_changes = { scope:'node', ref, kinds:['text'|'value'|'attributes'|'state'|'identity'|'detached'], advisory:['geometry'], changes:[{kind,field,before,after}] }`；
+- 纯几何变化（滚动/重排）只作为 `advisory` 记录，不阻断；
+- 目标是 CSS selector、或该 ref 在 sync 时没有签名 → 回退到整页 `revision` 校验（`E_OBSERVATION_STALE`）。
+
+```powershell
+bridge cooperate sync --session <id>                     # → node_scope 摘要
+bridge click @e5 --observation ob1 --node-scope --session <id>   # 无关节点变了也放行
+bridge read @e1 --observation ob1 --node-scope --session <id>    # 读取类同样支持
+```
+
+未带 `--node-scope` 时行为不变（整页 `E_OBSERVATION_STALE`）。
+
+### 12.2.3 焦点策略（默认不抢用户焦点）
+
+对齐 BSK 与 OpenCode Browse 的行为：**默认后台执行，不主动把浏览器窗口/标签页置前**。
+
+- 会话标签页由 `debugger.armTab` 开启 `Emulation.setFocusEmulationEnabled`：页面自认可见/聚焦，
+  CDP 原生鼠标/键盘输入可在后台 Agent Window 直接派发；
+- 未挂 CDP 的标签页（借用/预挂失败）走同一策略：临时 `Emulation.setFocusEmulationEnabled(true)` +
+  `Page.setWebLifecycleState({state:'active'})`，**不调用** `Page.bringToFront` /
+  `chrome.windows.update({focused:true})` / `chrome.tabs.update({active:true})`；
+- 显式 `--focus`（`params.focus:true`）才会置前：`session start --focus`、`tab new --focus`、
+  动作/截图 `--focus`（回退路径用）；
+- `tab select`、`window focus`、系统通知点击属于**用户显式要求**的置前，保持原行为；
+- `request-help` / borrow 确认是人工交接界面，仍会置前提醒用户（一次一格）；
+- `chrome.windows.create` 默认 `focused:false`；`chrome.tabs.create` 默认 `active:false`。
+
+```powershell
+bridge session start            # 后台开 Agent Window，不打断用户
+bridge session start --focus    # 显式置前
+bridge tab new https://x        # 新 tab 不激活
+bridge click @e3 --trusted      # 后台派发原生输入（无需置前）
+```
+
+未传 `--focus` 时窗口/标签页的前台状态、`window.list` 的 `focused` 与 `active` 均不应被改变。
+
+**实现审计**（2026-11-19；`tools/source-guard.mjs` 会拦截 `extension/src` 里新增的 `Page.bringToFront`）：
+
+| 位置 | 行为 | 可置前 | 触发条件 | 分类 |
+| --- | --- | --- | --- | --- |
+| `interaction.js` `ensureInputFocus` | `tabs.update(active)` / `windows.update(focused)` | 是 | 仅 `focusRequested(params)` 分支 | 显式 `--focus` |
+| `background-execution.js` `withForegroundTab` | 切 active + 恢复 | 是 | 仅 `{focus:true}` / `{foreground:true}` | 显式 |
+| `tabs.js` `ensureAgent` / `newAgentWindow` | 建窗/建 tab + 末尾聚焦 | 是 | `focusRequested(params)` | 显式 |
+| `tabs.js` `tabNew` | 建 tab/window 的 `active`/`focused` | 是 | `--focus` | 显式 |
+| `tabs.js` `tabSelect` / `windowFocus` | 置前 | 是 | `tab select` / `window focus` | 用户显式命令 |
+| `screenshot.js` `captureVisibleTab` 回退 | 窗口/标签置前 + 恢复 | 是 | `focusRequested(params)` | 显式 |
+| `shadow.js` closed-shadow 点击 | 曾 `Page.bringToFront` | **已移除**（只开焦点仿真） | 任意动作 | 后台 |
+| `interaction.js` 可信/拖拽/click-backend | 曾 `Page.bringToFront` | **已移除**（焦点仿真 + lifecycle） | 任意动作 | 后台 |
+| `tabs-help.js` `requestHelp` | 置前 + 激活 | 是 | `request-help` | 人工协作 |
+| `borrow-ui.js` / `tabs-borrow.js` | 置前/激活/页面内 focus | 是 | 借用确认 | 人工协作 |
+| `bridge.js` 通知点击 | 置前 | 是 | 用户点系统通知 | 用户主动 |
+| `preview.js` | 置前 | 是 | 用户在扩展 UI 点“预览” | 用户主动 |
+| `overlay-ui.js` 借用弹窗 | 页面内 `focus()` | 页面内焦点 | 借用确认弹窗 | 人工协作 |
+| `chrome.tabs.query({active:true})`（多处） | 只读查询 | 否 | — | 无影响 |
+| `tools/*.mjs` 诊断脚本 | `Page.bringToFront` | 是 | 手工运行 | 不随扩展运行 |
 
 ### 12.3 交互补充
 | method | params | result | 说明 |
@@ -1064,6 +1326,9 @@ context/observation 授权模型（简化实现，保持向后兼容）：
    当前实现为简化版（总是 ready），人工接管检测在后续波次补。
 7. **plan / step**：把顶层 `context/expect/observation` 透传给每个步骤（步骤自带则优先）。
    plan/step 本身不参与同 tab 串行链。
+8. **节点级校验**：`cooperate sync` 额外记录 `node_scope`（ref 表节点签名摘要）；动作/读取带
+   `nodeScope: true`（CLI `--node-scope`）+ `--observation` 时只校验目标节点，
+   见 §12.2.2（`E_TARGET_DETACHED` / 节点级 `E_OBSERVATION_CHANGED`）。
 
 
 ## 29. 调试命令（v0.1 波次 4）
@@ -1293,12 +1558,26 @@ bridge debug operation <id>
    配对码 6 位（去掉易混字符），token 32 hex；TTL 1 分钟–24 小时，默认 10 分钟；过期自动清理。
 3. **远程鉴权**：来自非回环地址的 WS `hello` 必须带 `pairToken`，否则 daemon 回
    `{ type: 'hello-error', code: 'E_PAIR_REQUIRED' }` 并以 4003 关闭；回环连接视为本机可信。
-4. **扩展远程地址**：设置 `daemonUrl`（ws://host:port[/ws]）与 `daemonToken` 后，
+4. **激活即作废旧链接**：配对码/token 只用于**首次激活**。首次握手成功后 daemon 立即作废该配对码，
+   并为设备换发独立 `deviceToken`（通过 `hello-ack.deviceToken` 下发）；扩展把它持久化到
+   `daemonToken`，之后重连用新 token。旧链接（含旧 token）不再能证明已配对身份（本机模式下会降级为
+   `unpaired`，远程模式直接 `E_PAIR_REQUIRED`）。再次 `pair redeem` 旧码返回 `E_PAIR_INVALID`。
+5. **扩展远程地址**：设置 `daemonUrl`（ws://host:port[/ws]）与 `daemonToken` 后，
    ws-client 优先连该地址、hello 带 `pairToken`；远程模式断线不轮询本地端口，3s 后重连同一目标。
    设置变化（`bridge settings set --daemon-url ...`）会立即触发重连。
-5. **撤销即时生效**：`pair revoke` 会断开使用该 token 的已连接实例（返回 `kicked` 计数）。
-6. 限制：目前是 `ws://`（无 TLS），配对 token 是唯一凭据；弹窗「远程配对」可填地址/token 并重连。
-
+6. **撤销即时生效**：`pair revoke` 会断开使用该 token 的已连接实例（返回 `kicked` 计数），
+   并删除 `devices.json` 里的设备记录（`bridge pair list` 的 `knownDevices` 可看到）。
+7. **模式与提示**：默认可选配对；`bridge daemon trust-local off` 切到必需模式（未配对本机连接被拒绝）。
+   `bridge doctor` 会输出当前配对模式、已知设备/待配对码、未配对连接数，以及 `bridge daemon pair` 建议；
+   另外输出 `log`（日志路径/大小）、`disk`（BB_HOME 可用空间）、`port`（daemon.json 与 /health 端口一致性）。
+8. **browser_id 绑定 + 分阶段 commit**：激活时把设备 token 绑定到 hello 的 `browserId`；换浏览器复用
+   同一 token 会返回 `E_PAIR_REJECTED`（远程/本机一致）。设备先 pending，扩展 `auth-commit` 后才 active；
+   断线未 commit 可重连恢复（同一 commitTxn），10 分钟未确认则 token 作废。
+9. **分阶段 rotation（pair renew / daemon rotate）**：`bridge pair renew <deviceId>`（远程设备）与
+   `bridge daemon rotate`（本机 token）都只生成 pending rotation token/txn（`{token, txn, pending:true}`），
+   旧 token 在 commit 前仍有效；扩展用新链接/新 token 连接后 daemon 下发 `commitTxn`，扩展 `auth-commit`
+   成功后新 token 才替换旧 token（旧 token 立即失效）。10 分钟未 commit 则 rotation 过期，旧 token 继续有效。
+10. 限制：目前是 `ws://`（无 TLS），配对 token 是唯一凭据；弹窗「远程配对」可填地址/token 并重连。
 
 ## 42. operations 与请求关联（v0.1 波次 18）
 
@@ -1363,6 +1642,28 @@ bridge debug operation <id>
 - 默认 `observe` 会包含所有可观察 frame，ref 统一为 `@eN`。
 - `observe --frames` 仍返回逐 frame 结构，并附带 `aliases`（`@eN` → frameId + 局部 `@eN`）。
 - `@fNeM` 仍然兼容，可直接用于 click/fill 等动作。
+- **`observe --frames --vom` 的跨源子图**（2026-11-19 起）：每个 frame 额外返回 `frame.vom` 子图，
+  顶层返回 `vomFrames:{count,nodes,edges,truncated}` 与 `vomLimits:{frames,nodes,edges}`：
+
+  ```json
+  { "frameId": 3, "url": "http://127.0.0.1:PORT/frame-x.html",
+    "vom": { "available": true, "frameNodeId": "frame:3",
+             "nodes": [{ "id": "frame:3", "tag": "iframe", "role": "frame", "frame": true }],
+             "edges": [{ "type": "frame", "from": "frame:3", "to": "f3:@e1" }],
+             "roots": ["frame:3"], "counts": { "nodes": 12, "edges": 14, "byType": { "child": 8, "frame": 1 } },
+             "truncated": false } }
+  ```
+
+  - 节点 id 统一加 `f<frameId>:` 前缀（不同 frame 的 `@eN` 不会撞车）；`frame:<frameId>` 是子图根，
+    通过 `type:"frame"` 边连到该帧的 root；主文档 `frame:0` 的 `tag` 是 `document`，其余是 `iframe`。
+  - 上限：**16 帧**、每帧 400 节点 / 800 边；超限 `truncated:true`。无法注入的 frame（CDP 兜底）
+    只有 `available:false` 的 frame 节点，不伪造内容。
+  - **iframe 元素 → 子图根**：父文档里的 iframe 元素（按该帧 `frame-meta.children[].index` 对应）会在父图中
+    补一个 `frame:<childFrameId>` 节点（`parentId` 指向 iframe 元素）并连 `type:"frame"` 边；
+    **嵌套 iframe 同样适用**（每个父帧用自己的 `frame-meta` 匹配它的直接子帧）；
+    `vomFrames.links = [{fromFrameId, toFrameId, ownerId}]` 给出可遍历的对应关系，
+    `vomFrames.unlinked` 是匹配不到元素的可观察子帧数（URL 被重定向/隐藏/无法注入时不硬连）。
+  - 子图之间彼此独立（跨源文档没有统一 DOM）；需要跨帧操作时仍用 `@fNeM`/aliases。
 
 ## 47. 可取消等待与 recipe 审批（含内容绑定）（v0.1 波次 24）
 
@@ -1466,6 +1767,28 @@ bridge debug operation <id>
 4. ref 仍遵循稳定策略：同一元素跨多次 observe 复用编号，元素脱离文档后回收；节点里的 ref 可直接用于 click/fill 等动作。
 5. `hitTest` 是对元素可见区域中心点做 `elementFromPoint` 的结果；被遮挡时 `clickable=false` 且给出 `occludedBy`。它用于解释“看得到但点不到”，不改变动作命令的选中逻辑。
 6. `pointer-events:none`、屏外、零尺寸元素仍会出现在节点数组里（`observe` 的可见性判定是 CSS 可见，不是视口内），并通过 `hitTest`/`inViewport` 区分。
+7. **完整关系图**（2026-11-19 起）：`--vom` 额外返回 `vom.graph`（页面侧一次遍历收集的 containment/ownership 图），
+   并给每个 `vom.nodes[i]` 补 `id` / `parentId` / `ancestorIds`（近 → 远）：
+
+   ```json
+   { "graph": { "available": true,
+                "nodes": [{ "id": "@e5", "ref": "@e5", "tag": "button", "role": null, "domId": "submit-btn",
+                            "parentId": "vom:n2", "ancestorIds": ["vom:n2", "vom:n1"], "observed": true }],
+                "edges": [{ "type": "child", "from": "vom:n2", "to": "@e5" },
+                          { "type": "label", "from": "vom:n4", "to": "@e5" }],
+                "roots": ["vom:n1"], "counts": { "nodes": 42, "edges": 51, "byType": { "child": 40, "label": 11 } },
+                "truncated": false } }
+   ```
+
+   - **id 规则**：`ref` > `stableRef` > `vom:<页面内 key>`；重名时追加 `~<key>` 保证唯一。
+   - **边类型**：`child`（DOM 包含，完整到 `documentElement`）、`label`（`<label for>`）、`form`、
+     `controls`/`labelledby`/`describedby`/`owns`（对应 ARIA 属性），端点全部是图内 id；未知端点直接丢弃。
+   - **AX 父子边**（`observe --vom --ax`）：额外并入 `type:"ax"` 的边。AX 节点能映射到图内节点时直接复用 id，
+     中间节点补 `ax:<nodeId>` 上下文节点（只含 `role`，不含 name/text）；上限 300 边 / 200 上下文节点，超限 `truncated`。
+   - **上限**：页面侧最多 800 节点 / 2000 边，扩展侧再收敛到 600/1500；超限时 `truncated=true`。
+   - **兼容**：`vom.nodes[i].ancestors`（旧字段）继续保留；`vom.edges` 仍是 `{type, from, to, child, parent}`
+     形式（child/parent 为兼容字段）。没有页面图（AX 兜底/降级管线）时 `vom.graph=null`，行为与旧版一致。
+   - 图里只放结构（tag/id/role/ref/父子关系），不放文本内容。
 
 ## 53b. `observe --facts`（DOMSnapshot 事实）
 

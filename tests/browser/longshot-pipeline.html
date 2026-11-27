@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>LONGSHOT_PIPE_PENDING</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; padding: 0; }
+  #fixed-header { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: #123; color: #fff; z-index: 10; }
+  #fixed-footer { position: fixed; left: 0; right: 0; bottom: 0; height: 80px; background: #321; color: #fff; z-index: 10; }
+  #content { height: 2400px; background: linear-gradient(#fff, #eef); }
+  .tile { width: 120px; height: 40px; margin: 4px; }
+</style>
+<body>
+  <div id="fixed-header">固定页眉</div>
+  <div id="content">
+    <div class="tile"></div>
+    <div class="tile"></div>
+  </div>
+  <div id="fixed-footer">固定页脚</div>
+  <script type="module" src="./longshot-pipeline.js"></script>
+</body>

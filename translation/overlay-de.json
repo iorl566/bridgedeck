@@ -52,5 +52,7 @@
   "manualFrame": "Frame aufnehmen",
   "manualDone": "Fertig",
   "manualCancel": "Abbrechen",
-  "manualFrames": " Frames"
+  "manualFrames": " Frames",
+  "borrowInactiveTitle": "Agent fordert Tab-Ausleihe an",
+  "helpCompactStatus": "Der Agent wartet noch darauf, dass Sie diesen Schritt abschließen"
 }

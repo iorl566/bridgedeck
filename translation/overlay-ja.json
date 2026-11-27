@@ -52,5 +52,7 @@
   "manualFrame": "フレームを撮影",
   "manualDone": "完了",
   "manualCancel": "キャンセル",
-  "manualFrames": " フレーム"
+  "manualFrames": " フレーム",
+  "borrowInactiveTitle": "Agent がタブの借用を要求しています",
+  "helpCompactStatus": "Agent はまだこの手順の完了を待っています"
 }

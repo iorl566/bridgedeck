@@ -1,0 +1,16 @@
+{
+  "schema": "bdeval-thresholds-gate-fail/1",
+  "note": "门禁负向夹具：降低 minCases 让唯一失败项暴露为 unexpected/fn 阈值不满足；用于证明 exit≠0。",
+  "minCases": 0,
+  "minPrecision": 0,
+  "minRecall": 0,
+  "maxSkipRate": 1,
+  "maxUnverifiedRate": 1,
+  "maxFalsePositives": 10,
+  "maxFalseNegatives": 0,
+  "maxMissedNegatives": 10,
+  "maxUnexpected": 0,
+  "maxInvalid": 0,
+  "requiredStatuses": ["passed"],
+  "requiredOracleLevels": ["offline-fake"]
+}

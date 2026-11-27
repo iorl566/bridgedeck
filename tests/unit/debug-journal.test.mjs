@@ -27,3 +27,20 @@ test('formatJournalEvent is stable', () => {
   assert.match(formatJournalEvent({ type: 'console', at: 0, level: 'error', text: 'bad' }), /console\[error\] bad/);
   assert.match(formatJournalEvent({ type: 'operation', at: 0, method: 'click', ok: false, commandId: 'c1' }), /operation click fail c1/);
 });
+
+test('buildDebugJournal 合并调试动作事件（start/pin/rule/replay）', () => {
+  const journal = buildDebugJournal({
+    journal: [
+      { at: 1, type: 'start', name: 'demo' },
+      { at: 2, type: 'pin', id: 'req-1' },
+      { at: 3, type: 'rule', action: 'add', id: 7, pattern: '*/api/*' },
+      { at: 4, type: 'replay', id: 3, ok: false, error: 'boom' },
+    ],
+    requests: [],
+    console: [],
+  });
+  assert.equal(journal.counts.debug, 4);
+  assert.deepEqual(journal.events.map((event) => event.action), ['start', 'pin', 'rule', 'replay']);
+  assert.match(formatJournalEvent(journal.events[2]), /debug rule id=7 \*\/api\/\*/);
+  assert.match(formatJournalEvent(journal.events[3]), /debug replay id=3 fail/);
+});

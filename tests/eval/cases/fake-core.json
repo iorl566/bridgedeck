@@ -1,0 +1,233 @@
+[
+  {
+    "id": "status-ok",
+    "title": "成功：status 直连 daemon 返回端口与实例列表",
+    "mode": "tool",
+    "tool": "browser_status",
+    "args": {},
+    "script": {
+      "handlers": {
+        "status": {
+          "result": {
+            "port": 52900,
+            "version": "0.3.0",
+            "browsers": [{ "instanceId": "inst-1", "name": "工作账号" }],
+            "sessions": []
+          }
+        }
+      }
+    },
+    "expect": "passed",
+    "assert": { "port": 52900, "browsers.0.instanceId": "inst-1" },
+    "evidence": ["port", "browsers"]
+  },
+  {
+    "id": "navigate-ok",
+    "title": "成功：会话内 navigate 直连 daemon",
+    "mode": "tool",
+    "tool": "browser_navigate",
+    "args": { "url": "https://example.test/", "sessionId": "s1" },
+    "script": {
+      "handlers": {
+        "navigate": { "result": { "url": "https://example.test/", "title": "Example" } }
+      }
+    },
+    "expect": "passed",
+    "assert": { "url": "https://example.test/", "title": "Example" },
+    "evidence": ["url", "title"]
+  },
+  {
+    "id": "observe-filter",
+    "title": "成功：observe 直连结果按 grep 过滤且保留 refs",
+    "mode": "tool",
+    "tool": "browser_observe",
+    "args": { "sessionId": "s1", "grep": "提交" },
+    "script": {
+      "handlers": {
+        "observe": {
+          "result": {
+            "url": "https://example.test/form",
+            "title": "表单",
+            "refs": 2,
+            "observation": "- document\n  - button \"提交\" [@e1]\n  - link \"取消\" [@e2]"
+          }
+        }
+      }
+    },
+    "expect": "passed",
+    "assert": { "refs": 2, "observation": "  - button \"提交\" [@e1]" },
+    "evidence": ["observation"]
+  },
+  {
+    "id": "act-click",
+    "title": "成功：browser_act click 走会话直连",
+    "mode": "tool",
+    "tool": "browser_act",
+    "args": { "action": "click", "ref": "@e1", "sessionId": "s1" },
+    "script": {
+      "handlers": {
+        "click": { "result": { "ok": true, "ref": "@e1", "via": "cdp" } }
+      }
+    },
+    "expect": "passed",
+    "assert": { "ok": true, "ref": "@e1" },
+    "evidence": ["ref"]
+  },
+  {
+    "id": "session-start-tracked",
+    "title": "成功：新建 Agent 窗口走 session.start_tracked",
+    "mode": "tool",
+    "tool": "browser_session_start",
+    "args": { "browser": "工作账号", "agentName": "W4" },
+    "script": {
+      "handlers": {
+        "session.start_tracked": {
+          "delayMs": 5,
+          "result": { "sessionId": "sess-1", "tabId": 7, "windowId": 3, "instanceId": "inst-1", "borrowed": false }
+        }
+      }
+    },
+    "expect": "passed",
+    "assert": { "sessionId": "sess-1", "tabId": 7, "borrowed": false },
+    "evidence": ["sessionId", "tabId"]
+  },
+  {
+    "id": "tab-new-rpc",
+    "title": "成功：无会话的 tab.new 直连后回填 tabId",
+    "mode": "tool",
+    "tool": "browser_tab_new",
+    "args": { "url": "https://example.test/new" },
+    "script": {
+      "handlers": {
+        "tab.new": { "result": { "tabId": 11, "windowId": 3 } }
+      }
+    },
+    "expect": "passed",
+    "assert": { "tabId": 11 },
+    "evidence": ["tabId"]
+  },
+  {
+    "id": "cli-fallback-status",
+    "title": "兜底：daemon 不可用时 status 回退 CLI",
+    "mode": "tool",
+    "tool": "browser_status",
+    "args": {},
+    "script": { "unavailable": true },
+    "cli": {
+      "result": {
+        "port": 1,
+        "version": "0.3.0-cli",
+        "browsers": [],
+        "sessions": []
+      }
+    },
+    "expect": "passed",
+    "assert": { "port": 1, "version": "0.3.0-cli" },
+    "evidence": ["port", "version"]
+  },
+  {
+    "id": "error-forbidden",
+    "title": "错误码：daemon E_FORBIDDEN 原样上抛，不被 CLI 兜底吞掉",
+    "mode": "tool",
+    "tool": "browser_navigate",
+    "args": { "url": "https://blocked.test/", "sessionId": "s1" },
+    "script": {
+      "handlers": {
+        "navigate": { "error": { "code": "E_FORBIDDEN", "message": "安全策略拒绝" } }
+      }
+    },
+    "expect": "passed",
+    "expectError": "E_FORBIDDEN"
+  },
+  {
+    "id": "timeout-tool",
+    "title": "超时：daemon E_TIMEOUT 传给工具调用方",
+    "mode": "tool",
+    "tool": "browser_navigate",
+    "args": { "url": "https://slow.test/", "sessionId": "s1" },
+    "script": {
+      "handlers": {
+        "navigate": { "delayMs": 20, "error": { "code": "E_TIMEOUT", "message": "daemon 请求超时" } }
+      }
+    },
+    "expect": "passed",
+    "expectError": "E_TIMEOUT"
+  },
+  {
+    "id": "timeout-adapter",
+    "title": "超时：fake adapter 按 timeoutMs 真实超时（延迟 60ms > 超时 10ms）",
+    "mode": "rpc",
+    "rpc": { "method": "status", "params": {}, "timeoutMs": 10 },
+    "script": {
+      "handlers": {
+        "status": { "delayMs": 60, "result": { "port": 1 } }
+      }
+    },
+    "expect": "passed",
+    "expectError": "E_TIMEOUT"
+  },
+  {
+    "id": "unknown-method",
+    "title": "错误码：未注册方法默认 E_UNKNOWN_METHOD",
+    "mode": "rpc",
+    "rpc": { "method": "legacy.nope" },
+    "script": { "handlers": {} },
+    "expect": "passed",
+    "expectError": "E_UNKNOWN_METHOD"
+  },
+  {
+    "id": "unverified-no-evidence",
+    "title": "unverified：observe 返回缺 observation 证据，不得算 pass",
+    "mode": "tool",
+    "tool": "browser_observe",
+    "args": { "sessionId": "s1" },
+    "script": {
+      "handlers": {
+        "observe": { "result": { "url": "about:blank", "title": "", "refs": 0 } }
+      }
+    },
+    "expect": "unverified",
+    "evidence": ["observation"]
+  },
+  {
+    "id": "unverified-cli-fallback",
+    "title": "unverified：daemon 不可用回退 CLI 后仍缺 observation 证据",
+    "mode": "tool",
+    "tool": "browser_observe",
+    "args": { "sessionId": "s1" },
+    "script": { "unavailable": true },
+    "cli": { "result": { "url": "about:blank", "title": "", "refs": 0 } },
+    "expect": "unverified",
+    "evidence": ["observation"]
+  },
+  {
+    "id": "fail-value-mismatch",
+    "title": "失败（负向自检）：实际端口与期望不符，判定 failed 并带证据",
+    "mode": "tool",
+    "tool": "browser_status",
+    "args": {},
+    "script": {
+      "handlers": {
+        "status": { "result": { "port": 52900, "version": "0.3.0", "browsers": [], "sessions": [] } }
+      }
+    },
+    "expect": "failed",
+    "negative": true,
+    "assert": { "port": 1 }
+  },
+  {
+    "id": "fail-error-code",
+    "title": "失败（负向自检）：期望 E_TIMEOUT 实得 E_FORBIDDEN",
+    "mode": "tool",
+    "tool": "browser_navigate",
+    "args": { "url": "https://blocked.test/", "sessionId": "s1" },
+    "script": {
+      "handlers": {
+        "navigate": { "error": { "code": "E_FORBIDDEN", "message": "安全策略拒绝" } }
+      }
+    },
+    "expect": "failed",
+    "negative": true,
+    "expectError": "E_TIMEOUT"
+  }
+]

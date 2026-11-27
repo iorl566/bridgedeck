@@ -2,11 +2,20 @@ name: real-browser-e2e
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 18 * * *'
+  push:
+    branches: [main]
+  pull_request:
 
 jobs:
   edge:
     runs-on: windows-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [alpha, beta]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,4 +24,22 @@ jobs:
       - name: Run real Edge E2E
         env:
           BB_E2E_SYNC_DOCS: '0'
+          BB_E2E_SEED: ${{ matrix.seed }}
         run: node tools/eval-from-e2e.mjs
+  chrome:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [alpha, beta]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run real Chrome E2E
+        env:
+          BB_E2E_SYNC_DOCS: '0'
+          BB_E2E_SEED: ${{ matrix.seed }}
+        run: node tools/eval-from-e2e.mjs --browser chrome

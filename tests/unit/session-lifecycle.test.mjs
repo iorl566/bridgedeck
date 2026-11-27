@@ -11,6 +11,10 @@ test('createSessionRecord normalizes defaults', () => {
   assert.equal(session.connected, true);
   assert.equal(session.paused, false);
   assert.equal(session.startedAt, 1000);
+  // 共享 tab 的控制模式默认 open，且只有合法值会被保留。
+  assert.equal(session.controlMode, 'open');
+  assert.equal(createSessionRecord({ sessionId: 's2', instanceId: 'i1', tabId: 1, controlMode: 'exclusive' }).controlMode, 'exclusive');
+  assert.equal(createSessionRecord({ sessionId: 's3', instanceId: 'i1', tabId: 1, controlMode: 'nope' }).controlMode, 'open');
 });
 
 test('disconnect and restore update connection state', () => {

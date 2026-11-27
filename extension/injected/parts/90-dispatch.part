@@ -1,0 +1,136 @@
+  // §I 指针/拖拽/滚轮/上传/fetch
+  // ===========================================================================
+  function rectCenter(el) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 && rect.height <= 0) pageError('E_NOT_FOUND', '目标元素没有可交互区域（尺寸为 0）');
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }
+
+  function eventTargetAt(x, y, fallback) {
+    let el = null;
+    try { el = document.elementFromPoint(x, y); } catch (e) { el = null; }
+    return el || fallback || document.body;
+  }
+
+  function fireMouseTarget(target, type, x, y, extra) {
+    const init = Object.assign({
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      screenX: x,
+      screenY: y,
+      button: 0,
+      buttons: 0,
+    }, extra || {});
+    try {
+      target.dispatchEvent(new PointerEvent(type, Object.assign({ pointerId: 1, pointerType: 'mouse', isPrimary: true }, init)));
+    } catch (e) {
+      // 极旧内核没有 PointerEvent：只发 MouseEvent
+    }
+    const mapped = type === 'pointerdown' ? 'mousedown' : (type === 'pointermove' ? 'mousemove' : (type === 'pointerup' ? 'mouseup' : null));
+    if (mapped) target.dispatchEvent(new MouseEvent(mapped, init));
+  }
+
+  function targetArg(value, label) {
+    if (typeof value === 'string' && value) {
+      return value.charAt(0) === '@' ? { ref: value } : { selector: value };
+    }
+    if (value && typeof value === 'object' && (value.ref || value.selector)) return value;
+    pageError('E_BAD_ARG', 'drag 需要 ' + label + '（ref 或 selector）');
+    return null;
+  }
+
+  function nativeDragSequence(fromEl, toEl, a, b, mods) {
+    let transfer = null;
+    try { transfer = new DataTransfer(); } catch (e) { transfer = null; }
+    const base = Object.assign({ bubbles: true, cancelable: true, composed: true, dataTransfer: transfer }, mods || {});
+    try {
+      fromEl.dispatchEvent(new DragEvent('dragstart', Object.assign({}, base, { clientX: a.x, clientY: a.y })));
+      fromEl.dispatchEvent(new DragEvent('drag', Object.assign({}, base, { clientX: a.x, clientY: a.y })));
+      toEl.dispatchEvent(new DragEvent('dragenter', Object.assign({}, base, { clientX: b.x, clientY: b.y })));
+      toEl.dispatchEvent(new DragEvent('dragover', Object.assign({}, base, { clientX: b.x, clientY: b.y })));
+      toEl.dispatchEvent(new DragEvent('drop', Object.assign({}, base, { clientX: b.x, clientY: b.y })));
+      fromEl.dispatchEvent(new DragEvent('dragend', Object.assign({}, base, { clientX: b.x, clientY: b.y })));
+    } catch (error) {
+      pageError('E_INTERNAL', '原生拖拽事件派发失败：' + ((error && error.message) || error));
+    }
+    return { ok: true, mode: 'native', points: 0 };
+  }
+
+  async function actionDrag(args) {
+    const mode = args.mode == null ? 'hold' : String(args.mode);
+    if (mode !== 'hold' && mode !== 'click-move-click') {
+      pageError('E_BAD_MODE', 'mode 只能是 hold 或 click-move-click');
+    }
+    const bits = Number(args.modifiers) || 0;
+    const mods = {
+      altKey: (bits & 1) !== 0,
+      ctrlKey: (bits & 2) !== 0,
+      metaKey: (bits & 4) !== 0,
+      shiftKey: (bits & 8) !== 0,
+    };
+    const fromEl = resolveElement(targetArg(args.from, 'from'));
+    const hasDelta = Number.isFinite(Number(args.dx)) || Number.isFinite(Number(args.dy));
+    let toEl = null;
+    if (args.to != null) toEl = resolveElement(targetArg(args.to, 'to'));
+    else if (!hasDelta) pageError('E_BAD_ARG', 'drag 需要 --to 或 --dx/--dy');
+    const rawSteps = Number(args.steps);
+    const steps = Math.min(Math.max(Number.isFinite(rawSteps) && rawSteps > 0 ? Math.round(rawSteps) : 8, 2), 40);
+    scrollIntoView(fromEl);
+    await ensureActionable(fromEl, args, 'drag');
+    const a = rectCenter(fromEl);
+    const fromOffset = { x: Number(args.fromOffsetX) || 0, y: Number(args.fromOffsetY) || 0 };
+    a.x += fromOffset.x;
+    a.y += fromOffset.y;
+    let b;
+    if (toEl) {
+      b = rectCenter(toEl);
+      b.x += Number(args.toOffsetX) || 0;
+      b.y += Number(args.toOffsetY) || 0;
+    } else {
+      b = { x: a.x + (Number(args.dx) || 0), y: a.y + (Number(args.dy) || 0) };
+    }
+    const holdMs = Math.min(Math.max(Number(args.holdMs) || 0, 0), 5000);
+    const durationMs = Math.min(Math.max(Number(args.durationMs) || 0, 0), 5000);
+    const hoverEl = toEl || eventTargetAt(b.x, b.y, fromEl);
+
+    const draggable = fromEl.draggable === true || fromEl.getAttribute('draggable') === 'true';
+    if (draggable && toEl) return nativeDragSequence(fromEl, toEl, a, b, mods);
+
+    fireMouseTarget(fromEl, 'pointermove', a.x, a.y, Object.assign({ buttons: 0 }, mods));
+    fireMouseTarget(fromEl, 'pointerdown', a.x, a.y, Object.assign({ buttons: 1 }, mods));
+    if (mode === 'click-move-click') {
+      fireMouseTarget(fromEl, 'pointerup', a.x, a.y, Object.assign({ buttons: 0 }, mods));
+      fireMouseTarget(fromEl, 'click', a.x, a.y, Object.assign({ buttons: 0 }, mods));
+      for (let i = 1; i <= steps; i += 1) {
+        const t = i / steps;
+        const x = a.x + (b.x - a.x) * t;
+        const y = a.y + (b.y - a.y) * t;
+        fireMouseTarget(eventTargetAt(x, y, fromEl), 'pointermove', x, y, Object.assign({ buttons: 0 }, mods));
+      }
+      fireMouseTarget(hoverEl, 'pointerdown', b.x, b.y, Object.assign({ buttons: 1 }, mods));
+      fireMouseTarget(hoverEl, 'pointerup', b.x, b.y, Object.assign({ buttons: 0 }, mods));
+      fireMouseTarget(hoverEl, 'click', b.x, b.y, Object.assign({ buttons: 0 }, mods));
+      if (durationMs > 0) await sleepMs(durationMs);
+      return { ok: true, mode: mode, points: steps };
+    }
+
+    // 长按语义：按下之后保持按住，再开始移动。之前把 sleep 放在 pointerdown 之前，
+    // 实际效果只是"先等一会儿再按下"，控件收不到任何长按时长。
+    if (holdMs > 0) await sleepMs(holdMs);
+
+    for (let i = 1; i <= steps; i += 1) {
+      const t = i / steps;
+      const x = a.x + (b.x - a.x) * t;
+      const y = a.y + (b.y - a.y) * t;
+      fireMouseTarget(eventTargetAt(x, y, fromEl), 'pointermove', x, y, Object.assign({ buttons: 1 }, mods));
+      if (durationMs > 0) await sleepMs(Math.max(1, Math.round(durationMs / steps)));
+    }
+    fireMouseTarget(hoverEl, 'pointermove', b.x, b.y, Object.assign({ buttons: 1 }, mods));
+    fireMouseTarget(hoverEl, 'pointerup', b.x, b.y, Object.assign({ buttons: 0 }, mods));
+    return { ok: true, mode: mode, points: steps };
+  }
+

@@ -24,5 +24,19 @@
   "。远程配对令牌只保存在扩展私有存储中，不写入普通偏好设置。": ". O token de pareamento remoto fica apenas no armazenamento privado da extensão e não é gravado nas preferências comuns.",
   "你的控制": "Seus controles",
   "你可以在弹窗或设置页关闭连接、控制提示、自动化设置；可以随时清空调试历史、录制和视频。\n        本扩展只连接": "No popup ou na página de configurações, você pode desativar a conexão, os indicadores de controle e as configurações de automação; também pode limpar o histórico de depuração, as gravações e os vídeos a qualquer momento.\n        Esta extensão se conecta apenas a",
-  "上的本地 daemon；远程连接必须由你主动配置并授权。": "— o daemon local; conexões remotas precisam ser configuradas e autorizadas por você."
+  "上的本地 daemon；远程连接必须由你主动配置并授权。": "— o daemon local; conexões remotas precisam ser configuradas e autorizadas por você.",
+  "本地分片": "Fragmentos locais",
+  "扫描": "Verificar",
+  "恢复最新": "Restaurar o mais recente",
+  "尚未扫描": "Ainda não verificado",
+  "没有本地分片": "Nenhum fragmento local",
+  "没有可恢复的本地分片": "Nenhum fragmento local recuperável",
+  "已保存": "Salvo",
+  "已恢复默认": "Padrões restaurados",
+  "已复制：": "Copiado: ",
+  "复制失败，请手动复制：": "Falha ao copiar; copie manualmente: ",
+  "配对码需为 6 位数字": "O código de emparelhamento deve ter 6 dígitos",
+  "地址格式不正确": "Formato de endereço inválido",
+  "已清空本机任务审计记录": "Registros de auditoria locais apagados",
+  "目标标签页": "Aba de destino"
 }

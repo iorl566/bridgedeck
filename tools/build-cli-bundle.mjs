@@ -13,7 +13,7 @@ const name = `BridgeDeck-cli-bundle-${pkg.version}.zip`;
 const out = path.join(DIST, name);
 const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-cli-bundle-'));
 
-const DIRS = ['cli', 'daemon', 'lib', 'mcp', 'skill', 'sdk'];
+const DIRS = ['cli', 'daemon', 'lib', 'mcp', 'skill', 'sdk', 'vendor'];
 const FILES = ['install.ps1', 'install-online.ps1', 'install.sh', 'install-online.sh', 'uninstall.sh', 'AGENT_INSTALL.md', 'LICENSE', 'package.json', 'README.md', 'uninstall.ps1'];
 
 try {
@@ -32,7 +32,7 @@ try {
   const listed = spawnSync('tar', ['-tf', out], { encoding: 'utf8' });
   if (listed.status !== 0) throw new Error('无法读取 zip 列表：' + (listed.stderr || listed.stdout));
   const entries = new Set(String(listed.stdout).split(/\r?\n/).filter(Boolean));
-  for (const required of ['cli/bridge.mjs', 'daemon/server.mjs', 'mcp/server.mjs', 'install.ps1']) {
+  for (const required of ['cli/bridge.mjs', 'daemon/server.mjs', 'mcp/server.mjs', 'install.ps1', 'vendor/quickjs/core/dist/index.mjs']) {
     if (!entries.has(required)) throw new Error('CLI bundle 缺少文件：' + required);
   }
   console.log(JSON.stringify({ ok: true, name, bytes: fs.statSync(out).size, entries: entries.size }, null, 2));

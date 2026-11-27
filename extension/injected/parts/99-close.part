@@ -1,0 +1,173 @@
+  // §J 消息分派与 installHumanWatchers
+  // ===========================================================================
+  function ok(result) {
+    return { ok: true, result };
+  }
+
+  async function handle(name, args) {
+    const input = args && typeof args === 'object' ? args : {};
+    try {
+      // 观测代数守卫：调用方给了 expectRevision 就要求动作与观测在同一代 DOM 上发生。
+      if (input.expectRevision != null) {
+        const expected = Number(input.expectRevision);
+        const current = currentRevision();
+        if (!Number.isFinite(expected) || current !== expected) {
+          pageError('E_OBSERVATION_CHANGED', '页面在观测后已变化（观测代数 ' + (Number.isFinite(expected) ? expected : '无效')
+            + '，当前 ' + current + '）；重新 observe 后再操作', {
+            expected: Number.isFinite(expected) ? expected : null,
+            current,
+            observed_changes: { revision_delta: Number.isFinite(expected) ? current - expected : null },
+          });
+        }
+      }
+      switch (name) {
+        case 'mark-agent-input':
+          markAgentInput();
+          return ok(true);
+        case 'observe':
+          return ok(observe(input));
+        case 'deep-vom':
+          return ok(buildDeepVom(input));
+        case 'snapshot':
+          return ok(snapshot());
+        case 'reset-refs':
+          return ok(resetRefs());
+        case 'click':
+          return ok(await retryDetachedTarget(input, () => actionClick(input)));
+        case 'hover':
+          return ok(await retryDetachedTarget(input, () => actionHover(input)));
+        case 'fill':
+          return ok(await retryDetachedTarget(input, () => actionFill(input)));
+        case 'press':
+          return ok(await retryDetachedTarget(input, () => actionPress(input)));
+        case 'select':
+          return ok(await retryDetachedTarget(input, () => actionSelect(input)));
+        case 'actionable':
+          return ok(actionability(input));
+        case 'row-anchor':
+          // 只读：动作前取当前行事实；无行/非虚拟化行返回 anchor:null（fail-closed）。
+          return ok(rowAnchorProbe(input));
+        case 'fill-focus':
+          return ok(fillFastTarget(input));
+        case 'fill-verify':
+          return ok(fillVerify(input));
+        case 'focus':
+          return ok(actionFocus(input));
+        case 'scroll-to':
+          return ok(actionScrollTo(input));
+        case 'point':
+          return ok(actionPoint(input));
+        case 'ref-selector':
+          return ok(refSelector(input));
+        case 'frame-project-point':
+          return ok(frameProjectPoint(input));
+        case 'rect':
+          return ok(actionRect(input));
+        case 'auto-scroll':
+          return ok(await actionAutoScroll());
+        case 'read':
+          return ok(withRevision(actionRead(input)));
+        case 'extract':
+          return ok(withRevision(capExtractBytes(actionExtract(input), input.maxBytes)));
+        case 'drag':
+          return ok(await actionDrag(input));
+        case 'wheel':
+          return ok(actionWheel(input));
+        case 'blur':
+          return ok(actionBlur(input));
+        case 'upload':
+          return ok(actionUpload(input));
+        case 'upload-first':
+          return ok(actionUploadFirst(input));
+        case 'fetch-run':
+          return ok(await actionFetchRun(input));
+        case 'get-html':
+          return ok(getHtml(input));
+        case 'probe-state':
+          return ok(probeState(input));
+        case 'node-signature':
+          return ok(actionNodeSignature(input));
+        case 'ref-signatures':
+          return ok(actionRefSignatures(input));
+        case 'page-metrics':
+          return ok(pageMetrics());
+        case 'element-rect':
+          return ok(elementRect(input));
+        case 'hit-test':
+          return ok(actionHitTest(input));
+        case 'clear-vom-markers':
+          return ok(clearVomMarkers());
+        case 'expect-check':
+          return ok(expectCheck(input));
+        case 'help-criteria-check':
+          return ok(helpCriteriaCheck(input));
+        case 'perf-metrics':
+          return ok(perfMetrics());
+        case 'human-activity':
+          return ok(humanActivity());
+        case 'media-progress':
+          return ok(mediaProgress());
+        case 'frame-meta':
+          return ok(frameMeta());
+        case 'revision':
+          return ok({ revision: currentRevision() });
+        case 'visual-refs':
+          return ok(visualRefs());
+        case 'visual-scan':
+          return ok(visualScan());
+        case 'hit-at':
+          return ok(hitAt(input));
+        case 'click-point':
+          return ok(await clickPoint(input));
+        case 'upload-probe':
+          return ok(uploadProbe(input));
+        case 'scroll-to-y':
+          return ok(scrollToY(input));
+        default:
+          return { ok: false, error: { code: 'E_UNKNOWN_METHOD', message: `页面侧未知方法: ${name}` } };
+      }
+    } catch (error) {
+      if (error && typeof error.code === 'string' && error.code.startsWith('E_')) {
+        return { ok: false, error: { code: error.code, message: error.message, ...(error.data && typeof error.data === 'object' ? { data: error.data } : {}) } };
+      }
+      return {
+        ok: false,
+        error: { code: 'E_INTERNAL', message: String((error && error.message) || error) },
+      };
+    }
+  }
+
+  function installHumanWatchers() {
+    try {
+      if (!globalThis.chrome || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') return;
+      const send = (event) => {
+        try { const p = chrome.runtime.sendMessage({ type: event, at: Date.now() }); if (p && typeof p.catch === 'function') p.catch(() => {}); } catch { /* 离线忽略 */ }
+      };
+      let lastAt = 0;
+      const onInput = (event) => {
+        if (!event || event.isTrusted !== true) return;
+        // 浮层自己的按钮不能算“人工接管页面”：否则点“交给 Agent”会立刻被自动暂停。
+        const target = event.target;
+        if (target && target.nodeType === 1 && target.closest && target.closest('[data-bb-ui], #__bb_takeover_host, #__bb_help_host, #__bb_help_highlight, #__bb_record_host, #__bb_manual_host, #__bb_borrow_modal, #__bb_control_hint, #__bb_human_banner')) return;
+        const now = Date.now();
+        // 与 content/human-watch.js 共用同一抑制标记：Agent 的可信输入不应被当成人工接管。
+        if (agentInputRecent(now)) return;
+        if (now - lastAt < 500) return;
+        lastAt = now;
+        send('bb.human.input');
+      };
+      document.addEventListener('keydown', onInput, true);
+      document.addEventListener('pointerdown', onInput, true);
+      window.addEventListener('blur', () => send('bb.human.blur'), true);
+    } catch { /* 页面环境不支持时忽略 */ }
+  }
+  installHumanWatchers();
+
+  globalThis[KEY] = {    version: LIB_VERSION,
+    handle,
+    isVisible,
+    hitAt,
+    visualScan,
+    resetRefs,
+  };
+})();

@@ -1,0 +1,2296 @@
+{
+  "version": 1,
+  "url": "https://example.test/basic-form.html",
+  "title": "登录表单夹具",
+  "frameId": 0,
+  "nodes": [
+    {
+      "id": "n3",
+      "ref": null,
+      "domId": null,
+      "tag": "h1",
+      "role": "heading",
+      "name": "登录表单夹具",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 800,
+        "height": 40
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 2,
+      "backendNodeId": 3,
+      "ancestorIds": [],
+      "ancestors": [],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "app",
+      "ref": null,
+      "domId": "app",
+      "tag": "main",
+      "role": "main",
+      "name": "主内容",
+      "bounds": {
+        "x": 0,
+        "y": 40,
+        "width": 800,
+        "height": 720
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 3,
+      "backendNodeId": 4,
+      "ancestorIds": [],
+      "ancestors": [],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "login-form",
+      "ref": null,
+      "domId": "login-form",
+      "tag": "form",
+      "role": "form",
+      "name": "登录",
+      "bounds": {
+        "x": 0,
+        "y": 50,
+        "width": 800,
+        "height": 420
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 4,
+      "backendNodeId": 5,
+      "ancestorIds": [
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "user-label",
+      "ref": null,
+      "domId": "user-label",
+      "tag": "label",
+      "role": "label",
+      "name": "用户名",
+      "bounds": {
+        "x": 10,
+        "y": 60,
+        "width": 80,
+        "height": 20
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 5,
+      "backendNodeId": 6,
+      "ancestorIds": [
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [
+          "user-label"
+        ],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "username",
+      "ref": "@e1",
+      "domId": "username",
+      "tag": "input",
+      "role": "textbox",
+      "name": "请输入用户名",
+      "bounds": {
+        "x": 100,
+        "y": 60,
+        "width": 220,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": true,
+      "disabled": false,
+      "invalid": true,
+      "inputState": "empty",
+      "paintOrder": 6,
+      "backendNodeId": 7,
+      "ancestorIds": [
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [
+          "user-hint"
+        ],
+        "owns": [],
+        "labelIds": [
+          "user-label"
+        ],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": [
+          "user-error"
+        ]
+      },
+      "table": null,
+      "inputType": "text",
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "user-hint",
+      "ref": null,
+      "domId": "user-hint",
+      "tag": "p",
+      "role": "note",
+      "name": "至少 8 位",
+      "bounds": {
+        "x": 100,
+        "y": 90,
+        "width": 220,
+        "height": 18
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 7,
+      "backendNodeId": 8,
+      "ancestorIds": [
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "user-error",
+      "ref": null,
+      "domId": "user-error",
+      "tag": "p",
+      "role": "alert",
+      "name": "用户名已存在",
+      "bounds": {
+        "x": 100,
+        "y": 110,
+        "width": 220,
+        "height": 18
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 8,
+      "backendNodeId": 9,
+      "ancestorIds": [
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "submit",
+      "ref": "@e2",
+      "domId": "submit",
+      "tag": "button",
+      "role": "button",
+      "name": "提交",
+      "bounds": {
+        "x": 100,
+        "y": 140,
+        "width": 100,
+        "height": 32
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 9,
+      "backendNodeId": 10,
+      "ancestorIds": [
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": "button",
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "avatar",
+      "ref": "@e3",
+      "domId": "avatar",
+      "tag": "input",
+      "role": "file",
+      "name": "上传头像",
+      "bounds": {
+        "x": 100,
+        "y": 180,
+        "width": 200,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": "empty",
+      "paintOrder": 10,
+      "backendNodeId": 11,
+      "ancestorIds": [
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": "file",
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "city-box",
+      "ref": null,
+      "domId": "city-box",
+      "tag": "div",
+      "role": "container",
+      "name": "",
+      "bounds": {
+        "x": 10,
+        "y": 220,
+        "width": 700,
+        "height": 90
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 11,
+      "backendNodeId": 12,
+      "ancestorIds": [
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "city",
+      "ref": "@e4",
+      "domId": "city",
+      "tag": "input",
+      "role": "combobox",
+      "name": "城市",
+      "bounds": {
+        "x": 100,
+        "y": 220,
+        "width": 200,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": "empty",
+      "paintOrder": 12,
+      "backendNodeId": 13,
+      "ancestorIds": [
+        "city-box",
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "city-box",
+          "domId": "city-box",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        },
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [
+          "city-list"
+        ],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": "listbox",
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": false,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "city-list",
+      "ref": null,
+      "domId": "city-list",
+      "tag": "ul",
+      "role": "listbox",
+      "name": "城市列表",
+      "bounds": {
+        "x": 100,
+        "y": 250,
+        "width": 200,
+        "height": 60
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 13,
+      "backendNodeId": 14,
+      "ancestorIds": [
+        "city-box",
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "city-box",
+          "domId": "city-box",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        },
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "beijing",
+      "ref": "@e5",
+      "domId": "beijing",
+      "tag": "li",
+      "role": "option",
+      "name": "北京",
+      "bounds": {
+        "x": 100,
+        "y": 250,
+        "width": 200,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 14,
+      "backendNodeId": 15,
+      "ancestorIds": [
+        "city-list",
+        "city-box",
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "city-list",
+          "domId": "city-list",
+          "ref": null,
+          "role": "listbox",
+          "tag": "ul",
+          "name": "城市列表"
+        },
+        {
+          "id": "city-box",
+          "domId": "city-box",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        },
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "shanghai",
+      "ref": "@e6",
+      "domId": "shanghai",
+      "tag": "li",
+      "role": "option",
+      "name": "上海",
+      "bounds": {
+        "x": 100,
+        "y": 278,
+        "width": 200,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 15,
+      "backendNodeId": 16,
+      "ancestorIds": [
+        "city-list",
+        "city-box",
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "city-list",
+          "domId": "city-list",
+          "ref": null,
+          "role": "listbox",
+          "tag": "ul",
+          "name": "城市列表"
+        },
+        {
+          "id": "city-box",
+          "domId": "city-box",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        },
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "agree",
+      "ref": "@e7",
+      "domId": "agree",
+      "tag": "input",
+      "role": "checkbox",
+      "name": "同意条款",
+      "bounds": {
+        "x": 100,
+        "y": 320,
+        "width": 20,
+        "height": 20
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": "empty",
+      "paintOrder": 16,
+      "backendNodeId": 17,
+      "ancestorIds": [
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": "checkbox",
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "slider",
+      "ref": "@e8",
+      "domId": "slider",
+      "tag": "div",
+      "role": "slider",
+      "name": "音量",
+      "bounds": {
+        "x": 140,
+        "y": 320,
+        "width": 160,
+        "height": 20
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 17,
+      "backendNodeId": 18,
+      "ancestorIds": [
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": true,
+      "dragHint": "draggable",
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": "pointer",
+      "tabIndex": 0,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "close-btn",
+      "ref": "@e9",
+      "domId": "close-btn",
+      "tag": "button",
+      "role": "button",
+      "name": "关闭",
+      "bounds": {
+        "x": 320,
+        "y": 320,
+        "width": 80,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 18,
+      "backendNodeId": 19,
+      "ancestorIds": [
+        "login-form",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "login-form",
+          "domId": "login-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "登录"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "login-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": "button",
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "profile-dialog",
+      "ref": null,
+      "domId": "profile-dialog",
+      "tag": "div",
+      "role": "dialog",
+      "name": "个人资料",
+      "bounds": {
+        "x": 120,
+        "y": 480,
+        "width": 420,
+        "height": 200
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 19,
+      "backendNodeId": 20,
+      "ancestorIds": [
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "dialog-close",
+      "ref": "@e10",
+      "domId": "dialog-close",
+      "tag": "button",
+      "role": "button",
+      "name": "Close",
+      "bounds": {
+        "x": 500,
+        "y": 490,
+        "width": 30,
+        "height": 30
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 20,
+      "backendNodeId": 21,
+      "ancestorIds": [
+        "profile-dialog",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "profile-dialog",
+          "domId": "profile-dialog",
+          "ref": null,
+          "role": "dialog",
+          "tag": "div",
+          "name": "个人资料"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": "button",
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "dialog-home",
+      "ref": "@e11",
+      "domId": "dialog-home",
+      "tag": "a",
+      "role": "link",
+      "name": "首页",
+      "bounds": {
+        "x": 140,
+        "y": 500,
+        "width": 80,
+        "height": 24
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 21,
+      "backendNodeId": 22,
+      "ancestorIds": [
+        "profile-dialog",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "profile-dialog",
+          "domId": "profile-dialog",
+          "ref": null,
+          "role": "dialog",
+          "tag": "div",
+          "name": "个人资料"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": "/home",
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "scroll-box",
+      "ref": null,
+      "domId": "scroll-box",
+      "tag": "div",
+      "role": "region",
+      "name": "滚动区",
+      "bounds": {
+        "x": 0,
+        "y": 690,
+        "width": 300,
+        "height": 60
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 22,
+      "backendNodeId": 23,
+      "ancestorIds": [
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": "auto",
+      "scrollable": true,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "people",
+      "ref": null,
+      "domId": "people",
+      "tag": "table",
+      "role": "table",
+      "name": "用户表",
+      "bounds": {
+        "x": 420,
+        "y": 480,
+        "width": 360,
+        "height": 200
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 23,
+      "backendNodeId": 24,
+      "ancestorIds": [
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": {
+        "headers": [
+          {
+            "id": "people-name",
+            "role": "columnheader",
+            "name": "姓名"
+          },
+          {
+            "id": "people-city",
+            "role": "columnheader",
+            "name": "城市"
+          }
+        ],
+        "dataRows": 1,
+        "caption": "用户表"
+      },
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "n26",
+      "ref": "@e12",
+      "domId": null,
+      "tag": "tr",
+      "role": "row",
+      "name": "",
+      "bounds": {
+        "x": 10,
+        "y": 10,
+        "width": 100,
+        "height": 30
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 25,
+      "backendNodeId": 26,
+      "ancestorIds": [
+        "people",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "people",
+          "domId": "people",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "用户表"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "people-name",
+      "ref": null,
+      "domId": "people-name",
+      "tag": "th",
+      "role": "columnheader",
+      "name": "姓名",
+      "bounds": {
+        "x": 420,
+        "y": 480,
+        "width": 120,
+        "height": 24
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 26,
+      "backendNodeId": 27,
+      "ancestorIds": [
+        "n26",
+        "people",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "n26",
+          "domId": null,
+          "ref": "@e12",
+          "role": "row",
+          "tag": "tr",
+          "name": null
+        },
+        {
+          "id": "people",
+          "domId": "people",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "用户表"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "people-city",
+      "ref": null,
+      "domId": "people-city",
+      "tag": "th",
+      "role": "columnheader",
+      "name": "城市",
+      "bounds": {
+        "x": 540,
+        "y": 480,
+        "width": 120,
+        "height": 24
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 27,
+      "backendNodeId": 28,
+      "ancestorIds": [
+        "n26",
+        "people",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "n26",
+          "domId": null,
+          "ref": "@e12",
+          "role": "row",
+          "tag": "tr",
+          "name": null
+        },
+        {
+          "id": "people",
+          "domId": "people",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "用户表"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "n30",
+      "ref": "@e13",
+      "domId": null,
+      "tag": "tr",
+      "role": "row",
+      "name": "",
+      "bounds": {
+        "x": 10,
+        "y": 10,
+        "width": 100,
+        "height": 30
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 29,
+      "backendNodeId": 30,
+      "ancestorIds": [
+        "people",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "people",
+          "domId": "people",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "用户表"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "people-1-name",
+      "ref": null,
+      "domId": "people-1-name",
+      "tag": "td",
+      "role": "cell",
+      "name": "张三",
+      "bounds": {
+        "x": 420,
+        "y": 510,
+        "width": 120,
+        "height": 24
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 30,
+      "backendNodeId": 31,
+      "ancestorIds": [
+        "n30",
+        "people",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "n30",
+          "domId": null,
+          "ref": "@e13",
+          "role": "row",
+          "tag": "tr",
+          "name": null
+        },
+        {
+          "id": "people",
+          "domId": "people",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "用户表"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "people-1-city",
+      "ref": null,
+      "domId": "people-1-city",
+      "tag": "td",
+      "role": "cell",
+      "name": "北京",
+      "bounds": {
+        "x": 540,
+        "y": 510,
+        "width": 120,
+        "height": 24
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 31,
+      "backendNodeId": 32,
+      "ancestorIds": [
+        "n30",
+        "people",
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "n30",
+          "domId": null,
+          "ref": "@e13",
+          "role": "row",
+          "tag": "tr",
+          "name": null
+        },
+        {
+          "id": "people",
+          "domId": "people",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "用户表"
+        },
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "logo",
+      "ref": null,
+      "domId": "logo",
+      "tag": "img",
+      "role": "img",
+      "name": "公司 Logo",
+      "bounds": {
+        "x": 700,
+        "y": 60,
+        "width": 40,
+        "height": 40
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 32,
+      "backendNodeId": 33,
+      "ancestorIds": [
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": "公司 Logo",
+      "title": "公司标志"
+    },
+    {
+      "id": "toggle",
+      "ref": "@e14",
+      "domId": "toggle",
+      "tag": "div",
+      "role": "switch",
+      "name": "开关",
+      "bounds": {
+        "x": 360,
+        "y": 320,
+        "width": 60,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 33,
+      "backendNodeId": 34,
+      "ancestorIds": [
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": true,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "drag-handle",
+      "ref": null,
+      "domId": "drag-handle",
+      "tag": "div",
+      "role": "container",
+      "name": "拖拽手柄",
+      "bounds": {
+        "x": 600,
+        "y": 320,
+        "width": 40,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 34,
+      "backendNodeId": 35,
+      "ancestorIds": [
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": "drag-handle",
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "menu-trigger",
+      "ref": "@e15",
+      "domId": "menu-trigger",
+      "tag": "div",
+      "role": "menuitem",
+      "name": "更多操作",
+      "bounds": {
+        "x": 660,
+        "y": 320,
+        "width": 100,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 35,
+      "backendNodeId": 36,
+      "ancestorIds": [
+        "app"
+      ],
+      "ancestors": [
+        {
+          "id": "app",
+          "domId": "app",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主内容"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": "menu",
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    }
+  ],
+  "frames": [],
+  "limits": {
+    "nodes": 900,
+    "ancestors": 32,
+    "edges": 1500,
+    "frames": 16,
+    "relations": 600,
+    "groups": 200,
+    "contexts": 200,
+    "chainDepth": 3
+  },
+  "truncated": false,
+  "limitations": [
+    "facts 来自 DOM/ARIA/computed style（无 CDP）：backendNodeId 是 DOM 顺序号，不是 CDP backendNodeId",
+    "aria-* 关系保留 DOM id 原值；投影时解析不到节点 id 的端点会被丢弃",
+    "只包含本帧事实：跨 frame 汇总由调用方提供 frames 子图（TS background 尚未聚合）"
+  ]
+}

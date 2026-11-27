@@ -1,0 +1,58 @@
+Drag an element to another element or by a relative offset
+
+Usage: bsk.exe drag [OPTIONS] <SOURCE>
+
+Arguments:
+  <SOURCE>  Source ref or CSS selector (selectors must match exactly one element)
+
+Options:
+      --mode <MODE>
+          Mouse gesture. Click-move-click releases before moving, then clicks the destination [default: press-move-release] [possible values: press-move-release, click-move-click]
+      --context <CONTEXT>
+          Control context returned by cooperate sync. Required for shared-tab actions
+      --to <TO>
+          Destination ref or CSS selector; mutually exclusive with --dx/--dy
+      --depends-on <DEPENDS_ON>
+          Legacy strict-policy decision regions. Target policy uses --expect instead
+      --dx <DX>
+
+      --dy <DY>
+
+      --observation <OBSERVATION>
+          Explicit observation ID for visual or untargeted actions; never inferred from cached state
+      --expect <EXPECT>
+          JSON array of target facts to check before input: [{"target":"@e1","field":"text","equals":"Save"}]
+      --from-offset-x <FROM_OFFSET_X>
+          Source offset from its visible action point, in viewport CSS pixels [default: 0]
+      --from-offset-y <FROM_OFFSET_Y>
+          [default: 0]
+      --json
+          Emit machine-readable JSON output (when meaningful)
+      --quiet
+          Suppress informational output
+      --to-offset-x <TO_OFFSET_X>
+
+      --to-offset-y <TO_OFFSET_Y>
+
+  -v, --verbose...
+          Increase log verbosity (`-v` debug, `-vv` trace)
+      --session <SESSION>
+
+      --scope <SCOPE>
+
+      --tab-id <TAB_ID>
+
+      --observation-id <OBSERVATION_ID>
+
+      --button <BUTTON>
+          [default: left] [possible values: left, middle, right]
+      --modifiers <MODIFIERS>
+          [default: ""]
+      --hold <HOLD>
+          [default: 0ms]
+      --duration <DURATION>
+          [default: 500ms]
+      --timeout <TIMEOUT>
+          [default: 30s]
+  -h, --help
+          Print help

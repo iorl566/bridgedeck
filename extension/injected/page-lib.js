@@ -2,6 +2,18 @@
 // 页面侧（ISOLATED world）能力库：observe / snapshot / 动作命令 / 等待探测。
 // 通过 chrome.scripting.executeScript(files) 按需补注入，也作为 content script 在 document_start 注入。
 // 所有状态挂在 globalThis.__BB_PAGE__（同一 frame 的隔离世界在多次注入间共享），导航后随文档重建。
+// 结构索引（同一 IIFE 内顺序）：\
+//   §A 状态与 DOM 代数（revision / mutation tracker）      → currentRevision、ensureMutationTracker
+//   §B 基础工具（文本 / 可见性 / 角色 / 无障碍名）           → roleOf、accessibleName、statusFlags
+//   §C 观察与页面图（VOM / 视觉扫描 / 命中 / 对比度 / graph） → buildObservation、walk、visualScan、hitAt、formatNode
+//   §D 目标解析（阻塞层 / 增量观察 / ref→element）           → observe、snapshot、resolveElement
+//   §E 动作（click / fill / press / focus / expect / help）  → actionClick、actionFill、actionPress、actionability
+//   §F 视觉与等待（坐标点击 / 滚动空闲 / 性能 / human）       → visualRefs、clickPoint、perfMetrics、humanActivity
+//   §G 签名与读取（nodeSignature / fieldInfo / actionRead）  → nodeSignatureOf、actionReadFields、actionRead
+//   §H 提取（table / list / grid / discover / 预算 / 覆盖度） → tableExtract、listExtract、gridExtract、actionExtract
+//   §I 指针 / 拖拽 / 滚轮 / 上传 / fetch                    → actionDrag、actionWheel、actionUpload、actionFetchRun
+//   §J 消息分派（handle）与 installHumanWatchers
+//
 (() => {
   'use strict';
 
@@ -98,6 +110,10 @@
 
   // 视觉候选表：index -> element。随文档重建而清空，命中校验按 index 判断"是不是它"。
   const visualState = { candidates: new Map() };
+
+  // ===========================================================================
+  // §A 状态与 DOM 代数：revision、变更摘要、MutationObserver
+  // ===========================================================================
   function getVisualState() {
     return visualState;
   }
@@ -271,11 +287,239 @@
   }
 
   // 稳定 ref：同一个元素在多次 observe 之间复用同一个编号
+
+  // ===========================================================================
+  // §B 基础工具：文本/可见性/角色/无障碍名/状态旗标
+  // ===========================================================================
   function rowAnchorFor(el) {
     const row = el && el.closest ? el.closest('tr,[role="row"]') : null;
     if (!row) return null;
     const text = normalizeText(row.textContent || '').slice(0, 200);
     return text ? { text, tag: row.tagName } : null;
+  }
+
+  // ---------- 虚拟列表行事实（VOM row facts） ----------
+  // 契约（与 lib/vom-rows.js / W2 fill/click 的 rowAnchor 一致）：
+  //   anchor = { ariaRowIndex, dataIndex, transform, rowKey, rowText, containerScrollTop, recycled }
+  // 另有 role/tag 供 classifyVirtualRow 判 kind。仅对“有虚拟化线索”的行产出，静态表格不产出，
+  // 避免普通大表把 payload 撑大。
+  const ROW_SELECTOR = 'tr,[role="row"],[aria-rowindex],[data-index],[data-row-key],[data-key]';
+  const VIRTUAL_ROW_SELECTOR = '[role="grid"],[role="treegrid"],[role="listbox"],[aria-rowcount],[aria-rowindex],[data-index],[data-row-key],[data-key]';
+  const ROW_SCROLL_ANCESTOR_LIMIT = 16;
+  const ROW_FACT_TEXT_MAX = 200;
+  let rowFactsCache = new WeakMap();
+
+  function resetRowFactsCache() {
+    rowFactsCache = new WeakMap();
+  }
+
+  function rowElementOf(el) {
+    if (!el || el.nodeType !== 1 || typeof el.closest !== 'function') return null;
+    try {
+      return el.closest(ROW_SELECTOR);
+    } catch {
+      return null;
+    }
+  }
+
+  function rowIntAttr(el, names) {
+    if (!el || el.nodeType !== 1) return null;
+    for (const name of names) {
+      const raw = normalizeText(el.getAttribute(name) || '');
+      if (/^-?\d+$/.test(raw)) return Number(raw);
+    }
+    return null;
+  }
+
+  function rowAriaIndex(row) {
+    let node = row;
+    for (let depth = 0; node && node.nodeType === 1 && depth < 4; depth += 1) {
+      const value = rowIntAttr(node, ['aria-rowindex']);
+      if (value != null) return value;
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  function rowDataIndex(row) {
+    let node = row;
+    for (let depth = 0; node && node.nodeType === 1 && depth < 4; depth += 1) {
+      const value = rowIntAttr(node, ['data-index', 'data-row-index']);
+      if (value != null) return value;
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  function rowKeyOf(row) {
+    for (const name of ['data-row-key', 'data-key', 'data-id']) {
+      const value = normalizeText(row.getAttribute(name) || '');
+      if (value) return value.slice(0, 120);
+    }
+    const id = normalizeText(row.id || '');
+    return id ? id.slice(0, 120) : null;
+  }
+
+  function rowTransformOf(row) {
+    try {
+      const transform = getComputedStyle(row).transform;
+      return transform ? String(transform).slice(0, 200) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function rowScrollContainerOf(row) {
+    let node = row ? row.parentElement : null;
+    let guard = 0;
+    while (node && node.nodeType === 1 && guard < ROW_SCROLL_ANCESTOR_LIMIT) {
+      let style = null;
+      try {
+        style = getComputedStyle(node);
+      } catch {
+        style = null;
+      }
+      if (style && /(auto|scroll)/.test(String(style.overflowX || '') + ' ' + String(style.overflowY || ''))
+        && (node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1)) {
+        return node;
+      }
+      node = node.parentElement;
+      guard += 1;
+    }
+    return null;
+  }
+
+  function rowHasVirtualHints(row) {
+    if (!row || row.nodeType !== 1) return false;
+    if (row.hasAttribute('aria-rowindex') || row.hasAttribute('data-index') || row.hasAttribute('data-row-index')
+      || row.hasAttribute('data-row-key') || row.hasAttribute('data-key') || row.hasAttribute('data-id')) return true;
+    const transform = rowTransformOf(row);
+    if (transform && transform !== 'none') return true;
+    try {
+      return Boolean(row.closest(VIRTUAL_ROW_SELECTOR));
+    } catch {
+      return false;
+    }
+  }
+
+  function computeRowFacts(row) {
+    const rowText = normalizeText(row.textContent || '').slice(0, ROW_FACT_TEXT_MAX);
+    const container = rowScrollContainerOf(row);
+    const roleAttr = normalizeText(row.getAttribute('role') || '').toLowerCase();
+    return {
+      ariaRowIndex: rowAriaIndex(row),
+      dataIndex: rowDataIndex(row),
+      transform: rowTransformOf(row),
+      rowKey: rowKeyOf(row),
+      rowText: rowText || null,
+      // text 是 rowText 的兼容别名：51-key-fill 的旧行守卫按 anchor.text 比对。
+      text: rowText || null,
+      containerScrollTop: container ? Math.round(container.scrollTop * 10) / 10 : null,
+      recycled: false,
+      role: roleAttr || (row.tagName === 'TR' ? 'row' : null),
+      tag: String(row.tagName || '').toLowerCase(),
+    };
+  }
+
+  function rowFactsChanged(previous, current) {
+    if (!previous || !current) return false;
+    const beforeText = previous.rowText != null ? previous.rowText : previous.text;
+    if (beforeText !== current.rowText) return true;
+    if (previous.rowKey != null && current.rowKey != null && previous.rowKey !== current.rowKey) return true;
+    if (previous.ariaRowIndex != null && current.ariaRowIndex != null && previous.ariaRowIndex !== current.ariaRowIndex) return true;
+    if (previous.dataIndex != null && current.dataIndex != null && previous.dataIndex !== current.dataIndex) return true;
+    if (previous.transform !== current.transform) return true;
+    return false;
+  }
+
+  /** 当前行事实（每次都重新读）：row-anchor 只读命令用它，避免返回上一次观察的缓存。 */
+  function currentRowAnchorOf(el) {
+    const row = rowElementOf(el);
+    if (!row || !rowHasVirtualHints(row)) return null;
+    const facts = computeRowFacts(row);
+    const refSeq = state.elRefs.get(el);
+    const previous = Number.isInteger(refSeq) ? state.rowAnchors.get(refSeq) : null;
+    facts.recycled = rowFactsChanged(previous, facts);
+    return facts;
+  }
+
+  /** 页面侧行事实生产者：同一观察内缓存；跨观察用 state.rowAnchors 判定 recycled。 */
+  function rowFactsOf(el) {
+    if (!el || el.nodeType !== 1) return null;
+    const cached = rowFactsCache.get(el);
+    if (cached !== undefined) return cached;
+    const facts = currentRowAnchorOf(el);
+    if (facts) {
+      const refSeq = state.elRefs.get(el);
+      if (Number.isInteger(refSeq)) state.rowAnchors.set(refSeq, facts);
+    }
+    rowFactsCache.set(el, facts);
+    return facts;
+  }
+
+  /** 只读命令 row-anchor：动作前取“当前行事实”；无行/非虚拟行返回 anchor:null（fail-closed）。 */
+  function rowAnchorProbe(args) {
+    const el = resolveElement(args);
+    return { anchor: currentRowAnchorOf(el), revision: currentRevision() };
+  }
+
+  // ---------- 页面侧 paint/可见性事实（统一 gate 的输入） ----------
+  // display/visibility/opacity + 原生 checkVisibility + 祖先 overflow 裁剪，只在这一处归约；
+  // 扩展侧 lib/vom-visibility.js 读取这些事实做唯一判定。
+  function paintVisibilityOf(el, style) {
+    let computed = style || null;
+    if (!computed) {
+      try {
+        computed = getComputedStyle(el);
+      } catch {
+        computed = null;
+      }
+    }
+    if (!computed) return { paintVisible: null, hiddenReason: null };
+    if (computed.display === 'none') return { paintVisible: false, hiddenReason: 'display-none' };
+    if (computed.visibility === 'hidden' || computed.visibility === 'collapse') {
+      return { paintVisible: false, hiddenReason: 'visibility-hidden' };
+    }
+    if (Number.parseFloat(computed.opacity) === 0) return { paintVisible: false, hiddenReason: 'opacity-zero' };
+    let paintVisible = true;
+    try {
+      if (typeof el.checkVisibility === 'function') {
+        paintVisible = el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) === true;
+      }
+    } catch {
+      paintVisible = true;
+    }
+    return paintVisible === false
+      ? { paintVisible: false, hiddenReason: 'content-hidden' }
+      : { paintVisible: true, hiddenReason: null };
+  }
+
+  function clipFactsOf(el, rect) {
+    if (!el || !rect || !(rect.width > 0) || !(rect.height > 0)) return { clipped: false, clippedBy: null };
+    let node = el.parentElement;
+    let guard = 0;
+    while (node && node.nodeType === 1 && guard < ROW_SCROLL_ANCESTOR_LIMIT) {
+      let style = null;
+      try {
+        style = getComputedStyle(node);
+      } catch {
+        style = null;
+      }
+      if (style) {
+        const overflow = String(style.overflowX || '') + ' ' + String(style.overflowY || '');
+        if (/(hidden|clip|auto|scroll)/.test(overflow)) {
+          const box = node.getBoundingClientRect();
+          const ix = Math.max(0, Math.min(rect.right, box.right) - Math.max(rect.left, box.left));
+          const iy = Math.max(0, Math.min(rect.bottom, box.bottom) - Math.max(rect.top, box.top));
+          if (ix * iy <= 0) {
+            return { clipped: true, clippedBy: normalizeText(node.id || '') || String(node.tagName || '').toLowerCase() };
+          }
+        }
+      }
+      node = node.parentElement;
+      guard += 1;
+    }
+    return { clipped: false, clippedBy: null };
   }
 
   function refFor(el) {
@@ -284,9 +528,14 @@
     state.seq += 1;
     state.refs.set(state.seq, el);
     state.elRefs.set(el, state.seq);
-    // 虚拟滚动列表会复用行节点：记下 ref 所在行的业务文本，动作前比对。
-    const anchor = rowAnchorFor(el);
-    if (anchor) state.rowAnchors.set(state.seq, anchor);
+    // 虚拟滚动列表会复用行节点：记录行事实（含 rowText 别名），动作前比对。
+    const anchor = rowFactsOf(el);
+    if (anchor) {
+      state.rowAnchors.set(state.seq, anchor);
+    } else {
+      const plain = rowAnchorFor(el);
+      if (plain) state.rowAnchors.set(state.seq, plain);
+    }
     return state.seq;
   }
 
@@ -323,7 +572,10 @@
   }
 
   function agentInputRecent() {
-    return false;
+    // 用单调时钟判断“刚才是不是 Agent 自己派发的输入”；窗口取 3s（覆盖动作+settle），
+    // 避免 trusted 点击/按键产生的 isTrusted 事件被当成人工接管而自动暂停会话。
+    const at = Number(globalThis.__bbAgentInputAt || 0);
+    return at > 0 && performance.now() - at < 3000;
   }
 
   function isVisible(el) {
@@ -387,6 +639,100 @@
   const FORM_CONTROL_ROLES = new Set([
     'textbox', 'searchbox', 'combobox', 'listbox', 'checkbox', 'radio', 'slider', 'spinbutton', 'switch',
   ]);
+
+  // ---------- aria 关系事实（关系图 v3 的页面侧证据） ----------
+
+  const LABELLED_BY_CHAIN_DEPTH = 3;
+
+  /**
+   * aria-labelledby 链：直接目标 + 目标自身 aria-labelledby 的继续展开（最多 3 跳）。
+   * 返回 [{id, depth, from, text}]；关系图用 depth≥2 的跳生成 aria-labelledby-chain 关系。
+   */
+  function labelledByChainOf(el) {
+    const raw = normalizeText(el.getAttribute('aria-labelledby') || '');
+    if (!raw) return null;
+    const out = [];
+    const seen = new Set();
+    if (el.id) seen.add(String(el.id));
+    const queue = [];
+    for (const id of raw.split(/\s+/).filter(Boolean)) queue.push({ id, depth: 1, from: null });
+    while (queue.length) {
+      const item = queue.shift();
+      if (!item || !item.id || item.depth > LABELLED_BY_CHAIN_DEPTH) continue;
+      if (seen.has(String(item.id))) continue;
+      seen.add(String(item.id));
+      let target = null;
+      try {
+        target = document.getElementById(item.id);
+      } catch {
+        target = null;
+      }
+      if (!target) continue;
+      out.push({
+        id: String(item.id),
+        depth: item.depth,
+        from: item.from,
+        text: truncate(normalizeText(target.textContent || ''), 80) || null,
+      });
+      const nested = normalizeText(target.getAttribute('aria-labelledby') || '');
+      if (!nested) continue;
+      for (const nestedId of nested.split(/\s+/).filter(Boolean)) {
+        queue.push({ id: nestedId, depth: item.depth + 1, from: String(item.id) });
+      }
+    }
+    return out.length ? out : null;
+  }
+
+  /**
+   * 表格结构事实（表头单元格/数据行数/题注）：原生 <th> 不会作为节点被遍历到，
+   * 但表格节点自身可以一次读出，供 lib/vom-context.js 的表格分组使用。
+   */
+  function tableFactsOf(el) {
+    if (!el || el.nodeType !== 1 || String(el.tagName || '').toUpperCase() !== 'TABLE') return null;
+    const role = normalizeText(el.getAttribute('role') || '').toLowerCase();
+    if (role && !['table', 'grid', 'treegrid'].includes(role)) return null;
+    const headers = [];
+    let cells = 0;
+    try {
+      cells = el.querySelectorAll('th,[role="columnheader"],[role="rowheader"]').length;
+    } catch {
+      cells = 0;
+    }
+    if (cells) {
+      let index = 0;
+      for (const cell of el.querySelectorAll('th,[role="columnheader"],[role="rowheader"]')) {
+        if (index >= 12) break;
+        index += 1;
+        const name = truncate(normalizeText(cell.textContent || ''), 80);
+        if (!name) continue;
+        const cellRole = normalizeText(cell.getAttribute('role') || '').toLowerCase()
+          || (String(cell.tagName || '').toUpperCase() === 'TH' ? 'columnheader' : 'cell');
+        headers.push({ role: cellRole, name, id: cell.id || null });
+      }
+    }
+    let dataRows = 0;
+    try {
+      const bodies = el.tBodies ? Array.from(el.tBodies) : [];
+      dataRows = bodies.reduce((sum, body) => sum + (body.rows ? body.rows.length : 0), 0);
+      if (!bodies.length && el.rows) dataRows = Math.max(0, el.rows.length - (el.tHead ? 1 : 0));
+    } catch {
+      dataRows = 0;
+    }
+    let caption = null;
+    try {
+      const captionEl = el.querySelector('caption');
+      if (captionEl) caption = truncate(normalizeText(captionEl.textContent || ''), 120) || null;
+    } catch {
+      caption = null;
+    }
+    return {
+      headers,
+      headerCount: headers.length,
+      dataRows,
+      caption,
+      hasHeaderRow: headers.length > 0,
+    };
+  }
 
   function accessibleName(el, role) {
     const ariaLabel = normalizeText(el.getAttribute('aria-label') || '');
@@ -544,6 +890,69 @@
     return flags;
   }
 
+  // ---------- affordance / layer 页面侧事实（26/27/30 共用） ----------
+
+  /** 真实 Chromium top-layer 探测：modal dialog / popover / fullscreen。 */
+  function topLayerKindOf(el) {
+    if (!el || el.nodeType !== 1) return null;
+    try {
+      if (document.fullscreenElement === el) return 'fullscreen';
+    } catch {
+      // 忽略
+    }
+    try {
+      if (el.matches(':popover-open')) return 'popover';
+    } catch {
+      // 旧内核不支持 :popover-open
+    }
+    if (el.tagName === 'DIALOG') {
+      const open = el.open === true || el.hasAttribute('open');
+      if (!open) return null;
+      let modal = false;
+      try {
+        modal = el.matches(':modal');
+      } catch {
+        modal = false;
+      }
+      return modal ? 'modal-dialog' : 'dialog';
+    }
+    const role = normalizeText(el.getAttribute('role') || '').toLowerCase();
+    if (role === 'dialog' || role === 'alertdialog') return 'role-dialog';
+    return null;
+  }
+
+  /** 单个元素的计算样式层事实：position/z-index/top-layer/指针与 DIP 矩形。 */
+  function layerFactsOf(el) {
+    if (!el || el.nodeType !== 1) return null;
+    let style = null;
+    try {
+      style = getComputedStyle(el);
+    } catch {
+      return null;
+    }
+    if (!style) return null;
+    const zIndexRaw = normalizeText(style.zIndex || '');
+    const rect = el.getBoundingClientRect();
+    return {
+      position: style.position || null,
+      zIndex: /^-?\d+$/.test(zIndexRaw) ? Number(zIndexRaw) : null,
+      topLayer: topLayerKindOf(el),
+      pointerEvents: style.pointerEvents || null,
+      display: style.display || null,
+      visibility: style.visibility || null,
+      opacity: style.opacity || null,
+      rect: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      },
+    };
+  }
+
+  // ===========================================================================
+  // §C 观察与页面图：VOM markers、walk/nodeBrief、视觉扫描、命中、对比度、graph
+  // ===========================================================================
   function probeHoverEntries(el) {
     const selector =
       '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="menu"] a';
@@ -600,6 +1009,7 @@
   function buildObservation(options) {
     const withRefs = !!options.withRefs;
     const probeHover = !!options.probeHover;
+    const walkStartedAt = performance.now();
     if (options.markVom) clearVomMarkers();
     if (withRefs) {
       // 清掉已脱离文档的旧 ref，保留仍可用的编号，保证多次 observe 稳定
@@ -621,8 +1031,10 @@
     const ctx = {
       lines, withRefs, probeHover, refs: 0, nodes: options.collectNodes ? [] : null, paintSeq: 0,
       markVom: !!options.markVom, vomSeq: 0,
+      graph: options.collectGraph ? createGraph() : null,
       maxDepth: Number.isFinite(maxDepth) && maxDepth > 0 ? maxDepth : 0, truncated: false,
       surfaces: { iframes: 0, shadows: 0 }, consumedCaptions: new Set(),
+      funnel: { visited: 0, hidden: 0, stealth: 0, skippedTag: 0, emitted: 0, refs: 0, truncated: false, ms: { visibility: 0, stealth: 0 }, walkMs: 0 },
     };
 
     // 提示注入剥离：隐藏不可交互的"视觉不可见"子树（opacity/字号/尺寸/离屏），保留可交互控件。
@@ -698,12 +1110,19 @@
   }
   function walk(el, depth) {
       if (!el || el.nodeType !== 1) return;
-      if (ctx.maxDepth && depth > ctx.maxDepth) { ctx.truncated = true; return; }
+      ctx.funnel.visited += 1;
+      if (ctx.maxDepth && depth > ctx.maxDepth) { ctx.truncated = true; ctx.funnel.truncated = true; return; }
       if (el.tagName === 'IFRAME') ctx.surfaces.iframes += 1;
       const tag = el.tagName;
-      if (SKIP_TAGS.has(tag)) return;
-      if (!isVisible(el)) return;
-      if (!stealthInteractive(el) && stealthHidden(el)) return;
+      if (SKIP_TAGS.has(tag)) { ctx.funnel.skippedTag += 1; return; }
+      const visibleAt = performance.now();
+      const visible = isVisible(el);
+      ctx.funnel.ms.visibility += performance.now() - visibleAt;
+      if (!visible) { ctx.funnel.hidden += 1; return; }
+      const stealthAt = performance.now();
+      const stealth = !stealthInteractive(el) && stealthHidden(el);
+      ctx.funnel.ms.stealth += performance.now() - stealthAt;
+      if (stealth) { ctx.funnel.stealth += 1; return; }
       if (isGridNode(el)) {
         const cols = gridHeaderCells(el).map(function (cell) { return normalizeText(cell.textContent || ''); }).filter(Boolean);
         const gridLine = '  '.repeat(depth) + '- grid' + (cols.length ? ' ' + quoteName(truncate(cols.join(' | '), NAME_MAX)) : '');
@@ -867,14 +1286,68 @@
 
     if (options.only) {
       walk(options.only.node, options.only.depth);
-      return { lines, refs: ctx.refs, nodes: ctx.nodes || [], lineMap };
+      ctx.funnel.walkMs = performance.now() - walkStartedAt;
+      return { lines, refs: ctx.refs, nodes: ctx.nodes || [], lineMap, graph: snapshotGraph(ctx.graph), stats: finishFunnel(ctx, lines) };
     }
     if (document.body) {
       for (const child of document.body.children) walk(child, 1);
     }
     if (ctx.truncated) lines.push('- …（已按 --max-depth ' + ctx.maxDepth + ' 截断更深层）');
     if (options.debugSurfaces) lines.push('- surfaces iframes=' + ctx.surfaces.iframes + ' open-shadow=' + ctx.surfaces.shadows);
-    return { lines, refs: ctx.refs, nodes: ctx.nodes || [], lineMap };
+    ctx.funnel.walkMs = performance.now() - walkStartedAt;
+    return { lines, refs: ctx.refs, nodes: ctx.nodes || [], lineMap, graph: snapshotGraph(ctx.graph), stats: finishFunnel(ctx, lines) };
+  }
+
+  function estimateLineTokens(text) {
+    const value = String(text == null ? '' : text);
+    let tokens = 0;
+    let latinRun = 0;
+    const flushLatin = () => {
+      if (latinRun > 0) { tokens += latinRun <= 3 ? 1 : Math.ceil(latinRun / 3.6); latinRun = 0; }
+    };
+    for (const ch of value) {
+      if (/[A-Za-z0-9_]/.test(ch)) { latinRun += 1; continue; }
+      flushLatin();
+      if (/\s/.test(ch)) tokens += 0.25;
+      else if (/[\u3400-\u9fff\uf900-\ufaff]/.test(ch)) tokens += 0.76;
+      else if (/[\u3040-\u30ff\uac00-\ud7af]/.test(ch)) tokens += 0.6;
+      else tokens += 0.5;
+    }
+    flushLatin();
+    return Math.max(1, Math.round(tokens));
+  }
+
+  function finishFunnel(ctx, lines) {
+    const funnel = ctx.funnel || {};
+    let tokens = 0;
+    let maxLineTokens = 0;
+    for (const line of lines) {
+      const cost = estimateLineTokens(line);
+      tokens += cost;
+      if (cost > maxLineTokens) maxLineTokens = cost;
+    }
+    const walkMs = Number(funnel.walkMs) || 0;
+    const visibilityMs = Number(funnel.ms && funnel.ms.visibility) || 0;
+    const stealthMs = Number(funnel.ms && funnel.ms.stealth) || 0;
+    return {
+      visited: Number(funnel.visited) || 0,
+      hidden: Number(funnel.hidden) || 0,
+      stealth: Number(funnel.stealth) || 0,
+      skippedTag: Number(funnel.skippedTag) || 0,
+      emitted: lines.length,
+      refs: Number(ctx.refs) || 0,
+      truncated: funnel.truncated === true || ctx.truncated === true,
+      iframes: Number(ctx.surfaces && ctx.surfaces.iframes) || 0,
+      tokens: tokens,
+      lineTokens: tokens,
+      maxLineTokens,
+      ms: {
+        walk: Math.round(walkMs * 10) / 10,
+        visibility: Math.round(visibilityMs * 10) / 10,
+        stealth: Math.round(stealthMs * 10) / 10,
+        semantics: Math.max(0, Math.round((walkMs - visibilityMs - stealthMs) * 10) / 10),
+      },
+    };
   }
 
   /** VOM：被遮挡时可读的遮挡者摘要（只用于诊断，不参与动作）。 */
@@ -931,7 +1404,7 @@
     // shadow DOM 会在文档级 elementFromPoint 上 retarget 到 host；host 是祖先不算遮挡
     if (hit.contains && hit.contains(el)) return { state: 'ancestor', by: null };
     if (hit.shadowRoot && hit.shadowRoot.contains && hit.shadowRoot.contains(el)) return { state: 'ancestor', by: null };
-    return { state: 'blocked', by: nodeBrief(hit), byOwnOverlay: isOwnOverlayNode(hit) };
+    return { state: 'blocked', by: nodeBrief(hit), byOwnOverlay: isOwnOverlayNode(hit), byLayer: layerFactsOf(hit) };
   }
 
   /**
@@ -939,6 +1412,70 @@
    * 先有"区域"这个对象，再谈坐标；坐标永远相对某个候选，
    * 命中校验也才有"是不是它"可判。只报告几何与类型，不判断内容是什么。
    */
+  const LAYER_SCAN_LIMIT = 16;
+  const LAYER_SCAN_BODY_CHILDREN = 120;
+
+  /**
+   * 页面侧有序层事实（交给 lib/vom-layers.js 归一化）：
+   * 只扫 top-layer（dialog/popover/fullscreen）、role=dialog 与 body 直系子节点，
+   * 按 position/z-index 粗过滤，避免对整页做 computed style 扫描。
+   */
+  function layerStackFacts() {
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    const out = [];
+    const seen = new Set();
+    const push = (el) => {
+      if (!el || el.nodeType !== 1 || out.length >= LAYER_SCAN_LIMIT || seen.has(el)) return;
+      if (el === document.documentElement || el === document.body) return;
+      if (isOwnOverlayNode(el)) return;
+      const facts = layerFactsOf(el);
+      if (!facts || facts.display === 'none' || facts.visibility === 'hidden' || facts.opacity === '0') return;
+      const rect = facts.rect;
+      if (rect.width <= 0 && rect.height <= 0) return;
+      if (rect.x < -10000 || rect.y < -10000) return;
+      const interesting = facts.topLayer
+        || facts.position === 'fixed'
+        || facts.position === 'sticky'
+        || (facts.zIndex != null && facts.zIndex !== 0);
+      if (!interesting) return;
+      seen.add(el);
+      const role = roleOf(el) || '';
+      out.push({
+        position: facts.position,
+        zIndex: facts.zIndex,
+        topLayer: facts.topLayer,
+        pointerEvents: facts.pointerEvents,
+        rect,
+        tag: String(el.tagName || '').toLowerCase(),
+        id: el.id || null,
+        role: role || null,
+        name: truncate(accessibleName(el, role), 60) || null,
+        coverage: vw > 0 && vh > 0 && rect.width > 0 && rect.height > 0
+          ? Math.round((rect.width * rect.height) / (vw * vh) * 1000) / 1000
+          : null,
+      });
+    };
+    const scan = (selector, limit) => {
+      let count = 0;
+      try {
+        for (const el of document.querySelectorAll(selector)) {
+          count += 1;
+          if (count > limit) break;
+          push(el);
+        }
+      } catch {
+        // 选择器异常忽略
+      }
+    };
+    scan('dialog,[popover],[role="dialog"],[role="alertdialog"]', 32);
+    scan('body > *', LAYER_SCAN_BODY_CHILDREN);
+    return {
+      viewport: { width: vw, height: vh, scrollX: Math.round(window.scrollX), scrollY: Math.round(window.scrollY) },
+      layers: out,
+    };
+  }
+
   function visualScan() {
     const out = [];
     const seen = new Set();
@@ -1001,7 +1538,13 @@
       if (rect.width < 120 || rect.height < 80) continue;
       push(el, 'region');
     }
-    return { candidates: out, viewport: { width: vw, height: vh, scrollX: Math.round(window.scrollX), scrollY: Math.round(window.scrollY) } };
+    const layerStack = layerStackFacts();
+    return {
+      candidates: out,
+      viewport: { width: vw, height: vh, scrollX: Math.round(window.scrollX), scrollY: Math.round(window.scrollY) },
+      layers: layerStack.layers,
+      layerViewport: layerStack.viewport,
+    };
   }
 
   /**
@@ -1041,6 +1584,9 @@
       pointerEvents: style.pointerEvents,
       inert,
       ownOverlay: isOwnOverlayNode(el),
+      // 页面侧层/affordance 事实：agent 在按坐标动作前可以判断落点会激活/输入/滚动什么。
+      layer: layerFactsOf(el),
+      affordance: affordanceFactsOf(el),
       coversViewport: vw > 0 && vh > 0 && rect.width * rect.height > vw * vh * 0.8,
       anchored: el === document.documentElement || el === document.body,
       matches,
@@ -1343,6 +1889,59 @@
     return null;
   }
 
+  /**
+   * VOM affordance 页面侧事实：一次把所有规则需要的 DOM/样式事实收齐。
+   * 纯读取；hit-at 会把它随命中结果返回，lib/vom-affordance.js 再用同一份事实归约。
+   */
+  function affordanceFactsOf(el) {
+    if (!el || el.nodeType !== 1) return null;
+    const role = roleOf(el) || '';
+    const tag = String(el.tagName || '').toLowerCase();
+    const inputType = tag === 'input' ? String(el.type || 'text').toLowerCase() : null;
+    let style = null;
+    try {
+      style = getComputedStyle(el);
+    } catch {
+      style = null;
+    }
+    let scrollable = false;
+    try {
+      const overflow = String(style ? style.overflowX : '') + ' ' + String(style ? style.overflowY : '');
+      scrollable = /(auto|scroll)/.test(overflow)
+        && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1);
+    } catch {
+      scrollable = false;
+    }
+    const readBool = (value) => (value == null ? null : normalizeText(value).toLowerCase() === 'true');
+    const tabIndexAttr = el.hasAttribute('tabindex') ? Number(el.getAttribute('tabindex')) : null;
+    const name = truncate(normalizeText(accessibleName(el, role)), NAME_MAX);
+    return {
+      role: role || null,
+      tag,
+      name: name || null,
+      inputType,
+      href: typeof el.href === 'string' && el.href ? String(el.href).slice(0, 200) : null,
+      contentEditable: el.isContentEditable === true,
+      tabIndex: Number.isFinite(tabIndexAttr) ? tabIndexAttr : null,
+      checked: typeof el.checked === 'boolean' ? el.checked : null,
+      expanded: readBool(el.getAttribute('aria-expanded')),
+      selected: readBool(el.getAttribute('aria-selected')),
+      pressed: readBool(el.getAttribute('aria-pressed')),
+      hasPopup: el.getAttribute('aria-haspopup') || null,
+      disabled: disabledNode(el),
+      readOnly: readOnlyNode(el),
+      multiple: el.multiple === true,
+      scrollable,
+      draggable: el.draggable === true || normalizeText(el.getAttribute('draggable') || '').toLowerCase() === 'true',
+      dragHint: nodeDragHint(el),
+      pointerEvents: style ? style.pointerEvents : null,
+      cursor: style ? style.cursor : null,
+      position: style ? style.position : null,
+      zIndex: style && /^-?\d+$/.test(normalizeText(style.zIndex || '')) ? Number(style.zIndex) : null,
+      topLayer: topLayerKindOf(el),
+    };
+  }
+
   /** VOM：邻近文本（用于消歧；只看兄弟/叔伯节点，避免把整页文本带进来）。 */
   function nodeNearbyText(el) {
     const own = normalizeText(el.textContent || '');
@@ -1355,6 +1954,175 @@
       if (text && (!own || !text.includes(own))) return truncate(text, 80);
     }
     return null;
+  }
+
+  // ---------- VOM 完整关系图（containment / ownership / label / form） ----------
+  //
+  // 旧版只有每个节点自己的 ancestors（best-effort，最多 4 层，父节点用 tag#id 猜）。
+  // 这里在页面侧一次性收集一张可解析的图：
+  // - 每个被观察到的元素 + 其祖先链都分配一个观测内唯一的 key；
+  // - `child` 边从祖先指向元素（完整到 documentElement，受上限保护）；
+  // - `aria-controls/labelledby/describedby/owns`、`<label for>`、`form` 边尽量解析到目标元素；
+  // - 只输出结构（tag/id/role/ref/parentKey），不带文本内容，避免放大观测体积。
+
+  const GRAPH_NODE_LIMIT = 800;
+  const GRAPH_EDGE_LIMIT = 2000;
+  const GRAPH_ANCESTOR_LIMIT = 16;
+  const GRAPH_OWNER_TARGET_LIMIT = 8;
+
+  function createGraph() {
+    return { keyOf: new WeakMap(), nodes: new Map(), edges: [], edgeSeen: new Set(), domKeys: new Map(), seq: 0, truncated: false };
+  }
+
+  /** 页面图必须能跨 executeScript 序列化：只输出纯数组/对象。 */
+  function snapshotGraph(graph) {
+    if (!graph) return null;
+    return {
+      nodes: Array.from(graph.nodes.values()).map((node) => ({
+        key: node.key,
+        ref: node.ref,
+        tag: node.tag,
+        domId: node.domId,
+        role: node.role,
+        parentKey: node.parentKey,
+        frameIndex: Number.isInteger(node.frameIndex) ? node.frameIndex : null,
+        srcUrl: node.srcUrl || null,
+      })),
+      edges: graph.edges.map((edge) => ({ type: edge.type, from: edge.from, to: edge.to })),
+      truncated: graph.truncated === true,
+      nodeLimit: GRAPH_NODE_LIMIT,
+      edgeLimit: GRAPH_EDGE_LIMIT,
+    };
+  }
+
+  function frameIndexOf(el) {
+    try {
+      const all = document.querySelectorAll('iframe');
+      const index = Array.prototype.indexOf.call(all, el);
+      return index >= 0 ? index : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function graphKeyOf(el, graph) {
+    if (!graph || !el || el.nodeType !== 1) return null;
+    const existing = graph.keyOf.get(el);
+    if (existing) return existing;
+    if (graph.nodes.size >= GRAPH_NODE_LIMIT) {
+      graph.truncated = true;
+      return null;
+    }
+    const key = 'n' + (++graph.seq);
+    graph.keyOf.set(el, key);
+    const refSeq = state.elRefs.get(el);
+    graph.nodes.set(key, {
+      key: key,
+      ref: Number.isInteger(refSeq) ? '@e' + refSeq : null,
+      tag: String(el.tagName || '').toLowerCase(),
+      domId: el.id || null,
+      role: el.getAttribute('role') || null,
+      parentKey: null,
+      frameIndex: el.tagName === 'IFRAME' ? frameIndexOf(el) : null,
+      srcUrl: el.tagName === 'IFRAME' ? String(el.src || '').slice(0, 300) : null,
+    });
+    if (el.id) graph.domKeys.set(String(el.id), key);
+    return key;
+  }
+
+  /** DOM id → 图节点 key（已存在则复用，不存在则建节点）；关系链展开用。 */
+  function graphKeyOfDomId(graph, domId) {
+    if (!graph || !domId) return null;
+    const existing = graph.domKeys.get(String(domId));
+    if (existing) return existing;
+    let target = null;
+    try {
+      target = document.getElementById(String(domId));
+    } catch {
+      target = null;
+    }
+    return target ? graphKeyOf(target, graph) : null;
+  }
+
+  function graphEdgeOf(graph, type, from, to) {
+    if (!graph || !from || !to || from === to) return;
+    const id = type + '\u0000' + from + '\u0000' + to;
+    if (graph.edgeSeen.has(id)) return;
+    if (graph.edges.length >= GRAPH_EDGE_LIMIT) {
+      graph.truncated = true;
+      return;
+    }
+    graph.edgeSeen.add(id);
+    graph.edges.push({ type: type, from: from, to: to });
+  }
+
+  /** 记录元素 + 祖先链（child 边）与它自己的语义关系边，返回元素 key。 */
+  function recordElementGraph(el, graph) {
+    if (!graph) return null;
+    const key = graphKeyOf(el, graph);
+    if (!key) return null;
+    let childKey = key;
+    let childEl = el;
+    let depth = 0;
+    while (childEl && childEl.parentElement && depth < GRAPH_ANCESTOR_LIMIT) {
+      const parentEl = childEl.parentElement;
+      const parentKey = graphKeyOf(parentEl, graph);
+      if (!parentKey) break;
+      graphEdgeOf(graph, 'child', parentKey, childKey);
+      graph.nodes.get(childKey).parentKey = parentKey;
+      childKey = parentKey;
+      childEl = parentEl;
+      depth += 1;
+    }
+    if (el.labels && el.labels.length) {
+      for (const label of Array.from(el.labels).slice(0, 4)) {
+        const labelKey = graphKeyOf(label, graph);
+        if (!labelKey) continue;
+        // 显式 <label for>（htmlFor 指向本元素）与隐式包裹 label 分开记：关系来源/置信度不同。
+        const explicit = label.htmlFor && el.id && String(label.htmlFor) === String(el.id);
+        graphEdgeOf(graph, explicit ? 'html-for' : 'label', labelKey, key);
+      }
+    }
+    if (el.form) {
+      const formKey = graphKeyOf(el.form, graph);
+      // form 边的方向统一为“表单 → 控件”（关系方向，见 lib/vom-relations.js 的 form → owns）。
+      if (formKey) graphEdgeOf(graph, 'form', formKey, key);
+    }
+    const roleAttr = normalizeText(el.getAttribute('role') || '').toLowerCase();
+    // 关系边按“关系方向”记录（与 lib/vom-relations.js 的映射一一对应，避免同一网页事实两种方向）：
+    //   label/html-for: 标签 → 控件；labelledby/describedby/errormessage: 目标 → 元素；controls: 元素 → 目标。
+    const emitRelationEdges = (attr, type, reverse) => {
+      const ids = String(el.getAttribute(attr) || '').split(/\s+/).filter(Boolean);
+      for (const targetId of ids.slice(0, GRAPH_OWNER_TARGET_LIMIT)) {
+        let target = null;
+        try { target = document.getElementById(targetId); } catch { target = null; }
+        if (!target) continue;
+        const targetKey = graphKeyOf(target, graph);
+        if (!targetKey) continue;
+        if (reverse) graphEdgeOf(graph, type, targetKey, key);
+        else graphEdgeOf(graph, type, key, targetKey);
+      }
+    };
+    emitRelationEdges('aria-controls', roleAttr === 'tab' ? 'tab-controls' : 'controls', false);
+    emitRelationEdges('aria-owns', 'owns', false);
+    emitRelationEdges('aria-labelledby', 'labelledby', true);
+    emitRelationEdges('aria-describedby', 'describedby', true);
+    emitRelationEdges('aria-errormessage', 'errormessage', true);
+    // labelledby 链：把链上每一跳的节点与 labelledby 边补进图，关系层才能解析出 aria-labelledby-chain。
+    const chainFacts = labelledByChainOf(el);
+    if (chainFacts) {
+      const ordered = chainFacts
+        .filter((hop) => hop && hop.id)
+        .slice()
+        .sort((left, right) => (Number(left.depth) || 0) - (Number(right.depth) || 0));
+      for (const hop of ordered) {
+        const targetKey = graphKeyOfDomId(graph, hop.id);
+        if (!targetKey) continue;
+        const sourceKey = hop.from ? graphKeyOfDomId(graph, hop.from) : key;
+        if (sourceKey) graphEdgeOf(graph, 'labelledby', targetKey, sourceKey);
+      }
+    }
+    return key;
   }
 
   function formatNode(el, role, depth, ctx) {
@@ -1391,9 +2159,15 @@
       const textBearing = Boolean(name) || ['paragraph', 'heading', 'listitem', 'cell', 'link', 'button', 'textbox'].includes(role);
       const vomId = ctx.markVom ? 'v' + (++ctx.vomSeq) : null;
       if (vomId) el.setAttribute('data-bb-vom', vomId);
+      const graphKey = ctx.graph ? recordElementGraph(el, ctx.graph) : null;
+      // 行事实（虚拟列表契约）与页面侧 paint/裁剪事实：扩展侧 lib/vom-visibility.js 统一归约。
+      const anchor = rowFactsOf(el);
+      const paint = paintVisibilityOf(el, style);
+      const clip = interactive || clickableBase ? clipFactsOf(el, rect) : null;
       ctx.nodes.push({
         ref: refId != null ? '@e' + refId : null,
         vomId,
+        graphKey,
         tag: String(el.tagName || '').toLowerCase(),
         id: el.id || null,
         role: role || null,
@@ -1405,8 +2179,51 @@
         expanded: el.getAttribute('aria-expanded') == null ? null : String(el.getAttribute('aria-expanded')).toLowerCase() === 'true',
         selected: el.getAttribute('aria-selected') == null ? null : String(el.getAttribute('aria-selected')).toLowerCase() === 'true',
         required: el.required === true || String(el.getAttribute('aria-required') || '').toLowerCase() === 'true',
+        invalid: String(el.getAttribute('aria-invalid') || '').toLowerCase() === 'true' || (typeof el.matches === 'function' && el.matches(':invalid')),
+        busy: String(el.getAttribute('aria-busy') || '').toLowerCase() === 'true',
         readonly: el.readOnly === true,
         placeholder: el.getAttribute('placeholder') || null,
+        ariaControls: el.getAttribute('aria-controls') || null,
+        ariaLive: el.getAttribute('aria-live') || null,
+        ariaPressed: el.getAttribute('aria-pressed') == null ? null : String(el.getAttribute('aria-pressed')).toLowerCase() === 'true',
+        ariaCurrent: el.getAttribute('aria-current') || null,
+        ariaHasPopup: el.getAttribute('aria-haspopup') || null,
+        ariaValueNow: el.getAttribute('aria-valuenow') == null ? null : Number(el.getAttribute('aria-valuenow')),
+        ariaValueMin: el.getAttribute('aria-valuemin') == null ? null : Number(el.getAttribute('aria-valuemin')),
+        ariaValueMax: el.getAttribute('aria-valuemax') == null ? null : Number(el.getAttribute('aria-valuemax')),
+        ariaHidden: String(el.getAttribute('aria-hidden') || '').toLowerCase() === 'true',
+        ariaLabelledBy: el.getAttribute('aria-labelledby') || null,
+        ariaDescribedBy: el.getAttribute('aria-describedby') || null,
+        ariaOwns: el.getAttribute('aria-owns') || null,
+        ariaErrorMessage: el.getAttribute('aria-errormessage') || null,
+        ariaInvalid: el.getAttribute('aria-invalid') || null,
+        labels: el.labels ? Array.from(el.labels).map((label) => normalizeText(label.textContent || '').slice(0, 80)).filter(Boolean) : [],
+        labelIds: el.labels ? Array.from(el.labels).map((label) => label.id).filter(Boolean).slice(0, 8) : [],
+        labelledByChain: labelledByChainOf(el),
+        title: normalizeText(el.getAttribute('title') || '') || null,
+        alt: el.tagName === 'IMG' ? (normalizeText(el.getAttribute('alt') || '') || null) : null,
+        ...(el.tagName === 'TABLE' ? (() => {
+          const tableFacts = tableFactsOf(el);
+          return tableFacts ? { tableFacts } : {};
+        })() : {}),
+        formId: el.form && el.form.id ? String(el.form.id) : null,
+        ancestors: (() => {
+          const out = [];
+          let parent = el.parentElement;
+          while (parent && out.length < 4) {
+            const refSeq = state.elRefs.get(parent);
+            out.push({
+              tag: String(parent.tagName || '').toLowerCase(),
+              role: parent.getAttribute('role') || null,
+              id: parent.id || null,
+              ref: Number.isInteger(refSeq) ? '@e' + refSeq : null,
+              // 上下文分组（lib/vom-context.js）用祖先的可访问名做 landmark/form/table 标签。
+              name: normalizeText(parent.getAttribute('aria-label') || parent.getAttribute('title') || '') || null,
+            });
+            parent = parent.parentElement;
+          }
+          return out;
+        })(),
         href: role === 'link' && el.href && /^https?:/i.test(el.href) ? el.href : null,
         inputType: String(el.type || '').toLowerCase() || null,
         inputState: nodeInputState(el),
@@ -1420,6 +2237,10 @@
         paintOrder: ctx.paintSeq++,
         pointerEvents: style.pointerEvents,
         cursor: style.cursor,
+        ...(anchor ? { anchor } : {}),
+        paintVisible: paint.paintVisible,
+        hiddenReason: paint.hiddenReason || null,
+        ...(clip && clip.clipped ? { clipped: true, clippedBy: clip.clippedBy || null } : {}),
         rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
         inViewport: rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth,
         contrast: contrast == null ? null : Number(contrast.toFixed(2)),
@@ -1443,6 +2264,10 @@
     return line;
   }
 
+
+  // ===========================================================================
+  // §D 目标解析：探测阻塞层、增量观察、observe/snapshot、ref→element
+  // ===========================================================================
   function testAttr(el, name) {
     return normalizeText(el.getAttribute(name) || '');
   }
@@ -1513,13 +2338,150 @@
     return lines.join('\n');
   }
 
+  function collectDeepElements(root, out) {
+    if (!root || !root.children) return;
+    for (const el of root.children) {
+      out.push(el);
+      if (el.shadowRoot) collectDeepElements(el.shadowRoot, out);
+      if (el.tagName === 'IFRAME') {
+        try {
+          const doc = el.contentDocument;
+          if (doc && doc.documentElement) collectDeepElements(doc.documentElement, out);
+        } catch { /* 跨源文档跳过 */ }
+      }
+      collectDeepElements(el, out);
+    }
+  }
+
+  function estimateDeepTokens(text) {
+    const value = String(text == null ? '' : text);
+    let tokens = 0;
+    let run = 0;
+    const flush = () => { if (run) { tokens += run <= 3 ? 1 : Math.ceil(run / 3.6); run = 0; } };
+    for (const ch of value) {
+      if (/[A-Za-z0-9_]/.test(ch)) { run += 1; continue; }
+      flush();
+      if (/\s/.test(ch)) tokens += 0.25;
+      else if (/[\u3400-\u9fff\uf900-\ufaff]/.test(ch)) tokens += 0.76;
+      else if (/[\u3040-\u30ff\uac00-\ud7af]/.test(ch)) tokens += 0.6;
+      else tokens += 0.5;
+    }
+    flush();
+    return Math.max(1, Math.round(tokens));
+  }
+
+  function deepInteractive(el) {
+    const tag = el.tagName;
+    if (['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'SUMMARY', 'LABEL'].includes(tag)) return true;
+    const role = (el.getAttribute('role') || '').toLowerCase();
+    if (['button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem', 'option', 'textbox', 'combobox'].includes(role)) return true;
+    if (el.hasAttribute('tabindex') && Number(el.getAttribute('tabindex')) >= 0) return true;
+    if (el.getAttribute('contenteditable') === 'true' || el.isContentEditable === true) return true;
+    if (el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]')) return true;
+    return Boolean(el.getAttribute('aria-labelledby') || el.getAttribute('aria-describedby'));
+  }
+
+  function deepHidden(el) {
+    const style = getComputedStyle(el);
+    const opacity = Number(style.opacity);
+    if (Number.isFinite(opacity) && opacity < 0.05) return true;
+    const fontSize = Number.parseFloat(style.fontSize || '0');
+    if (Number.isFinite(fontSize) && fontSize > 0 && fontSize <= 1.5) return true;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 2 && rect.height < 2) return true;
+    const margin = 5000;
+    if (rect.right < -margin || rect.bottom < -margin) return true;
+    if (rect.left > (window.innerWidth || 0) + margin || rect.top > (window.innerHeight || 0) + margin) return true;
+    return false;
+  }
+
+  /** 六阶段深观察：收集 → 可见 → 注入过滤 → 语义 → 去重/绘制序 → token 预算与 ref。 */
+  function buildDeepVom(args) {
+    const started = performance.now();
+    resetRowFactsCache();
+    const all = [];
+    collectDeepElements(document.documentElement, all);
+    const stages = {
+      collected: all.length, skippedTag: 0, hidden: 0, stealth: 0, empty: 0, deduped: 0,
+      emitted: 0, tokens: 0, truncated: false,
+    };
+    const candidates = [];
+    const seen = new Map();
+    let order = 0;
+    for (const el of all) {
+      order += 1;
+      const tag = el.tagName;
+      if (SKIP_TAGS.has(tag)) { stages.skippedTag += 1; continue; }
+      if (!isVisible(el)) { stages.hidden += 1; continue; }
+      if (!deepInteractive(el) && deepHidden(el)) { stages.stealth += 1; continue; }
+      const role = roleOf(el) || '';
+      const name = normalizeText(accessibleName(el, role) || '');
+      const text = normalizeText(el.textContent || '');
+      const interactive = deepInteractive(el) || role === 'button' || role === 'link';
+      if (!interactive && !name && !text) { stages.empty += 1; continue; }
+      const rect = el.getBoundingClientRect();
+      const key = [role, name, tag, el.id || '', Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)].join('|');
+      if (seen.has(key)) { stages.deduped += 1; continue; }
+      seen.set(key, true);
+      candidates.push({
+        el, tag, role: role || null, name: name || null, interactive,
+        rect: {
+          x: Math.round((rect.left + (window.scrollX || 0)) * 10) / 10,
+          y: Math.round((rect.top + (window.scrollY || 0)) * 10) / 10,
+          width: Math.round(rect.width * 10) / 10,
+          height: Math.round(rect.height * 10) / 10,
+        },
+        order,
+      });
+    }
+    // 绘制序：先按视口外坐标（含滚动）从上到下、从左到右；同位置按 DOM 顺序。
+    candidates.sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x || a.order - b.order);
+    const budget = Number(args && args.deepMaxTokens) > 0
+      ? Math.min(Math.round(Number(args.deepMaxTokens)), 20000)
+      : 12000;
+    const nodes = [];
+    const lines = [];
+    let tokens = 0;
+    for (const item of candidates) {
+      const line = '- ' + (item.role || item.tag.toLowerCase())
+        + (item.name ? ' ' + quoteName(truncate(item.name, NAME_MAX)) : '')
+        + (item.interactive ? ' [interactive]' : '')
+        + (item.rect.width && item.rect.height ? ' @' + Math.round(item.rect.x) + ',' + Math.round(item.rect.y) : '');
+      const cost = estimateDeepTokens(line);
+      if (tokens + cost > budget && nodes.length) { stages.truncated = true; break; }
+      tokens += cost;
+      lines.push(line);
+      // 与树观察同一个 rowFactsOf：深观察节点也带虚拟列表行事实，供 W2 动作守卫消费。
+      const anchor = rowFactsOf(item.el);
+      nodes.push({
+        id: 'vom-deep:' + nodes.length,
+        ref: '@e' + refFor(item.el),
+        tag: item.tag,
+        role: item.role,
+        name: item.name,
+        interactive: item.interactive,
+        rect: item.rect,
+        ...(anchor ? { anchor } : {}),
+      });
+    }
+    stages.emitted = nodes.length;
+    stages.tokens = tokens;
+    return {
+      nodes,
+      lines,
+      stages: { ...stages, elapsedMs: Math.round(performance.now() - started), sorted: 'paint-order' },
+      revision: currentRevision(),
+    };
+  }
+
   function observe(args) {
     ensureMutationTracker();
+    resetRowFactsCache();
     const mutations = takeMutations();
     const url = location.href;
     const previous = state.lastObservation;
-    const wantsFull = args.force === true || args.delta === true || args.baseline !== undefined;
-    const plain = !args.probeHover && args.maxDepth == null && !args.debugSurfaces && !args.vom && !args.markVom && !args.facts;
+    const wantsFull = args.force === true || args.delta === true || args.baseline !== undefined || args.vomDeep === true;
+    const plain = !args.probeHover && args.maxDepth == null && !args.debugSurfaces && !args.vom && !args.markVom && !args.facts && !args.vomDeep;
     // 无 mutation、无输入交互且参数与上次一致：直接返回 unchanged，不重建 VOM。
     if (!wantsFull && plain && previous && previous.plain === true && previous.url === url
       && shouldFastUnchanged(mutations)) {
@@ -1555,7 +2517,9 @@
         };
       }
     }
-    const built = buildObservation({ withRefs: true, probeHover: !!args.probeHover, maxDepth: args.maxDepth, debugSurfaces: !!args.debugSurfaces, collectNodes: !!args.vom, markVom: !!args.markVom });
+    const started = performance.now();
+    const built = buildObservation({ withRefs: true, probeHover: !!args.probeHover, maxDepth: args.maxDepth, debugSurfaces: !!args.debugSurfaces, collectNodes: !!args.collectNodes || !!args.vom, collectGraph: !!args.vom, markVom: !!args.markVom });
+    const deep = args.vomDeep === true ? buildDeepVom(args) : null;
     const text = built.lines.join('\n');
     const unchanged = !wantsFull && previous && previous.url === url && previous.text === text;
     state.lastObservation = { url, text, refs: built.refs, revision: currentRevision(), plain, lineMap: built.lineMap };
@@ -1565,6 +2529,9 @@
       ...(unchanged ? { unchanged: true } : { observation: text }),
       refs: built.refs,
       nodes: built.nodes || [],
+      ...(built.graph ? { graph: built.graph } : {}),
+      ...(built.stats ? { stages: { ...built.stats, elapsedMs: Math.round(performance.now() - started), serializeMs: Math.max(0, Math.round((performance.now() - started) - (Number(built.stats.ms && built.stats.ms.walk) || 0))) } } : {}),
+      ...(deep ? { deepVom: deep } : {}),
       blocking: detectBlockingLayer(),
       revision: currentRevision(),
       mutations,
@@ -1580,6 +2547,7 @@
     state.refs.clear();
     state.elRefs = new WeakMap();
     state.rowAnchors.clear();
+    resetRowFactsCache();
     state.seq = 0;
     return { ok: true };
   }
@@ -1644,8 +2612,9 @@
     }
   }
 
-  // ---------- 页面动作 ----------
-
+  // ===========================================================================
+  // §E 动作：click/hover/scroll/fill/press/focus/get-html/actionable/expect/help
+  // ===========================================================================
   async function actionClick(args) {
     let el = resolveElement(args);
     scrollIntoView(el);
@@ -1759,22 +2728,37 @@
     let px = x;
     let py = y;
     const owners = [];
-    // chain 是「目标在内、外层在后」，从内往外加 owner 的 viewport rect。
+    // chain 是「目标在内、外层在后」，从内往外加 owner 的 viewport 四边形。
     for (const entry of chain) {
+      const win = entry.doc.defaultView;
+      // Chromium 没有 getBoxQuads：只要 owner 或祖先带 transform/rotate/scale，
+      // 就放弃页面内 rect 投影，交给 CDP owner 链做完整仿射投影。
+      for (let node = entry.owner; node && node.nodeType === 1; node = node.parentElement) {
+        const cs = win.getComputedStyle(node);
+        if ((cs.transform && cs.transform !== 'none') ||
+            (cs.rotate && cs.rotate !== 'none') ||
+            (cs.scale && cs.scale !== 'none')) return null;
+      }
       const rect = entry.owner.getBoundingClientRect();
-      const style = entry.doc.defaultView.getComputedStyle(entry.owner);
+      const style = win.getComputedStyle(entry.owner);
       const left = Number.parseFloat(style.borderLeftWidth) || 0;
       const top = Number.parseFloat(style.borderTopWidth) || 0;
-      const width = Number(entry.owner.clientWidth) || rect.width;
-      const height = Number(entry.owner.clientHeight) || rect.height;
-      const scaleX = width > 0 ? rect.width / width : 1;
-      const scaleY = height > 0 ? rect.height / height : 1;
-      px = rect.left + left + px * scaleX;
-      py = rect.top + top + py * scaleY;
+      const width = Number(entry.owner.offsetWidth) || Number(entry.owner.clientWidth) || rect.width;
+      const height = Number(entry.owner.offsetHeight) || Number(entry.owner.clientHeight) || rect.height;
+      // 无变换时四边形退化为 axis-aligned rect；仍走同一仿射公式。
+      const p1 = { x: rect.left, y: rect.top };
+      const p2 = { x: rect.right, y: rect.top };
+      const p4 = { x: rect.left, y: rect.bottom };
+      const ux = { x: (p2.x - p1.x) / width, y: (p2.y - p1.y) / width };
+      const uy = { x: (p4.x - p1.x) / height, y: (p4.y - p1.y) / height };
+      const localX = left + px;
+      const localY = top + py;
+      px = p1.x + ux.x * localX + uy.x * localY;
+      py = p1.y + ux.y * localX + uy.y * localY;
       owners.push({
         url: normalize(entry.owner.getAttribute('src'), entry.doc.location ? entry.doc.location.href : location.href),
-        rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
-        scale: { x: scaleX, y: scaleY },
+        rect: { x: p1.x, y: p1.y, width, height },
+        scale: { x: Math.hypot(ux.x, ux.y), y: Math.hypot(uy.x, uy.y) },
       });
     }
     return { x: px, y: py, frameUrl: target, owners };
@@ -2008,12 +2992,19 @@
     return { ok: true, textLike: true, tag: tag, type: type, focused: isElementFocused(el), hadValue: String(el.value == null ? '' : el.value).length > 0 };
   }
 
+  function normalizeFillExpected(el, expected) {
+    let value = String(expected);
+    if (el && el.tagName === 'TEXTAREA') value = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (el && el.type === 'number' && value.trim() !== '' && Number.isFinite(Number(value))) value = String(Number(value));
+    return value;
+  }
+
   function fillVerify(args) {
     const el = resolveElement(args);
-    const expected = typeof args.expected === 'string' ? args.expected : '';
+    const expected = normalizeFillExpected(el, typeof args.expected === 'string' ? args.expected : '');
     const sensitive = el ? sensitiveField(el) : false;
     const actual = el ? String(el.value != null ? el.value : normalizeText(el.textContent || '')) : '';
-    return { ok: true, sensitive: sensitive, value: sensitive ? null : actual, formatted: actual !== expected, matches: actual === expected };
+    return { ok: true, sensitive: sensitive, value: sensitive ? null : actual, expected_value: sensitive ? null : expected, formatted: actual !== expected, matches: actual === expected };
   }
 
   function assertRowAnchor(el, args) {
@@ -2263,6 +3254,10 @@
     return { ok: results.every((item) => item.ok === true), results };
   }
 
+
+  // ===========================================================================
+  // §F 视觉与等待：visualRefs、滚动空闲、坐标点击、性能指标、human activity、frame
+  // ===========================================================================
   function visualRefs() {
     const out = [];
     for (const entry of state.refs) {
@@ -2409,28 +3404,29 @@
 
   function frameMeta() {
     const top = window.top === window;
-    const children = top
-      ? Array.from(document.querySelectorAll('iframe')).slice(0, 50).map(function (el) {
-        const rect = el.getBoundingClientRect();
-        const style = window.getComputedStyle(el);
-        const hidden =
-          rect.width < 1 ||
-          rect.height < 1 ||
-          style.display === 'none' ||
-          style.visibility === 'hidden' ||
-          Number(style.opacity) === 0 ||
-          el.hidden === true;
-        const offscreen = rect.bottom < 0 || rect.right < 0;
-        return {
-          url: el.src || '',
-          hidden,
-          offscreen,
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
-          reason: hidden ? 'not-visible' : offscreen ? 'offscreen' : null,
-        };
-      })
-      : [];
+    // 本地文档的 iframe 列表（嵌套 frame 也需要，供父帧把 iframe 元素连到子图根）。
+    const children = Array.from(document.querySelectorAll('iframe')).slice(0, 50).map(function (el, index) {
+      const rect = el.getBoundingClientRect();
+      const style = window.getComputedStyle(el);
+      const hidden =
+        rect.width < 1 ||
+        rect.height < 1 ||
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        Number(style.opacity) === 0 ||
+        el.hidden === true;
+      const offscreen = rect.bottom < 0 || rect.right < 0;
+      return {
+        index: index,
+        url: el.src || '',
+        id: el.id || null,
+        hidden,
+        offscreen,
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        reason: hidden ? 'not-visible' : offscreen ? 'offscreen' : null,
+      };
+    });
     let frameElement = null;
     try { frameElement = window.frameElement; } catch { frameElement = null; }
     if (!frameElement) {
@@ -2462,6 +3458,30 @@
 
   function pageMetrics() {
     const body = document.body;
+    const viewportHeight = window.innerHeight;
+    let fixedBottomHeight = 0;
+    let fixedTopHeight = 0;
+    const fixedBands = [];
+    // 只扫一层常见固定元素；用于长截图 final/footer 重绘，不做完整层树。
+    try {
+      let count = 0;
+      for (const element of document.querySelectorAll('body *')) {
+        count += 1;
+        if (count > 3000) break;
+        const style = getComputedStyle(element);
+        if (style.position !== 'fixed' && style.position !== 'sticky') continue;
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0 || rect.height > viewportHeight * 0.6) continue;
+        if (rect.bottom >= viewportHeight - 2 && rect.top > viewportHeight * 0.5) {
+          fixedBottomHeight = Math.max(fixedBottomHeight, Math.round(viewportHeight - rect.top));
+          if (fixedBands.length < 8) fixedBands.push({ edge: 'bottom', height: Math.round(rect.height), top: Math.round(rect.top), bottom: Math.round(rect.bottom) });
+        }
+        if (rect.top <= 2 && rect.bottom < viewportHeight * 0.5) {
+          fixedTopHeight = Math.max(fixedTopHeight, Math.round(rect.bottom));
+          if (fixedBands.length < 8) fixedBands.push({ edge: 'top', height: Math.round(rect.height), top: Math.round(rect.top), bottom: Math.round(rect.bottom) });
+        }
+      }
+    } catch { /* 受限文档忽略 */ }
     return {
       url: location.href,
       title: document.title || '',
@@ -2475,6 +3495,10 @@
       scrollX: window.scrollX,
       scrollWidth: Math.max(document.documentElement ? document.documentElement.scrollWidth : 0, document.body ? document.body.scrollWidth : 0),
       dpr: window.devicePixelRatio || 1,
+      revision: currentRevision(),
+      fixedBottomHeight,
+      fixedTopHeight,
+      fixedBands,
     };
   }
 
@@ -2482,6 +3506,83 @@
     const y = Number(args.y);
     window.scrollTo(0, Number.isFinite(y) ? y : 0);
     return { scrollY: window.scrollY };
+  }
+
+  // ---------- 节点级签名（动态读取校验：target_detached / 节点级 observed_changes） ----------
+  //
+  // 页面级 revision 只能判断“整页变没变”。节点级校验需要能回答：
+  // - 观测到的那个节点还在不在（detached）；
+  // - 它自己的文本/值/属性/状态有没有变（而不是邻居变了）。
+  // 签名刻意做小：内容用 FNV-1a 哈希，几何只做记录、不作为阻断条件（滚动/重排不算内容变化）。
+
+
+  // ===========================================================================
+  // §G 签名与读取：nodeSignature、ref 签名、fieldInfo、actionRead
+  // ===========================================================================
+  function fnv1a(value) {
+    const text = String(value == null ? '' : value);
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return ('0000000' + hash.toString(16)).slice(-8);
+  }
+
+  const SIGNATURE_ATTRS = [
+    'id', 'class', 'name', 'type', 'role', 'href', 'src', 'alt', 'title',
+    'aria-label', 'aria-checked', 'aria-expanded', 'aria-selected', 'data-testid', 'placeholder',
+  ];
+
+  function nodeSignatureOf(el) {
+    const tag = el.tagName.toLowerCase();
+    const attrs = [];
+    for (const name of SIGNATURE_ATTRS) {
+      const value = el.getAttribute(name);
+      if (value != null) attrs.push(name + '=' + value);
+    }
+    const text = normalizeText(el.textContent || '');
+    const sensitive = sensitiveField(el);
+    const rawValue = 'value' in el ? String(el.value == null ? '' : el.value) : '';
+    const rect = el.getBoundingClientRect();
+    return {
+      tag: tag,
+      id: el.id || '',
+      name: normalizeText(el.getAttribute('name') || ''),
+      textLength: text.length,
+      textHash: fnv1a(text),
+      valueHash: fnv1a(sensitive ? '********' : rawValue),
+      attrsHash: fnv1a(attrs.join('\u0001')),
+      geometry: [Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height)],
+      disabled: el.disabled === true,
+      checked: 'checked' in el ? el.checked === true : null,
+    };
+  }
+
+  /** 单节点签名：节点不存在/ref 失效时返回 present:false（不抛错，供调用方区分 detached 与 changed）。 */
+  function actionNodeSignature(args) {
+    try {
+      const el = resolveElement(args);
+      return { present: true, ...nodeSignatureOf(el), revision: currentRevision() };
+    } catch (error) {
+      return {
+        present: false,
+        code: (error && error.code) || 'E_NOT_FOUND',
+        revision: currentRevision(),
+      };
+    }
+  }
+
+  /** 批量签名：给 cooperate sync 在观测时一次性记录当前 ref 表的节点状态。 */
+  function actionRefSignatures(args) {
+    const limit = Math.min(Math.max(Number(args.limit) || 200, 1), 500);
+    const signatures = [];
+    for (const [refId, el] of state.refs) {
+      if (!el || el.isConnected !== true) continue;
+      signatures.push({ ref: '@e' + refId, ...nodeSignatureOf(el) });
+      if (signatures.length >= limit) break;
+    }
+    return { signatures: signatures, count: signatures.length, limit: limit, revision: currentRevision() };
   }
 
   // ---------- v0.2：读取与结构化导出 ----------
@@ -2589,6 +3690,10 @@
     return true;
   }
 
+
+  // ===========================================================================
+  // §H 提取：table/list/grid、discover、预算、覆盖度、revision、capExtractBytes
+  // ===========================================================================
   function tableCellGrid(rows) {
     const grid = [];
     const covered = [];
@@ -2622,7 +3727,8 @@
     return grid;
   }
 
-  function tableExtract(table, maxRows) {
+  function tableExtract(table, maxRows, budget, offset) {
+    const start = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
     const headRows = table.tHead ? Array.from(table.tHead.rows) : [];
     const bodyRows = table.tBodies && table.tBodies.length
       ? Array.from(table.tBodies).flatMap(function (body) { return Array.from(body.rows); })
@@ -2645,17 +3751,31 @@
       }
       columns.push({ key: 'c' + (c + 1), label: parts.join(' / ') || ('c' + (c + 1)) });
     }
+    const cellCap = budget ? Math.max(0, Math.floor(budget.maxCells / Math.max(width, 1))) : maxRows;
+    const effectiveMax = Math.min(maxRows, cellCap);
     const rows = [];
     let truncated = false;
+    let stopReason = 'end';
+    let seen = 0;
     for (const cells of bodyGrid) {
-      if (rows.length >= maxRows) { truncated = true; break; }
+      if (rows.length >= effectiveMax) {
+        truncated = true;
+        stopReason = effectiveMax < maxRows ? 'max-cells' : 'max-rows';
+        break;
+      }
+      if (seen < start) {
+        seen += 1;
+        continue;
+      }
       const out = {};
       for (let c = 0; c < width; c += 1) out['c' + (c + 1)] = cells[c] === undefined ? '' : cells[c];
       rows.push(out);
+      seen += 1;
     }
     const warnings = [];
     if (!headerRows.length) warnings.push('未找到表头，列名用 cN 代替');
     const declared = declaredRowCount(table, 'table');
+    const hasMore = start + rows.length < bodyGrid.length;
     return withCoverage({
       kind: 'table',
       columns: columns,
@@ -2663,13 +3783,17 @@
       rowCount: rows.length,
       totalRows: bodyGrid.length,
       columnCount: width,
-      complete: !truncated && warnings.length === 0,
+      cells: rows.length * width,
+      stopReason: truncated ? stopReason : 'end',
+      hasMore: hasMore,
+      complete: !truncated && !hasMore && warnings.length === 0,
       truncated: truncated,
       warnings: warnings,
-    }, declared == null ? null : Math.max(0, declared - headerRows.length));
+    }, declared == null ? null : Math.max(0, declared - headerRows.length), budget, start);
   }
 
-  function listExtract(root, maxRows) {
+  function listExtract(root, maxRows, budget, offset) {
+    const start = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
     let items = [];
     if (root.matches && root.matches('ul,ol,[role=list]')) {
       items = Array.from(root.children).filter(function (node) {
@@ -2678,29 +3802,47 @@
       });
     }
     if (!items.length) items = Array.from(root.querySelectorAll('li,[role=listitem]'));
+    const cellCap = budget ? Math.max(0, Math.floor(budget.maxCells / 2)) : maxRows;
+    const effectiveMax = Math.min(maxRows, cellCap);
     const rows = [];
     let truncated = false;
+    let stopReason = 'end';
+    let seen = 0;
     for (const item of items) {
-      if (rows.length >= maxRows) { truncated = true; break; }
+      if (rows.length >= effectiveMax) {
+        truncated = true;
+        stopReason = effectiveMax < maxRows ? 'max-cells' : 'max-rows';
+        break;
+      }
+      if (seen < start) {
+        seen += 1;
+        continue;
+      }
       const link = item.querySelector ? item.querySelector('a[href]') : null;
-      const row = { index: rows.length + 1, text: truncate(normalizeText(item.textContent || ''), 500) };
+      const row = { index: start + rows.length + 1, text: truncate(normalizeText(item.textContent || ''), 500) };
       if (link) row.href = link.href;
       rows.push(row);
+      seen += 1;
     }
+    const hasMore = start + rows.length < items.length;
     return withCoverage({
       kind: 'list',
       columns: [{ key: 'index', label: '#' }, { key: 'text', label: 'text' }],
       rows: rows,
       rowCount: rows.length,
       totalRows: items.length,
-      complete: !truncated,
+      cells: rows.length * 2,
+      stopReason: truncated ? stopReason : 'end',
+      hasMore: hasMore,
+      complete: !truncated && !hasMore,
       truncated: truncated,
       warnings: [],
-    }, declaredRowCount(root, 'list'));
+    }, declaredRowCount(root, 'list'), budget, start);
   }
 
-  function listExtractFields(root, args) {
-    const maxRows = boundedMaxRows(args);
+  function listExtractFields(root, args, budget, offset) {
+    const start = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
+    const maxRows = budget ? budget.maxRows : boundedMaxRows(args);
     const selector = typeof args.itemSelector === 'string' && args.itemSelector.trim() ? args.itemSelector.trim() : '';
     let items = selector ? Array.from(root.querySelectorAll(selector)) : Array.from(root.children || []);
     if (!selector) items = items.filter(function (node) { return node.nodeType === 1; });
@@ -2716,11 +3858,23 @@
       })
       : [{ name: 'text', selector: '', attribute: '' }];
     const columns = fields.map(function (field, index) { return { key: field.name || ('field' + (index + 1)), label: field.name || ('field' + (index + 1)) }; });
+    const cellCap = budget ? Math.max(0, Math.floor(budget.maxCells / Math.max(fields.length, 1))) : maxRows;
+    const effectiveMax = Math.min(maxRows, cellCap);
     const rows = [];
     let truncated = false;
+    let stopReason = 'end';
+    let seen = 0;
     for (const item of items) {
-      if (rows.length >= maxRows) { truncated = true; break; }
-      const row = { index: rows.length + 1 };
+      if (rows.length >= effectiveMax) {
+        truncated = true;
+        stopReason = effectiveMax < maxRows ? 'max-cells' : 'max-rows';
+        break;
+      }
+      if (seen < start) {
+        seen += 1;
+        continue;
+      }
+      const row = { index: start + rows.length + 1 };
       for (const field of fields) {
         const target = field.selector ? item.querySelector(field.selector) : item;
         let value = '';
@@ -2732,8 +3886,22 @@
         if (link) row.href = link.href;
       }
       rows.push(row);
+      seen += 1;
     }
-    return withCoverage({ kind: 'list', columns: columns, rows: rows, rowCount: rows.length, totalRows: items.length, complete: !truncated, truncated: truncated, warnings: [] }, declaredRowCount(root, 'list'));
+    const hasMore = start + rows.length < items.length;
+    return withCoverage({
+      kind: 'list',
+      columns: columns,
+      rows: rows,
+      rowCount: rows.length,
+      totalRows: items.length,
+      cells: rows.length * fields.length,
+      stopReason: truncated ? stopReason : 'end',
+      hasMore: hasMore,
+      complete: !truncated && !hasMore,
+      truncated: truncated,
+      warnings: [],
+    }, declaredRowCount(root, 'list'), budget, start);
   }
 
   function isGridNode(node) {
@@ -2756,6 +3924,10 @@
     });
   }
 
+  function gridRowCells(row) {
+    return Array.from(row.querySelectorAll('[role="gridcell"], .ag-cell'));
+  }
+
   function gridRowEntries(node) {
     const byIndex = new Map();
     const rows = Array.from(node.querySelectorAll('[role="row"], .ag-row'));
@@ -2773,7 +3945,8 @@
     });
   }
 
-  function gridExtract(node, maxRows) {
+  function gridExtract(node, maxRows, budget, offset) {
+    const start = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
     const headerCells = Array.from(node.querySelectorAll('[role="columnheader"][col-id], .ag-header-cell[col-id]')).filter(function (cell) {
       return isVisible(cell);
     });
@@ -2805,13 +3978,27 @@
     });
     const outRows = [];
     let truncated = false;
+    let stopReason = 'end';
+    const cellCap = budget ? Math.max(0, Math.floor(budget.maxCells / Math.max(orderedCols.length, 1))) : maxRows;
+    const effectiveMax = Math.min(maxRows, cellCap);
+    let seen = 0;
     for (const index of sorted) {
-      if (outRows.length >= maxRows) { truncated = true; break; }
+      if (outRows.length >= effectiveMax) {
+        truncated = true;
+        stopReason = effectiveMax < maxRows ? 'max-cells' : 'max-rows';
+        break;
+      }
+      if (seen < start) {
+        seen += 1;
+        continue;
+      }
       const bucket = byRow.get(index);
       const out = {};
       orderedCols.forEach(function (colId, i) { out['c' + (i + 1)] = bucket[colId] === undefined ? '' : bucket[colId]; });
       outRows.push(out);
+      seen += 1;
     }
+    const hasMore = start + outRows.length < sorted.length;
     return withCoverage({
       kind: 'table',
       columns: columns,
@@ -2819,20 +4006,81 @@
       rowCount: outRows.length,
       totalRows: sorted.length,
       columnCount: orderedCols.length,
-      complete: !truncated && headerCells.length > 0,
+      cells: outRows.length * orderedCols.length,
+      stopReason: truncated ? stopReason : 'end',
+      hasMore: hasMore,
+      complete: !truncated && !hasMore && headerCells.length > 0,
       truncated: truncated,
       warnings: headerCells.length ? [] : ['未找到列头，列名用 cN 代替'],
-    }, declaredRowCount(node, 'grid'));
+    }, declaredRowCount(node, 'grid'), budget, start);
   }
 
-  function discoverTargets() {
+  const DISCOVER_MAX_TARGETS = 32;
+  const DISCOVER_PREVIEW_COLUMNS = 8;
+  const DISCOVER_MAX_DEPTH = 4;
+
+  function discoverPreview(node, kind, columns, previewColumns) {
+    const labels = [];
+    const sample = [];
+    if (kind === 'table') {
+      if (isGridNode(node)) {
+        for (const cell of gridHeaderCells(node).slice(0, previewColumns)) labels.push(truncate(normalizeText(cell.textContent || ''), 60));
+        const firstRow = gridDataRows(node)[0];
+        if (firstRow) {
+          for (const cell of gridRowCells(firstRow).slice(0, previewColumns)) sample.push(truncate(normalizeText(cell.textContent || ''), 80));
+        }
+      } else {
+        const headRows = node.tHead && node.tHead.rows.length ? Array.from(node.tHead.rows) : Array.from(node.rows || []).slice(0, 1);
+        const grid = tableCellGrid(headRows);
+        for (let c = 0; c < Math.min(columns, previewColumns); c += 1) {
+          const parts = [];
+          for (const row of grid) {
+            const value = normalizeText(row[c] || '');
+            if (value && parts[parts.length - 1] !== value) parts.push(value);
+          }
+          labels.push(truncate(parts.join(' / ') || ('c' + (c + 1)), 60));
+        }
+        const body = node.tBodies && node.tBodies.length ? node.tBodies[0].rows : (node.rows || []);
+        const firstBody = Array.from(body)[0] || Array.from(node.rows || [])[1];
+        if (firstBody) {
+          const cells = tableCellGrid([firstBody])[0] || [];
+          for (let c = 0; c < Math.min(cells.length, previewColumns); c += 1) sample.push(truncate(normalizeText(cells[c] || ''), 80));
+        }
+      }
+    } else {
+      const first = node.querySelector('li, [role="listitem"]');
+      if (first) sample.push(truncate(normalizeText(first.textContent || ''), 80));
+    }
+    return { columns: labels, sample: sample };
+  }
+
+  function discoverTargets(args = {}) {
     state.extractTargets = new Map();
+    state.extractTargetsAt = Date.now();
+    const maxTargets = Math.min(Math.max(Number.isInteger(Number(args.maxTargets)) ? Number(args.maxTargets) : DISCOVER_MAX_TARGETS, 1), 200);
+    const previewColumns = Math.min(Math.max(Number.isInteger(Number(args.previewColumns)) ? Number(args.previewColumns) : DISCOVER_PREVIEW_COLUMNS, 1), 32);
     const found = [];
     let seq = 0;
-    const nodes = document.querySelectorAll('table, ul, ol, [role="table"], [role="list"], [role="grid"], [role="treegrid"], .ag-root');
+    let scanned = 0;
+    let truncated = false;
+    const selector = 'table, ul, ol, [role="table"], [role="list"], [role="grid"], [role="treegrid"], .ag-root';
+    const nodes = [];
+    const collect = (root, depth) => {
+      if (!root || depth > DISCOVER_MAX_DEPTH) return;
+      for (const node of root.querySelectorAll(selector)) nodes.push(node);
+      for (const host of root.querySelectorAll('*')) {
+        if (host.shadowRoot) collect(host.shadowRoot, depth + 1);
+      }
+    };
+    collect(document, 0);
     for (const node of nodes) {
+      if (found.length >= maxTargets) {
+        truncated = true;
+        break;
+      }
       if (!isVisible(node)) continue;
       if (node.closest('table') && node.tagName !== 'TABLE' && node.tagName !== 'UL' && node.tagName !== 'OL') continue;
+      scanned += 1;
       seq += 1;
       const kind = node.tagName === 'TABLE' || node.getAttribute('role') === 'table' || isGridNode(node) ? 'table' : 'list';
       let rows = 0;
@@ -2854,15 +4102,61 @@
       }
       const label = normalizeText(node.getAttribute('aria-label') || node.id || node.className || '') || (kind + ' #' + seq);
       state.extractTargets.set(seq, node);
-      found.push({ id: seq, kind: kind, label: truncate(label, 60), rows: rows, columns: columns });
-      if (found.length >= 20) break;
+      found.push({
+        id: seq,
+        kind: kind,
+        label: truncate(label, 60),
+        rows: rows,
+        columns: columns,
+        preview: discoverPreview(node, kind, columns, previewColumns),
+      });
     }
-    return { targets: found };
+    return {
+      targets: found,
+      url: location.href,
+      scanned: scanned,
+      truncated: truncated,
+      limits: { maxTargets: maxTargets, previewColumns: previewColumns, maxDepth: DISCOVER_MAX_DEPTH },
+    };
+  }
+
+  function extractTarget(id) {
+    const node = state.extractTargets ? state.extractTargets.get(Number(id)) : null;
+    if (!node || !node.isConnected) pageError('E_STALE_REF', 'target ' + id + ' 不在当前列表里，请重新 extract discover');
+    if (state.extractTargetsAt && Date.now() - state.extractTargetsAt > 5 * 60 * 1000) {
+      pageError('E_STALE_REF', 'extract target 句柄已超过 5 分钟，请重新 extract discover');
+    }
+    return node;
   }
 
   function boundedMaxRows(args) {
     const rawMax = Number(args.maxRows);
     return Math.min(Math.max(Number.isFinite(rawMax) && rawMax > 0 ? Math.round(rawMax) : 500, 1), 5000);
+  }
+
+  // 预算镜像：与 extension/src/lib/extract-limits.js 保持一致（页面侧不能 import 模块）。
+  const EXTRACT_DEFAULT_MAX_BYTES = 256 * 1024;
+  const EXTRACT_DEFAULT_MAX_CELLS = 20000;
+
+  function boundedMaxBytes(args) {
+    const raw = Number(args.maxBytes);
+    return Math.min(Math.max(Number.isFinite(raw) && raw > 0 ? Math.round(raw) : EXTRACT_DEFAULT_MAX_BYTES, 1024), 4 * 1024 * 1024);
+  }
+
+  function boundedMaxCells(args) {
+    const raw = Number(args.maxCells);
+    return Math.min(Math.max(Number.isFinite(raw) && raw > 0 ? Math.round(raw) : EXTRACT_DEFAULT_MAX_CELLS, 1), 200000);
+  }
+
+  function extractBudgetOf(args) {
+    return { maxRows: boundedMaxRows(args), maxBytes: boundedMaxBytes(args), maxCells: boundedMaxCells(args) };
+  }
+
+  function jsonBytes(value) {
+    try {
+      const text = JSON.stringify(value === undefined ? null : value);
+      try { return new TextEncoder().encode(text).length; } catch { return text.length; }
+    } catch { return 0; }
   }
 
   /** 读取页面自己声明的行数（ARIA），没有声明就返回 null——不猜。 */
@@ -2889,22 +4183,40 @@
    * 声明行数取自页面 ARIA，停止原因区分"到末尾 / 行数上限 / 字节上限"。
    * datasetComplete 只有在"页面有声明且确实读满"时才给 complete，其余一律 unknown/incomplete。
    */
-  function withCoverage(result, declared) {
+  function withCoverage(result, declared, budget, offset) {
     if (!result || typeof result !== 'object') return result;
     const returned = Array.isArray(result.rows) ? result.rows.length : 0;
+    const start = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
     const declaredRows = Number.isFinite(declared) ? declared : null;
     const stopReason = result.stopReason || (result.truncated === true ? 'max-rows' : 'end');
+    const hasMore = result.hasMore === true;
     let datasetComplete = 'unknown';
-    if (result.truncated === true) datasetComplete = 'incomplete';
-    else if (declaredRows != null && returned >= declaredRows) datasetComplete = 'complete';
+    if (result.truncated === true || hasMore) datasetComplete = 'incomplete';
+    else if (declaredRows != null && start + returned >= declaredRows) datasetComplete = 'complete';
+    result.offset = start;
     result.declaredRows = declaredRows;
     result.coverage = {
       scope: 'loaded-dom',
+      offset: start,
       returned: returned,
       declared: declaredRows,
+      omitted: declaredRows == null ? null : Math.max(0, declaredRows - (start + returned)),
       stopReason: stopReason,
       datasetComplete: datasetComplete,
     };
+    if (budget) {
+      result.cells = Number.isFinite(result.cells) ? result.cells : returned;
+      result.budget = {
+        maxRows: budget.maxRows,
+        maxBytes: budget.maxBytes,
+        maxCells: budget.maxCells,
+        offset: start,
+        rows: returned,
+        cells: result.cells,
+        bytes: jsonBytes(result),
+        stopReason: stopReason,
+      };
+    }
     return result;
   }
 
@@ -2918,54 +4230,70 @@
   function capExtractBytes(result, maxBytes) {
     const budget = Number(maxBytes);
     if (!Number.isFinite(budget) || budget <= 0) return result;
-    if (JSON.stringify(result).length <= budget) return result;
+    if (jsonBytes(result) <= budget) {
+      if (result && typeof result === 'object' && result.budget) result.budget.bytes = jsonBytes(result);
+      return result;
+    }
     result.truncated = true;
     result.complete = false;
     result.stopReason = 'max-bytes';
     if (Array.isArray(result.rows)) {
-      while (result.rows.length > 0 && JSON.stringify(result).length > budget) result.rows.pop();
+      while (result.rows.length > 0 && jsonBytes(result) > budget) result.rows.pop();
+    }
+    if (result.coverage && typeof result.coverage === 'object') {
+      result.coverage.stopReason = 'max-bytes';
+      result.coverage.returned = Array.isArray(result.rows) ? result.rows.length : 0;
+      result.coverage.datasetComplete = 'incomplete';
+      if (result.coverage.declared != null) {
+        result.coverage.omitted = Math.max(0, result.coverage.declared - result.coverage.returned);
+      }
+    }
+    if (result.budget && typeof result.budget === 'object') {
+      result.budget.maxBytes = budget;
+      result.budget.bytes = jsonBytes(result);
+      result.budget.stopReason = 'max-bytes';
+      result.budget.rows = Array.isArray(result.rows) ? result.rows.length : 0;
     }
     return result;
   }
 
   function actionExtract(args) {
-    if (args.discover === true) return discoverTargets();
+    const budget = extractBudgetOf(args);
+    const maxRows = budget.maxRows;
+    const offset = Math.max(0, Math.min(Math.floor(Number(args.offset) || 0), 1000000));
+    if (args.discover === true) return discoverTargets(args);
     if (args.mode === 'list') {
       let root = null;
       if (args.ref || args.selector) root = resolveElement(args);
       else if (args.target != null && args.target !== '') {
-        const node = state.extractTargets ? state.extractTargets.get(Number(args.target)) : null;
-        if (!node || !node.isConnected) pageError('E_STALE_REF', 'target ' + args.target + ' 不在当前列表里，请重新 extract discover');
+        const node = extractTarget(args.target);
         root = node;
       } else {
         root = document.querySelector('ul,ol,[role=list],main') || document.body;
       }
       if (!root) pageError('E_NOT_FOUND', '页面没有可导出的列表');
-      return listExtractFields(root, args);
+      return listExtractFields(root, args, budget, offset);
     }
     if (args.target != null && args.target !== '') {
-      const id = Number(args.target);
-      const node = state.extractTargets ? state.extractTargets.get(id) : null;
-      if (!node || !node.isConnected) pageError('E_STALE_REF', 'target ' + args.target + ' 不在当前列表里，请重新 extract discover');
-      if (node.tagName === 'TABLE') return tableExtract(node, boundedMaxRows(args));
-      if (isGridNode(node)) return gridExtract(node, boundedMaxRows(args));
-      return listExtract(node, boundedMaxRows(args));
+      const node = extractTarget(args.target);
+      if (node.tagName === 'TABLE') return tableExtract(node, maxRows, budget, offset);
+      if (isGridNode(node)) return gridExtract(node, maxRows, budget, offset);
+      return listExtract(node, maxRows, budget, offset);
     }
-    const rawMax = Number(args.maxRows);
-    const maxRows = boundedMaxRows(args);
     let root = null;
     if (args.ref || args.selector) root = resolveElement(args);
     else root = document.querySelector('table') || document.querySelector('[role="grid"], [role="treegrid"], .ag-root') || document.querySelector('ul,ol,[role=list]');
     if (!root) pageError('E_NOT_FOUND', '页面没有可导出的表格或列表');
-    if (root.tagName === 'TABLE') return tableExtract(root, maxRows);
-    if (isGridNode(root)) return gridExtract(root, maxRows);
+    if (root.tagName === 'TABLE') return tableExtract(root, maxRows, budget, offset);
+    if (isGridNode(root)) return gridExtract(root, maxRows, budget, offset);
     const table = root.querySelector ? root.querySelector('table') : null;
-    if (table) return tableExtract(table, maxRows);
-    return listExtract(root, maxRows);
+    if (table) return tableExtract(table, maxRows, budget, offset);
+    return listExtract(root, maxRows, budget, offset);
   }
 
-  // ---------- v0.2：拖拽 / 滚轮 / 失焦 / 上传 ----------
-
+  // ===========================================================================
+  // §I 指针/拖拽/滚轮/上传/fetch
+  // ===========================================================================
   function rectCenter(el) {
     const rect = el.getBoundingClientRect();
     if (rect.width <= 0 && rect.height <= 0) pageError('E_NOT_FOUND', '目标元素没有可交互区域（尺寸为 0）');
@@ -3121,7 +4449,8 @@
       y = Math.round(window.innerHeight / 2);
     }
     const node = target || eventTargetAt(x, y, document.body);
-    const beforeY = window.scrollY;
+    const modBits = Number(args.modifiers) || 0;
+const beforeY = window.scrollY;
     const beforeX = window.scrollX;
     node.dispatchEvent(new WheelEvent('wheel', {
       bubbles: true,
@@ -3132,6 +4461,10 @@
       deltaX: dx,
       deltaY: dy,
       deltaMode: 0,
+      altKey: (modBits & 1) !== 0,
+      ctrlKey: (modBits & 2) !== 0,
+      metaKey: (modBits & 4) !== 0,
+      shiftKey: (modBits & 8) !== 0,
     }));
     const moved = Math.abs(window.scrollY - beforeY) > 1 || Math.abs(window.scrollX - beforeX) > 1;
     let synthetic = false;
@@ -3235,8 +4568,9 @@
     };
   }
 
-  // ---------- 入口 ----------
-
+  // ===========================================================================
+  // §J 消息分派与 installHumanWatchers
+  // ===========================================================================
   function ok(result) {
     return { ok: true, result };
   }
@@ -3258,8 +4592,13 @@
         }
       }
       switch (name) {
+        case 'mark-agent-input':
+          markAgentInput();
+          return ok(true);
         case 'observe':
           return ok(observe(input));
+        case 'deep-vom':
+          return ok(buildDeepVom(input));
         case 'snapshot':
           return ok(snapshot());
         case 'reset-refs':
@@ -3276,6 +4615,9 @@
           return ok(await retryDetachedTarget(input, () => actionSelect(input)));
         case 'actionable':
           return ok(actionability(input));
+        case 'row-anchor':
+          // 只读：动作前取当前行事实；无行/非虚拟化行返回 anchor:null（fail-closed）。
+          return ok(rowAnchorProbe(input));
         case 'fill-focus':
           return ok(fillFastTarget(input));
         case 'fill-verify':
@@ -3314,6 +4656,10 @@
           return ok(getHtml(input));
         case 'probe-state':
           return ok(probeState(input));
+        case 'node-signature':
+          return ok(actionNodeSignature(input));
+        case 'ref-signatures':
+          return ok(actionRefSignatures(input));
         case 'page-metrics':
           return ok(pageMetrics());
         case 'element-rect':
@@ -3334,6 +4680,8 @@
           return ok(mediaProgress());
         case 'frame-meta':
           return ok(frameMeta());
+        case 'revision':
+          return ok({ revision: currentRevision() });
         case 'visual-refs':
           return ok(visualRefs());
         case 'visual-scan':

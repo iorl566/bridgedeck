@@ -1,29 +1,510 @@
 [
-  { "id": "20b", "title": "console 记录与游标" },
-  { "id": "20c", "title": "network 记录" },
-  { "id": "20d6", "title": "record iframe 事件（frameId + documentId）" },
-  { "id": "20d7", "title": "record 跨 frame popup 归属" },
-  { "id": "20e", "title": "debug 重复请求检测" },
-  { "id": "20f", "title": "debug DNR fulfill/block" },
-  { "id": "20n", "title": "tab 借用与归还" },
-  { "id": "20o", "title": "规则拦截子资源" },
-  { "id": "20p", "title": "跨源 iframe 统一 ref" },
-  { "id": "20q", "title": "rebind 拒绝 Agent 窗口" },
-  { "id": "20s2", "title": "session pause/resume" },
-  { "id": "20w", "title": "CDP Fetch 诊断" },
-  { "id": "23p", "title": "同源 iframe + Shadow 树隔离" },
-  { "id": "23p2", "title": "嵌套 iframe owner 链投影" },
-  { "id": "23p3", "title": "真正 OOPIF CDP owner 投影" },
-  { "id": "23q", "title": "screenshot annotate + 按图点击" },
-  { "id": "23r", "title": "--settle 动作后等待" },
-  { "id": "23s", "title": "--depends-on 结构化失败" },
-  { "id": "23w", "title": "strict 策略 context" },
-  { "id": "24d", "title": "接管浮层 closed shadow 点击" },
-  { "id": "26", "title": "借用安全策略" },
-  { "id": "35b", "title": "VOM 命中测试" },
-  { "id": "35c", "title": "VOM 对比度" },
-  { "id": "35d", "title": "replaced target fail-closed" },
-  { "id": "35e", "title": "click --text --trusted --follow" },
-  { "id": "36", "title": "收尾：清空 session + status" },
-  { "id": "37", "title": "内嵌技能安装" }
+  {
+    "id": "20b",
+    "title": "console 记录与游标"
+  },
+  {
+    "id": "7b",
+    "title": "stableRef 驱动动作"
+  },
+  {
+    "id": "20c",
+    "title": "network 记录"
+  },
+  {
+    "id": "20d6",
+    "title": "record iframe 事件（frameId + documentId）"
+  },
+  {
+    "id": "20d7",
+    "title": "record 跨 frame popup 归属"
+  },
+  {
+    "id": "20e",
+    "title": "debug 重复请求检测"
+  },
+  {
+    "id": "20f",
+    "title": "debug DNR fulfill/block"
+  },
+  {
+    "id": "20n",
+    "title": "tab 借用与归还"
+  },
+  {
+    "id": "20o",
+    "title": "规则拦截子资源"
+  },
+  {
+    "id": "20p",
+    "title": "跨源 iframe 统一 ref"
+  },
+  {
+    "id": "20q",
+    "title": "rebind 拒绝 Agent 窗口"
+  },
+  {
+    "id": "20s2",
+    "title": "session pause/resume"
+  },
+  {
+    "id": "20w",
+    "title": "CDP Fetch 诊断"
+  },
+  {
+    "id": "23p",
+    "title": "同源 iframe + Shadow 树隔离"
+  },
+  {
+    "id": "23p2",
+    "title": "嵌套 iframe owner 链投影"
+  },
+  {
+    "id": "23p3",
+    "title": "真正 OOPIF CDP owner 投影"
+  },
+  {
+    "id": "23q",
+    "title": "screenshot annotate + 按图点击"
+  },
+  {
+    "id": "23r",
+    "title": "--settle 动作后等待"
+  },
+  {
+    "id": "23s",
+    "title": "--depends-on 结构化失败"
+  },
+  {
+    "id": "23w",
+    "title": "strict 策略 context"
+  },
+  {
+    "id": "24d",
+    "title": "接管浮层 closed shadow 点击"
+  },
+  {
+    "id": "26",
+    "title": "借用安全策略"
+  },
+  {
+    "id": "35b",
+    "title": "VOM 命中测试"
+  },
+  {
+    "id": "35c",
+    "title": "VOM 对比度"
+  },
+  {
+    "id": "35d",
+    "title": "replaced target fail-closed"
+  },
+  {
+    "id": "35e",
+    "title": "click --text --trusted --follow"
+  },
+  {
+    "id": "36",
+    "title": "收尾：清空 session + status"
+  },
+  {
+    "id": "37",
+    "title": "内嵌技能安装"
+  },
+  {
+    "id": "23p4",
+    "title": "缩放 iframe owner 链投影"
+  },
+  {
+    "id": "23p5",
+    "title": "滚动容器 iframe 投影"
+  },
+  {
+    "id": "13",
+    "title": "adversarial：借用确认受安全策略保护（E_FORBIDDEN）"
+  },
+  {
+    "id": "20k",
+    "title": "adversarial：daemon 重启后会话恢复"
+  },
+  {
+    "id": "20s",
+    "title": "adversarial：recipe 篡改/过期/重新审批"
+  },
+  {
+    "id": "20t",
+    "title": "adversarial：wait-for-element 可取消"
+  },
+  {
+    "id": "20u",
+    "title": "adversarial：closed shadow 点击/读取"
+  },
+  {
+    "id": "20v",
+    "title": "adversarial：closed shadow observe + ref"
+  },
+  {
+    "id": "20y",
+    "title": "adversarial：子资源 modify 重写"
+  },
+  {
+    "id": "20d4",
+    "title": "adversarial：导航后恢复记录器"
+  },
+  {
+    "id": "23b",
+    "title": "adversarial：wait-for-element 超时返回 satisfied=false"
+  },
+  {
+    "id": "23g",
+    "title": "adversarial：download 默认拒绝覆盖（E_EXISTS）"
+  },
+  {
+    "id": "23i",
+    "title": "adversarial：--expect 失败带 actual"
+  },
+  {
+    "id": "23j",
+    "title": "adversarial：导航后旧 context 失效（E_CONTEXT_STALE）"
+  },
+  {
+    "id": "23j2",
+    "title": "adversarial：cooperation authority stale 全链路（generation 单调）"
+  },
+  {
+    "id": "23k",
+    "title": "adversarial：旧 observation 失效（E_OBSERVATION_STALE）"
+  },
+  {
+    "id": "23t",
+    "title": "adversarial：--expect 失败带 data.mismatch"
+  },
+  {
+    "id": "23x",
+    "title": "adversarial：cooperate handback 立刻 ready"
+  },
+  {
+    "id": "23x4",
+    "title": "adversarial：extract --max-bytes 截断"
+  },
+  {
+    "id": "24",
+    "title": "adversarial：request-help 关闭时拒绝（E_HELP_DISABLED）"
+  },
+  {
+    "id": "24b2",
+    "title": "adversarial：help 完成条件满足后自动交还"
+  },
+  {
+    "id": "29c",
+    "title": "adversarial：CLI 不能用 daemonUrl 完成本机配对（E_FORBIDDEN）"
+  },
+  {
+    "id": "8b",
+    "title": "VOM stableRef 驱动 fill/select/read/actionable"
+  },
+  {
+    "id": "20b2",
+    "title": "debug capabilities / pin / unpin"
+  },
+  {
+    "id": "23p8",
+    "title": "3D matrix3d OOPIF 投影"
+  },
+  {
+    "id": "23v",
+    "title": "scroll-to 边界 + 性能 CLS/长任务"
+  },
+  {
+    "id": "23x5",
+    "title": "screenshot --scope follow 整页"
+  },
+  {
+    "id": "29d",
+    "title": "ar/he RTL 界面真实渲染"
+  },
+  {
+    "id": "31b",
+    "title": "长截图分片恢复"
+  },
+  {
+    "id": "31c",
+    "title": "超长页面 CDP 分块拼接"
+  },
+  {
+    "id": "31d",
+    "title": "超宽页面 CDP 分块拼接"
+  },
+  {
+    "id": "35r",
+    "title": "视频完帧恢复（分片 → 文件）"
+  },
+  {
+    "id": "23h2",
+    "title": "cooperation frameState 计数器（DOM/滚动）"
+  },
+  {
+    "id": "35f",
+    "title": "VOM visualObjects 稳定身份 + 动作闭环"
+  },
+  {
+    "id": "20q2",
+    "title": "tab move 跨窗口移动"
+  },
+  {
+    "id": "20q3",
+    "title": "window list/focus 窗口路由"
+  },
+  {
+    "id": "20q4",
+    "title": "window ensure 复用/创建 Agent 窗口"
+  },
+  {
+    "id": "24b",
+    "title": "人工协助卡片：完成并交还"
+  },
+  {
+    "id": "20b3",
+    "title": "debug requests 过滤 + request metadata"
+  },
+  {
+    "id": "20d10",
+    "title": "record 默认过滤 Agent 动作"
+  },
+  {
+    "id": "20m",
+    "title": "debug operations 时间线"
+  },
+  {
+    "id": "33d",
+    "title": "调试页重放面板：采集后重放"
+  },
+  {
+    "id": "35",
+    "title": "视频录制页（真实 MP4 落库）"
+  },
+  {
+    "id": "23p9",
+    "title": "perspective 3D iframe homography 投影"
+  },
+  {
+    "id": "31e",
+    "title": "超大高度 capture（>30000px 分块）"
+  },
+  {
+    "id": "20d9",
+    "title": "record hover 停留"
+  },
+  {
+    "id": "20j",
+    "title": "MCP server observe/click/screenshot"
+  },
+  {
+    "id": "25",
+    "title": "手动长截图拼接"
+  },
+  {
+    "id": "29",
+    "title": "扩展弹窗真实渲染"
+  },
+  {
+    "id": "31",
+    "title": "长截图页（真实整页截图）"
+  },
+  {
+    "id": "33b",
+    "title": "调试页规则面板增删"
+  },
+  {
+    "id": "33c",
+    "title": "调试页性能面板指标"
+  },
+  {
+    "id": "35g",
+    "title": "paint-order 分层 + capture issues"
+  },
+  {
+    "id": "23h3",
+    "title": "归因时钟：Agent 点击计入 agentAttributed"
+  },
+  {
+    "id": "23h4",
+    "title": "归因时钟：Agent 按键计入 agentAttributed"
+  },
+  {
+    "id": "31f",
+    "title": "固定页脚重绘（final footer overlay）"
+  },
+  {
+    "id": "23h5",
+    "title": "拟人输入 --human 多段轨迹"
+  },
+  {
+    "id": "31g",
+    "title": "截图差分 YIQ changed pixels"
+  },
+  {
+    "id": "20q5",
+    "title": "read-only scope 拒绝变更动作"
+  },
+  {
+    "id": "20q6",
+    "title": "per-tab readOnly / allowedOrigins"
+  },
+  {
+    "id": "20e2",
+    "title": "debug coverage 明确缺口"
+  },
+  {
+    "id": "20q7",
+    "title": "tab group 命名标签组"
+  },
+  {
+    "id": "20q8",
+    "title": "命名 tab alias 驱动动作"
+  },
+  {
+    "id": "20q9",
+    "title": "tab keepOpen + cleanup dry-run"
+  },
+  {
+    "id": "20s1",
+    "title": "seeded fixture 可复现"
+  },
+  {
+    "id": "20s3",
+    "title": "stress smoke observe/read"
+  },
+  {
+    "id": "29e",
+    "title": "可访问性基础自检"
+  },
+  {
+    "id": "20s4",
+    "title": "bridge exec 受限脚本"
+  },
+  {
+    "id": "20s5",
+    "title": "WebMCP list/call"
+  },
+  {
+    "id": "20s6",
+    "title": "VOM 阶段证据"
+  },
+  {
+    "id": "23h6",
+    "title": "cooperate hold 拒绝/恢复"
+  },
+  {
+    "id": "23j3",
+    "title": "观察代际 stale"
+  },
+  {
+    "id": "15b",
+    "title": "extract 跨 frame discover"
+  },
+  {
+    "id": "20s7",
+    "title": "bridge exec QuickJS 沙箱"
+  },
+  {
+    "id": "20q10",
+    "title": "多 Agent session 共享同一 tab"
+  },
+  {
+    "id": "20q11",
+    "title": "共享 tab 控制权/exclusive/租约/handoff"
+  },
+  {
+    "id": "20q12",
+    "title": "主会话停止转交控制权与主会话身份"
+  },
+  {
+    "id": "20s8",
+    "title": "QuickJS locator 全量（同步链式 + 错误码）"
+  },
+  {
+    "id": "23j4",
+    "title": "节点级动态读取校验（node-scope/target_detached）"
+  },
+  {
+    "id": "15c",
+    "title": "extract 预算证据：max-rows / max-cells / max-bytes"
+  },
+  {
+    "id": "35h",
+    "title": "VOM 完整关系图（containment/ownership/AX）"
+  },
+  {
+    "id": "15d",
+    "title": "observe --frames --vom 跨源 iframe 子图"
+  },
+  {
+    "id": "15e",
+    "title": "嵌套 iframe 链 owner link"
+  },
+  {
+    "id": "20d11",
+    "title": "焦点策略：session start/tab.new 默认不置前"
+  },
+  {
+    "id": "15f",
+    "title": "extract 多页游标续取 + 过期/类型校验"
+  },
+  {
+    "id": "20s9",
+    "title": "session run log → recipe draft（不含输入值）"
+  },
+  {
+    "id": "31h",
+    "title": "大截图流式读（--stream）"
+  },
+  {
+    "id": "15g",
+    "title": "view 分页缓存：offset/limit/grep 组合"
+  },
+  {
+    "id": "20u2",
+    "title": "CDP 性能追踪 trace start/stop"
+  },
+  {
+    "id": "20c2",
+    "title": "逐帧编码录制（--force-frames）"
+  },
+  {
+    "id": "31e2",
+    "title": "超单画布上限自动分段 PNG"
+  },
+  {
+    "id": "5b2",
+    "title": "VOM 六阶段深观察（--vom-deep）"
+  },
+  {
+    "id": "20p2",
+    "title": "隐藏 iframe 标记与 frameGaps"
+  },
+  {
+    "id": "31f2",
+    "title": "长截图分数 DPR 与固定顶/底栏"
+  },
+  {
+    "id": "23l",
+    "title": "observe --max-tokens/--cursor 分页"
+  },
+  {
+    "id": "5b",
+    "title": "observe --vom 结构化节点"
+  },
+  {
+    "id": "20b4",
+    "title": "console --limit/--cursor 分页"
+  },
+  {
+    "id": "23e6",
+    "title": "extract 完整性元数据（truncated/complete）"
+  },
+  {
+    "id": "20v2",
+    "title": "PDF 导出 Page.printToPDF"
+  }
 ]

@@ -1,0 +1,2541 @@
+{
+  "version": 1,
+  "url": "https://example.test/app-shell.html",
+  "title": "应用壳夹具",
+  "frameId": 0,
+  "nodes": [
+    {
+      "id": "shell",
+      "ref": null,
+      "domId": "shell",
+      "tag": "div",
+      "role": "container",
+      "name": "",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 800
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 2,
+      "backendNodeId": 3,
+      "ancestorIds": [],
+      "ancestors": [],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "topbar",
+      "ref": null,
+      "domId": "topbar",
+      "tag": "header",
+      "role": "banner",
+      "name": "页头",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 60
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 3,
+      "backendNodeId": 4,
+      "ancestorIds": [
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "sign-in",
+      "ref": "@e1",
+      "domId": "sign-in",
+      "tag": "button",
+      "role": "button",
+      "name": "登录",
+      "bounds": {
+        "x": 1100,
+        "y": 10,
+        "width": 100,
+        "height": 32
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 4,
+      "backendNodeId": 5,
+      "ancestorIds": [
+        "topbar",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "topbar",
+          "domId": "topbar",
+          "ref": null,
+          "role": "banner",
+          "tag": "header",
+          "name": "页头"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "sidebar",
+      "ref": null,
+      "domId": "sidebar",
+      "tag": "nav",
+      "role": "navigation",
+      "name": "导航",
+      "bounds": {
+        "x": 0,
+        "y": 60,
+        "width": 200,
+        "height": 740
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 5,
+      "backendNodeId": 6,
+      "ancestorIds": [
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "nav-home",
+      "ref": "@e2",
+      "domId": "nav-home",
+      "tag": "a",
+      "role": "link",
+      "name": "首页",
+      "bounds": {
+        "x": 10,
+        "y": 80,
+        "width": 160,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 6,
+      "backendNodeId": 7,
+      "ancestorIds": [
+        "sidebar",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "sidebar",
+          "domId": "sidebar",
+          "ref": null,
+          "role": "navigation",
+          "tag": "nav",
+          "name": "导航"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": "/",
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "nav-orders",
+      "ref": "@e3",
+      "domId": "nav-orders",
+      "tag": "a",
+      "role": "link",
+      "name": "订单",
+      "bounds": {
+        "x": 10,
+        "y": 120,
+        "width": 160,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 7,
+      "backendNodeId": 8,
+      "ancestorIds": [
+        "sidebar",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "sidebar",
+          "domId": "sidebar",
+          "ref": null,
+          "role": "navigation",
+          "tag": "nav",
+          "name": "导航"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": "/orders",
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "content",
+      "ref": null,
+      "domId": "content",
+      "tag": "main",
+      "role": "main",
+      "name": "主体",
+      "bounds": {
+        "x": 200,
+        "y": 60,
+        "width": 1080,
+        "height": 740
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 8,
+      "backendNodeId": 9,
+      "ancestorIds": [
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "orders-section",
+      "ref": null,
+      "domId": "orders-section",
+      "tag": "section",
+      "role": "region",
+      "name": "订单区",
+      "bounds": {
+        "x": 200,
+        "y": 60,
+        "width": 1080,
+        "height": 400
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 9,
+      "backendNodeId": 10,
+      "ancestorIds": [
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "filter-form",
+      "ref": null,
+      "domId": "filter-form",
+      "tag": "form",
+      "role": "form",
+      "name": "筛选",
+      "bounds": {
+        "x": 200,
+        "y": 60,
+        "width": 1080,
+        "height": 80
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 10,
+      "backendNodeId": 11,
+      "ancestorIds": [
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "filter-label",
+      "ref": null,
+      "domId": "filter-label",
+      "tag": "label",
+      "role": "label",
+      "name": "关键词",
+      "bounds": {
+        "x": 210,
+        "y": 70,
+        "width": 80,
+        "height": 20
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 11,
+      "backendNodeId": 12,
+      "ancestorIds": [
+        "filter-form",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "filter-form",
+          "domId": "filter-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "筛选"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [
+          "filter-label"
+        ],
+        "form": [
+          "filter-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "filter-kw",
+      "ref": "@e4",
+      "domId": "filter-kw",
+      "tag": "input",
+      "role": "searchbox",
+      "name": "",
+      "bounds": {
+        "x": 300,
+        "y": 70,
+        "width": 240,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": "empty",
+      "paintOrder": 12,
+      "backendNodeId": 13,
+      "ancestorIds": [
+        "filter-form",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "filter-form",
+          "domId": "filter-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "筛选"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [
+          "filter-label"
+        ],
+        "form": [
+          "filter-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": "search",
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "filter-apply",
+      "ref": "@e5",
+      "domId": "filter-apply",
+      "tag": "button",
+      "role": "button",
+      "name": "筛选",
+      "bounds": {
+        "x": 560,
+        "y": 70,
+        "width": 80,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": true,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 13,
+      "backendNodeId": 14,
+      "ancestorIds": [
+        "filter-form",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "filter-form",
+          "domId": "filter-form",
+          "ref": null,
+          "role": "form",
+          "tag": "form",
+          "name": "筛选"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [
+          "filter-form"
+        ],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": "button",
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "orders-table",
+      "ref": null,
+      "domId": "orders-table",
+      "tag": "table",
+      "role": "table",
+      "name": "订单表",
+      "bounds": {
+        "x": 200,
+        "y": 150,
+        "width": 900,
+        "height": 300
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 14,
+      "backendNodeId": 15,
+      "ancestorIds": [
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": {
+        "headers": [
+          {
+            "id": "orders-id",
+            "role": "columnheader",
+            "name": "订单号"
+          },
+          {
+            "id": "orders-amount",
+            "role": "columnheader",
+            "name": "金额"
+          }
+        ],
+        "dataRows": 2,
+        "caption": "订单表"
+      },
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "n17",
+      "ref": "@e6",
+      "domId": null,
+      "tag": "tr",
+      "role": "row",
+      "name": "",
+      "bounds": {
+        "x": 10,
+        "y": 10,
+        "width": 100,
+        "height": 30
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 16,
+      "backendNodeId": 17,
+      "ancestorIds": [
+        "orders-table",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "orders-table",
+          "domId": "orders-table",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "订单表"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "orders-id",
+      "ref": null,
+      "domId": "orders-id",
+      "tag": "th",
+      "role": "columnheader",
+      "name": "订单号",
+      "bounds": {
+        "x": 200,
+        "y": 150,
+        "width": 200,
+        "height": 24
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 17,
+      "backendNodeId": 18,
+      "ancestorIds": [
+        "n17",
+        "orders-table",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "n17",
+          "domId": null,
+          "ref": "@e6",
+          "role": "row",
+          "tag": "tr",
+          "name": null
+        },
+        {
+          "id": "orders-table",
+          "domId": "orders-table",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "订单表"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "orders-amount",
+      "ref": null,
+      "domId": "orders-amount",
+      "tag": "th",
+      "role": "columnheader",
+      "name": "金额",
+      "bounds": {
+        "x": 400,
+        "y": 150,
+        "width": 200,
+        "height": 24
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 18,
+      "backendNodeId": 19,
+      "ancestorIds": [
+        "n17",
+        "orders-table",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "n17",
+          "domId": null,
+          "ref": "@e6",
+          "role": "row",
+          "tag": "tr",
+          "name": null
+        },
+        {
+          "id": "orders-table",
+          "domId": "orders-table",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "订单表"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "n21",
+      "ref": "@e7",
+      "domId": null,
+      "tag": "tr",
+      "role": "row",
+      "name": "",
+      "bounds": {
+        "x": 10,
+        "y": 10,
+        "width": 100,
+        "height": 30
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 20,
+      "backendNodeId": 21,
+      "ancestorIds": [
+        "orders-table",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "orders-table",
+          "domId": "orders-table",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "订单表"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "order-1",
+      "ref": null,
+      "domId": "order-1",
+      "tag": "td",
+      "role": "cell",
+      "name": "A-001",
+      "bounds": {
+        "x": 200,
+        "y": 180,
+        "width": 200,
+        "height": 24
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 21,
+      "backendNodeId": 22,
+      "ancestorIds": [
+        "n21",
+        "orders-table",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "n21",
+          "domId": null,
+          "ref": "@e7",
+          "role": "row",
+          "tag": "tr",
+          "name": null
+        },
+        {
+          "id": "orders-table",
+          "domId": "orders-table",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "订单表"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "order-1-amount",
+      "ref": null,
+      "domId": "order-1-amount",
+      "tag": "td",
+      "role": "cell",
+      "name": "¥ 100",
+      "bounds": {
+        "x": 400,
+        "y": 180,
+        "width": 200,
+        "height": 24
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 22,
+      "backendNodeId": 23,
+      "ancestorIds": [
+        "n21",
+        "orders-table",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "n21",
+          "domId": null,
+          "ref": "@e7",
+          "role": "row",
+          "tag": "tr",
+          "name": null
+        },
+        {
+          "id": "orders-table",
+          "domId": "orders-table",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "订单表"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "n24",
+      "ref": "@e8",
+      "domId": null,
+      "tag": "tr",
+      "role": "row",
+      "name": "",
+      "bounds": {
+        "x": 10,
+        "y": 10,
+        "width": 100,
+        "height": 30
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 23,
+      "backendNodeId": 24,
+      "ancestorIds": [
+        "orders-table",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "orders-table",
+          "domId": "orders-table",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "订单表"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "order-2",
+      "ref": null,
+      "domId": "order-2",
+      "tag": "td",
+      "role": "cell",
+      "name": "A-002",
+      "bounds": {
+        "x": 200,
+        "y": 210,
+        "width": 200,
+        "height": 24
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 24,
+      "backendNodeId": 25,
+      "ancestorIds": [
+        "n24",
+        "orders-table",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "n24",
+          "domId": null,
+          "ref": "@e8",
+          "role": "row",
+          "tag": "tr",
+          "name": null
+        },
+        {
+          "id": "orders-table",
+          "domId": "orders-table",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "订单表"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "order-2-amount",
+      "ref": null,
+      "domId": "order-2-amount",
+      "tag": "td",
+      "role": "cell",
+      "name": "¥ 200",
+      "bounds": {
+        "x": 400,
+        "y": 210,
+        "width": 200,
+        "height": 24
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 25,
+      "backendNodeId": 26,
+      "ancestorIds": [
+        "n24",
+        "orders-table",
+        "orders-section",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "n24",
+          "domId": null,
+          "ref": "@e8",
+          "role": "row",
+          "tag": "tr",
+          "name": null
+        },
+        {
+          "id": "orders-table",
+          "domId": "orders-table",
+          "ref": null,
+          "role": "table",
+          "tag": "table",
+          "name": "订单表"
+        },
+        {
+          "id": "orders-section",
+          "domId": "orders-section",
+          "ref": null,
+          "role": "region",
+          "tag": "section",
+          "name": "订单区"
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "detail-pane",
+      "ref": null,
+      "domId": "detail-pane",
+      "tag": "div",
+      "role": "region",
+      "name": "",
+      "bounds": {
+        "x": 200,
+        "y": 480,
+        "width": 600,
+        "height": 300
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 26,
+      "backendNodeId": 27,
+      "ancestorIds": [
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [
+          "detail-title"
+        ],
+        "describedBy": [
+          "detail-hint"
+        ],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "detail-title",
+      "ref": null,
+      "domId": "detail-title",
+      "tag": "h2",
+      "role": "heading",
+      "name": "订单详情",
+      "bounds": {
+        "x": 210,
+        "y": 490,
+        "width": 200,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 27,
+      "backendNodeId": 28,
+      "ancestorIds": [
+        "detail-pane",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "detail-pane",
+          "domId": "detail-pane",
+          "ref": null,
+          "role": "region",
+          "tag": "div",
+          "name": null
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "detail-hint",
+      "ref": null,
+      "domId": "detail-hint",
+      "tag": "p",
+      "role": "note",
+      "name": "点击行查看详情",
+      "bounds": {
+        "x": 210,
+        "y": 520,
+        "width": 300,
+        "height": 20
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 28,
+      "backendNodeId": 29,
+      "ancestorIds": [
+        "detail-pane",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "detail-pane",
+          "domId": "detail-pane",
+          "ref": null,
+          "role": "region",
+          "tag": "div",
+          "name": null
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "detail-tabs",
+      "ref": null,
+      "domId": "detail-tabs",
+      "tag": "div",
+      "role": "tablist",
+      "name": "详情页签",
+      "bounds": {
+        "x": 210,
+        "y": 550,
+        "width": 400,
+        "height": 32
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 29,
+      "backendNodeId": 30,
+      "ancestorIds": [
+        "detail-pane",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "detail-pane",
+          "domId": "detail-pane",
+          "ref": null,
+          "role": "region",
+          "tag": "div",
+          "name": null
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "tab-info",
+      "ref": "@e9",
+      "domId": "tab-info",
+      "tag": "button",
+      "role": "tab",
+      "name": "信息",
+      "bounds": {
+        "x": 210,
+        "y": 550,
+        "width": 80,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 30,
+      "backendNodeId": 31,
+      "ancestorIds": [
+        "detail-tabs",
+        "detail-pane",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "detail-tabs",
+          "domId": "detail-tabs",
+          "ref": null,
+          "role": "tablist",
+          "tag": "div",
+          "name": "详情页签"
+        },
+        {
+          "id": "detail-pane",
+          "domId": "detail-pane",
+          "ref": null,
+          "role": "region",
+          "tag": "div",
+          "name": null
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [
+          "panel-info"
+        ],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "tab-log",
+      "ref": "@e10",
+      "domId": "tab-log",
+      "tag": "button",
+      "role": "tab",
+      "name": "日志",
+      "bounds": {
+        "x": 300,
+        "y": 550,
+        "width": 80,
+        "height": 28
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 31,
+      "backendNodeId": 32,
+      "ancestorIds": [
+        "detail-tabs",
+        "detail-pane",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "detail-tabs",
+          "domId": "detail-tabs",
+          "ref": null,
+          "role": "tablist",
+          "tag": "div",
+          "name": "详情页签"
+        },
+        {
+          "id": "detail-pane",
+          "domId": "detail-pane",
+          "ref": null,
+          "role": "region",
+          "tag": "div",
+          "name": null
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [
+          "panel-log"
+        ],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "panel-info",
+      "ref": null,
+      "domId": "panel-info",
+      "tag": "div",
+      "role": "tabpanel",
+      "name": "信息",
+      "bounds": {
+        "x": 210,
+        "y": 590,
+        "width": 400,
+        "height": 120
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 32,
+      "backendNodeId": 33,
+      "ancestorIds": [
+        "detail-pane",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "detail-pane",
+          "domId": "detail-pane",
+          "ref": null,
+          "role": "region",
+          "tag": "div",
+          "name": null
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "panel-log",
+      "ref": null,
+      "domId": "panel-log",
+      "tag": "div",
+      "role": "tabpanel",
+      "name": "日志",
+      "bounds": {
+        "x": 210,
+        "y": 590,
+        "width": 400,
+        "height": 120
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 33,
+      "backendNodeId": 34,
+      "ancestorIds": [
+        "detail-pane",
+        "content",
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "detail-pane",
+          "domId": "detail-pane",
+          "ref": null,
+          "role": "region",
+          "tag": "div",
+          "name": null
+        },
+        {
+          "id": "content",
+          "domId": "content",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "主体"
+        },
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "page-footer",
+      "ref": null,
+      "domId": "page-footer",
+      "tag": "footer",
+      "role": "contentinfo",
+      "name": "页脚",
+      "bounds": {
+        "x": 0,
+        "y": 760,
+        "width": 1280,
+        "height": 40
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 34,
+      "backendNodeId": 35,
+      "ancestorIds": [
+        "shell"
+      ],
+      "ancestors": [
+        {
+          "id": "shell",
+          "domId": "shell",
+          "ref": null,
+          "role": "container",
+          "tag": "div",
+          "name": null
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    }
+  ],
+  "frames": [],
+  "limits": {
+    "nodes": 900,
+    "ancestors": 32,
+    "edges": 1500,
+    "frames": 16,
+    "relations": 600,
+    "groups": 200,
+    "contexts": 200,
+    "chainDepth": 3
+  },
+  "truncated": false,
+  "limitations": [
+    "facts 来自 DOM/ARIA/computed style（无 CDP）：backendNodeId 是 DOM 顺序号，不是 CDP backendNodeId",
+    "aria-* 关系保留 DOM id 原值；投影时解析不到节点 id 的端点会被丢弃",
+    "只包含本帧事实：跨 frame 汇总由调用方提供 frames 子图（TS background 尚未聚合）"
+  ]
+}

@@ -46,8 +46,8 @@ test('renderMethodHelp 由 schema 生成单方法帮助', () => {
 });
 
 test('renderFlagUsage 生成帮助片段并排除位置参数', () => {
-  assert.deepEqual(renderFlagUsage('click'), ['[--text <text>]', '[--trusted]', '[--force]', '[--wait-timeout <n>]']);
-  assert.deepEqual(renderFlagUsage('fill'), ['[--value <text>]', '[--no-clear]', '[--trusted]', '[--force]', '[--wait-timeout <n>]']);
+  assert.deepEqual(renderFlagUsage('click'), ['[--text <text>]', '[--stable-ref <text>]', '[--trusted]', '[--force]', '[--wait-timeout <n>]', '[--button <text>]', '[--click-count <n>]']);
+  assert.deepEqual(renderFlagUsage('fill'), ['[--stable-ref <text>]', '[--value <text>]', '[--no-clear]', '[--trusted]', '[--force]', '[--wait-timeout <n>]']);
   assert.deepEqual(renderFlagUsage('not.a.method'), []);
 });
 

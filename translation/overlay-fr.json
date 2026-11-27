@@ -52,5 +52,7 @@
   "manualFrame": "Capturer une image",
   "manualDone": "Terminer",
   "manualCancel": "Annuler",
-  "manualFrames": " images"
+  "manualFrames": " images",
+  "borrowInactiveTitle": "L'Agent demande l'emprunt d'un onglet",
+  "helpCompactStatus": "L'Agent attend toujours que vous terminiez cette étape"
 }

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>longshot recovery pipeline</title>
+<style>
+  body { margin: 0; font: 14px/1.5 system-ui, sans-serif; }
+  #fixed-header { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: #21324a; color: #fff; }
+  #fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; height: 80px; background: #4a2132; color: #fff; }
+  #scroll-content { padding: 56px 0 80px; }
+  .row { height: 240px; border-bottom: 1px solid #dbe3ef; }
+</style>
+</head>
+<body>
+<header id="fixed-header">固定页眉（真实布局高度 56px）</header>
+<main id="scroll-content">
+  <section class="row">row 0</section>
+  <section class="row">row 1</section>
+  <section class="row">row 2</section>
+  <section class="row">row 3</section>
+  <section class="row">row 4</section>
+  <section class="row">row 5</section>
+</main>
+<footer id="fixed-footer">固定页脚（真实布局高度 80px）</footer>
+<pre id="recovery-summary-json" hidden></pre>
+<script type="module" src="./longshot-recovery-pipeline.js"></script>
+</body>
+</html>

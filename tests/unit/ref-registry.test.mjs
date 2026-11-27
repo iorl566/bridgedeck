@@ -39,3 +39,10 @@ test('RefRegistry sweep 清理过期项', () => {
   assert.equal(registry.sweep(5_000), 1);
   assert.equal(registry.size(1), 0);
 });
+
+test('RefRegistry 可按 stableRef 查找', () => {
+  const registry = new RefRegistry();
+  registry.register(1, '@e1', { backendNodeId: 1, frameId: 0, documentId: 'd', revision: 1 }, { stableRef: 's-1' });
+  assert.equal(registry.getByStableRef(1, 's-1').ref, '@e1');
+  assert.equal(registry.getByStableRef(1, 's-2'), null);
+});

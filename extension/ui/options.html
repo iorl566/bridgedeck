@@ -3,12 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <title>BridgeDeck · 设置</title>
-  <link rel="stylesheet" href="ui.css" />
+  <script src="direction.js"></script>
+<link rel="stylesheet" href="ui.css" />
+  <link rel="stylesheet" href="page-brand.css" />
 <script type="module" src="i18n.js"></script>
 </head>
 <body class="options">
   <header class="brand">
-    <img src="../icons/icon32.png" alt="" />
+    <img src="assets/brand-mark.svg" alt="" width="24" height="24" style="width:24px;height:24px" />
     <h1>BridgeDeck · 设置</h1>
   </header>
   <p class="hint">这些设置立刻对已打开和新建的任务生效，保存在当前浏览器配置里。</p>
@@ -52,6 +54,13 @@
         </span>
         <input id="cooperationGuard" type="checkbox" />
       </label>
+    <label class="field">
+      <span>
+        无障碍浮层（读屏可访问）
+        <small>开启后浮层使用开放 shadow DOM，并标注 role/aria-live，方便读屏与自动化审查；默认关闭。</small>
+      </span>
+      <input id="overlayA11y" type="checkbox" />
+    </label>
       <label class="field">
         <span>
           页面守卫
@@ -72,6 +81,8 @@
           <option value="fr">Français</option>
           <option value="it">Italiano</option>
           <option value="pt">Português</option>
+          <option value="ar">العربية</option>
+          <option value="he">עברית</option>
         </select>
       </label>
       <label class="field">

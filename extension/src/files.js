@@ -1,5 +1,6 @@
 // src/files.js —— 下载：点元素或导航后，等待该 tab 发起的下载完成（chrome.downloads）
 import { bridgeError, mapChromeError } from './errors.js';
+import { committedEffect } from './lib/transaction-ledger.js';
 import { execPage } from './inject.js';
 import { getTab, sleep } from './tabs.js';
 import { acquire, release, send as cdpSend } from './debugger.js';
@@ -24,6 +25,7 @@ function normalizeItem(item) {
     state: item.state,
     url: item.url || '',
     mime: item.mime || '',
+    ...committedEffect('download'),
   };
 }
 
@@ -117,7 +119,10 @@ export async function download(params = {}) {
         throw bridgeError('E_DOWNLOAD_FAILED', '下载中断：' + reason);
       }
     }
-    throw bridgeError('E_NO_DOWNLOAD', '等待 ' + timeoutMs + 'ms 没有观测到完成下载');
+    throw bridgeError('E_NO_DOWNLOAD', '等待 ' + timeoutMs + 'ms 没有观测到完成下载', {
+      effect_state: hasTarget ? 'unknown' : 'none',
+      dispatched: hasTarget,
+    });
   } finally {
     chrome.downloads.onCreated.removeListener(onCreated);
   }

@@ -1,0 +1,175 @@
+  // §G 签名与读取：nodeSignature、ref 签名、fieldInfo、actionRead
+  // ===========================================================================
+  function fnv1a(value) {
+    const text = String(value == null ? '' : value);
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return ('0000000' + hash.toString(16)).slice(-8);
+  }
+
+  const SIGNATURE_ATTRS = [
+    'id', 'class', 'name', 'type', 'role', 'href', 'src', 'alt', 'title',
+    'aria-label', 'aria-checked', 'aria-expanded', 'aria-selected', 'data-testid', 'placeholder',
+  ];
+
+  function nodeSignatureOf(el) {
+    const tag = el.tagName.toLowerCase();
+    const attrs = [];
+    for (const name of SIGNATURE_ATTRS) {
+      const value = el.getAttribute(name);
+      if (value != null) attrs.push(name + '=' + value);
+    }
+    const text = normalizeText(el.textContent || '');
+    const sensitive = sensitiveField(el);
+    const rawValue = 'value' in el ? String(el.value == null ? '' : el.value) : '';
+    const rect = el.getBoundingClientRect();
+    return {
+      tag: tag,
+      id: el.id || '',
+      name: normalizeText(el.getAttribute('name') || ''),
+      textLength: text.length,
+      textHash: fnv1a(text),
+      valueHash: fnv1a(sensitive ? '********' : rawValue),
+      attrsHash: fnv1a(attrs.join('\u0001')),
+      geometry: [Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height)],
+      disabled: el.disabled === true,
+      checked: 'checked' in el ? el.checked === true : null,
+    };
+  }
+
+  /** 单节点签名：节点不存在/ref 失效时返回 present:false（不抛错，供调用方区分 detached 与 changed）。 */
+  function actionNodeSignature(args) {
+    try {
+      const el = resolveElement(args);
+      return { present: true, ...nodeSignatureOf(el), revision: currentRevision() };
+    } catch (error) {
+      return {
+        present: false,
+        code: (error && error.code) || 'E_NOT_FOUND',
+        revision: currentRevision(),
+      };
+    }
+  }
+
+  /** 批量签名：给 cooperate sync 在观测时一次性记录当前 ref 表的节点状态。 */
+  function actionRefSignatures(args) {
+    const limit = Math.min(Math.max(Number(args.limit) || 200, 1), 500);
+    const signatures = [];
+    for (const [refId, el] of state.refs) {
+      if (!el || el.isConnected !== true) continue;
+      signatures.push({ ref: '@e' + refId, ...nodeSignatureOf(el) });
+      if (signatures.length >= limit) break;
+    }
+    return { signatures: signatures, count: signatures.length, limit: limit, revision: currentRevision() };
+  }
+
+  // ---------- v0.2：读取与结构化导出 ----------
+
+  function reverseRef(el) {
+    for (const entry of state.refs) {
+      if (entry[1] === el) return '@e' + entry[0];
+    }
+    return undefined;
+  }
+
+  function fieldInfo(el) {
+    const tag = el.tagName.toLowerCase();
+    const isCe = el.isContentEditable === true;
+    const type = tag === 'input'
+      ? normalizeText(el.getAttribute('type') || 'text').toLowerCase()
+      : (tag === 'select' ? 'select' : (tag === 'textarea' ? 'textarea' : (isCe ? 'contenteditable' : tag)));
+    const info = {
+      tag: tag,
+      type: type,
+      name: normalizeText(el.getAttribute('name') || ''),
+      disabled: el.disabled === true,
+      readonly: el.readOnly === true || el.hasAttribute('readonly'),
+      required: el.required === true || el.hasAttribute('required'),
+      contentEditable: isCe,
+    };
+    const ref = reverseRef(el);
+    if (ref) info.ref = ref;
+    const placeholder = normalizeText(el.getAttribute('placeholder') || '');
+    if (placeholder) info.placeholder = placeholder;
+    if (tag === 'select') {
+      info.value = el.value;
+      info.selectedOptions = Array.from(el.selectedOptions || []).map(function (option) {
+        return { value: option.value, label: normalizeText(option.textContent || '') };
+      });
+    } else if (tag === 'input' && (type === 'checkbox' || type === 'radio')) {
+      info.value = el.value;
+      info.checked = el.checked === true;
+    } else if (isCe) {
+      info.value = normalizeText(el.innerText || '');
+    } else if ('value' in el) {
+      info.value = sensitiveField(el) ? '********' : String(el.value == null ? '' : el.value);
+    } else {
+      info.value = normalizeText(el.textContent || '');
+    }
+    if (tag === 'input' && el.files) {
+      info.files = Array.from(el.files).map(function (file) { return file.name; });
+    }
+    return info;
+  }
+
+  function readFieldsFrom(el, fields) {
+    const out = {};
+    for (const field of fields) {
+      if (!field || typeof field !== 'object') continue;
+      const key = String(field.key || field.name || 'field');
+      const read = String(field.read || 'text');
+      if (read === 'value') {
+        out[key] = sensitiveField(el) ? '********' : ('value' in el ? el.value : normalizeText(el.textContent || ''));
+      } else if (read === 'attribute') {
+        const name = String(field.attribute || '');
+        out[key] = name
+          ? (sensitiveField(el) && name.toLowerCase() === 'value' ? '********' : el.getAttribute(name))
+          : null;
+      } else if (read === 'checked') {
+        out[key] = el.checked === true;
+      } else {
+        out[key] = normalizeText(el.textContent || '');
+      }
+    }
+    return out;
+  }
+
+  function actionReadFields(args) {
+    const el = resolveElement(args);
+    return { fields: [readFieldsFrom(el, Array.isArray(args.fields) ? args.fields : [])] };
+  }
+
+  function actionRead(args) {
+    if (Array.isArray(args.fields) && args.fields.length) return actionReadFields(args);
+    if (args.all === true) {
+      const nodes = document.querySelectorAll(
+        'input:not([type=hidden]),textarea,select,[contenteditable=""],[contenteditable="true"]',
+      );
+      const fields = [];
+      for (const el of nodes) {
+        if (!isVisible(el)) continue;
+        fields.push(fieldInfo(el));
+        if (fields.length >= 500) break;
+      }
+      return { fields: fields };
+    }
+    return { fields: [fieldInfo(resolveElement(args))] };
+  }
+
+  function cellText(cell) {
+    return normalizeText(cell.textContent || '');
+  }
+
+  function rowIsHeader(row) {
+    if (!row || !row.cells || !row.cells.length) return false;
+    for (const cell of row.cells) {
+      if (cell.tagName !== 'TH') return false;
+    }
+    return true;
+  }
+
+
+  // ===========================================================================

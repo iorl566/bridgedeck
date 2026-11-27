@@ -137,7 +137,7 @@
   "界面语言 / Language": "Lingua dell'interfaccia / Language",
   "保存图片": "Salva immagine",
   "停止并保存": "Interrompi e salva",
-  "复制录制指令": "Copia le istruzioni di registrazione",
+  "复制录制指令": "Copia l'istruzione di registrazione",
   "复制给 Agent 的指令": "Copia istruzioni per l'Agent",
   "复制给 Agent 的提示词": "Copia il prompt per l'Agent",
   "已打开手动长截图页": "Aperta la pagina di cattura manuale",
@@ -149,7 +149,7 @@
   "录制完成": "Registrazione completata",
   "手动录制正在运行的任务": "Registra manualmente un'attività in corso",
   "打开录制页": "Apri pagina di registrazione",
-  "操作主题（可选）": "Argomento (facoltativo)",
+  "操作主题（可选）": "Tema dell'operazione (facoltativo)",
   "整页 · 自动滚动": "Pagina intera · Automatica",
   "时长上限（1–600 秒）": "Durata massima (1–600 secondi)",
   "标准 1280/15": "Standard 1280/15",
@@ -223,5 +223,14 @@
   "允许人工协助说明": "Informazioni sulle richieste di aiuto umano",
   "输入锁说明": "Informazioni sul blocco dell'input",
   "Agent 控制时锁定页面输入": "Blocca l'input della pagina durante il controllo dell'Agent",
-  "复制实例 ID": "Copia ID istanza"
+  "复制实例 ID": "Copia ID istanza",
+  "起始网址（可选）": "URL di avvio (facoltativo)",
+  "例如：发布一篇文章": "es. pubblicare un articolo",
+  "协议": "Protocollo",
+  "生成一段给 Agent 的录制指令：Agent 启动录制后你正常操作，结束后 Agent 读取写出的 trace 目录包，就能自动完成同类任务。": "Genera un'istruzione di registrazione per l'Agent: dopo l'avvio registra normalmente; al termine l'Agent legge la cartella trace esportata e automatizza attività simili.",
+  "录制给 Agent": "Registra per l'Agent",
+  "直接录制": "Registra direttamente",
+  "录制指令预览": "Anteprima dell'istruzione di registrazione",
+  "无障碍浮层（读屏可访问）": "Overlay accessibili (compatibili con screen reader)",
+  "开启后浮层使用开放 shadow DOM，并标注 role/aria-live，方便读屏与自动化审查；默认关闭。": "Usa shadow DOM aperto con role/aria-live per screen reader e strumenti di audit. Disattivato per impostazione predefinita."
 }

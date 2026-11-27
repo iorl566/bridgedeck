@@ -1,0 +1,16 @@
+{
+  "schema": "bdeval-thresholds/1",
+  "note": "W6 eval 门禁阈值。任一不满足 → tools/eval-report.mjs 与 tools/eval-from-e2e.mjs 退出码非 0。阈值只允许下调需在报告中说明理由。",
+  "minCases": 57,
+  "minPrecision": 0.98,
+  "minRecall": 0.98,
+  "maxSkipRate": 0.05,
+  "maxUnverifiedRate": 0.2,
+  "maxFalsePositives": 0,
+  "maxFalseNegatives": 0,
+  "maxMissedNegatives": 0,
+  "maxUnexpected": 0,
+  "maxInvalid": 0,
+  "requiredStatuses": ["passed", "failed", "unverified"],
+  "requiredOracleLevels": ["offline-fake", "dom-real"]
+}

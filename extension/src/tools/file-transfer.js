@@ -1,5 +1,6 @@
 // src/tools/file-transfer.js —— upload（input 赋值 / 文件选择器拦截 / 拖放）。
 import { bridgeError } from '../errors.js';
+import { committedEffect } from '../lib/transaction-ledger.js';
 import { execPage } from '../inject.js';
 import { getTab, sleep } from '../tabs.js';
 import { acquire, onEvent, release, send as cdpSend } from '../debugger.js';
@@ -64,7 +65,7 @@ export async function upload(params = {}) {
       await cdpSend(tabId, 'Input.dispatchDragEvent', { type: 'dragEnter', x, y, data: dragData });
       await cdpSend(tabId, 'Input.dispatchDragEvent', { type: 'dragOver', x, y, data: dragData });
       await cdpSend(tabId, 'Input.dispatchDragEvent', { type: 'drop', x, y, data: dragData });
-      return { ok: true, via: 'drop', names: paths.map((item) => item.split(/[\\/]/).pop()) };
+      return { ok: true, ...committedEffect('upload'), via: 'drop', names: paths.map((item) => item.split(/[\\/]/).pop()) };
     } finally {
       await release(tabId, 'upload-drop').catch(() => {});
     }
@@ -78,7 +79,7 @@ export async function upload(params = {}) {
         await acquire(tabId, 'upload');
         try {
           if (await setFirstFileInputFiles(tabId, directPaths, params.selector)) {
-            return { ok: true, names: directPaths.map((item) => item.split(/[\\/]/).pop()), via: 'input-path' };
+            return { ok: true, ...committedEffect('upload'), names: directPaths.map((item) => item.split(/[\\/]/).pop()), via: 'input-path' };
           }
         } finally {
           await release(tabId, 'upload').catch(() => {});
@@ -127,7 +128,7 @@ export async function upload(params = {}) {
       if (paths.length) {
         try {
           if (await setFirstFileInputFiles(tabId, paths, params.selector)) {
-            return { ok: true, names: paths.map((item) => item.split(/[\\/]/).pop()), via: 'hidden-input' };
+            return { ok: true, ...committedEffect('upload'), names: paths.map((item) => item.split(/[\\/]/).pop()), via: 'hidden-input' };
           }
         } catch {
           // 继续尝试 base64 兜底
@@ -136,12 +137,12 @@ export async function upload(params = {}) {
       // 有些站点用程序化 click 打开选择器，CDP 拦截不到；退回给页面里的隐藏 file input 赋值
       if (Array.isArray(params.files) && params.files.length) {
         const fallback = await execPage(tabId, 'upload-first', { files: params.files });
-        return { ok: true, names: (fallback && fallback.names) || [], via: 'hidden-input' };
+        return { ok: true, ...committedEffect('upload'), names: (fallback && fallback.names) || [], via: 'hidden-input' };
       }
       throw bridgeError('E_NO_FILE_CHOOSER', '点击后没有出现文件选择器，且没有可赋值的 input[type=file]');
     }
     await cdpSend(tabId, 'DOM.setFileInputFiles', { files: paths, backendNodeId: chooser.backendNodeId });
-    return { ok: true, names: paths.map((item) => item.split(/[\\\\/]/).pop()), via: 'chooser' };
+    return { ok: true, ...committedEffect('upload'), names: paths.map((item) => item.split(/[\\/]/).pop()), via: 'chooser' };
   } finally {
     if (unsubscribe) unsubscribe();
     await cdpSend(tabId, 'Page.setInterceptFileChooserDialog', { enabled: false }).catch(() => {});

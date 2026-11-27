@@ -1,75 +1,68 @@
-# 发布签名与上架准备
+# 发布签名与上架准备（0.3.1）
 
-`dist/release.json` 当前 **unsigned**；签名/上架需要私钥和商店权限，属于外部阻塞。
+> 目标：`dist/release.json` 由**生产 Ed25519 私钥**签名，客户端可离线验证；扩展包可提交 Edge/Chrome 商店。
+> 当前本地产物可能使用临时验证密钥（keyId `4ee9753d5d93f35d`），**不可对外分发**；正式发布必须由 CI Secret 签名。
+> 安全：私钥/Token/API Key 只放密码库与 GitHub Secrets，禁止写入仓库、聊天或日志。
 
-## 1. 预检
+## 1. 密钥与密钥模式
 
-```sh
-node tools/release-preflight.mjs
-node tools/release-preflight.mjs --json
+| 项 | 路径/Secret | 说明 |
+| --- | --- | --- |
+| 生产私钥 | GitHub Secret `RELEASE_SIGNING_PRIVATE_KEY` | Ed25519 PEM 原文；离线备份 |
+| 生产公钥 | `lib/release-public-key.mjs`、`tools/release-public-key.production.pem` | 客户端内置验证 |
+| keyId | `RELEASE_PUBLIC_KEY_ID`（GitHub Actions Variable/Secret） | 例如生产 keyId；必须在 `release.json` 与客户端一致 |
+| 本地验证密钥 | `.tmp/release-verify-031/keys/release-private.pem` | 仅本地 dry-run，不得发布 |
+
+生成与切换：
+
+```powershell
+openssl genpkey -algorithm ED25519 -out bridge-release-private.pem
+openssl pkey -in bridge-release-private.pem -pubout -out bridge-release-public.pem
+node tools/release-key-mode.mjs production   # 以脚本参数为准；把生产公钥写入 lib/release-public-key.mjs
 ```
 
-检查：
+轮换：生成新对 → 更新公钥与 keyId → 发新版本清单；不要在同一版本内静默换钥。
 
-- 每个 artifact 是否存在；
-- 实际字节数/sha256 是否与 manifest 一致；
-- 制品版本是否混合（例如 0.1.7 CLI + 0.1.8 extension）；
-- `release.json` 是否已签名；
-- 提供 `--key` 时只校验私钥类型，不签名。
+## 2. 构建 + 签名 + 预检（顺序固定）
 
-当前（2026-11-17）状态：0.1.7 制品已移到 `dist/archive-0.1.7/`，`release.json` 只含 0.1.8：
-
-```text
-[ok] darwin-arm64/darwin-x64/linux-arm64/linux-x64 portable
-[ok] win32-x64 portable
-[ok] CLI bundle
-[ok] DSH plugin
-[ok] extension
-[ok] BridgeDeckSetup-0.1.8.exe
-blocker: release.json 缺少签名
-```
-
-0.1.8 的 macOS/Linux/Windows portable、CLI bundle、DSH plugin、extension、Setup exe 都已重建；只剩签名。
-
-## 2. 重新构建全部制品
-
-```sh
+```powershell
 node tools/build-extension.mjs
-node tools/build-cli.mjs
+node tools/verify-extension-package.mjs
 node tools/build-cli-bundle.mjs
-node tools/build-dsh-plugin.mjs
-node tools/build-installer.ps1
-node tools/release.mjs
+node tools/build-setup-exe.mjs
+tar.exe -a -cf dist/BridgeDeck-dsh-plugin-0.3.1.zip dsh-plugin
+node tools/release-brand-scan.mjs
+node tools/release.mjs --sign-ed25519 <私钥 PEM> [--public-key <生产公钥>]
+node tools/release-preflight.mjs
+node tools/release.mjs --check --public-key dist/release-public.pem
 ```
 
-以各自脚本的实际参数为准；先确保所有制品都是 0.1.8。
+要求：
 
-## 3. 签名
+- `release-brand-scan` **必须 PASS**（源码 + 已构建压缩包均无对标品牌字眼）；
+- `release-preflight` **必须 PASS**（版本四方一致、制品字节/哈希、SHA256SUMS、签名、体积上限、协议/错误码/生成物一致）；
+- `release.json` 的 `signature.keyId` 必须等于客户端内置生产 keyId；
+- 发布前不得再改版本号或重新打包，否则哈希/签名失效。
 
-```sh
-node tools/release.mjs --sign-ed25519 C:\keys\bridge-release.pem
-```
+## 3. 客户端验证
 
-- 私钥不能提交到仓库；
-- 公钥写入 `dist/release-public.pem`，并同步到 `lib/release-public-key.mjs`；
-- 验证：
-  ```sh
-  node tools/release.mjs --verify --public-key dist/release-public.pem
-  node tools/release-preflight.mjs
-  ```
+- 下载 `release.json`、`SHA256SUMS`、`release-public.pem` 与全部制品；
+- `node tools/release.mjs --check --public-key release-public.pem`；
+- 客户端更新器按内置公钥验签，验签失败拒绝更新。
 
-## 4. 上架
+## 4. 商店与 GitHub
 
-- GitHub Release：上传 `release.json`、`release-public.pem`、extension zip、CLI 包、安装包；
-- Edge Add-ons：上传 extension zip，填写权限说明和隐私说明；
-- 商店审核通过前不要改版本号或重新打包，否则哈希/签名失效。
+- GitHub Release：tag 触发 `release-extension.yml` / `release-cli.yml` / `release-dsh-plugin.yml` / `sign-release.yml`；
+- Edge 商店：`release-store.yml`（需 `EDGE_API_KEY`、`EDGE_PRODUCT_ID`），或按 `docs/STORE-PUBLISH-RUNBOOK.md` 手动 API；
+- Chrome Web Store：同一扩展 zip，按商店后台流程提交（如启用）；
+- 商店 listing 文案/截图/隐私见 `docs/STORE-LISTING.md`、`docs/STORE-REVIEW.md`。
 
-## 5. 外部阻塞
+## 5. 门禁清单（发布前）
 
-以下需要用户提供，不能由 Agent 自行完成：
-
-- Ed25519 私钥（或签名服务）；
-- GitHub release 写权限；
-- Edge Partner Center 账号/产品权限。
-
-没有这些材料时，只能完成预检、打包和文档，不能完成签名/上架。
+- [ ] `npm run brand:scan` PASS
+- [ ] `release-preflight` PASS
+- [ ] `release --check` PASS
+- [ ] 9 个制品齐全（扩展/Setup/5 平台 CLI/CLI bundle/插件）
+- [ ] 商店截图与图标已更新（`docs/assets/store/store-01..05.png`、`icon-300.png`）
+- [ ] 隐私政策 URL 可访问
+- [ ] 凭证未出现在仓库/日志；已吊销聊天中泄露的 PAT/API Key

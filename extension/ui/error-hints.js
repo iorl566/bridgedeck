@@ -1,0 +1,643 @@
+// 该文件由 translation/build-error-hints.mjs 从 translation/error-hints.json 生成；请勿手改。
+// 错误码→用户提示的 12 语言文案；UI 只展示提示，不直接展示英文协议错误。
+
+export const HINT_LANGS = ["zh","en","ja","ko","de","es","fr","it","pt","zh-TW","ar","he"];
+export const HINT_FALLBACK_LANG = "en";
+export const ERROR_HINT_CODES = [
+  "E_BAD_ARG",
+  "E_NOT_FOUND",
+  "E_STALE_REF",
+  "E_TIMEOUT",
+  "E_NAV_FAIL",
+  "E_NO_TAB",
+  "E_UNKNOWN_METHOD",
+  "E_INTERNAL",
+  "E_DEBUGGER_BUSY",
+  "E_BORROW_DENIED",
+  "E_BORROW_CONFLICT",
+  "E_BORROW_TIMEOUT",
+  "E_HELP_DISABLED",
+  "E_NO_DOWNLOAD",
+  "E_DOWNLOAD_FAILED",
+  "E_TOO_LARGE",
+  "E_CONTEXT_STALE",
+  "E_OBSERVATION_STALE",
+  "E_SESSION_PAUSED",
+  "E_FORBIDDEN",
+  "E_INPUT_BUSY",
+  "E_READ_ONLY",
+  "E_TARGET_MISMATCH",
+  "E_OBSCURED",
+  "E_NOT_ACTIONABLE",
+  "E_NO_BROWSER",
+  "E_NO_SESSION",
+  "E_PAIR_INVALID",
+  "E_PAIR_REQUIRED",
+  "E_AUTH_FAILED",
+  "E_RATE_LIMITED",
+  "E_PROTOCOL_UNSUPPORTED",
+  "E_UNSUPPORTED_CAPABILITY",
+  "E_UNSUPPORTED_REMOTE",
+  "E_CONTROL_NOT_HELD",
+];
+
+export const ERROR_HINTS = {
+  "E_BAD_ARG": {
+    "zh": "参数不正确：请检查命令参数后重试。",
+    "en": "Invalid argument: check the command arguments and try again.",
+    "ja": "引数が正しくありません。コマンド引数を確認して再試行してください。",
+    "ko": "인자가 올바르지 않습니다. 명령 인자를 확인한 뒤 다시 시도하세요.",
+    "de": "Ungültiges Argument: Prüfen Sie die Befehlsargumente und versuchen Sie es erneut.",
+    "es": "Argumento no válido: revisa los argumentos del comando y vuelve a intentarlo.",
+    "fr": "Argument non valide : vérifiez les arguments de la commande puis réessayez.",
+    "it": "Argomento non valido: controlla gli argomenti del comando e riprova.",
+    "pt": "Argumento inválido: verifique os argumentos do comando e tente novamente.",
+    "zh-TW": "參數不正確：請檢查指令參數後重試。",
+    "ar": "وسيط غير صالح: تحقق من وسائط الأمر ثم أعد المحاولة.",
+    "he": "ארגומנט לא תקין: בדוק את ארגומנטי הפקודה ונסה שוב.",
+  },
+  "E_NOT_FOUND": {
+    "zh": "没有找到目标：请确认元素或对象仍然存在。",
+    "en": "Target not found: make sure the element or object still exists.",
+    "ja": "対象が見つかりません。要素またはオブジェクトが存在するか確認してください。",
+    "ko": "대상을 찾을 수 없습니다. 요소나 객체가 여전히 있는지 확인하세요.",
+    "de": "Ziel nicht gefunden: Stellen Sie sicher, dass Element oder Objekt noch existiert.",
+    "es": "No se encontró el destino: comprueba que el elemento u objeto siga existiendo.",
+    "fr": "Cible introuvable : vérifiez que l'élément ou l'objet existe toujours.",
+    "it": "Destinazione non trovata: verifica che l'elemento o l'oggetto esista ancora.",
+    "pt": "Destino não encontrado: confirme se o elemento ou objeto ainda existe.",
+    "zh-TW": "找不到目標：請確認元素或物件仍然存在。",
+    "ar": "تعذر العثور على الهدف: تأكد من أن العنصر أو الكائن ما زال موجودًا.",
+    "he": "היעד לא נמצא: ודא שהאלמנט או האובייקט עדיין קיימים.",
+  },
+  "E_STALE_REF": {
+    "zh": "页面已变化：请重新 observe 后再操作。",
+    "en": "The page changed: observe again before acting.",
+    "ja": "ページが変更されました。observe し直してから操作してください。",
+    "ko": "페이지가 변경되었습니다. 다시 observe한 뒤 작업하세요.",
+    "de": "Die Seite hat sich geändert: beobachten Sie sie erneut, bevor Sie handeln.",
+    "es": "La página cambió: vuelve a observar antes de actuar.",
+    "fr": "La page a changé : relancez une observation avant d'agir.",
+    "it": "La pagina è cambiata: osserva di nuovo prima di agire.",
+    "pt": "A página mudou: observe novamente antes de agir.",
+    "zh-TW": "頁面已變更：請重新 observe 後再操作。",
+    "ar": "تغيّرت الصفحة: أعد المراقبة قبل التنفيذ.",
+    "he": "הדף השתנה: בצע observe מחדש לפני הפעולה.",
+  },
+  "E_TIMEOUT": {
+    "zh": "操作超时：页面可能无响应，请刷新后重试。",
+    "en": "Operation timed out: the page may be unresponsive; refresh and retry.",
+    "ja": "操作がタイムアウトしました。ページが応答しない可能性があります。再読み込みして再試行してください。",
+    "ko": "작업 시간이 초과되었습니다. 페이지가 응답하지 않을 수 있으니 새로 고친 뒤 다시 시도하세요.",
+    "de": "Zeitüberschreitung: Die Seite reagiert möglicherweise nicht. Aktualisieren und erneut versuchen.",
+    "es": "La operación agotó el tiempo: la página puede no responder; actualiza y reintenta.",
+    "fr": "Délai dépassé : la page ne répond peut-être pas ; actualisez puis réessayez.",
+    "it": "Operazione scaduta: la pagina potrebbe non rispondere; aggiorna e riprova.",
+    "pt": "A operação expirou: a página pode não responder; atualize e tente novamente.",
+    "zh-TW": "操作逾時：頁面可能無回應，請重新整理後重試。",
+    "ar": "انتهت مهلة العملية: قد لا تستجيب الصفحة؛ حدّثها ثم أعد المحاولة.",
+    "he": "פסק הזמן של הפעולה: ייתכן שהדף אינו מגיב; רענן ונסה שוב.",
+  },
+  "E_NAV_FAIL": {
+    "zh": "页面导航失败：请检查地址与网络后重试。",
+    "en": "Navigation failed: check the URL and network, then retry.",
+    "ja": "ページ遷移に失敗しました。URL とネットワークを確認して再試行してください。",
+    "ko": "페이지 이동에 실패했습니다. 주소와 네트워크를 확인한 뒤 다시 시도하세요.",
+    "de": "Navigation fehlgeschlagen: Prüfen Sie URL und Netzwerk und versuchen Sie es erneut.",
+    "es": "Falló la navegación: revisa la URL y la red, y vuelve a intentarlo.",
+    "fr": "Échec de la navigation : vérifiez l'URL et le réseau puis réessayez.",
+    "it": "Navigazione non riuscita: controlla URL e rete, poi riprova.",
+    "pt": "Falha na navegação: verifique o URL e a rede e tente novamente.",
+    "zh-TW": "頁面導覽失敗：請檢查網址與網路後重試。",
+    "ar": "فشل الانتقال إلى الصفحة: تحقق من العنوان والشبكة ثم أعد المحاولة.",
+    "he": "הניווט נכשל: בדוק את הכתובת והרשת ונסה שוב.",
+  },
+  "E_NO_TAB": {
+    "zh": "找不到目标标签页：请确认标签页仍然打开。",
+    "en": "Target tab not found: make sure the tab is still open.",
+    "ja": "対象のタブが見つかりません。タブが開いているか確認してください。",
+    "ko": "대상 탭을 찾을 수 없습니다. 탭이 열려 있는지 확인하세요.",
+    "de": "Ziel-Tab nicht gefunden: Stellen Sie sicher, dass der Tab noch geöffnet ist.",
+    "es": "No se encontró la pestaña de destino: comprueba que siga abierta.",
+    "fr": "Onglet cible introuvable : vérifiez qu'il est toujours ouvert.",
+    "it": "Scheda di destinazione non trovata: verifica che sia ancora aperta.",
+    "pt": "Aba de destino não encontrada: confirme se ela ainda está aberta.",
+    "zh-TW": "找不到目標分頁：請確認分頁仍然開啟。",
+    "ar": "تعذر العثور على علامة التبويب الهدف: تأكد من أنها ما زالت مفتوحة.",
+    "he": "לשונית היעד לא נמצאה: ודא שהיא עדיין פתוחה.",
+  },
+  "E_UNKNOWN_METHOD": {
+    "zh": "未知方法：请同步升级 CLI 与扩展后重试。",
+    "en": "Unknown method: update the CLI and extension together, then retry.",
+    "ja": "不明なメソッドです。CLI と拡張機能をそろえて更新してから再試行してください。",
+    "ko": "알 수 없는 메서드입니다. CLI와 확장을 함께 업데이트한 뒤 다시 시도하세요.",
+    "de": "Unbekannte Methode: Aktualisieren Sie CLI und Erweiterung gemeinsam und versuchen Sie es erneut.",
+    "es": "Método desconocido: actualiza el CLI y la extensión a la vez y vuelve a intentarlo.",
+    "fr": "Méthode inconnue : mettez à jour le CLI et l'extension ensemble puis réessayez.",
+    "it": "Metodo sconosciuto: aggiorna CLI ed estensione insieme e riprova.",
+    "pt": "Método desconhecido: atualize o CLI e a extensão juntos e tente novamente.",
+    "zh-TW": "未知方法：請同步升級 CLI 與擴充功能後重試。",
+    "ar": "طريقة غير معروفة: حدّث واجهة سطر الأوامر والإضافة معًا ثم أعد المحاولة.",
+    "he": "שיטה לא מוכרת: עדכן יחד את ה-CLI והתוסף ונסה שוב.",
+  },
+  "E_INTERNAL": {
+    "zh": "扩展内部错误：请重试；持续失败请重新加载扩展。",
+    "en": "Extension internal error: retry; if it persists, reload the extension.",
+    "ja": "拡張機能の内部エラーです。再試行し、続く場合は拡張機能を再読み込みしてください。",
+    "ko": "확장 내부 오류입니다. 다시 시도하고 계속되면 확장을 다시 로드하세요.",
+    "de": "Interner Fehler der Erweiterung: versuchen Sie es erneut; andernfalls laden Sie die Erweiterung neu.",
+    "es": "Error interno de la extensión: reintenta; si persiste, recarga la extensión.",
+    "fr": "Erreur interne de l'extension : réessayez ; si cela persiste, rechargez l'extension.",
+    "it": "Errore interno dell'estensione: riprova; se persiste, ricarica l'estensione.",
+    "pt": "Erro interno da extensão: tente novamente; se persistir, recarregue a extensão.",
+    "zh-TW": "擴充功能內部錯誤：請重試；若持續失敗請重新載入擴充功能。",
+    "ar": "خطأ داخلي في الإضافة: أعد المحاولة، وإذا استمر فأعد تحميل الإضافة.",
+    "he": "שגיאה פנימית בתוסף: נסה שוב; אם היא נמשכת, טען מחדש את התוסף.",
+  },
+  "E_DEBUGGER_BUSY": {
+    "zh": "调试会话被占用：请关闭其它调试会话后重试。",
+    "en": "Debugger busy: close the other debugging session and retry.",
+    "ja": "デバッガーが使用中です。他のデバッグセッションを閉じて再試行してください。",
+    "ko": "디버거가 사용 중입니다. 다른 디버깅 세션을 닫은 뒤 다시 시도하세요.",
+    "de": "Debugger belegt: Schließen Sie die andere Debug-Sitzung und versuchen Sie es erneut.",
+    "es": "Depurador ocupado: cierra la otra sesión de depuración y reintenta.",
+    "fr": "Débogueur occupé : fermez l'autre session de débogage puis réessayez.",
+    "it": "Debugger occupato: chiudi l'altra sessione di debug e riprova.",
+    "pt": "Depurador ocupado: feche a outra sessão de depuração e tente novamente.",
+    "zh-TW": "偵錯工作階段被佔用：請關閉其它偵錯工作階段後重試。",
+    "ar": "أداة التصحيح مشغولة: أغلق جلسة التصحيح الأخرى ثم أعد المحاولة.",
+    "he": "המנפה תפוס: סגור את הפעלת הניפוי האחרת ונסה שוב.",
+  },
+  "E_BORROW_DENIED": {
+    "zh": "用户拒绝借用该标签页。",
+    "en": "The user declined borrowing this tab.",
+    "ja": "ユーザーがこのタブの借用を拒否しました。",
+    "ko": "사용자가 이 탭의 대여를 거부했습니다.",
+    "de": "Der Nutzer hat das Ausleihen dieses Tabs abgelehnt.",
+    "es": "El usuario rechazó prestar esta pestaña.",
+    "fr": "L'utilisateur a refusé de prêter cet onglet.",
+    "it": "L'utente ha rifiutato di prestare questa scheda.",
+    "pt": "O usuário recusou emprestar esta aba.",
+    "zh-TW": "使用者拒絕借用該分頁。",
+    "ar": "رفض المستخدم استعارة علامة التبويب هذه.",
+    "he": "המשתמש סירב להשאיל את הלשונית הזו.",
+  },
+  "E_BORROW_CONFLICT": {
+    "zh": "标签页正在交接控制权：请稍后重试。",
+    "en": "The tab is switching controllers: retry shortly.",
+    "ja": "タブの制御権を切り替え中です。しばらくしてから再試行してください。",
+    "ko": "탭 제어권을 전환하는 중입니다. 잠시 후 다시 시도하세요.",
+    "de": "Der Tab wechselt gerade die Steuerung: Versuchen Sie es gleich noch einmal.",
+    "es": "La pestaña está cambiando de control: reintenta en unos segundos.",
+    "fr": "L'onglet change de contrôle : réessayez dans un instant.",
+    "it": "La scheda sta cambiando controllo: riprova tra poco.",
+    "pt": "A aba está trocando de controle: tente novamente em instantes.",
+    "zh-TW": "分頁正在交接控制權：請稍後重試。",
+    "ar": "علامة التبويب بصدد نقل التحكم: أعد المحاولة بعد قليل.",
+    "he": "הלשונית מחליפה שליטה: נסה שוב בעוד רגע.",
+  },
+  "E_BORROW_TIMEOUT": {
+    "zh": "等待借用确认超时。",
+    "en": "Timed out waiting for the borrow confirmation.",
+    "ja": "借用の確認待ちがタイムアウトしました。",
+    "ko": "대여 확인 대기 시간이 초과되었습니다.",
+    "de": "Zeitüberschreitung beim Warten auf die Ausleihbestätigung.",
+    "es": "Se agotó el tiempo de espera de la confirmación de préstamo.",
+    "fr": "Délai dépassé en attendant la confirmation de prêt.",
+    "it": "Tempo scaduto in attesa della conferma di prestito.",
+    "pt": "Tempo esgotado aguardando a confirmação de empréstimo.",
+    "zh-TW": "等待借用確認逾時。",
+    "ar": "انتهت مهلة انتظار تأكيد الاستعارة.",
+    "he": "פסק הזמן של המתנה לאישור ההשאלה.",
+  },
+  "E_HELP_DISABLED": {
+    "zh": "人工协助已关闭：请在设置页开启后重试。",
+    "en": "Human help is disabled: enable it in settings and retry.",
+    "ja": "人による支援が無効です。設定で有効にしてから再試行してください。",
+    "ko": "사람의 도움이 비활성화되어 있습니다. 설정에서 활성화한 뒤 다시 시도하세요.",
+    "de": "Menschliche Hilfe ist deaktiviert: Aktivieren Sie sie in den Einstellungen und versuchen Sie es erneut.",
+    "es": "La ayuda humana está desactivada: actívala en los ajustes y reintenta.",
+    "fr": "L'aide humaine est désactivée : activez-la dans les réglages puis réessayez.",
+    "it": "L'aiuto umano è disattivato: attivalo nelle impostazioni e riprova.",
+    "pt": "A ajuda humana está desativada: ative-a nas configurações e tente novamente.",
+    "zh-TW": "人工協助已關閉：請在設定頁開啟後重試。",
+    "ar": "المساعدة البشرية معطّلة: فعّلها في الإعدادات ثم أعد المحاولة.",
+    "he": "עזרה אנושית מושבתת: הפעל אותה בהגדרות ונסה שוב.",
+  },
+  "E_NO_DOWNLOAD": {
+    "zh": "没有观测到下载完成：请检查下载设置后重试。",
+    "en": "No completed download observed: check download settings and retry.",
+    "ja": "ダウンロードの完了を確認できませんでした。ダウンロード設定を確認して再試行してください。",
+    "ko": "다운로드 완료를 확인하지 못했습니다. 다운로드 설정을 확인한 뒤 다시 시도하세요.",
+    "de": "Kein abgeschlossener Download erkannt: Prüfen Sie die Download-Einstellungen und versuchen Sie es erneut.",
+    "es": "No se observó ninguna descarga completada: revisa los ajustes de descargas y reintenta.",
+    "fr": "Aucun téléchargement terminé observé : vérifiez les réglages de téléchargement puis réessayez.",
+    "it": "Nessun download completato rilevato: controlla le impostazioni dei download e riprova.",
+    "pt": "Nenhum download concluído observado: verifique as configurações de download e tente novamente.",
+    "zh-TW": "沒有觀測到下載完成：請檢查下載設定後重試。",
+    "ar": "لم يُلاحظ اكتمال أي تنزيل: تحقق من إعدادات التنزيل ثم أعد المحاولة.",
+    "he": "לא נצפה הורדה שהושלמה: בדוק את הגדרות ההורדה ונסה שוב.",
+  },
+  "E_DOWNLOAD_FAILED": {
+    "zh": "下载失败：请检查磁盘空间与网络后重试。",
+    "en": "Download failed: check disk space and network, then retry.",
+    "ja": "ダウンロードに失敗しました。ディスク容量とネットワークを確認して再試行してください。",
+    "ko": "다운로드에 실패했습니다. 디스크 공간과 네트워크를 확인한 뒤 다시 시도하세요.",
+    "de": "Download fehlgeschlagen: Prüfen Sie Speicherplatz und Netzwerk und versuchen Sie es erneut.",
+    "es": "Falló la descarga: revisa el espacio en disco y la red, y vuelve a intentarlo.",
+    "fr": "Échec du téléchargement : vérifiez l'espace disque et le réseau puis réessayez.",
+    "it": "Download non riuscito: controlla spazio su disco e rete, poi riprova.",
+    "pt": "Falha no download: verifique o espaço em disco e a rede e tente novamente.",
+    "zh-TW": "下載失敗：請檢查磁碟空間與網路後重試。",
+    "ar": "فشل التنزيل: تحقق من مساحة القرص والشبكة ثم أعد المحاولة.",
+    "he": "ההורדה נכשלה: בדוק מקום בדיסק ואת הרשת ונסה שוב.",
+  },
+  "E_TOO_LARGE": {
+    "zh": "数据或文件超过大小上限。",
+    "en": "The data or file exceeds the size limit.",
+    "ja": "データまたはファイルがサイズ上限を超えています。",
+    "ko": "데이터 또는 파일이 크기 한도를 초과했습니다.",
+    "de": "Daten oder Datei überschreiten das Größenlimit.",
+    "es": "Los datos o el archivo superan el límite de tamaño.",
+    "fr": "Les données ou le fichier dépassent la limite de taille.",
+    "it": "I dati o il file superano il limite di dimensione.",
+    "pt": "Os dados ou o arquivo excedem o limite de tamanho.",
+    "zh-TW": "資料或檔案超過大小上限。",
+    "ar": "تتجاوز البيانات أو الملف حد الحجم.",
+    "he": "הנתונים או הקובץ חורגים ממגבלת הגודל.",
+  },
+  "E_CONTEXT_STALE": {
+    "zh": "上下文已失效：请重新 cooperate sync 后重试。",
+    "en": "Context is stale: run cooperate sync again, then retry.",
+    "ja": "コンテキストが古くなっています。cooperate sync をやり直してから再試行してください。",
+    "ko": "컨텍스트가 만료되었습니다. cooperate sync를 다시 실행한 뒤 재시도하세요.",
+    "de": "Kontext ist veraltet: Führen Sie cooperate sync erneut aus und versuchen Sie es noch einmal.",
+    "es": "El contexto está obsoleto: ejecuta cooperate sync de nuevo y reintenta.",
+    "fr": "Le contexte est obsolète : relancez cooperate sync puis réessayez.",
+    "it": "Il contesto è obsoleto: esegui di nuovo cooperate sync e riprova.",
+    "pt": "O contexto está desatualizado: execute cooperate sync de novo e tente novamente.",
+    "zh-TW": "上下文已失效：請重新 cooperate sync 後重試。",
+    "ar": "انتهت صلاحية السياق: نفّذ cooperate sync مجددًا ثم أعد المحاولة.",
+    "he": "ההקשר אינו עדכני: הרץ cooperate sync שוב ונסה מחדש.",
+  },
+  "E_OBSERVATION_STALE": {
+    "zh": "观察结果已过期：请重新 observe 后重试。",
+    "en": "Observation is stale: observe again, then retry.",
+    "ja": "観測結果が古くなっています。observe し直してから再試行してください。",
+    "ko": "관찰 결과가 만료되었습니다. 다시 observe한 뒤 재시도하세요.",
+    "de": "Beobachtung ist veraltet: Beobachten Sie erneut und versuchen Sie es noch einmal.",
+    "es": "La observación está obsoleta: vuelve a observar y reintenta.",
+    "fr": "L'observation est obsolète : relancez une observation puis réessayez.",
+    "it": "L'osservazione è obsoleta: osserva di nuovo e riprova.",
+    "pt": "A observação está desatualizada: observe novamente e tente outra vez.",
+    "zh-TW": "觀察結果已過期：請重新 observe 後重試。",
+    "ar": "الملاحظة قديمة: أعد المراقبة ثم أعد المحاولة.",
+    "he": "התצפית אינה עדכנית: בצע observe מחדש ונסה שוב.",
+  },
+  "E_SESSION_PAUSED": {
+    "zh": "人工接管中：请先在浮层点「交给 Agent」后继续。",
+    "en": "Paused for human control: hand control back in the overlay first.",
+    "ja": "人による操作中です。先にオーバーレイで「Agent に渡す」を押してください。",
+    "ko": "사람이 제어 중입니다. 먼저 오버레이에서 'Agent에게 넘기기'를 누르세요.",
+    "de": "Wegen menschlicher Steuerung pausiert: Geben Sie die Steuerung zuerst im Overlay zurück.",
+    "es": "En pausa por control humano: devuelve antes el control en el panel flotante.",
+    "fr": "En pause pour contrôle humain : rendez d'abord le contrôle dans la surcouche.",
+    "it": "In pausa per controllo umano: restituisci prima il controllo nell'overlay.",
+    "pt": "Pausado para controle humano: devolva o controle na sobreposição primeiro.",
+    "zh-TW": "人工接管中：請先在浮層點「交給 Agent」後繼續。",
+    "ar": "متوقف مؤقتًا للتحكم البشري: أعد التحكم أولًا من الطبقة العائمة.",
+    "he": "מושהה לשליטה אנושית: החזר תחילה את השליטה בשכבת-העל.",
+  },
+  "E_FORBIDDEN": {
+    "zh": "操作被策略禁止：该页面或目标不允许。",
+    "en": "Blocked by policy: this page or target is not allowed.",
+    "ja": "ポリシーにより禁止されています。このページまたは対象は許可されていません。",
+    "ko": "정책상 금지되었습니다. 이 페이지나 대상은 허용되지 않습니다.",
+    "de": "Durch Richtlinie gesperrt: Diese Seite oder dieses Ziel ist nicht erlaubt.",
+    "es": "Bloqueado por política: esta página o destino no está permitido.",
+    "fr": "Bloqué par la politique : cette page ou cible n'est pas autorisée.",
+    "it": "Bloccato dalla policy: questa pagina o destinazione non è consentita.",
+    "pt": "Bloqueado por política: esta página ou destino não é permitido.",
+    "zh-TW": "操作被策略禁止：該頁面或目標不允許。",
+    "ar": "محظور حسب السياسة: هذه الصفحة أو الهدف غير مسموح به.",
+    "he": "נחסם לפי מדיניות: הדף או היעד הזה אינם מורשים.",
+  },
+  "E_INPUT_BUSY": {
+    "zh": "标签页正在执行另一个输入动作：请稍后重试。",
+    "en": "The tab is busy with another input action: retry shortly.",
+    "ja": "タブで別の入力操作を実行中です。しばらくしてから再試行してください。",
+    "ko": "탭에서 다른 입력 작업을 실행 중입니다. 잠시 후 다시 시도하세요.",
+    "de": "Der Tab führt gerade eine andere Eingabe aus: Versuchen Sie es gleich noch einmal.",
+    "es": "La pestaña está ejecutando otra acción de entrada: reintenta en un momento.",
+    "fr": "L'onglet exécute une autre action de saisie : réessayez dans un instant.",
+    "it": "La scheda sta eseguendo un'altra azione di input: riprova tra poco.",
+    "pt": "A aba está executando outra ação de entrada: tente novamente em instantes.",
+    "zh-TW": "分頁正在執行另一個輸入動作：請稍後重試。",
+    "ar": "علامة التبويب تنفّذ إجراء إدخال آخر: أعد المحاولة بعد قليل.",
+    "he": "הלשונית מבצעת פעולת קלט אחרת: נסה שוב בעוד רגע.",
+  },
+  "E_READ_ONLY": {
+    "zh": "标签页是只读的：不能执行变更动作。",
+    "en": "The tab is read-only: changing actions are not allowed.",
+    "ja": "このタブは読み取り専用です。変更操作は実行できません。",
+    "ko": "이 탭은 읽기 전용이라 변경 작업을 실행할 수 없습니다.",
+    "de": "Der Tab ist schreibgeschützt: Ändernde Aktionen sind nicht erlaubt.",
+    "es": "La pestaña es de solo lectura: no se permiten acciones que modifiquen.",
+    "fr": "L'onglet est en lecture seule : les actions modifiantes ne sont pas autorisées.",
+    "it": "La scheda è di sola lettura: le azioni che modificano non sono consentite.",
+    "pt": "A aba é somente leitura: ações que alteram não são permitidas.",
+    "zh-TW": "分頁是唯讀的：不能執行變更動作。",
+    "ar": "علامة التبويب للقراءة فقط: لا يُسمح بالإجراءات المعدّلة.",
+    "he": "הלשונית לקריאה בלבד: אין לבצע פעולות משנות.",
+  },
+  "E_TARGET_MISMATCH": {
+    "zh": "目标已变化：请重新 observe 后重试。",
+    "en": "The target changed: observe again, then retry.",
+    "ja": "対象が変更されました。observe し直してから再試行してください。",
+    "ko": "대상이 변경되었습니다. 다시 observe한 뒤 재시도하세요.",
+    "de": "Das Ziel hat sich geändert: Beobachten Sie erneut und versuchen Sie es noch einmal.",
+    "es": "El destino cambió: vuelve a observar y reintenta.",
+    "fr": "La cible a changé : relancez une observation puis réessayez.",
+    "it": "La destinazione è cambiata: osserva di nuovo e riprova.",
+    "pt": "O destino mudou: observe novamente e tente outra vez.",
+    "zh-TW": "目標已變更：請重新 observe 後重試。",
+    "ar": "تغيّر الهدف: أعد المراقبة ثم أعد المحاولة.",
+    "he": "היעד השתנה: בצע observe מחדש ונסה שוב.",
+  },
+  "E_OBSCURED": {
+    "zh": "目标被遮挡：请先关闭遮挡物后重试。",
+    "en": "The target is obscured: dismiss the overlay first, then retry.",
+    "ja": "対象が隠れています。覆っているものを閉じてから再試行してください。",
+    "ko": "대상이 가려져 있습니다. 가리는 요소를 닫은 뒤 다시 시도하세요.",
+    "de": "Das Ziel ist verdeckt: Schließen Sie zuerst die Überlagerung und versuchen Sie es erneut.",
+    "es": "El destino está oculto: cierra primero la capa superpuesta y reintenta.",
+    "fr": "La cible est masquée : fermez d'abord la surcouche puis réessayez.",
+    "it": "La destinazione è coperta: chiudi prima l'elemento sovrapposto e riprova.",
+    "pt": "O destino está encoberto: feche primeiro a sobreposição e tente novamente.",
+    "zh-TW": "目標被遮擋：請先關閉遮擋物後重試。",
+    "ar": "الهدف محجوب: أغلق الطبقة العلوية أولًا ثم أعد المحاولة.",
+    "he": "היעד מוסתר: סגור תחילה את שכבת-העל ונסה שוב.",
+  },
+  "E_NOT_ACTIONABLE": {
+    "zh": "元素不可操作：请换一个目标或先让元素可见。",
+    "en": "Element is not actionable: choose another target or make it visible first.",
+    "ja": "要素を操作できません。別の対象を選ぶか、先に表示させてください。",
+    "ko": "요소를 조작할 수 없습니다. 다른 대상을 고르거나 먼저 보이게 하세요.",
+    "de": "Element ist nicht bedienbar: Wählen Sie ein anderes Ziel oder machen Sie es zuerst sichtbar.",
+    "es": "El elemento no es accionable: elige otro destino o hazlo visible primero.",
+    "fr": "L'élément n'est pas actionnable : choisissez une autre cible ou rendez-le visible.",
+    "it": "L'elemento non è utilizzabile: scegli un'altra destinazione o rendilo prima visibile.",
+    "pt": "O elemento não é acionável: escolha outro destino ou torne-o visível primeiro.",
+    "zh-TW": "元素不可操作：請換一個目標或先讓元素可見。",
+    "ar": "العنصر غير قابل للتفاعل: اختر هدفًا آخر أو اجعله مرئيًا أولًا.",
+    "he": "האלמנט אינו פעיל: בחר יעד אחר או הפוך אותו לגלוי תחילה.",
+  },
+  "E_NO_BROWSER": {
+    "zh": "没有已连接的浏览器：请打开浏览器并启用 BridgeDeck 扩展。",
+    "en": "No browser connected: open a browser with the BridgeDeck extension enabled.",
+    "ja": "接続中のブラウザがありません。ブラウザを開き、BridgeDeck 拡張機能を有効にしてください。",
+    "ko": "연결된 브라우저가 없습니다. 브라우저를 열고 BridgeDeck 확장을 활성화하세요.",
+    "de": "Kein Browser verbunden: Öffnen Sie einen Browser mit aktivierter BridgeDeck-Erweiterung.",
+    "es": "No hay navegador conectado: abre uno con la extensión BridgeDeck activada.",
+    "fr": "Aucun navigateur connecté : ouvrez-en un avec l'extension BridgeDeck activée.",
+    "it": "Nessun browser connesso: aprine uno con l'estensione BridgeDeck attiva.",
+    "pt": "Nenhum navegador conectado: abra um com a extensão BridgeDeck ativa.",
+    "zh-TW": "沒有已連線的瀏覽器：請開啟瀏覽器並啟用 BridgeDeck 擴充功能。",
+    "ar": "لا يوجد متصفح متصل: افتح متصفحًا مع تفعيل إضافة BridgeDeck.",
+    "he": "אין דפדפן מחובר: פתח דפדפן עם התוסף BridgeDeck מופעל.",
+  },
+  "E_NO_SESSION": {
+    "zh": "没有活动会话：请先运行 bridge session start。",
+    "en": "No active session: run bridge session start first.",
+    "ja": "有効なセッションがありません。先に bridge session start を実行してください。",
+    "ko": "활성 세션이 없습니다. 먼저 bridge session start를 실행하세요.",
+    "de": "Keine aktive Sitzung: Führen Sie zuerst bridge session start aus.",
+    "es": "No hay sesión activa: ejecuta primero bridge session start.",
+    "fr": "Aucune session active : exécutez d'abord bridge session start.",
+    "it": "Nessuna sessione attiva: esegui prima bridge session start.",
+    "pt": "Nenhuma sessão ativa: execute primeiro bridge session start.",
+    "zh-TW": "沒有活動工作階段：請先執行 bridge session start。",
+    "ar": "لا توجد جلسة نشطة: نفّذ bridge session start أولًا.",
+    "he": "אין הפעלה פעילה: הרץ תחילה bridge session start.",
+  },
+  "E_PAIR_INVALID": {
+    "zh": "配对码无效或已过期：请重新生成配对链接。",
+    "en": "Pairing code invalid or expired: generate a new pairing link.",
+    "ja": "ペアリングコードが無効か期限切れです。ペアリングリンクを再生成してください。",
+    "ko": "페어링 코드가 유효하지 않거나 만료되었습니다. 페어링 링크를 다시 생성하세요.",
+    "de": "Kopplungscode ungültig oder abgelaufen: Erzeugen Sie einen neuen Kopplungslink.",
+    "es": "Código de emparejamiento no válido o caducado: genera un enlace nuevo.",
+    "fr": "Code d'appairage non valide ou expiré : générez un nouveau lien d'appairage.",
+    "it": "Codice di associazione non valido o scaduto: genera un nuovo link.",
+    "pt": "Código de emparelhamento inválido ou expirado: gere um novo link.",
+    "zh-TW": "配對碼無效或已過期：請重新產生配對連結。",
+    "ar": "رمز الاقتران غير صالح أو منتهٍ: أنشئ رابط اقتران جديدًا.",
+    "he": "קוד הצימוד אינו תקין או שפג תוקפו: צור קישור צימוד חדש.",
+  },
+  "E_PAIR_REQUIRED": {
+    "zh": "需要配对：请运行 bridge daemon pair 获取配对码。",
+    "en": "Pairing required: run bridge daemon pair to get a pairing code.",
+    "ja": "ペアリングが必要です。bridge daemon pair を実行してコードを取得してください。",
+    "ko": "페어링이 필요합니다. bridge daemon pair를 실행해 코드를 받으세요.",
+    "de": "Kopplung erforderlich: Führen Sie bridge daemon pair aus, um einen Code zu erhalten.",
+    "es": "Se requiere emparejamiento: ejecuta bridge daemon pair para obtener el código.",
+    "fr": "Appairage requis : exécutez bridge daemon pair pour obtenir un code.",
+    "it": "Associazione richiesta: esegui bridge daemon pair per ottenere un codice.",
+    "pt": "Emparelhamento necessário: execute bridge daemon pair para obter um código.",
+    "zh-TW": "需要配對：請執行 bridge daemon pair 取得配對碼。",
+    "ar": "الاقتران مطلوب: نفّذ bridge daemon pair للحصول على رمز الاقتران.",
+    "he": "נדרש צימוד: הרץ bridge daemon pair לקבלת קוד צימוד.",
+  },
+  "E_AUTH_FAILED": {
+    "zh": "认证失败：请核对配对码或 token 后重试。",
+    "en": "Authentication failed: check the pairing code or token and retry.",
+    "ja": "認証に失敗しました。ペアリングコードまたはトークンを確認して再試行してください。",
+    "ko": "인증에 실패했습니다. 페어링 코드나 토큰을 확인한 뒤 다시 시도하세요.",
+    "de": "Authentifizierung fehlgeschlagen: Prüfen Sie Kopplungscode oder Token und versuchen Sie es erneut.",
+    "es": "Falló la autenticación: revisa el código de emparejamiento o el token y reintenta.",
+    "fr": "Échec de l'authentification : vérifiez le code d'appairage ou le jeton puis réessayez.",
+    "it": "Autenticazione non riuscita: controlla il codice di associazione o il token e riprova.",
+    "pt": "Falha na autenticação: verifique o código de emparelhamento ou o token e tente novamente.",
+    "zh-TW": "認證失敗：請核對配對碼或 token 後重試。",
+    "ar": "فشل التحقق: تحقق من رمز الاقتران أو الرمز المميز ثم أعد المحاولة.",
+    "he": "האימות נכשל: בדוק את קוד הצימוד או הטוקן ונסה שוב.",
+  },
+  "E_RATE_LIMITED": {
+    "zh": "尝试过于频繁：请稍等片刻后重试。",
+    "en": "Too many attempts: wait a moment and retry.",
+    "ja": "試行回数が多すぎます。少し待ってから再試行してください。",
+    "ko": "시도가 너무 많습니다. 잠시 기다린 뒤 다시 시도하세요.",
+    "de": "Zu viele Versuche: Warten Sie kurz und versuchen Sie es erneut.",
+    "es": "Demasiados intentos: espera un momento y reintenta.",
+    "fr": "Trop de tentatives : attendez un instant puis réessayez.",
+    "it": "Troppi tentativi: aspetta un momento e riprova.",
+    "pt": "Tentativas demais: aguarde um momento e tente novamente.",
+    "zh-TW": "嘗試過於頻繁：請稍候片刻後重試。",
+    "ar": "محاولات كثيرة جدًا: انتظر قليلًا ثم أعد المحاولة.",
+    "he": "יותר מדי ניסיונות: המתן רגע ונסה שוב.",
+  },
+  "E_PROTOCOL_UNSUPPORTED": {
+    "zh": "协议版本不兼容：请同步升级 CLI、daemon 与扩展。",
+    "en": "Incompatible protocol version: update the CLI, daemon and extension together.",
+    "ja": "プロトコルバージョンに互換性がありません。CLI、daemon、拡張機能をそろえて更新してください。",
+    "ko": "프로토콜 버전이 호환되지 않습니다. CLI, daemon, 확장을 함께 업데이트하세요.",
+    "de": "Inkompatible Protokollversion: Aktualisieren Sie CLI, Daemon und Erweiterung gemeinsam.",
+    "es": "Versión de protocolo incompatible: actualiza CLI, daemon y extensión a la vez.",
+    "fr": "Version de protocole incompatible : mettez à jour le CLI, le daemon et l'extension ensemble.",
+    "it": "Versione del protocollo incompatibile: aggiorna insieme CLI, daemon ed estensione.",
+    "pt": "Versão de protocolo incompatível: atualize CLI, daemon e extensão juntos.",
+    "zh-TW": "協定版本不相容：請同步升級 CLI、daemon 與擴充功能。",
+    "ar": "إصدار البروتوكول غير متوافق: حدّث واجهة سطر الأوامر والخدمة والإضافة معًا.",
+    "he": "גרסת פרוטוקול לא תואמת: עדכן יחד את ה-CLI, ה-daemon והתוסף.",
+  },
+  "E_UNSUPPORTED_CAPABILITY": {
+    "zh": "浏览器缺少所需能力：请更新并重新加载扩展。",
+    "en": "The browser lacks a required capability: update and reload the extension.",
+    "ja": "ブラウザに必要な機能がありません。拡張機能を更新して再読み込みしてください。",
+    "ko": "브라우저에 필요한 기능이 없습니다. 확장을 업데이트하고 다시 로드하세요.",
+    "de": "Dem Browser fehlt eine erforderliche Fähigkeit: Aktualisieren und laden Sie die Erweiterung neu.",
+    "es": "Al navegador le falta una capacidad necesaria: actualiza y recarga la extensión.",
+    "fr": "Le navigateur manque d'une capacité requise : mettez à jour et rechargez l'extension.",
+    "it": "Al browser manca una capacità necessaria: aggiorna e ricarica l'estensione.",
+    "pt": "O navegador não tem um recurso necessário: atualize e recarregue a extensão.",
+    "zh-TW": "瀏覽器缺少所需能力：請更新並重新載入擴充功能。",
+    "ar": "يفتقر المتصفح إلى إمكانية مطلوبة: حدّث الإضافة وأعد تحميلها.",
+    "he": "לדפדפן חסר יכולת נדרשת: עדכן וטען מחדש את התוסף.",
+  },
+  "E_UNSUPPORTED_REMOTE": {
+    "zh": "远程连接不支持该操作：请在本机执行。",
+    "en": "This operation is not supported over a remote connection: run it locally.",
+    "ja": "この操作はリモート接続ではサポートされません。ローカルで実行してください。",
+    "ko": "이 작업은 원격 연결에서 지원되지 않습니다. 로컬에서 실행하세요.",
+    "de": "Dieser Vorgang wird über eine Remoteverbindung nicht unterstützt: Führen Sie ihn lokal aus.",
+    "es": "Esta operación no se admite en conexión remota: ejecútala localmente.",
+    "fr": "Cette opération n'est pas prise en charge à distance : exécutez-la en local.",
+    "it": "Questa operazione non è supportata da remoto: eseguila in locale.",
+    "pt": "Esta operação não é suportada em conexão remota: execute-a localmente.",
+    "zh-TW": "遠端連線不支援該操作：請在本機執行。",
+    "ar": "هذه العملية غير مدعومة عبر اتصال بعيد: نفّذها محليًا.",
+    "he": "הפעולה אינה נתמכת בחיבור מרחוק: הרץ אותה מקומית.",
+  },
+  "E_CONTROL_NOT_HELD": {
+    "zh": "当前会话没有控制权：请先接管或交还控制权。",
+    "en": "This session does not hold control: take control or hand it back first.",
+    "ja": "このセッションは制御権を持っていません。先に制御権を取得または返却してください。",
+    "ko": "이 세션이 제어권을 갖고 있지 않습니다. 먼저 제어권을 가져오거나 돌려주세요.",
+    "de": "Diese Sitzung hat keine Steuerung: Übernehmen oder geben Sie zuerst die Steuerung zurück.",
+    "es": "Esta sesión no tiene el control: toma el control o devuélvelo primero.",
+    "fr": "Cette session n'a pas le contrôle : prenez-le ou rendez-le d'abord.",
+    "it": "Questa sessione non ha il controllo: prendi o restituisci prima il controllo.",
+    "pt": "Esta sessão não tem o controle: assuma ou devolva o controle primeiro.",
+    "zh-TW": "目前工作階段沒有控制權：請先接管或交還控制權。",
+    "ar": "هذه الجلسة لا تملك التحكم: خذ التحكم أو أعده أولًا.",
+    "he": "ההפעלה הזו אינה מחזיקה בשליטה: קח שליטה או החזר אותה תחילה.",
+  },
+};
+
+export const UNKNOWN_HINTS = {
+  "zh": "操作失败：请重试；若持续失败请查看审计记录。",
+  "en": "Operation failed: retry, and check the audit log if it persists.",
+  "ja": "操作に失敗しました。再試行し、続く場合は監査ログを確認してください。",
+  "ko": "작업에 실패했습니다. 다시 시도하고 계속되면 감사 기록을 확인하세요.",
+  "de": "Vorgang fehlgeschlagen: Versuchen Sie es erneut; bei Anhalten prüfen Sie das Audit-Protokoll.",
+  "es": "La operación falló: reintenta y, si persiste, revisa el registro de auditoría.",
+  "fr": "L'opération a échoué : réessayez et consultez le journal d'audit si cela persiste.",
+  "it": "Operazione non riuscita: riprova e, se persiste, controlla il registro di audit.",
+  "pt": "A operação falhou: tente novamente e, se persistir, verifique o registro de auditoria.",
+  "zh-TW": "操作失敗：請重試；若持續失敗請查看稽核記錄。",
+  "ar": "فشلت العملية: أعد المحاولة، وإن استمر الفشل فراجع سجل التدقيق.",
+  "he": "הפעולה נכשלה: נסה שוב, ואם היא נמשכת בדוק את יומן הביקורת.",
+};
+const CODE_PATTERN = /(?:^|[^A-Z0-9_])(E_[A-Z][A-Z0-9_]*)(?![A-Z0-9_])/;
+const SCRIPT_PATTERNS = {
+  ja: /[\u3040-\u30ff\u4e00-\u9fff]/,
+  ko: /[\uac00-\ud7af]/,
+  ar: /[\u0600-\u06ff]/,
+  he: /[\u0590-\u05ff]/,
+  'zh-TW': /[\u4e00-\u9fff]/,
+};
+
+/** 语言标签归一化：接受浏览器/存储里的 zh-TW、zh-tw、zh-Hant、iw 等写法。 */
+export function normalizeHintLang(tag) {
+  const raw = String(tag || '').trim();
+  if (!raw) return 'en';
+  const lower = raw.toLowerCase().replace(/_/g, '-');
+  if (lower === 'zh-tw' || lower === 'zh-hk' || lower === 'zh-hant' || lower.startsWith('zh-hant-')) return 'zh-TW';
+  if (lower.startsWith('zh')) return 'zh';
+  if (lower.startsWith('iw') || lower.startsWith('he')) return 'he';
+  for (const lang of HINT_LANGS) {
+    if (lang === 'zh-TW' || lang === 'zh') continue;
+    if (lower === lang || lower.startsWith(lang + '-')) return lang;
+  }
+  return 'en';
+}
+
+/** 从 { code } / Error / 字符串里提取协议错误码；没有则返回 null。 */
+export function errorCodeOf(input) {
+  if (!input) return null;
+  const direct = typeof input === 'object' && typeof input.code === 'string' ? input.code : '';
+  if (direct) return direct.toUpperCase();
+  const text = typeof input === 'string' ? input : String(input.message || '');
+  const match = CODE_PATTERN.exec(text);
+  return match ? match[1] : null;
+}
+
+/** 返回某语言的未知错误兜底文案。 */
+export function unknownHint(lang) {
+  const key = normalizeHintLang(lang);
+  return UNKNOWN_HINTS[key] || UNKNOWN_HINTS.en;
+}
+
+/** 错误码 + 语言 → 用户可读提示；未收录的码回退到该语言的未知错误文案。 */
+export function hintForCode(code, lang) {
+  const key = normalizeHintLang(lang);
+  const normalized = errorCodeOf(code) || (typeof code === 'string' ? String(code).toUpperCase() : '');
+  const entry = normalized ? ERROR_HINTS[normalized] : null;
+  if (entry && entry[key]) return entry[key];
+  if (entry && entry.en) return entry.en;
+  return unknownHint(key);
+}
+
+/** 该语言下是否存在真正本地化的提示（用于 12 语言覆盖门禁的自检）。 */
+export function hasLocalizedHint(code, lang) {
+  const key = normalizeHintLang(lang);
+  const entry = ERROR_HINTS[String(code || '').toUpperCase()];
+  if (!entry || typeof entry[key] !== 'string' || !entry[key].trim()) return false;
+  return true;
+}
+
+/**
+ * 把 { code, message } / Error / 原始字符串转成结构化提示。
+ * 有错误码时优先使用本地化提示（原始英文/中文 message 仅保留在 message 字段，
+ * 便于诊断，不直接展示给用户）；没有错误码时才回退到原始 message。
+ */
+export function describeError(input, lang) {
+  const code = errorCodeOf(input);
+  const rawMessage = typeof input === 'string'
+    ? input
+    : String((input && (input.message || input.error)) || '');
+  const hint = code ? hintForCode(code, lang) : '';
+  const fallback = hint || rawMessage || unknownHint(lang);
+  return {
+    code: code || null,
+    hint: hint || null,
+    message: rawMessage,
+    text: code ? fallback + ' (' + code + ')' : fallback,
+  };
+}
+
+/** 只要一行展示文案时的便捷入口。 */
+export function localizeErrorText(input, lang) {
+  return describeError(input, lang).text;
+}
+
+/** 门禁用：判断某段文案是否是“只有英文”（给本地化语言用）。 */
+export function isEnglishOnlyHint(text) {
+  const value = String(text || '');
+  const latinWords = value.match(/[A-Za-z]{2,}/g) || [];
+  if (!latinWords.length) return false;
+  for (const pattern of Object.values(SCRIPT_PATTERNS)) {
+    if (pattern.test(value)) return false;
+  }
+  return true;
+}

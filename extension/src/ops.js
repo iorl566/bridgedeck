@@ -3,6 +3,8 @@ import { execPage } from './inject.js';
 import { log } from './log.js';
 import { showRecordOverlay, hideRecordOverlay } from './record-overlay.js';
 import { clearCooperationPassthroughs } from './cooperation.js';
+import { withOverlaysHidden } from './overlay-suppress.js';
+import { suppressionScope, SUPPRESSION_KINDS } from './lib/suppression-scope.js';
 
 const RECORDINGS_KEY = 'bb.ops.recordings';
 const MAX_EVENTS = 500;
@@ -14,6 +16,14 @@ const active = new Map(); // tabId -> { tabId, url, title, startedAt, events }
 /** 可选的按步骤截图：仅当录制页是当前窗口的活动标签页时截一张缩略图。 */
 async function captureStepShot(session, event) {
   if (!session.screenshots || session.shotCount >= MAX_SHOTS) return;
+  // 【接线】录制步骤截图也走 capture 抑制：截之前 acquire、finally release，
+  // 失败/超时同样释放（suppression-scope 的看门狗兜底），避免录制浮层被截进图里。
+  await suppressionScope.run(session.tabId, { kind: SUPPRESSION_KINDS.RECORD_SHOT, method: 'record.step-shot', owner: 'ops' }, () =>
+    withOverlaysHidden(session.tabId, () => captureStepShotInner(session, event)),
+  );
+}
+
+async function captureStepShotInner(session, event) {
   try {
     const tabs = await chrome.tabs.query({ active: true, windowId: session.windowId });
     if (!tabs.length || tabs[0].id !== session.tabId) return;
@@ -369,14 +379,24 @@ async function sendToAllFrames(tabId, message) {
 
 async function activateContentRecorder(tabId, startedAt, includeAgent) {
   const replied = await sendToAllFrames(tabId, { type: 'bb.record.activate', startedAt, includeAgent: includeAgent === true });
-  // 跨源 iframe 的 tabs.sendMessage 可能拿不到接收者；直接在所有 frame 调内容脚本暴露的 start。
+  // 跨源 iframe 的 tabs.sendMessage 可能拿不到接收者；按 frame 逐个注入，携带 documentId。
+  let frames = [];
   try {
-    await chrome.scripting.executeScript({
-      target: { tabId, allFrames: true },
-      func: (at, agent, documentId) => { try { globalThis.__bb_record_capture?.start({ startedAt: at, includeAgent: agent, documentId }); } catch { /* ignore */ } },
-      args: [startedAt, includeAgent === true, null],
-    });
-  } catch { /* 某些 frame 不可注入 */ }
+    if (chrome.webNavigation && typeof chrome.webNavigation.getAllFrames === 'function') {
+      frames = (await chrome.webNavigation.getAllFrames({ tabId })) || [];
+    }
+  } catch { frames = []; }
+  if (!frames.length) frames = [{ frameId: 0 }];
+  await Promise.all(frames.map(async (frame) => {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId, frameIds: [Number(frame.frameId) || 0] },
+        world: 'ISOLATED',
+        func: (at, agent, documentId) => { try { globalThis.__bb_record_capture?.start({ startedAt: at, includeAgent: agent, documentId }); } catch { /* ignore */ } },
+        args: [startedAt, includeAgent === true, frame.documentId || null],
+      });
+    } catch { /* 某帧不可注入 */ }
+  }));
   return replied;
 }
 
@@ -464,6 +484,11 @@ export async function startRecording(params = {}) {
     title: tab.title || '',
     startedAt: Date.now(),
     events: [],
+    purpose: typeof params.purpose === 'string' ? params.purpose.slice(0, 500) : '',
+    redactValues: params.redactValues === true,
+    maxPageTokens: Number.isInteger(params.maxPageTokens) ? params.maxPageTokens : undefined,
+    traceVersion: params.traceVersion === 3 ? 3 : 2,
+    supportsTabSwitchSteps: params.supportsTabSwitchSteps === true,
     screenshots: params.screenshots === true,
     includeAgent: params.includeAgent === true,
     shotCount: 0,
@@ -557,6 +582,11 @@ export async function stopRecording(params = {}) {
     endedAt: Date.now(),
     events: session.events,
     finalObservation,
+    purpose: session.purpose || '',
+    redactValues: session.redactValues === true,
+    maxPageTokens: session.maxPageTokens,
+    traceVersion: session.traceVersion || 2,
+    supportsTabSwitchSteps: session.supportsTabSwitchSteps === true,
   };
   list.unshift(recording);
   // 持久化失败（如配额不足）时重试一次并裁剪，确保已捕获的步骤不丢。

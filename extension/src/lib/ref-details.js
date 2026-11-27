@@ -1,6 +1,7 @@
 /**
- * 复合 ref 元数据：ref 是页面内的短期句柄，backendNodeId/frameId/documentId/revision
- * 才是跨观察、跨帧可核验的身份。这里只做纯映射，不读取页面。
+ * 复合 ref 元数据：ref 是页面内的短期句柄；stableRef 用稳定身份
+ * （documentId + frameId + tag + id + role + name）跨观察复用，而不是 backendNodeId。
+ * 纯映射，不读取页面。
  */
 function hash(value) {
   let h = 2166136261;
@@ -16,19 +17,37 @@ export function buildRefDetails(nodes, context = {}) {
   const frameId = Number.isInteger(context.frameId) ? context.frameId : 0;
   const revision = Number.isInteger(context.revision) ? context.revision : null;
   const documentId = context.documentId || null;
+  const cdpSessionId = context.cdpSessionId ? String(context.cdpSessionId) : null;
   const list = Array.isArray(nodes) ? nodes : [];
+  const used = new Map();
   return list
     .filter((node) => node && typeof node.ref === 'string' && node.ref.startsWith('@e'))
-    .map((node) => ({
-      ref: node.ref,
-      backendNodeId: Number.isInteger(node.backendNodeId) ? node.backendNodeId : null,
-      role: node.role || null,
-      name: node.name ? String(node.name).slice(0, 120) : null,
-      stableRef: Number.isInteger(node.backendNodeId)
-        ? 's-' + node.backendNodeId
-        : 's-' + hash([frameId, node.role || '', node.name || '', node.ref].join('|')),
-      frameId,
-      documentId,
-      revision,
-    }));
+    .map((node) => {
+      const identity = [
+        cdpSessionId || '',
+        documentId || '',
+        frameId,
+        node.tag || '',
+        node.id || '',
+        node.role || '',
+        node.name || '',
+      ].join('|');
+      const identityKey = 'i-' + hash(identity);
+      // 同页相同 tag/id/role/name 可能重复：用出现序号区分，仍保持稳定顺序。
+      const count = (used.get(identityKey) || 0) + 1;
+      used.set(identityKey, count);
+      const stableRef = 's-' + hash(identity + '#' + count);
+      return {
+        ref: node.ref,
+        backendNodeId: Number.isInteger(node.backendNodeId) ? node.backendNodeId : null,
+        role: node.role || null,
+        name: node.name ? String(node.name).slice(0, 120) : null,
+        stableRef,
+        identityKey,
+        frameId,
+        cdpSessionId,
+        documentId,
+        revision,
+      };
+    });
 }

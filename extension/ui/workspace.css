@@ -1,0 +1,598 @@
+/* workspace.css —— 数据工作台页面样式（只用逻辑属性，RTL 自动镜像）。
+ *
+ * 约定：
+ * - 颜色全部走 ui.css 的 token（--bg/--fg/--muted/--line/--card/--accent/--danger/--ok），
+ *   不在本文件引入新色值，深浅色自动跟随；
+ * - 不使用物理方向属性（left/right/margin-left/padding-left），显示顺序交给 inset-inline；
+ * - 焦点样式统一 2px accent 外环，与 ui.css 一致。
+ */
+
+.workspace-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 20px 64px;
+}
+
+.workspace-page .page-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.workspace-page .page-header h1 {
+  font-size: 18px;
+  margin: 0;
+  font-weight: 650;
+}
+
+.workspace-page .sub {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* ---------- 分区标签页 ---------- */
+.ws-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+.ws-tab {
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-start-start-radius: 9px;
+  border-start-end-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 14px;
+  margin-bottom: -1px;
+}
+
+.ws-tab[aria-selected="true"] {
+  background: var(--card);
+  border-color: var(--line);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.ws-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- IO 工具栏 / 导入面板 ---------- */
+.io-toolbar,
+.run-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.io-format {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.io-summary,
+.io-status {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.io-inline-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block: 8px;
+}
+
+.ws-import {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 12px;
+  margin-block: 10px;
+}
+
+.ws-import textarea {
+  width: 100%;
+  min-height: 120px;
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.ws-import .import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 8px;
+}
+
+.merge-chooser {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-block: 8px;
+}
+
+.merge-chooser .chip,
+.run-chip {
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.merge-chooser .chip.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.run-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip-close,
+.filter-chip-close {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 2px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.chip-close:focus-visible,
+.filter-chip-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------- 导入 / 导出报告 ---------- */
+.ws-report-host {
+  margin-block: 10px;
+}
+
+.import-report,
+.export-preview,
+.compare-matrix,
+.diff-panel {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  margin-block: 12px;
+  background: var(--card);
+}
+
+.panel-title {
+  font-size: 13px;
+  font-weight: 650;
+  margin: 0;
+}
+
+.import-report .kv-inline,
+.export-preview .kv-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-block: 6px;
+  font-size: 12px;
+}
+
+.pill.ok {
+  color: var(--ok);
+}
+
+.pill.err,
+.warn {
+  color: var(--danger);
+}
+
+.import-errors,
+.preview-table,
+.mx-table {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: auto;
+  max-block-size: 320px;
+  margin-block-start: 8px;
+  background: var(--bg);
+}
+
+.import-error-row,
+.preview-head,
+.preview-row,
+.mx-head,
+.mx-row {
+  display: grid;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-block-end: 1px solid var(--line);
+}
+
+.import-error-row {
+  grid-template-columns: 68px 120px 1fr;
+}
+
+.preview-head,
+.preview-row {
+  grid-template-columns: 48px repeat(auto-fit, minmax(96px, 1fr));
+}
+
+.mx-head,
+.mx-row {
+  grid-template-columns: minmax(120px, 1.2fr) repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.mx-row.changed {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.mx-cell.changed {
+  color: var(--danger);
+}
+
+.preview-cell,
+.mx-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block-end: 8px;
+}
+
+.diff-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.diff-rows,
+.diff-inline-rows {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: auto;
+  max-block-size: 360px;
+  background: var(--bg);
+}
+
+.diff-row,
+.diff-inline-row,
+.diff-fold {
+  display: grid;
+  grid-template-columns: 48px 48px 1fr;
+  gap: 8px;
+  padding: 3px 8px;
+  font-size: 12px;
+  border-block-end: 1px solid var(--line);
+}
+
+.diff-inline-row {
+  grid-template-columns: 1fr 1fr;
+}
+
+.diff-row.insert {
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+
+.diff-row.delete {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.diff-fold {
+  grid-template-columns: 1fr;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: center;
+}
+
+.diff-mark {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--fg);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+.diff-num {
+  color: var(--muted);
+  text-align: end;
+}
+
+/* ---------- 过滤 / 列配置 ---------- */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-input {
+  min-width: 280px;
+  flex: 1;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-block: 8px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.filter-help,
+.ws-hint,
+.ws-footnote,
+.filter-summary,
+.io-hint,
+.io-empty-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-block: 6px;
+}
+
+.filter-summary.err {
+  color: var(--danger);
+}
+
+.filter-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin: 2px 0;
+}
+
+.ws-columns-host {
+  margin-block: 10px;
+}
+
+.columns-panel {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 12px;
+}
+
+.columns-summary {
+  font-size: 12px;
+  margin-block: 6px;
+}
+
+.col-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.col-row {
+  display: grid;
+  grid-template-columns: 32px minmax(96px, 1.4fr) 80px 84px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+.col-row.off {
+  opacity: 0.6;
+}
+
+.col-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.col-toggle {
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.col-toggle.on {
+  color: var(--ok);
+}
+
+/* ---------- 数据表 ---------- */
+.ws-table-head,
+.ws-table-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-block-end: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.ws-table-head {
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.ws-table {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: auto;
+  max-block-size: 460px;
+  background: var(--bg);
+}
+
+.ws-cell {
+  padding: 6px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-inline-end: 1px solid var(--line);
+}
+
+.ws-cell.check {
+  flex: 0 0 34px;
+  text-align: center;
+}
+
+.ws-cell.head {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.ws-sort-btn {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: start;
+}
+
+.ws-sort-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ws-table-row[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.ws-table-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.ws-table-row:hover {
+  background: var(--card);
+}
+
+.ws-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- 空态 ---------- */
+.state-block.empty-deep {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  margin-block: 12px;
+  background: var(--card);
+}
+
+.empty-title {
+  font-weight: 650;
+  margin: 0 0 4px;
+}
+
+.empty-text,
+.empty-footnote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- 状态提示 ---------- */
+.io-note {
+  font-size: 12px;
+  margin-block: 6px;
+}
+
+.io-note.ok {
+  color: var(--ok);
+}
+
+.io-note.err {
+  color: var(--danger);
+}
+
+.io-note.warn,
+.io-warnings {
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.io-warnings {
+  margin: 6px 0;
+  padding-inline-start: 18px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 深色模式不需要额外规则：全部颜色来自 token。 */
+
+/* ---------- RTL 镜像微调 ---------- */
+[dir="rtl"] .ws-tab {
+  border-start-start-radius: 9px;
+  border-start-end-radius: 9px;
+}
+
+[dir="rtl"] .ws-cell {
+  border-inline-end: 1px solid var(--line);
+}
+
+[dir="rtl"] .col-actions {
+  justify-content: flex-start;
+}

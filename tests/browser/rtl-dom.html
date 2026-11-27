@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="/extension/ui/direction.js"></script>
+<link rel="stylesheet" href="/extension/ui/popup.css">
+<link rel="stylesheet" href="/extension/ui/ui.css">
+<title>RTL_PENDING</title>
+</head>
+<body>
+<main class="popup">
+  <button type="button" class="sw on" id="sw" role="switch" aria-checked="true" aria-label="switch"></button>
+  <span class="switch"><input type="checkbox" id="cb" checked><span class="slider" id="slider"></span></span>
+  <details class="settings" id="settings" open><summary id="settings-summary">settings</summary></details>
+  <details class="conn" id="conn" open><summary id="conn-summary">connection</summary></details>
+  <div class="setting-row" id="setting-row"><div class="info" id="info"><span class="tip" id="tip">tip</span></div></div>
+  <div class="toast" id="toast">toast</div>
+  <button type="button" class="icon-btn" id="icon-btn" aria-label="icon"><span class="badge" id="badge">1</span></button>
+  <span class="feature"><span class="chev" id="chev">›</span></span>
+  <button type="button" id="focus-a">A</button>
+  <button type="button" id="focus-b">B</button>
+  <button type="button" id="focus-disabled" disabled>C</button>
+  <button type="button" id="focus-hidden" class="hidden">D</button>
+  <input id="focus-input" type="text" aria-label="text" />
+  <a id="focus-link" href="#settings">jump</a>
+</main>
+<script type="module" src="./rtl-dom.js"></script>
+</body>
+</html>

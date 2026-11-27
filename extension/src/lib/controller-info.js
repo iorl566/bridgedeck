@@ -38,20 +38,27 @@ const COLORS = ['#2563eb', '#9333ea', '#0f766e', '#be185d', '#b45309', '#4d7c0f'
  * avoiding colors already in use.
  *
  * The session id is hashed into the palette so the same session always starts
- * at the same entry; the palette is then walked in order and the first color not
- * already taken is returned. When every color is taken, the hashed entry is
- * reused rather than failing, so a color is always produced.
+ * from the same color; callers that need distinct colors for a window pass the
+ * colors already taken and the next free slot is used instead.
  *
- * @param {string} sessionId  Stable per-session identifier used for hashing.
- * @param {ControllerInfo} [controller]  Caller labels; a valid `color` wins.
- * @param {Iterable<string | null | undefined>} [usedColors]  Colors already assigned.
- * @returns {string} Lowercase-insensitive `#rrggbb` accent for this session.
+ * @param {string} sessionId
+ * @param {{ color?: string | null } | null} [controller]
+ * @param {string[]} [used]
+ * @returns {string} `#rrggbb`
  */
-export function controllerColor(sessionId, controller, usedColors = []) {
-  if (controller?.color && /^#[0-9a-fA-F]{6}$/.test(controller.color)) return controller.color;
+export function controllerColor(sessionId, controller = null, used = []) {
+  const explicit = controller && typeof controller.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(controller.color)
+    ? controller.color
+    : '';
+  if (explicit) return explicit;
+  const text = String(sessionId || '');
   let hash = 0;
-  for (const char of sessionId) hash = (Math.imul(hash, 31) + char.codePointAt(0)) >>> 0;
-  const used = new Set(Array.from(usedColors, (color) => color?.toLowerCase()));
+  for (let index = 0; index < text.length; index += 1) hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+  const usedColors = new Set((Array.isArray(used) ? used : []).map((item) => String(item).toLowerCase()));
   const start = hash % COLORS.length;
-  return Array.from({ length: COLORS.length }, (_, offset) => COLORS[(start + offset) % COLORS.length]).find((color) => !used.has(color)) ?? COLORS[start];
+  for (let offset = 0; offset < COLORS.length; offset += 1) {
+    const candidate = COLORS[(start + offset) % COLORS.length];
+    if (!usedColors.has(candidate)) return candidate;
+  }
+  return COLORS[start];
 }

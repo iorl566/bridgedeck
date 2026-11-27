@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Data workspace · BridgeDeck</title>
+  <script src="direction.js"></script>
+  <link rel="stylesheet" href="ui.css" />
+  <link rel="stylesheet" href="workspace.css" />
+  <link rel="stylesheet" href="page-brand.css" />
+  <script type="module" src="i18n.js"></script>
+</head>
+<body>
+  <main class="page workspace-page">
+    <header class="page-header">
+      <div>
+        <h1 id="wsTitle"></h1>
+        <div id="wsSubtitle" class="sub"></div>
+      </div>
+      <span class="grow"></span>
+      <span id="wsStatus" role="status" aria-live="polite" class="io-status muted"></span>
+    </header>
+
+    <nav id="wsTabs" class="ws-tabs" role="tablist"></nav>
+
+    <section id="wsDataPanel" class="panel" role="tabpanel">
+      <div id="wsIoBar" class="toolbar"></div>
+      <div id="wsImportPanel" class="ws-import" hidden></div>
+      <div id="wsImportReportHost" class="ws-report-host" hidden></div>
+      <div id="wsTableBar" class="toolbar"></div>
+      <div id="wsFilterHost"></div>
+      <div id="wsColumnsHost" class="ws-columns-host" hidden></div>
+      <p id="wsTableHint" class="muted ws-hint"></p>
+      <div id="wsTable" role="grid"></div>
+      <div id="wsEmpty" class="ws-empty" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="wsComparePanel" class="panel" role="tabpanel" hidden>
+      <div id="wsCompareRuns" class="ws-runs"></div>
+      <p id="wsCompareHint" class="muted ws-hint"></p>
+      <div id="wsCompareBody" class="ws-compare"></div>
+      <div id="wsDiffHost" class="ws-diff"></div>
+      <div id="wsDiffRows" class="ws-diff-rows"></div>
+    </section>
+
+    <p id="wsFootnote" class="muted ws-footnote"></p>
+    <div id="wsAnnounce" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  </main>
+  <script type="module" src="workspace.js"></script>
+  <script type="module" src="page-brand.js"></script>
+</body>
+</html>

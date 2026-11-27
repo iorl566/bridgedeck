@@ -57,6 +57,7 @@ test('账本只保存参数键名，不保存参数值', () => {
   const ledger = new IntentLedger({ dir: tempDir(), staleMs: 1000 });
   const entry = ledger.begin('fill', { selector: '#pwd', value: 'super-secret', password: 'p@ss', text: 'hello' }, { tabId: 1, sessionId: 's1' });
   ledger.finish(entry, 'done');
+  ledger.flush();
   const raw = fs.readFileSync(ledger.file, 'utf8');
   assert.equal(raw.includes('super-secret'), false);
   assert.equal(raw.includes('p@ss'), false);

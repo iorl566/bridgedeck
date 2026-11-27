@@ -1,0 +1,273 @@
+  function discoverPreview(node, kind, columns, previewColumns) {
+    const labels = [];
+    const sample = [];
+    if (kind === 'table') {
+      if (isGridNode(node)) {
+        for (const cell of gridHeaderCells(node).slice(0, previewColumns)) labels.push(truncate(normalizeText(cell.textContent || ''), 60));
+        const firstRow = gridDataRows(node)[0];
+        if (firstRow) {
+          for (const cell of gridRowCells(firstRow).slice(0, previewColumns)) sample.push(truncate(normalizeText(cell.textContent || ''), 80));
+        }
+      } else {
+        const headRows = node.tHead && node.tHead.rows.length ? Array.from(node.tHead.rows) : Array.from(node.rows || []).slice(0, 1);
+        const grid = tableCellGrid(headRows);
+        for (let c = 0; c < Math.min(columns, previewColumns); c += 1) {
+          const parts = [];
+          for (const row of grid) {
+            const value = normalizeText(row[c] || '');
+            if (value && parts[parts.length - 1] !== value) parts.push(value);
+          }
+          labels.push(truncate(parts.join(' / ') || ('c' + (c + 1)), 60));
+        }
+        const body = node.tBodies && node.tBodies.length ? node.tBodies[0].rows : (node.rows || []);
+        const firstBody = Array.from(body)[0] || Array.from(node.rows || [])[1];
+        if (firstBody) {
+          const cells = tableCellGrid([firstBody])[0] || [];
+          for (let c = 0; c < Math.min(cells.length, previewColumns); c += 1) sample.push(truncate(normalizeText(cells[c] || ''), 80));
+        }
+      }
+    } else {
+      const first = node.querySelector('li, [role="listitem"]');
+      if (first) sample.push(truncate(normalizeText(first.textContent || ''), 80));
+    }
+    return { columns: labels, sample: sample };
+  }
+
+  function discoverTargets(args = {}) {
+    state.extractTargets = new Map();
+    state.extractTargetsAt = Date.now();
+    const maxTargets = Math.min(Math.max(Number.isInteger(Number(args.maxTargets)) ? Number(args.maxTargets) : DISCOVER_MAX_TARGETS, 1), 200);
+    const previewColumns = Math.min(Math.max(Number.isInteger(Number(args.previewColumns)) ? Number(args.previewColumns) : DISCOVER_PREVIEW_COLUMNS, 1), 32);
+    const found = [];
+    let seq = 0;
+    let scanned = 0;
+    let truncated = false;
+    const selector = 'table, ul, ol, [role="table"], [role="list"], [role="grid"], [role="treegrid"], .ag-root';
+    const nodes = [];
+    const collect = (root, depth) => {
+      if (!root || depth > DISCOVER_MAX_DEPTH) return;
+      for (const node of root.querySelectorAll(selector)) nodes.push(node);
+      for (const host of root.querySelectorAll('*')) {
+        if (host.shadowRoot) collect(host.shadowRoot, depth + 1);
+      }
+    };
+    collect(document, 0);
+    for (const node of nodes) {
+      if (found.length >= maxTargets) {
+        truncated = true;
+        break;
+      }
+      if (!isVisible(node)) continue;
+      if (node.closest('table') && node.tagName !== 'TABLE' && node.tagName !== 'UL' && node.tagName !== 'OL') continue;
+      scanned += 1;
+      seq += 1;
+      const kind = node.tagName === 'TABLE' || node.getAttribute('role') === 'table' || isGridNode(node) ? 'table' : 'list';
+      let rows = 0;
+      let columns = 0;
+      if (kind === 'table') {
+        if (isGridNode(node)) {
+          rows = gridDataRows(node).length;
+          columns = gridHeaderCells(node).length;
+        } else {
+          const bodyRows = node.tBodies && node.tBodies.length ? Array.from(node.tBodies[0].rows) : Array.from(node.rows || []);
+          rows = bodyRows.length;
+          const headRows = node.tHead && node.tHead.rows.length ? Array.from(node.tHead.rows) : Array.from(node.rows || []).slice(0, 1);
+          const headGrid = tableCellGrid(headRows);
+          columns = headGrid.reduce(function (max, row) { return Math.max(max, row.length); }, 0);
+        }
+      } else {
+        rows = node.querySelectorAll('li, [role="listitem"]').length;
+        columns = 1;
+      }
+      const label = normalizeText(node.getAttribute('aria-label') || node.id || node.className || '') || (kind + ' #' + seq);
+      state.extractTargets.set(seq, node);
+      found.push({
+        id: seq,
+        kind: kind,
+        label: truncate(label, 60),
+        rows: rows,
+        columns: columns,
+        preview: discoverPreview(node, kind, columns, previewColumns),
+      });
+    }
+    return {
+      targets: found,
+      url: location.href,
+      scanned: scanned,
+      truncated: truncated,
+      limits: { maxTargets: maxTargets, previewColumns: previewColumns, maxDepth: DISCOVER_MAX_DEPTH },
+    };
+  }
+
+  function extractTarget(id) {
+    const node = state.extractTargets ? state.extractTargets.get(Number(id)) : null;
+    if (!node || !node.isConnected) pageError('E_STALE_REF', 'target ' + id + ' 不在当前列表里，请重新 extract discover');
+    if (state.extractTargetsAt && Date.now() - state.extractTargetsAt > 5 * 60 * 1000) {
+      pageError('E_STALE_REF', 'extract target 句柄已超过 5 分钟，请重新 extract discover');
+    }
+    return node;
+  }
+
+  function boundedMaxRows(args) {
+    const rawMax = Number(args.maxRows);
+    return Math.min(Math.max(Number.isFinite(rawMax) && rawMax > 0 ? Math.round(rawMax) : 500, 1), 5000);
+  }
+
+  // 预算镜像：与 extension/src/lib/extract-limits.js 保持一致（页面侧不能 import 模块）。
+  const EXTRACT_DEFAULT_MAX_BYTES = 256 * 1024;
+  const EXTRACT_DEFAULT_MAX_CELLS = 20000;
+
+  function boundedMaxBytes(args) {
+    const raw = Number(args.maxBytes);
+    return Math.min(Math.max(Number.isFinite(raw) && raw > 0 ? Math.round(raw) : EXTRACT_DEFAULT_MAX_BYTES, 1024), 4 * 1024 * 1024);
+  }
+
+  function boundedMaxCells(args) {
+    const raw = Number(args.maxCells);
+    return Math.min(Math.max(Number.isFinite(raw) && raw > 0 ? Math.round(raw) : EXTRACT_DEFAULT_MAX_CELLS, 1), 200000);
+  }
+
+  function extractBudgetOf(args) {
+    return { maxRows: boundedMaxRows(args), maxBytes: boundedMaxBytes(args), maxCells: boundedMaxCells(args) };
+  }
+
+  function jsonBytes(value) {
+    try {
+      const text = JSON.stringify(value === undefined ? null : value);
+      try { return new TextEncoder().encode(text).length; } catch { return text.length; }
+    } catch { return 0; }
+  }
+
+  /** 读取页面自己声明的行数（ARIA），没有声明就返回 null——不猜。 */
+  function declaredRowCount(root, kind) {
+    if (!root || !root.getAttribute) return null;
+    const read = (value) => {
+      if (value == null || value === '') return null;
+      const n = Number(value);
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    };
+    const direct = read(root.getAttribute('aria-rowcount'));
+    if (direct != null) return direct;
+    if (kind === 'list') {
+      const item = root.querySelector ? root.querySelector('[aria-setsize]') : null;
+      const size = item ? read(item.getAttribute('aria-setsize')) : null;
+      if (size != null) return size;
+    }
+    const rowgroup = root.querySelector ? root.querySelector('[aria-rowcount]') : null;
+    return rowgroup ? read(rowgroup.getAttribute('aria-rowcount')) : null;
+  }
+
+  /**
+   * 给提取结果补一层覆盖度说明：本次只覆盖已加载的 DOM，
+   * 声明行数取自页面 ARIA，停止原因区分"到末尾 / 行数上限 / 字节上限"。
+   * datasetComplete 只有在"页面有声明且确实读满"时才给 complete，其余一律 unknown/incomplete。
+   */
+  function withCoverage(result, declared, budget, offset) {
+    if (!result || typeof result !== 'object') return result;
+    const returned = Array.isArray(result.rows) ? result.rows.length : 0;
+    const start = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
+    const declaredRows = Number.isFinite(declared) ? declared : null;
+    const stopReason = result.stopReason || (result.truncated === true ? 'max-rows' : 'end');
+    const hasMore = result.hasMore === true;
+    let datasetComplete = 'unknown';
+    if (result.truncated === true || hasMore) datasetComplete = 'incomplete';
+    else if (declaredRows != null && start + returned >= declaredRows) datasetComplete = 'complete';
+    result.offset = start;
+    result.declaredRows = declaredRows;
+    result.coverage = {
+      scope: 'loaded-dom',
+      offset: start,
+      returned: returned,
+      declared: declaredRows,
+      omitted: declaredRows == null ? null : Math.max(0, declaredRows - (start + returned)),
+      stopReason: stopReason,
+      datasetComplete: datasetComplete,
+    };
+    if (budget) {
+      result.cells = Number.isFinite(result.cells) ? result.cells : returned;
+      result.budget = {
+        maxRows: budget.maxRows,
+        maxBytes: budget.maxBytes,
+        maxCells: budget.maxCells,
+        offset: start,
+        rows: returned,
+        cells: result.cells,
+        bytes: jsonBytes(result),
+        stopReason: stopReason,
+      };
+    }
+    return result;
+  }
+
+  /** 给读取类结果标注当前 DOM 代数，调用方可据此在后续动作里要求同一代。 */
+  function withRevision(result) {
+    if (!result || typeof result !== 'object') return result;
+    if (result.revision == null) result.revision = currentRevision();
+    return result;
+  }
+
+  function capExtractBytes(result, maxBytes) {
+    const budget = Number(maxBytes);
+    if (!Number.isFinite(budget) || budget <= 0) return result;
+    if (jsonBytes(result) <= budget) {
+      if (result && typeof result === 'object' && result.budget) result.budget.bytes = jsonBytes(result);
+      return result;
+    }
+    result.truncated = true;
+    result.complete = false;
+    result.stopReason = 'max-bytes';
+    if (Array.isArray(result.rows)) {
+      while (result.rows.length > 0 && jsonBytes(result) > budget) result.rows.pop();
+    }
+    if (result.coverage && typeof result.coverage === 'object') {
+      result.coverage.stopReason = 'max-bytes';
+      result.coverage.returned = Array.isArray(result.rows) ? result.rows.length : 0;
+      result.coverage.datasetComplete = 'incomplete';
+      if (result.coverage.declared != null) {
+        result.coverage.omitted = Math.max(0, result.coverage.declared - result.coverage.returned);
+      }
+    }
+    if (result.budget && typeof result.budget === 'object') {
+      result.budget.maxBytes = budget;
+      result.budget.bytes = jsonBytes(result);
+      result.budget.stopReason = 'max-bytes';
+      result.budget.rows = Array.isArray(result.rows) ? result.rows.length : 0;
+    }
+    return result;
+  }
+
+  function actionExtract(args) {
+    const budget = extractBudgetOf(args);
+    const maxRows = budget.maxRows;
+    const offset = Math.max(0, Math.min(Math.floor(Number(args.offset) || 0), 1000000));
+    if (args.discover === true) return discoverTargets(args);
+    if (args.mode === 'list') {
+      let root = null;
+      if (args.ref || args.selector) root = resolveElement(args);
+      else if (args.target != null && args.target !== '') {
+        const node = extractTarget(args.target);
+        root = node;
+      } else {
+        root = document.querySelector('ul,ol,[role=list],main') || document.body;
+      }
+      if (!root) pageError('E_NOT_FOUND', '页面没有可导出的列表');
+      return listExtractFields(root, args, budget, offset);
+    }
+    if (args.target != null && args.target !== '') {
+      const node = extractTarget(args.target);
+      if (node.tagName === 'TABLE') return tableExtract(node, maxRows, budget, offset);
+      if (isGridNode(node)) return gridExtract(node, maxRows, budget, offset);
+      return listExtract(node, maxRows, budget, offset);
+    }
+    let root = null;
+    if (args.ref || args.selector) root = resolveElement(args);
+    else root = document.querySelector('table') || document.querySelector('[role="grid"], [role="treegrid"], .ag-root') || document.querySelector('ul,ol,[role=list]');
+    if (!root) pageError('E_NOT_FOUND', '页面没有可导出的表格或列表');
+    if (root.tagName === 'TABLE') return tableExtract(root, maxRows, budget, offset);
+    if (isGridNode(root)) return gridExtract(root, maxRows, budget, offset);
+    const table = root.querySelector ? root.querySelector('table') : null;
+    if (table) return tableExtract(table, maxRows, budget, offset);
+    return listExtract(root, maxRows, budget, offset);
+  }
+
+  // ===========================================================================

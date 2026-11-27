@@ -10,6 +10,7 @@ import { bridgeError, mapChromeError } from './errors.js';
 import { log } from './log.js';
 import { runCdpCommand } from './browser-driver/command-deadline.js';
 import { DEFAULT_DEBUGGER_IDLE_MS, shouldIdleDetach } from './debugger-idle.js';
+import { sameSignature, signatureOfTab } from './lib/soft-detach-signature.js';
 
 const states = new Map(); // tabId -> { tabId, handlers: Map<method, Set<fn>>, onDetach }
 const users = new Map(); // tabId -> Set<feature>
@@ -20,6 +21,7 @@ const detachEpoch = new Map(); // tabId -> 强制分离代数，用于取消迟�
 // 软分离/外部 detach 后待恢复的持有者与焦点仿真：下次 attach 时对账恢复。
 const pendingUsers = new Map(); // tabId -> Set<feature>
 const pendingEmulated = new Set(); // tabId
+const pendingSignatures = new Map(); // tabId -> 分离时页面签名
 const intentionalDetach = new Set(); // tabId（显式 detach 不参与恢复）
 
 function bumpEpoch(tabId) {
@@ -89,6 +91,13 @@ if (debuggerApi && debuggerApi.onDetach) {
       const held = users.get(source.tabId);
       if (held && held.size) pendingUsers.set(source.tabId, new Set(held));
       if (emulatedTabs.has(source.tabId)) pendingEmulated.add(source.tabId);
+      // 记录分离时页面签名：重挂时若 URL/title 已变，不再恢复旧持有者。
+      try {
+        chrome.tabs.get(source.tabId).then((tab) => {
+          const signature = signatureOfTab(tab);
+          if (signature) pendingSignatures.set(source.tabId, signature);
+        }).catch(() => {});
+      } catch { /* 测试环境无 tabs */ }
     }
     states.delete(source.tabId);
     users.delete(source.tabId);
@@ -129,13 +138,29 @@ export async function attach(tabId) {
     states.set(tabId, state);
     touch(tabId);
     // 对账：上次软分离/外部分离时保存的持有者与焦点仿真，在重挂后恢复。
-    const held = pendingUsers.get(tabId);
+    let signatureChanged = false;
+    const pendingSignature = pendingSignatures.get(tabId);
+    if (pendingSignature) {
+      pendingSignatures.delete(tabId);
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        signatureChanged = !sameSignature(pendingSignature, signatureOfTab(tab));
+      } catch {
+        signatureChanged = false;
+      }
+      if (signatureChanged) {
+        pendingUsers.delete(tabId);
+        pendingEmulated.delete(tabId);
+        log('debugger 重挂签名变化，丢弃旧恢复状态 tab=' + tabId);
+      }
+    }
+    const held = signatureChanged ? null : pendingUsers.get(tabId);
     if (held && held.size) {
       users.set(tabId, new Set(held));
       pendingUsers.delete(tabId);
       log('debugger 重挂后恢复持有者 tab=' + tabId + ' features=' + [...held].join(','));
     }
-    if (pendingEmulated.has(tabId)) {
+    if (!signatureChanged && pendingEmulated.has(tabId)) {
       pendingEmulated.delete(tabId);
       try {
         await chrome.debugger.sendCommand({ tabId }, 'Emulation.setFocusEmulationEnabled', { enabled: true });

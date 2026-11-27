@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <title>长截图 · BridgeDeck</title>
-  <link rel="stylesheet" href="ui.css" />
+  <script src="direction.js"></script>
+<link rel="stylesheet" href="ui.css" />
+  <link rel="stylesheet" href="page-brand.css" />
 <script type="module" src="i18n.js"></script>
 </head>
 <body>
@@ -36,8 +38,8 @@
       <summary>重新截图（高级）</summary>
       <h2 style="margin-top:10px">目标与模式</h2>
       <div class="toolbar">
-        <select id="tabSelect" class="inline-input" style="min-width:220px"></select>
-        <select id="modeSelect" class="inline-input" style="min-width:130px">
+        <select id="tabSelect" aria-label="目标标签页" class="inline-input" style="min-width:220px"></select>
+        <select id="modeSelect" aria-label="目标与模式" class="inline-input" style="min-width:130px">
           <option value="auto">自动滚动</option>
           <option value="manual">手动拼接</option>
         </select>
@@ -65,8 +67,23 @@
       </div>
     </section>
 
-    <div id="note" class="note"></div>
+    <section class="panel" id="recoveryPanel">
+      <div class="toolbar">
+        <h2 style="margin:0">本地分片</h2>
+        <span class="grow"></span>
+        <button id="restoreRefresh" class="btn">扫描</button>
+        <button id="restoreLatest" class="btn primary">恢复最新</button>
+      </div>
+      <div id="restoreList" role="status" aria-live="polite" class="muted" style="margin-top:10px;font-size:12px;line-height:1.7">尚未扫描</div>
+      <div id="longshotTools" class="filters"></div>
+      <div id="longshotList" hidden></div>
+      <div id="longshotPager" class="pager"></div>
+      <div id="longshotTimeline" hidden></div>
+    </section>
+
+    <div id="note" class="note" role="status" aria-live="polite"></div>
   </main>
   <script type="module" src="longshot.js"></script>
+  <script type="module" src="page-brand.js"></script>
 </body>
 </html>

@@ -1,0 +1,905 @@
+{
+  "version": 1,
+  "generator": "tools/longtail/run.mjs",
+  "createdWith": {
+    "scale": "default",
+    "seed": "1592598101"
+  },
+  "scenarios": {
+    "page-vom": {
+      "fingerprint": "eff6c8b02d3d7641",
+      "budgetFingerprint": "ea1aec545c19453e",
+      "budget": {
+        "version": 1,
+        "label": "page-vom",
+        "kind": "page-vom",
+        "timeMs": 8000,
+        "timeWarnMs": 4000,
+        "memoryMb": 384,
+        "checks": [
+          {
+            "name": "refs 达到目标",
+            "metric": "refs",
+            "kind": "min",
+            "limit": 1200,
+            "unit": "refs",
+            "reason": "页面夹具 refs 低于规模目标"
+          },
+          {
+            "name": "嵌套深度达到目标",
+            "metric": "maxDepth",
+            "kind": "min",
+            "limit": 16,
+            "unit": "levels",
+            "reason": "嵌套深度不足"
+          },
+          {
+            "name": "iframe 数量达到目标",
+            "metric": "frames",
+            "kind": "min",
+            "limit": 12,
+            "unit": "frames",
+            "reason": "iframe 数量不足"
+          },
+          {
+            "name": "总元素边 ≥ refs",
+            "metric": "edges",
+            "kind": "min",
+            "limit": 1200,
+            "unit": "edges",
+            "reason": "页面图边数不足"
+          },
+          {
+            "name": "夹具大小合理",
+            "metric": "fixtureBytes",
+            "kind": "min",
+            "limit": 360000,
+            "unit": "bytes",
+            "reason": "页面图夹具落盘体积过小"
+          },
+          {
+            "name": "默认上限截断生效",
+            "metric": "graphTruncated",
+            "kind": "truthy",
+            "reason": "VOM 图默认上限没有触发截断（大页面应被保护）"
+          },
+          {
+            "name": "默认上限节点数=600",
+            "metric": "graphDefaultNodes",
+            "kind": "equal",
+            "limit": 600,
+            "unit": "nodes",
+            "reason": "默认节点上限与 vom-graph 契约不一致"
+          },
+          {
+            "name": "关系边数量",
+            "metric": "relations",
+            "kind": "min",
+            "limit": 600,
+            "unit": "relations",
+            "reason": "语义关系边不足"
+          },
+          {
+            "name": "label 关系边",
+            "metric": "relationLabels",
+            "kind": "min",
+            "limit": 240,
+            "unit": "edges",
+            "reason": "label 关系不足"
+          },
+          {
+            "name": "invalidates 关系边",
+            "metric": "relationInvalidates",
+            "kind": "min",
+            "limit": 1,
+            "unit": "edges",
+            "reason": "错误/校验消息关系缺失"
+          },
+          {
+            "name": "跨帧归属边",
+            "metric": "frameLinks",
+            "kind": "min",
+            "limit": 11,
+            "unit": "links",
+            "reason": "多 iframe 归属边缺失"
+          },
+          {
+            "name": "帧深度链",
+            "metric": "depthMaxDepth",
+            "kind": "min",
+            "limit": 2,
+            "unit": "levels",
+            "reason": "嵌套 iframe 链深度不足"
+          },
+          {
+            "name": "帧缺口为 0",
+            "metric": "depthGaps",
+            "kind": "equal",
+            "limit": 0,
+            "unit": "gaps",
+            "reason": "帧归属证据缺失（应为 0）"
+          },
+          {
+            "name": "跨帧关系",
+            "metric": "crossRelations",
+            "kind": "min",
+            "limit": 10,
+            "unit": "relations",
+            "reason": "跨帧关系图不足"
+          },
+          {
+            "name": "语义分组",
+            "metric": "semanticGroups",
+            "kind": "min",
+            "limit": 1,
+            "unit": "groups",
+            "reason": "语义分组缺失"
+          },
+          {
+            "name": "元素预算裁剪",
+            "metric": "budgetTrimmed",
+            "kind": "min",
+            "limit": 1,
+            "unit": "nodes",
+            "reason": "元素/token 预算没有发生裁剪"
+          },
+          {
+            "name": "交互能力统计",
+            "metric": "affordanceTypes",
+            "kind": "min",
+            "limit": 2,
+            "unit": "types",
+            "reason": "affordance 统计过于单一"
+          },
+          {
+            "name": "确定性（同 seed 两次一致）",
+            "metric": "deterministic",
+            "kind": "truthy",
+            "reason": "生成器/模块输出不确定"
+          },
+          {
+            "name": "夹具仅写 tmpdir",
+            "metric": "tmpOnly",
+            "kind": "truthy",
+            "reason": "大夹具写进了仓库"
+          },
+          {
+            "name": "真实模块消费点",
+            "metric": "evidenceCalls",
+            "kind": "min",
+            "limit": 10,
+            "unit": "calls",
+            "reason": "真实模块消费证据不足"
+          },
+          {
+            "name": "预算失败原因可解释",
+            "metric": "budgetProbeOk",
+            "kind": "truthy",
+            "reason": "预算超限时没有给出 time/memory 原因码"
+          },
+          {
+            "name": "VOM 图构建时间",
+            "metric": "graphMs",
+            "kind": "max",
+            "limit": 500,
+            "unit": "ms",
+            "reason": "VOM 图构建超时"
+          },
+          {
+            "name": "帧子图构建时间",
+            "metric": "framesMs",
+            "kind": "max",
+            "limit": 1500,
+            "unit": "ms",
+            "reason": "13 帧子图构建超时"
+          },
+          {
+            "name": "关系图构建时间",
+            "metric": "relationsMs",
+            "kind": "max",
+            "limit": 1500,
+            "unit": "ms",
+            "reason": "关系图构建超时"
+          },
+          {
+            "name": "RSS 上限",
+            "metric": "peakRssMb",
+            "kind": "max",
+            "limit": 2048,
+            "unit": "MB",
+            "reason": "绝对内存占用异常"
+          }
+        ]
+      },
+      "reference": {
+        "timeMs": 281.029,
+        "generateMs": 13.428,
+        "persistMs": 12.67,
+        "readbackMs": 42.119,
+        "graphMs": 9.685,
+        "framesMs": 21.799,
+        "relationsMs": 15.871,
+        "depthMs": 1.115,
+        "semanticMs": 35.483,
+        "rankMs": 13.522,
+        "budgetMs": 5.812,
+        "refs": 1788,
+        "nodes": 1788,
+        "edges": 2860,
+        "maxDepth": 17,
+        "frames": 12,
+        "relations": 1056,
+        "frameLinks": 12,
+        "depthLinks": 12,
+        "peakHeapUsedMb": 29.26,
+        "peakRssMb": 108.1
+      }
+    },
+    "har-merge": {
+      "fingerprint": "bab8c2cc06620a00",
+      "budgetFingerprint": "ee973ec25f67d5b1",
+      "budget": {
+        "version": 1,
+        "label": "har-merge",
+        "kind": "har-merge",
+        "timeMs": 30000,
+        "timeWarnMs": 15000,
+        "memoryMb": 768,
+        "checks": [
+          {
+            "name": "HAR 来源总体积 ≥ 目标",
+            "metric": "sourceBytes",
+            "kind": "min",
+            "limit": 5000000,
+            "unit": "bytes",
+            "reason": "HAR 夹具总体积低于 5MB 目标"
+          },
+          {
+            "name": "来源数量",
+            "metric": "sourceCount",
+            "kind": "min",
+            "limit": 4,
+            "unit": "sources",
+            "reason": "多来源数量不足"
+          },
+          {
+            "name": "合并前条目数",
+            "metric": "totalEntries",
+            "kind": "min",
+            "limit": 1152,
+            "unit": "entries",
+            "reason": "HAR 条目数不足"
+          },
+          {
+            "name": "合并后保留条目数",
+            "metric": "keptEntries",
+            "kind": "min",
+            "limit": 448,
+            "unit": "entries",
+            "reason": "合并保留条目过少"
+          },
+          {
+            "name": "去重命中",
+            "metric": "duplicates",
+            "kind": "min",
+            "limit": 1,
+            "unit": "entries",
+            "reason": "跨来源去重没有发生（夹具/合并路径退化）"
+          },
+          {
+            "name": "冲突裁决",
+            "metric": "conflicts",
+            "kind": "min",
+            "limit": 10,
+            "unit": "conflicts",
+            "reason": "多来源冲突裁决没有发生"
+          },
+          {
+            "name": "page 合并",
+            "metric": "pages",
+            "kind": "min",
+            "limit": 4,
+            "unit": "pages",
+            "reason": "多来源页面没有全部并入"
+          },
+          {
+            "name": "合并时间轴跨度",
+            "metric": "spanMs",
+            "kind": "min",
+            "limit": 60000,
+            "unit": "ms",
+            "reason": "合并后的时间轴跨度过短"
+          },
+          {
+            "name": "合并结果体积",
+            "metric": "mergedBytes",
+            "kind": "min",
+            "limit": 100000,
+            "unit": "bytes",
+            "reason": "合并结果异常小"
+          },
+          {
+            "name": "深校验 error 数",
+            "metric": "validationErrors",
+            "kind": "equal",
+            "limit": 0,
+            "unit": "issues",
+            "reason": "生成的 HAR 结构非法"
+          },
+          {
+            "name": "深校验可解释输出",
+            "metric": "explainedIssues",
+            "kind": "min",
+            "limit": 50,
+            "unit": "chars",
+            "reason": "explainHarIssues 没有产出可解释文本"
+          },
+          {
+            "name": "归因行数（降级后）",
+            "metric": "degradedRows",
+            "kind": "min",
+            "limit": 100,
+            "unit": "rows",
+            "reason": "降级后的 waterfall 行数过少"
+          },
+          {
+            "name": "降级标记",
+            "metric": "degradedLimited",
+            "kind": "truthy",
+            "reason": "超过 limit 时没有标记 degraded.limited"
+          },
+          {
+            "name": "selectWaterfallRows 裁剪",
+            "metric": "selectedRows",
+            "kind": "min",
+            "limit": 100,
+            "unit": "rows",
+            "reason": "selectWaterfallRows 返回过少"
+          },
+          {
+            "name": "selectWaterfallRows 丢弃",
+            "metric": "selectDropped",
+            "kind": "min",
+            "limit": 1,
+            "unit": "rows",
+            "reason": "没有发生任何丢弃（limit 未生效）"
+          },
+          {
+            "name": "全量瀑布行数",
+            "metric": "fullRows",
+            "kind": "min",
+            "limit": 512,
+            "unit": "rows",
+            "reason": "全量 waterfall 行数不足"
+          },
+          {
+            "name": "慢请求识别",
+            "metric": "slowCount",
+            "kind": "min",
+            "limit": 1,
+            "unit": "requests",
+            "reason": "没有识别出慢请求"
+          },
+          {
+            "name": "三段归因完整",
+            "metric": "phaseDominant",
+            "kind": "exists",
+            "reason": "相位归因没有主导相位"
+          },
+          {
+            "name": "流式请求诚实标记",
+            "metric": "streamingCount",
+            "kind": "min",
+            "limit": 1,
+            "unit": "requests",
+            "reason": "未完成请求没有进 streaming 统计"
+          },
+          {
+            "name": "跨 frame 关联",
+            "metric": "frameCount",
+            "kind": "min",
+            "limit": 2,
+            "unit": "frames",
+            "reason": "跨 frame 归因没有覆盖多个 frame"
+          },
+          {
+            "name": "完成度审计",
+            "metric": "auditOk",
+            "kind": "truthy",
+            "reason": "auditCompletion 发现完成度违规"
+          },
+          {
+            "name": "往返保真（entry 字段）",
+            "metric": "roundTripEntryDiffs",
+            "kind": "equal",
+            "limit": 0,
+            "unit": "differences",
+            "reason": "import→export 往返丢失 entry 字段"
+          },
+          {
+            "name": "坏 HAR/坏来源探针",
+            "metric": "probesOk",
+            "kind": "truthy",
+            "reason": "失败原因不可解释（缺少具名 code）"
+          },
+          {
+            "name": "确定性（同 seed 两次一致）",
+            "metric": "deterministic",
+            "kind": "truthy",
+            "reason": "HAR 夹具/合并结果不确定"
+          },
+          {
+            "name": "夹具仅写 tmpdir",
+            "metric": "tmpOnly",
+            "kind": "truthy",
+            "reason": "大 HAR 写进了仓库"
+          },
+          {
+            "name": "真实模块消费点",
+            "metric": "evidenceCalls",
+            "kind": "min",
+            "limit": 13,
+            "unit": "calls",
+            "reason": "真实模块消费证据不足"
+          },
+          {
+            "name": "预算失败原因可解释",
+            "metric": "budgetProbeOk",
+            "kind": "truthy",
+            "reason": "预算超限时没有给出原因码"
+          },
+          {
+            "name": "合并耗时",
+            "metric": "mergeMs",
+            "kind": "max",
+            "limit": 8000,
+            "unit": "ms",
+            "reason": "HAR 合并超时"
+          },
+          {
+            "name": "归因耗时",
+            "metric": "attributionMs",
+            "kind": "max",
+            "limit": 4000,
+            "unit": "ms",
+            "reason": "waterfall 归因超时"
+          },
+          {
+            "name": "往返耗时",
+            "metric": "roundTripMs",
+            "kind": "max",
+            "limit": 8000,
+            "unit": "ms",
+            "reason": "HAR 往返导入导出超时"
+          },
+          {
+            "name": "RSS 上限",
+            "metric": "peakRssMb",
+            "kind": "max",
+            "limit": 2048,
+            "unit": "MB",
+            "reason": "绝对内存占用异常"
+          }
+        ]
+      },
+      "reference": {
+        "timeMs": 872.633,
+        "generateMs": 192.772,
+        "writeMs": 71.143,
+        "readMs": 37.259,
+        "mergeMs": 103.227,
+        "validateMs": 4.866,
+        "roundTripMs": 98.773,
+        "attributionMs": 11.206,
+        "fullAttributionMs": 6.801,
+        "sourceCount": 4,
+        "sourceBytes": 9116009,
+        "totalEntries": 1280,
+        "keptEntries": 752,
+        "duplicates": 528,
+        "conflicts": 702,
+        "peakHeapUsedMb": 53.08,
+        "peakRssMb": 278.09
+      }
+    },
+    "record-program": {
+      "fingerprint": "ffa6af9aabdf3fe3",
+      "budgetFingerprint": "3279a102e7fb27e5",
+      "budget": {
+        "version": 1,
+        "label": "record-program",
+        "kind": "record-program",
+        "timeMs": 8000,
+        "timeWarnMs": 4000,
+        "memoryMb": 256,
+        "checks": [
+          {
+            "name": "步骤数达到目标",
+            "metric": "steps",
+            "kind": "min",
+            "limit": 240,
+            "unit": "steps",
+            "reason": "record 程序步数低于目标"
+          },
+          {
+            "name": "分支（navigate 边界）数量",
+            "metric": "boundaries",
+            "kind": "min",
+            "limit": 6,
+            "unit": "branches",
+            "reason": "分支数量不足"
+          },
+          {
+            "name": "边界段数量",
+            "metric": "segments",
+            "kind": "min",
+            "limit": 7,
+            "unit": "segments",
+            "reason": "边界段划分不足"
+          },
+          {
+            "name": "循环组数量",
+            "metric": "loops",
+            "kind": "min",
+            "limit": 5,
+            "unit": "loops",
+            "reason": "连续重复步骤没有被识别成循环组"
+          },
+          {
+            "name": "human-gate 数量",
+            "metric": "humanGates",
+            "kind": "min",
+            "limit": 4,
+            "unit": "gates",
+            "reason": "人工门数量不足"
+          },
+          {
+            "name": "程序校验 error 数",
+            "metric": "validateErrors",
+            "kind": "equal",
+            "limit": 0,
+            "unit": "issues",
+            "reason": "合法录制程序出现校验错误"
+          },
+          {
+            "name": "严格预检拦截全部副作用",
+            "metric": "strictBlockersMatch",
+            "kind": "truthy",
+            "reason": "严格预检没有逐条拦截非幂等副作用"
+          },
+          {
+            "name": "严格预检拦截码",
+            "metric": "strictBlockerCodesOk",
+            "kind": "truthy",
+            "reason": "严格预检 blocker 的原因码不是 REPLAY_SIDE_EFFECT"
+          },
+          {
+            "name": "允许副作用后 0 blocker",
+            "metric": "allowedBlockers",
+            "kind": "equal",
+            "limit": 0,
+            "unit": "blockers",
+            "reason": "允许副作用后仍有 blocker"
+          },
+          {
+            "name": "回放 warning 可解释",
+            "metric": "allowedWarnings",
+            "kind": "min",
+            "limit": 1,
+            "unit": "warnings",
+            "reason": "循环/重试没有产生可解释 warning"
+          },
+          {
+            "name": "指纹稳定",
+            "metric": "fingerprintStable",
+            "kind": "truthy",
+            "reason": "同输入二次构建的程序指纹不稳定"
+          },
+          {
+            "name": "diff 检出变更",
+            "metric": "diffOps",
+            "kind": "min",
+            "limit": 3,
+            "unit": "ops",
+            "reason": "programDiff 没检出变体差异"
+          },
+          {
+            "name": "合并程序产物",
+            "metric": "mergeSteps",
+            "kind": "min",
+            "limit": 120,
+            "unit": "steps",
+            "reason": "mergeRecordPrograms 合并结果异常"
+          },
+          {
+            "name": "非法程序探针",
+            "metric": "probesOk",
+            "kind": "truthy",
+            "reason": "非法程序没有给出具名校验 code"
+          },
+          {
+            "name": "确定性（同 seed 两次一致）",
+            "metric": "deterministic",
+            "kind": "truthy",
+            "reason": "record 夹具不确定"
+          },
+          {
+            "name": "夹具仅写 tmpdir",
+            "metric": "tmpOnly",
+            "kind": "truthy",
+            "reason": "record 夹具写进了仓库"
+          },
+          {
+            "name": "真实模块消费点",
+            "metric": "evidenceCalls",
+            "kind": "min",
+            "limit": 7,
+            "unit": "calls",
+            "reason": "真实模块消费证据不足"
+          },
+          {
+            "name": "预算失败原因可解释",
+            "metric": "budgetProbeOk",
+            "kind": "truthy",
+            "reason": "预算超限时没有给出原因码"
+          },
+          {
+            "name": "程序构建耗时",
+            "metric": "buildMs",
+            "kind": "max",
+            "limit": 500,
+            "unit": "ms",
+            "reason": "程序构建超时"
+          },
+          {
+            "name": "回放预检耗时",
+            "metric": "preflightMs",
+            "kind": "max",
+            "limit": 500,
+            "unit": "ms",
+            "reason": "回放预检超时"
+          },
+          {
+            "name": "diff 耗时",
+            "metric": "diffMs",
+            "kind": "max",
+            "limit": 2000,
+            "unit": "ms",
+            "reason": "programDiff 超时"
+          },
+          {
+            "name": "RSS 上限",
+            "metric": "peakRssMb",
+            "kind": "max",
+            "limit": 1024,
+            "unit": "MB",
+            "reason": "绝对内存占用异常"
+          }
+        ]
+      },
+      "reference": {
+        "timeMs": 50.717,
+        "generateMs": 1.566,
+        "persistMs": 1.718,
+        "readbackMs": 17.045,
+        "mergeMs": 8.477,
+        "validateMs": 2.331,
+        "buildMs": 7.485,
+        "preflightMs": 2.208,
+        "diffMs": 4.394,
+        "steps": 240,
+        "boundaries": 6,
+        "segments": 7,
+        "loops": 5,
+        "humanGates": 4,
+        "nonIdempotent": 108,
+        "peakHeapUsedMb": 7.43,
+        "peakRssMb": 278.39
+      }
+    },
+    "video-manifest": {
+      "fingerprint": "e12239385add26d8",
+      "budgetFingerprint": "a4210ec1ea3b247b",
+      "budget": {
+        "version": 1,
+        "label": "video-manifest",
+        "kind": "video-manifest",
+        "timeMs": 20000,
+        "timeWarnMs": 10000,
+        "memoryMb": 384,
+        "checks": [
+          {
+            "name": "分片数达到目标",
+            "metric": "segments",
+            "kind": "min",
+            "limit": 120,
+            "unit": "segments",
+            "reason": "分片数低于百片目标"
+          },
+          {
+            "name": "分片总字节达到目标",
+            "metric": "totalBytes",
+            "kind": "min",
+            "limit": 4896000,
+            "unit": "bytes",
+            "reason": "分片总字节不足"
+          },
+          {
+            "name": "逐片校验和一致",
+            "metric": "checksumMatches",
+            "kind": "equal",
+            "limit": 120,
+            "unit": "segments",
+            "reason": "从磁盘重算的校验和与 manifest 不一致"
+          },
+          {
+            "name": "manifest 校验 error 数",
+            "metric": "validateErrors",
+            "kind": "equal",
+            "limit": 0,
+            "unit": "issues",
+            "reason": "manifest 结构校验出现 error"
+          },
+          {
+            "name": "seal 摘要合法",
+            "metric": "digestValid",
+            "kind": "truthy",
+            "reason": "seal 摘要不是合法 sha256"
+          },
+          {
+            "name": "seal 双摘要（含分片链）",
+            "metric": "digestCount",
+            "kind": "min",
+            "limit": 2,
+            "unit": "digests",
+            "reason": "缺少分片链摘要"
+          },
+          {
+            "name": "seal durability=verified",
+            "metric": "durabilityVerified",
+            "kind": "truthy",
+            "reason": "seal durability 不是 verified"
+          },
+          {
+            "name": "完整恢复",
+            "metric": "completeKept",
+            "kind": "equal",
+            "limit": 120,
+            "unit": "segments",
+            "reason": "全部分片可用时没有完整恢复"
+          },
+          {
+            "name": "缺片恢复前缀",
+            "metric": "partialKept",
+            "kind": "min",
+            "limit": 1,
+            "unit": "segments",
+            "reason": "缺片时没有恢复可播放前缀"
+          },
+          {
+            "name": "截断恢复证据",
+            "metric": "truncatedKept",
+            "kind": "min",
+            "limit": 1,
+            "unit": "segments",
+            "reason": "截断现场保留分片不足"
+          },
+          {
+            "name": "损坏恢复证据",
+            "metric": "corruptKept",
+            "kind": "min",
+            "limit": 1,
+            "unit": "segments",
+            "reason": "校验和损坏现场保留分片不足"
+          },
+          {
+            "name": "恢复现场断言",
+            "metric": "recoveryCasesOk",
+            "kind": "truthy",
+            "reason": "某个崩溃现场的恢复结果与预期不符"
+          },
+          {
+            "name": "sealed 后拒绝追加",
+            "metric": "sealedAppendRejected",
+            "kind": "truthy",
+            "reason": "seal 后仍允许追加分片"
+          },
+          {
+            "name": "缺校验和 seal 失败",
+            "metric": "sealInvalidProbeOk",
+            "kind": "truthy",
+            "reason": "缺校验和的 manifest 仍 seal 成功"
+          },
+          {
+            "name": "空 OPFS 不可恢复",
+            "metric": "noPartsProbeOk",
+            "kind": "truthy",
+            "reason": "空分片仍被报告为可恢复"
+          },
+          {
+            "name": "确定性（同 seed 两次一致）",
+            "metric": "deterministic",
+            "kind": "truthy",
+            "reason": "视频夹具/seal 摘要不确定"
+          },
+          {
+            "name": "夹具仅写 tmpdir",
+            "metric": "tmpOnly",
+            "kind": "truthy",
+            "reason": "大视频分片写进了仓库"
+          },
+          {
+            "name": "真实模块消费点",
+            "metric": "evidenceCalls",
+            "kind": "min",
+            "limit": 7,
+            "unit": "calls",
+            "reason": "真实模块消费证据不足"
+          },
+          {
+            "name": "预算失败原因可解释",
+            "metric": "budgetProbeOk",
+            "kind": "truthy",
+            "reason": "预算超限时没有给出原因码"
+          },
+          {
+            "name": "落盘耗时",
+            "metric": "writeMs",
+            "kind": "max",
+            "limit": 5000,
+            "unit": "ms",
+            "reason": "分片落盘超时"
+          },
+          {
+            "name": "追加耗时",
+            "metric": "appendMs",
+            "kind": "max",
+            "limit": 2000,
+            "unit": "ms",
+            "reason": "manifest 追加超时"
+          },
+          {
+            "name": "seal 耗时",
+            "metric": "sealMs",
+            "kind": "max",
+            "limit": 3000,
+            "unit": "ms",
+            "reason": "manifest seal 超时"
+          },
+          {
+            "name": "恢复耗时",
+            "metric": "recoveryMs",
+            "kind": "max",
+            "limit": 2000,
+            "unit": "ms",
+            "reason": "分片恢复规划超时"
+          },
+          {
+            "name": "RSS 上限",
+            "metric": "peakRssMb",
+            "kind": "max",
+            "limit": 1024,
+            "unit": "MB",
+            "reason": "绝对内存占用异常"
+          }
+        ]
+      },
+      "reference": {
+        "timeMs": 386.155,
+        "generateMs": 10.978,
+        "writeMs": 276.568,
+        "validateMs": 0.444,
+        "scanMs": 77.77,
+        "appendMs": 1.244,
+        "sealMs": 2.086,
+        "recoveryMs": 5.281,
+        "segments": 120,
+        "totalBytes": 5771601,
+        "checksumMatches": 120,
+        "manifestSegments": 120,
+        "peakHeapUsedMb": 7.09,
+        "peakRssMb": 300.69
+      }
+    }
+  }
+}

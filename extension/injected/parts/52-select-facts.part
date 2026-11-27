@@ -1,0 +1,233 @@
+  function actionability(args) {
+    const el = resolveElement(args);
+    if (!el) pageError('E_NOT_FOUND', '页面没有可操作元素');
+    assertRowAnchor(el, args);
+    const facts = actionFacts(el, args, 'actionable');
+    return {
+      ok: facts.ok,
+      reason: facts.reason,
+      rect: facts.rect,
+      ...(facts.occludedBy ? { occludedBy: facts.occludedBy } : {}),
+    };
+  }
+
+  async function actionSelect(args) {
+    const el = resolveElement(args);
+    if (el.tagName !== 'SELECT') pageError('E_BAD_ARG', 'select 只支持 <select> 元素');
+    if (typeof args.value !== 'string') pageError('E_BAD_ARG', 'select 需要字符串 value');
+    if (el.disabled === true) {
+      pageError('E_BAD_ARG', '控件已禁用，无法选择', { phase: 'precondition', dispatched: false, available: [] });
+    }
+    const wanted = args.value;
+    const options = Array.from(el.options);
+    const available = options.slice(0, 12).map((item) => normalizeText(item.textContent));
+    // 先校验再滚动/聚焦：选不到目标时页面没被改动，调用方可以安全重试而不用 resolve 账本。
+    let chosen = options.find((item) => item.value === wanted);
+    if (!chosen) {
+      let byLabel = options.filter((item) => normalizeText(item.textContent) === wanted);
+      if (!byLabel.length) {
+        const lower = wanted.toLowerCase();
+        byLabel = options.filter((item) => normalizeText(item.textContent).toLowerCase() === lower);
+      }
+      if (!byLabel.length) {
+        byLabel = options.filter((item) => normalizeText(item.getAttribute('label') || '') === wanted
+          || normalizeText(item.getAttribute('label') || '').toLowerCase() === wanted.toLowerCase());
+      }
+      if (byLabel.length > 1) {
+        pageError('E_OPTION_AMBIGUOUS', `“${wanted}” 匹配 ${byLabel.length} 个选项，请改用 value：` + byLabel.slice(0, 12).map((item) => item.value).join(' / '), {
+          phase: 'precondition', dispatched: false, count: byLabel.length, available, values: byLabel.slice(0, 12).map((item) => item.value),
+        });
+      }
+      if (byLabel.length === 0) {
+        pageError('E_OPTION_NOT_FOUND', `找不到“${wanted}”；可选：` + available.join(' / '), { phase: 'precondition', dispatched: false, available });
+      }
+      chosen = byLabel[0];
+    }
+    scrollIntoView(el);
+    await ensureActionable(el, args, 'select');
+    el.value = chosen.value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      ok: true,
+      value: chosen.value,
+      label: normalizeText(chosen.textContent),
+      selected: Array.from(el.selectedOptions || []).map((item) => ({ value: item.value, label: normalizeText(item.textContent) })),
+    };
+  }
+
+  function actionFocus(args) {
+    const el = resolveElement(args);
+    scrollIntoView(el);
+    if (typeof el.focus !== 'function') pageError('E_BAD_ARG', '目标元素不可聚焦');
+    el.focus({ preventScroll: true });
+    return { ok: true };
+  }
+
+  function actionScrollTo(args) {
+    const el = resolveElement(args);
+    scrollIntoView(el);
+    const rect = el.getBoundingClientRect();
+    return {
+      ok: true,
+      bounds: {
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      scroll: { x: Math.round(window.scrollX), y: Math.round(window.scrollY) },
+    };
+  }
+
+  function getHtml(args) {
+    const hasRef = typeof args.ref === 'string' && args.ref.length > 0;
+    const hasSelector = typeof args.selector === 'string' && args.selector.length > 0;
+    let html;
+    if (hasRef && hasSelector) pageError('E_BAD_ARG', 'ref 与 selector 必须恰好给一个');
+    if (hasRef || hasSelector) {
+      const el = resolveElement(args);
+      html = el.outerHTML == null ? String(el) : el.outerHTML;
+    } else {
+      html = document.documentElement.outerHTML;
+    }
+    return { html, url: location.href };
+  }
+
+  function probeState(args) {
+    const stateName = typeof args.state === 'string' ? args.state : 'visible';
+    let el = null;
+    if (typeof args.ref === 'string' && args.ref) {
+      try {
+        el = resolveElement({ ref: args.ref });
+      } catch (error) {
+        // ref 失效属于错误，交给上层
+        throw error;
+      }
+    } else {
+      const selector = typeof args.selector === 'string' ? args.selector : '';
+      if (!selector) pageError('E_BAD_ARG', 'probe-state 需要 selector 或 ref');
+      try {
+        el = document.querySelector(selector);
+      } catch {
+        pageError('E_BAD_ARG', '无效的 CSS 选择器: ' + selector);
+      }
+    }
+    return {
+      present: Boolean(el),
+      visible: el ? isVisible(el) : false,
+      state: stateName,
+    };
+  }
+
+  function elementRect(args) {
+    const el = resolveElement(args);
+    scrollIntoView(el);
+    const rect = el.getBoundingClientRect();
+    return {
+      x: Math.max(0, rect.left),
+      y: Math.max(0, rect.top),
+      width: Math.max(0, rect.width),
+      height: Math.max(0, rect.height),
+      dpr: window.devicePixelRatio || 1,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    };
+  }
+
+  function resolveConditionTarget(target) {
+    if (!target || typeof target !== 'string') return null;
+    try {
+      return target.charAt(0) === '@' ? resolveElement({ ref: target }) : document.querySelector(target);
+    } catch {
+      return null;
+    }
+  }
+
+  function fieldValue(el, condition) {
+    const field = String(condition.field || 'text');
+    if (field === 'exists') return Boolean(el);
+    if (!el) return null;
+    if (field === 'value') {
+      if (sensitiveField(el)) return '********';
+      return 'value' in el ? el.value : null;
+    }
+    if (field === 'checked') return el.checked === true;
+    if (field === 'attribute') {
+      const name = String(condition.attribute || '');
+      return name ? el.getAttribute(name) : null;
+    }
+    return el.textContent;
+  }
+
+  function expectCheck(args) {
+    const conditions = Array.isArray(args.conditions) ? args.conditions : [];
+    for (const condition of conditions) {
+      if (!condition || typeof condition !== 'object' || !condition.target) {
+        return { ok: false, mismatch: { reason: 'missing_target', expected: null, actual: null } };
+      }
+      const el = resolveConditionTarget(String(condition.target));
+      const field = String(condition.field || 'text');
+      const sensitive = el ? sensitiveField(el) : false;
+      // 敏感字段的 value 以及 value 属性都不外泄：expect 失败详情同样遮蔽。
+      const masked = sensitive && (field === 'value'
+        || (field === 'attribute' && String(condition.attribute || '').toLowerCase() === 'value'));
+      const actual = masked ? '********' : fieldValue(el, condition);
+      const expected = masked ? '********' : condition.equals;
+      const same = masked ? String(el.value) === String(condition.equals) : actual === expected;
+      if (!same) {
+        return {
+          ok: false,
+          mismatch: {
+            target: condition.target,
+            field: String(condition.field || 'text'),
+            attribute: condition.attribute ? String(condition.attribute) : undefined,
+            expected: expected === undefined ? null : expected,
+            actual: actual === undefined ? null : actual,
+            reason: el ? 'mismatch' : 'not_found',
+          },
+        };
+      }
+    }
+    return { ok: true, checked: conditions.length };
+  }
+
+  /** request-help 的完成条件：只读检查，不修改页面。 */
+  function helpCriteriaCheck(args) {
+    const criteria = Array.isArray(args && args.criteria) ? args.criteria : [];
+    const results = [];
+    for (const criterion of criteria) {
+      if (!criterion || typeof criterion !== 'object') {
+        return { ok: false, results, error: 'invalid_criterion' };
+      }
+      const kind = String(criterion.kind || criterion.type || '');
+      if (kind === 'selector_exists' || kind === 'selector') {
+        const selector = String(criterion.selector || '');
+        let element = null;
+        try { element = selector ? document.querySelector(selector) : null; } catch { element = null; }
+        results.push({ kind, ok: Boolean(element) });
+      } else if (kind === 'selector_visible') {
+        const selector = String(criterion.selector || '');
+        let element = null;
+        try { element = selector ? document.querySelector(selector) : null; } catch { element = null; }
+        let visible = false;
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          visible = rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+        }
+        results.push({ kind, ok: visible });
+      } else if (kind === 'text_exists' || kind === 'text') {
+        const text = String(criterion.text || '');
+        const bodyText = document.body ? String(document.body.innerText || '') : '';
+        results.push({ kind, ok: text.length > 0 && bodyText.includes(text) });
+      } else {
+        results.push({ kind, ok: false, error: 'unsupported' });
+      }
+    }
+    return { ok: results.every((item) => item.ok === true), results };
+  }
+
+
+  // ===========================================================================

@@ -52,5 +52,7 @@
   "manualFrame": "Capturar fotograma",
   "manualDone": "Hecho",
   "manualCancel": "Cancelar",
-  "manualFrames": " fotogramas"
+  "manualFrames": " fotogramas",
+  "borrowInactiveTitle": "Agent solicita el préstamo de una pestaña",
+  "helpCompactStatus": "El Agent sigue esperando que completes este paso"
 }

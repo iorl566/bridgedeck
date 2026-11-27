@@ -1,0 +1,158 @@
+{
+  "schema": "bdeval-dom-cases/1",
+  "description": "deterministic DOM oracle 层：事实来自真实 headless Chromium（tests/eval/dom/eval-dom-cases.html），断言与证据规则由本文件决定。",
+  "cases": [
+    {
+      "id": "dom-top-layer-modal",
+      "title": "原生 dialog showModal 进入 top-layer：背景点击被模态层接管",
+      "capability": "overlay.top-layer",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "passed",
+      "assert": {
+        "modal.open": true,
+        "modal.isModal": true,
+        "modal.backgroundHitId": "modal",
+        "modal.contentHitId": "modal-content"
+      },
+      "evidence": ["modal.isModal", "modal.backgroundHitId"],
+      "evidenceRule": "必须由真实浏览器给出 :modal 匹配与背景命中 id；缺任一证据降级 unverified"
+    },
+    {
+      "id": "dom-focus-containment",
+      "title": "模态打开时焦点不逃逸：背景元素 focus() 无效",
+      "capability": "overlay.focus",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "passed",
+      "assert": {
+        "modal.activeId": "modal-input",
+        "modal.activeAfterBackgroundFocus": "modal-input",
+        "modal.focusContained": true
+      },
+      "evidence": ["modal.activeAfterBackgroundFocus", "modal.focusContained"],
+      "evidenceRule": "证据必须是背景 focus() 之后的真实 activeElement；只给初始焦点不算通过"
+    },
+    {
+      "id": "dom-fixed-hit-testing",
+      "title": "fixed 浮层覆盖下层按钮：elementFromPoint 命中浮层",
+      "capability": "overlay.hit-testing",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "passed",
+      "assert": { "hit.overlayTopId": "fixed-overlay" },
+      "evidence": ["hit.overlayTopId"],
+      "evidenceRule": "证据必须是真实 elementFromPoint 返回的 id"
+    },
+    {
+      "id": "dom-pointer-through",
+      "title": "pointer-events:none 浮层不拦截点击：命中穿透到下层按钮",
+      "capability": "overlay.pointer-through",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "passed",
+      "assert": { "hit.throughTargetId": "pointer-target" },
+      "evidence": ["hit.throughTargetId"],
+      "evidenceRule": "若浮层拦截了点击，命中 id 会是 pointer-through，本 case 必须失败"
+    },
+    {
+      "id": "dom-stacking-order",
+      "title": "同层 z-index 决定命中顺序：z=20 覆盖 z=10",
+      "capability": "overlay.stacking",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "passed",
+      "assert": {
+        "stack.lowId": "stack-low",
+        "stack.highId": "stack-high",
+        "hit.stackTopId": "stack-high"
+      },
+      "evidence": ["hit.stackTopId", "stack.highId"],
+      "evidenceRule": "证据必须同时给出两个浮层 id 与真实命中结果"
+    },
+    {
+      "id": "dom-toast-lifecycle",
+      "title": "toast 生命周期：class 切换驱动 opacity 0→1，文本保持",
+      "capability": "overlay.toast",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "passed",
+      "assert": {
+        "toast.text": "saved",
+        "toast.hideOpacity": "0",
+        "toast.showOpacity": "1"
+      },
+      "evidence": ["toast.hideOpacity", "toast.showOpacity"],
+      "evidenceRule": "没启用 transition 的 computed opacity 读数才是确定证据"
+    },
+    {
+      "id": "dom-rtl-logical-margins",
+      "title": "RTL 逻辑方向：direction=rtl 且 margin-inline-start 映射到右侧",
+      "capability": "overlay.rtl",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "passed",
+      "assert": {
+        "rtl.direction": "rtl",
+        "rtl.marginLeft": "0px",
+        "rtl.marginRight": "12px",
+        "rtl.rightGap": 22
+      },
+      "evidence": ["rtl.direction", "rtl.marginRight", "rtl.rightGap"],
+      "evidenceRule": "rightGap = padding(10) + margin-inline-start(12)，由真实布局矩形计算"
+    },
+    {
+      "id": "dom-closed-shadow-retarget",
+      "title": "closed shadow DOM：shadowRoot 不可见、内部节点不暴露、事件重定向到 host",
+      "capability": "overlay.shadow",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "passed",
+      "assert": {
+        "shadow.closed": true,
+        "shadow.innerExposed": false,
+        "shadow.hitId": "closed-host",
+        "shadow.hostClickCount": 1
+      },
+      "evidence": ["shadow.innerExposed", "shadow.hitId"],
+      "evidenceRule": "必须同时证明 shadowRoot===null、命中重定向 host、host 收到 click"
+    },
+    {
+      "id": "dom-sticky-header",
+      "title": "sticky 顶栏滚动 200px 后贴住视口顶部",
+      "capability": "overlay.sticky",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "passed",
+      "assert": {
+        "page.scrollY": 200,
+        "sticky.topAfterScroll": 0
+      },
+      "evidence": ["page.scrollY", "sticky.topAfterScroll"],
+      "evidenceRule": "必须先真实滚动（scrollY 证据）再看 sticky 的 top"
+    },
+    {
+      "id": "dom-negative-hit-mismatch",
+      "title": "负向自检（负向）：期望命中下层按钮，真实命中浮层 → 必须 failed",
+      "capability": "dom.negative-selfcheck",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "failed",
+      "negative": true,
+      "assert": { "hit.overlayTopId": "under-button" },
+      "evidence": ["hit.overlayTopId"],
+      "evidenceRule": "负向自检：断言把真实命中的 fixed-overlay 写成了 under-button，必须产出 failed 并带 expected/actual"
+    },
+    {
+      "id": "dom-negative-rtl-mismatch",
+      "title": "负向自检（负向）：RTL 页面期望 direction=ltr → 必须 failed",
+      "capability": "dom.negative-selfcheck",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "failed",
+      "negative": true,
+      "assert": { "rtl.direction": "ltr" },
+      "evidence": ["rtl.direction"],
+      "evidenceRule": "负向自检：真实 direction 是 rtl，期望 ltr 的断言必须 failed"
+    },
+    {
+      "id": "dom-unverified-missing-fact",
+      "title": "unverified：断言可过但必需证据事实不存在 → 不得算 pass",
+      "capability": "dom.negative-selfcheck",
+      "oracleLevel": "dom-real",
+      "expectedStatus": "unverified",
+      "assert": { "modal.open": true },
+      "evidence": ["modal.notProducedByFixture"],
+      "evidenceRule": "必需证据路径不存在时必须降级 unverified（skip 不算 pass）"
+    }
+  ]
+}

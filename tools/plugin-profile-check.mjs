@@ -14,7 +14,10 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLUGIN_DIR = path.join(ROOT, 'dsh-plugin');
 const PROFILE = 'bridge-plugin-check';
-const HOME = path.join(os.homedir(), '.dsh');
+// 2026-11-25 事故后隔离：检查必须在临时 DSH_HOME 里跑，绝不触碰用户真实 ~/.dsh
+// （此前用真实 HOME，profile/插件安装链路曾把 dsh-plugin/ 与其它 profile 一起清空）。
+const TMP_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-dsh-check-'));
+const HOME = TMP_HOME;
 const PROFILE_DIR = path.join(HOME, 'profiles', PROFILE);
 const KEEP = process.argv.includes('--keep');
 
@@ -48,7 +51,7 @@ function runDsh(dsh, args, timeoutMs) {
   return new Promise((resolve) => {
     const child = spawn(base.exe, base.args.concat(args), {
       cwd: ROOT,
-      env: { ...process.env, ...base.env },
+      env: { ...process.env, ...base.env, DSH_HOME: HOME },
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -117,13 +120,16 @@ try {
 } finally {
   if (!KEEP) {
     try {
-      fs.rmSync(PROFILE_DIR, { recursive: true, force: true });
-      console.log('\n  已清理临时 profile');
+      // 只清理本次 mkdtemp 出来的临时 DSH_HOME，路径校验防止误删。
+      if (TMP_HOME.startsWith(os.tmpdir()) && fs.existsSync(TMP_HOME)) {
+        fs.rmSync(TMP_HOME, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      }
+      console.log('\n  已清理临时 DSH_HOME：' + TMP_HOME);
     } catch (error) {
-      console.log('\n  清理临时 profile 失败：' + ((error && error.message) || error));
+      console.log('\n  清理临时 DSH_HOME 失败：' + ((error && error.message) || error));
     }
   } else {
-    console.log('\n  保留临时 profile：' + PROFILE_DIR);
+    console.log('\n  保留临时 DSH_HOME：' + TMP_HOME);
   }
 }
 

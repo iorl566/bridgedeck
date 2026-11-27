@@ -1,0 +1,361 @@
+  const LAYER_SCAN_LIMIT = 16;
+  const LAYER_SCAN_BODY_CHILDREN = 120;
+
+  /**
+   * 页面侧有序层事实（交给 lib/vom-layers.js 归一化）：
+   * 只扫 top-layer（dialog/popover/fullscreen）、role=dialog 与 body 直系子节点，
+   * 按 position/z-index 粗过滤，避免对整页做 computed style 扫描。
+   */
+  function layerStackFacts() {
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    const out = [];
+    const seen = new Set();
+    const push = (el) => {
+      if (!el || el.nodeType !== 1 || out.length >= LAYER_SCAN_LIMIT || seen.has(el)) return;
+      if (el === document.documentElement || el === document.body) return;
+      if (isOwnOverlayNode(el)) return;
+      const facts = layerFactsOf(el);
+      if (!facts || facts.display === 'none' || facts.visibility === 'hidden' || facts.opacity === '0') return;
+      const rect = facts.rect;
+      if (rect.width <= 0 && rect.height <= 0) return;
+      if (rect.x < -10000 || rect.y < -10000) return;
+      const interesting = facts.topLayer
+        || facts.position === 'fixed'
+        || facts.position === 'sticky'
+        || (facts.zIndex != null && facts.zIndex !== 0);
+      if (!interesting) return;
+      seen.add(el);
+      const role = roleOf(el) || '';
+      out.push({
+        position: facts.position,
+        zIndex: facts.zIndex,
+        topLayer: facts.topLayer,
+        pointerEvents: facts.pointerEvents,
+        rect,
+        tag: String(el.tagName || '').toLowerCase(),
+        id: el.id || null,
+        role: role || null,
+        name: truncate(accessibleName(el, role), 60) || null,
+        coverage: vw > 0 && vh > 0 && rect.width > 0 && rect.height > 0
+          ? Math.round((rect.width * rect.height) / (vw * vh) * 1000) / 1000
+          : null,
+      });
+    };
+    const scan = (selector, limit) => {
+      let count = 0;
+      try {
+        for (const el of document.querySelectorAll(selector)) {
+          count += 1;
+          if (count > limit) break;
+          push(el);
+        }
+      } catch {
+        // 选择器异常忽略
+      }
+    };
+    scan('dialog,[popover],[role="dialog"],[role="alertdialog"]', 32);
+    scan('body > *', LAYER_SCAN_BODY_CHILDREN);
+    return {
+      viewport: { width: vw, height: vh, scrollX: Math.round(window.scrollX), scrollY: Math.round(window.scrollY) },
+      layers: out,
+    };
+  }
+
+  function visualScan() {
+    const out = [];
+    const seen = new Set();
+    const state = getVisualState();
+    state.candidates.clear();
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    const push = (el, kind) => {
+      if (!el || seen.has(el) || out.length >= 40) return;
+      if (el === document.documentElement || el === document.body) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 24 || rect.height < 24) return;
+      if (rect.bottom <= 0 || rect.right <= 0 || rect.top >= vh || rect.left >= vw) return;
+      const style = getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none') return;
+      if (Number(style.opacity) === 0) return;
+      // 只保留"真的能被点到"的候选：同一份 DOM 里常有多份模板/隐藏副本，
+      // 它们矩形看着正常，但该点上最上层的元素不是它，按它算坐标会打到空气。
+      const cx = Math.min(vw - 1, Math.max(0, rect.left + rect.width / 2));
+      const cy = Math.min(vh - 1, Math.max(0, rect.top + rect.height / 2));
+      let top = null;
+      try {
+        top = document.elementFromPoint(cx, cy);
+      } catch {
+        top = null;
+      }
+      if (!top) return;
+      const hitSelf = top === el
+        || (el.contains && el.contains(top))
+        || (top.contains && top.contains(el));
+      if (!hitSelf) return;
+      seen.add(el);
+      const index = out.length + 1;
+      state.candidates.set(index, el);
+      out.push({
+        index,
+        kind,
+        tag: el.tagName.toLowerCase(),
+        id: String(el.id || ''),
+        cls: String(el.getAttribute('class') || '').slice(0, 60),
+        rect: {
+          x: Math.round(rect.x),
+          y: Math.round(rect.y),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        },
+      });
+    };
+    for (const el of document.querySelectorAll('canvas')) push(el, 'canvas');
+    for (const el of document.querySelectorAll('img, [role=img]')) push(el, 'image');
+    for (const el of document.querySelectorAll('svg')) push(el, 'vector');
+    // 自绘区域：有背景图、自身几乎没有文本、面积够大（canvas 类控件的常见形态）
+    for (const el of document.querySelectorAll('div,section,li')) {
+      if (out.length >= 40) break;
+      if (seen.has(el)) continue;
+      const style = getComputedStyle(el);
+      if (!style.backgroundImage || style.backgroundImage === 'none') continue;
+      if ((el.textContent || '').trim().length > 24) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 120 || rect.height < 80) continue;
+      push(el, 'region');
+    }
+    const layerStack = layerStackFacts();
+    return {
+      candidates: out,
+      viewport: { width: vw, height: vh, scrollX: Math.round(window.scrollX), scrollY: Math.round(window.scrollY) },
+      layers: layerStack.layers,
+      layerViewport: layerStack.viewport,
+    };
+  }
+
+  /**
+   * 视觉坐标命中校验：这个页面坐标下面到底是什么？
+   * 用于"看图派发动作"之前——坐标是模型给的，必须先确认落点不是浮层/遮罩/空白。
+   * 给了 index 时额外判断"落点是不是那个视觉候选"（自身/后代/祖先都算命中）。
+   */
+  function hitAt(args) {
+    const x = Number(args && args.x);
+    const y = Number(args && args.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return pageError('E_BAD_ARG', 'hitAt 需要 x/y');
+    const el = document.elementFromPoint(x, y);
+    if (!el) return { hit: false, reason: 'none' };
+    const style = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    let inert = false;
+    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+      if (node.inert) { inert = true; break; }
+    }
+    const expectedIndex = Number(args && args.index);
+    let matches = null;
+    if (Number.isFinite(expectedIndex)) {
+      const target = getVisualState().candidates.get(expectedIndex);
+      matches = Boolean(target)
+        && (target === el || (target.contains && target.contains(el)) || (el.contains && el.contains(target)));
+    }
+    return {
+      hit: true,
+      x,
+      y,
+      tag: el.tagName.toLowerCase(),
+      id: String(el.id || ''),
+      cls: String(el.className || '').slice(0, 80),
+      rect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+      pointerEvents: style.pointerEvents,
+      inert,
+      ownOverlay: isOwnOverlayNode(el),
+      // 页面侧层/affordance 事实：agent 在按坐标动作前可以判断落点会激活/输入/滚动什么。
+      layer: layerFactsOf(el),
+      affordance: affordanceFactsOf(el),
+      coversViewport: vw > 0 && vh > 0 && rect.width * rect.height > vw * vh * 0.8,
+      anchored: el === document.documentElement || el === document.body,
+      matches,
+    };
+  }
+
+  /** 扩展自己的浮层（__bb_*）不算页面遮挡：动作前会临时隐藏，脚本动作也应能穿透。 */
+  const OWN_OVERLAY_IDS = new Set([
+    '__bb_takeover_host', '__bb_help_host', '__bb_help_highlight', '__bb_record_host',
+    '__bb_manual_host', '__bb_borrow_modal', '__bb_control_hint', '__bb_human_banner',
+  ]);
+  function isOwnOverlayNode(node) {
+    let current = node;
+    for (let depth = 0; current && current.nodeType === 1 && depth < 12; depth += 1) {
+      if (OWN_OVERLAY_IDS.has(String(current.id || ''))) return true;
+      if (current.getAttribute && current.getAttribute('data-bb-ui') === 'takeover') return true;
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function disabledNode(el) {
+    if (el.disabled === true) return true;
+    try {
+      if (el.matches && el.matches(':disabled')) return true;
+    } catch {
+      // 非表单元素不支持 :disabled
+    }
+    if (normalizeText(el.getAttribute('aria-disabled') || '').toLowerCase() === 'true') return true;
+    try {
+      return Boolean(el.closest && el.closest('[inert]'));
+    } catch {
+      return false;
+    }
+  }
+
+  function readOnlyNode(el) {
+    if (el.readOnly === true) return true;
+    return normalizeText(el.getAttribute('aria-readonly') || '').toLowerCase() === 'true';
+  }
+
+  const ACTION_WAIT_DEFAULT_MS = 5000;
+  const ACTION_FORCE_SKIP_REASONS = new Set(['occluded', 'pointer-events-none', 'outside_viewport']);
+
+  function sameActionRect(a, b) {
+    return Boolean(a && b) && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+  }
+
+  /** 等两帧让动画推进；后台标签页 rAF 可能被节流，用 60ms 超时兜底。 */
+  function nextActionFrame() {
+    return new Promise(function (resolve) {
+      let settled = false;
+      const done = function () {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function () { requestAnimationFrame(done); });
+      }
+      setTimeout(done, 60);
+    });
+  }
+
+  /**
+   * 动作前统一可操作性判定：可见、可用、可编辑、能接收指针事件。
+   * --force 只绕过遮挡类检查，不放宽"存在/可见/可用"这些硬条件。
+   */
+  function actionFacts(el, args, kind) {
+    const rect = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    const facts = {
+      kind,
+      rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+    };
+    if (!el.isConnected) return { ...facts, ok: false, reason: 'detached' };
+    if (!isVisible(el)) return { ...facts, ok: false, reason: 'not_visible' };
+    if (kind !== 'hover' && kind !== 'scroll-to' && disabledNode(el)) return { ...facts, ok: false, reason: 'disabled' };
+    if (kind === 'fill' && readOnlyNode(el)) return { ...facts, ok: false, reason: 'readonly' };
+    if (rect.width < 1 || rect.height < 1) return { ...facts, ok: false, reason: 'no_area' };
+    const hit = hitTestNode(el, rect, style);
+    if (hit.state === 'pointer-events-none') return { ...facts, ok: false, reason: 'pointer-events-none' };
+    if (hit.state === 'offscreen') return { ...facts, ok: false, reason: 'outside_viewport' };
+    if (hit.state === 'blocked' && hit.byOwnOverlay !== true) {
+      return { ...facts, ok: false, reason: 'occluded', occludedBy: hit.by };
+    }
+    return { ...facts, ok: true, reason: 'ok' };
+  }
+
+  function describeActionFailure(facts) {
+    if (facts.reason === 'occluded') {
+      const by = facts.occludedBy || {};
+      const label = (by.tag || '元素') + (by.id ? '#' + by.id : '') + (by.role ? ' (' + by.role + ')' : '');
+      return `目标被遮挡（${label}）`;
+    }
+    const labels = {
+      detached: '目标已脱离文档',
+      not_visible: '目标不可见',
+      disabled: '目标已禁用',
+      readonly: '目标为只读，无法填写',
+      no_area: '目标尺寸为 0',
+      'pointer-events-none': '目标 pointer-events:none，收不到事件',
+      outside_viewport: '目标不在视口内',
+    };
+    return labels[facts.reason] || '目标当前不可操作';
+  }
+
+  /**
+   * 不满足时按 waitTimeoutMs 等待（默认 5s），并连续两次采样 rect 一致（stable）后才动作。
+   * waitTimeoutMs: 0 关闭等待与稳定采样，退回单次判定。
+   */
+  async function ensureActionable(el, args, kind) {
+    assertRowAnchor(el, args);
+    const rawWait = args.waitTimeoutMs;
+    const waitMs = rawWait === 0
+      ? 0
+      : (Number.isFinite(Number(rawWait)) && Number(rawWait) >= 0 ? Number(rawWait) : ACTION_WAIT_DEFAULT_MS);
+    const deadline = Date.now() + waitMs;
+    let previous = null;
+    let last = null;
+    for (;;) {
+      const facts = actionFacts(el, args, kind);
+      last = facts;
+      // selector 目标被替换：立即交给 retryDetachedTarget 重新解析，不必等满超时。
+      if (facts.reason === 'detached' && typeof args.selector === 'string' && args.selector) {
+        let replacement = null;
+        try {
+          replacement = document.querySelector(args.selector);
+        } catch {
+          replacement = null;
+        }
+        if (replacement && replacement.isConnected) break;
+      }
+      if (args.force === true && (facts.ok || ACTION_FORCE_SKIP_REASONS.has(facts.reason))) return { ...facts, waitedMs: 0 };
+      if (facts.ok) {
+        if (waitMs === 0) return { ...facts, waitedMs: 0 };
+        if (previous && previous.ok && sameActionRect(previous.rect, facts.rect)) {
+          return { ...facts, waitedMs: Math.max(0, waitMs - Math.max(0, deadline - Date.now())) };
+        }
+      }
+      if (Date.now() >= deadline) break;
+      previous = facts;
+      await nextActionFrame();
+    }
+    const who = args.ref ? args.ref : ('selector ' + String(args.selector || ''));
+    const hint = args.force === true ? '' : '；确认页面状态后重试，或用 --force 跳过遮挡检查';
+    const waited = waitMs > 0 ? `（已等待 ${waitMs}ms）` : '';
+    pageError('E_NOT_ACTIONABLE', `${who} 不可操作：${describeActionFailure(last)}${waited}${hint}`);
+  }
+
+  /**
+   * 动作等待期间目标被 SPA 替换（旧节点 detached）时，selector 目标重试一次。
+   * 只有 selector 仍能解析到新节点才重试，避免永久消失的目标等两倍超时。
+   */
+  async function retryDetachedTarget(args, run) {
+    try {
+      return await run();
+    } catch (error) {
+      if (!args || typeof args.selector !== 'string' || !args.selector) throw error;
+      if (!error || error.code !== 'E_NOT_ACTIONABLE') throw error;
+      if (!/脱离文档|detached/i.test(String(error.message || ''))) throw error;
+      let replacement = null;
+      try {
+        replacement = document.querySelector(args.selector);
+      } catch {
+        replacement = null;
+      }
+      if (!replacement || !replacement.isConnected) throw error;
+      return run();
+    }
+  }
+
+  /** 动作前命中测试：给 --trusted 用，避免原生点击落到遮挡层。 */
+  function actionHitTest(args) {
+    const el = resolveElement(args);
+    if (!isVisible(el)) return { state: 'hidden', occludedBy: null, rect: null };
+    const rect = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    const hit = hitTestNode(el, rect, style);
+    return {
+      state: hit.state,
+      occludedBy: hit.by,
+      rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+    };
+  }
+

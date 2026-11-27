@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>BridgeDeck E2E stale fixture</title>
+<style>
+  body { margin: 0; font: 14px/1.4 sans-serif; background: #fff; }
+  #bar { position: fixed; top: 0; left: 0; right: 0; height: 40px; background: #d33; color: #fff; }
+  #grow { height: 12000px; background: linear-gradient(#fff, #eee); }
+</style>
+</head>
+<body>
+<div id="bar">stale fixture</div>
+<div id="grow"></div>
+<script>
+  // 持续改变高度：确保截图前后的 metrics 不一致，触发 stale 判定与重拍路径。
+  let tick = 0;
+  setInterval(() => {
+    tick += 1;
+    document.getElementById('grow').style.height = (12000 + Math.floor(Math.random() * 1000)) + 'px';
+  }, 50);
+</script>
+</body>
+</html>

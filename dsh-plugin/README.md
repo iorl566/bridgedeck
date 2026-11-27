@@ -1,6 +1,6 @@
 # dsh-browser-bridge
 
-DeepSeek Harness 插件：把 **BridgeDeck** 的 CLI 包装成模型可直接调用的 `browser_*` 工具（34 个）。
+DeepSeek Harness 插件：把 **BridgeDeck** 的 CLI 包装成模型可直接调用的 `browser_*` 工具（37 个）。
 模型在会话里就能读页面、点按填表、导出表格、截图、抓网络，用的还是用户本机已登录的浏览器。
 
 ## 工具
@@ -24,6 +24,8 @@ DeepSeek Harness 插件：把 **BridgeDeck** 的 CLI 包装成模型可直接调
 | `browser_record` | 操作录制 start/stop/list |
 | `browser_cooperate` | 共享控制 sync/wait/handback |
 | `browser_recipe` | 流程 list/show/save/approve/run/rm |
+| `browser_plan` | 一次执行多步动作（首个失败即停） |
+| `browser_ledger` | 意图账本 status/resolve（确认后解除阻挡） |
 | `browser_pair` | 远程配对 create/list/redeem/revoke |
 
 上表是主要工具。其余为便捷封装：`browser_tab` / `browser_tab_new` / `browser_tab_select` /
@@ -35,9 +37,45 @@ DeepSeek Harness 插件：把 **BridgeDeck** 的 CLI 包装成模型可直接调
 工具内部就是一次 `bridge <命令> --json` 调用：退出码 0 取 `result`，否则抛带错误码的异常
 （`E_STALE_REF`、`E_TIMEOUT`、`E_BORROW_DENIED`…），模型能按错误码自我修正。
 
+### 工具索引与行为元数据
+
+每个工具在 spec 上暴露 `category`、`risk`（`read`/`write`/`destructive`）、`idempotent`、
+`sideEffects`、`recovery`、`docs`、`methods`，以及 MCP 同义的 `annotations`
+（`readOnlyHint`/`destructiveHint`/`idempotentHint`）。完整索引由生成器输出到
+[`TOOLS.md`](TOOLS.md)：
+
+```powershell
+node dsh-plugin/scripts/build-tools-doc.mjs          # 生成
+node dsh-plugin/scripts/build-tools-doc.mjs --check  # 校验漂移
+```
+
+### 失败恢复
+
+工具失败时入口把异常转成 `{ ok:false, error:{ code, retry, steps, docs } }`，`output.render`
+渲染成“错误码 + 重试语义 + 可执行下一步”（如重新 observe、session start、问用户），模型不需要
+猜。错误码 → 动作表在 `lib/error-recovery.mjs`，覆盖仓库权威清单里的全部 122 个错误码。
+
+### 离线验证（无 daemon/无浏览器）
+
+```powershell
+node tests/plugin/selftest.mjs                    # 工具映射 + 入口 apply
+node --test tests/unit/plugin-*.test.mjs tests/unit/dsh-*.test.mjs
+node dsh-plugin/scripts/tool-matrix.mjs           # 37 工具 × 4 场景（148 格）→ TOOLS-MATRIX.md
+node dsh-plugin/scripts/tool-matrix.mjs --check
+npm run check:plugin-profile                      # 真实 DSH 临时 profile 安装（需 dsh CLI）
+```
+
 插件还会把同一份 `browser-bridge` 技能注册到 DSH 的 skills 服务（`ctx.skills.register`，
 并按 agent 作用域注册），因此 DSH 内可以直接 `/browser-bridge`，不需要再执行
 `bridge install-skill --harness dsh`。CLI 技能仍是其他 harness 的安装来源。
+插件在 bundled 技能里额外附带 4 篇补充参考（`actions-guide` / `transactions` / `evaluation` /
+`offline-testing`），源文件在 `skill-extras/references/`，由 `scripts/build-skill-content.mjs`
+同步进 `skill/` 并在技能正文尾部生成索引：
+
+```powershell
+node dsh-plugin/scripts/build-skill-content.mjs          # 同步技能内容 + references
+node dsh-plugin/scripts/build-skill-content.mjs --check  # 未同步即 exit 1
+```
 
 ## 安装
 

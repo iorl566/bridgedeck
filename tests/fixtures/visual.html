@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>视觉对象夹具</title>
+<body style="margin:0">
+  <canvas id="viz" width="240" height="120" style="display:block"></canvas>
+  <img id="pic" alt="示例图片" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z0ZkAAAAASUVORK5CYII=" style="width:120px;height:80px;display:block" />
+  <button id="visual-btn" type="button">视觉按钮</button>
+  <script>
+    const canvas = document.getElementById('viz');
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#2f6fed';
+    ctx.fillRect(0, 0, 240, 120);
+    ctx.fillStyle = '#fff';
+    ctx.font = '16px sans-serif';
+    ctx.fillText('canvas visual', 30, 60);
+  </script>
+</body>

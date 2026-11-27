@@ -1,0 +1,16 @@
+Check for and install bsk CLI updates
+
+Usage: bsk.exe update [OPTIONS]
+
+Options:
+      --check                      Only check whether a newer version is available; do not install it
+      --context <CONTEXT>          Control context returned by cooperate sync. Required for shared-tab actions
+  -y, --yes                        Skip interactive confirmation prompts
+      --depends-on <DEPENDS_ON>    Legacy strict-policy decision regions. Target policy uses --expect instead
+      --no-restart-daemon          Do not restart the daemon after replacing the CLI binary
+      --observation <OBSERVATION>  Explicit observation ID for visual or untargeted actions; never inferred from cached state
+      --expect <EXPECT>            JSON array of target facts to check before input: [{"target":"@e1","field":"text","equals":"Save"}]
+      --json                       Emit machine-readable JSON output (when meaningful)
+      --quiet                      Suppress informational output
+  -v, --verbose...                 Increase log verbosity (`-v` debug, `-vv` trace)
+  -h, --help                       Print help

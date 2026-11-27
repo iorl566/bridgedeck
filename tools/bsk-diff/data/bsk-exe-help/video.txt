@@ -1,0 +1,22 @@
+Record a task tab to MP4 and save it to an explicit destination
+
+Usage: bsk.exe video [OPTIONS] <COMMAND>
+
+Commands:
+  start    Record a fixed task tab as H.264 MP4 (no audio), then return immediately
+  status   Read state, including an automatically stopped recording
+  stop     Stop idempotently. Optionally export to an explicit path
+  save     Save an already finished recording on this CLI's computer
+  list     List this connection's browser-owned recordings (retained for 24 hours)
+  discard  Delete a stopped browser copy; files already saved are unaffected
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --context <CONTEXT>          Control context returned by cooperate sync. Required for shared-tab actions
+      --depends-on <DEPENDS_ON>    Legacy strict-policy decision regions. Target policy uses --expect instead
+      --observation <OBSERVATION>  Explicit observation ID for visual or untargeted actions; never inferred from cached state
+      --expect <EXPECT>            JSON array of target facts to check before input: [{"target":"@e1","field":"text","equals":"Save"}]
+      --json                       Emit machine-readable JSON output (when meaningful)
+      --quiet                      Suppress informational output
+  -v, --verbose...                 Increase log verbosity (`-v` debug, `-vv` trace)
+  -h, --help                       Print help

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EVAL_DOM_PENDING</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { width: 600px; height: 1200px; background: #ffffff; font: 14px/1.2 system-ui, sans-serif; }
+  #under-button { position: fixed; top: 10px; left: 10px; width: 80px; height: 30px; z-index: 1; }
+  #fixed-overlay { position: fixed; top: 0; left: 0; width: 100px; height: 40px; z-index: 5; background: rgba(0, 0, 0, 0.5); color: #fff; }
+  #pointer-through { position: fixed; top: 50px; left: 0; width: 120px; height: 40px; z-index: 6; pointer-events: none; background: rgba(255, 0, 0, 0.4); }
+  #pointer-target { position: fixed; top: 60px; left: 20px; width: 60px; height: 20px; z-index: 1; }
+  #stack-low { position: fixed; top: 150px; left: 0; width: 100px; height: 40px; z-index: 10; background: #99ccff; }
+  #stack-high { position: fixed; top: 160px; left: 0; width: 100px; height: 40px; z-index: 20; background: #336699; }
+  #closed-host { position: fixed; top: 220px; left: 0; width: 100px; height: 40px; z-index: 3; background: #eeeeee; }
+  #modal { width: 200px; height: 120px; padding: 0; border: 0; }
+  #modal-content { width: 100%; height: 100%; background: #fafafa; }
+  #modal-input { position: absolute; top: 10px; left: 10px; width: 120px; height: 24px; }
+  #rtl-box { position: fixed; top: 300px; left: 0; width: 200px; height: 40px; padding: 0 10px; box-sizing: border-box; direction: rtl; background: #f0f0f0; }
+  #rtl-child { display: inline-block; width: 40px; height: 10px; margin-inline-start: 12px; background: #333333; }
+  .toast { position: fixed; top: 360px; left: 0; width: 160px; height: 30px; opacity: 0; transition: none; background: #222222; color: #ffffff; }
+  .toast.show { opacity: 1; }
+  #sticky-header { position: sticky; top: 0; height: 30px; background: #dddddd; }
+  #sticky-spacer { height: 900px; }
+</style>
+</head>
+<body>
+  <button id="under-button" type="button">under</button>
+  <div id="fixed-overlay">overlay</div>
+  <div id="pointer-through">through</div>
+  <button id="pointer-target" type="button">target</button>
+  <div id="stack-low">low</div>
+  <div id="stack-high">high</div>
+  <div id="closed-host">closed host</div>
+  <dialog id="modal"><div id="modal-content"><input id="modal-input" aria-label="modal field"></div></dialog>
+  <div id="rtl-box"><span id="rtl-child"></span></div>
+  <div id="toast" class="toast">saved</div>
+  <div id="sticky-header">sticky</div>
+  <div id="sticky-spacer"></div>
+  <script type="application/json" id="eval-facts">{}</script>
+  <script type="module" src="./eval-dom-cases.js"></script>
+</body>
+</html>

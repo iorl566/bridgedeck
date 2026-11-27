@@ -1,0 +1,243 @@
+  // §E 动作：click/hover/scroll/fill/press/focus/get-html/actionable/expect/help
+  // ===========================================================================
+  async function actionClick(args) {
+    let el = resolveElement(args);
+    scrollIntoView(el);
+    await ensureActionable(el, args, 'click');
+    markAgentInput();
+    try {
+      if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+    } catch {
+      // 忽略 focus 失败
+    }
+    await sleepMs(20);
+    if (args.selector && !args.ref) {
+      let current = null;
+      try { current = document.querySelector(args.selector); } catch { current = null; }
+      if (current && current !== el) pageError('E_NOT_ACTIONABLE', '目标在聚焦时被替换（selector 指向新节点），未重放点击');
+    }
+    if (!el.isConnected) {
+      // 安全契约：动作前目标被替换就 fail closed，不把旧动作重放到新节点。
+      pageError('E_NOT_ACTIONABLE', '目标在聚焦时被替换（detached），未重放点击');
+    }
+    // 有些站点把真正的按钮嵌在外层 custom button 里（例如 SSO 登录按钮），
+    // 直接 el.click() 只触发外层，页面不会提交。优先点击视口中心命中的子元素。
+    let target = el;
+    try {
+      const rect = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (hit && hit !== el && el.contains(hit) && typeof hit.click === 'function' && !(hit.closest && hit.closest('[id^="__bb_"]'))) {
+        target = hit;
+      }
+    } catch {
+      // 命中测试失败时退回目标本身
+    }
+    if (typeof target.click === 'function') {
+      target.click();
+    } else {
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    }
+    return { ok: true };
+  }
+
+  async function actionHover(args) {
+    const el = resolveElement(args);
+    scrollIntoView(el);
+    await ensureActionable(el, args, 'hover');
+    markAgentInput();
+    const common = { bubbles: true, cancelable: true, view: window };
+    el.dispatchEvent(new MouseEvent('pointerover', common));
+    el.dispatchEvent(new MouseEvent('mouseover', common));
+    el.dispatchEvent(new MouseEvent('pointerenter', { ...common, bubbles: false }));
+    el.dispatchEvent(new MouseEvent('mouseenter', { ...common, bubbles: false }));
+    el.dispatchEvent(new MouseEvent('mousemove', common));
+    return { ok: true };
+  }
+
+  async function actionAutoScroll() {
+    const stepMs = 120;
+    let lastHeight = 0;
+    let stable = 0;
+    for (let i = 0; i < 60; i += 1) {
+      window.scrollBy(0, Math.max(200, Math.round(window.innerHeight * 0.85)));
+      await sleepMs(stepMs);
+      const height = document.documentElement ? document.documentElement.scrollHeight : document.body.scrollHeight;
+      const atBottom = window.innerHeight + window.scrollY >= height - 4;
+      if (height === lastHeight) stable += 1; else stable = 0;
+      lastHeight = height;
+      if (atBottom && stable >= 2) break;
+    }
+    window.scrollTo(0, 0);
+    await sleepMs(180);
+    return { height: lastHeight };
+  }
+
+  function actionRect(args) {
+    const el = resolveElement(args);
+    const rect = el.getBoundingClientRect();
+    return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+  }
+
+  /** 把子 frame 的本地坐标逐层投影到当前文档；只做几何，不做动作。 */
+  function frameProjectPoint(args) {
+    if (typeof args.url !== 'string' || !args.url) return null;
+    const normalize = (value, base) => {
+      try { return new URL(String(value || ''), base).href; } catch { return String(value || ''); }
+    };
+    const target = normalize(args.url, location.href);
+    const x = Number(args.x);
+    const y = Number(args.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const chain = [];
+    const find = (doc, base) => {
+      if (!doc || !doc.querySelectorAll) return false;
+      for (const owner of doc.querySelectorAll('iframe,frame')) {
+        const src = normalize(owner.getAttribute('src'), base);
+        if (src === target) {
+          chain.push({ owner, doc });
+          return true;
+        }
+        // 同源嵌套：继续在子文档里找；跨源拿不到 contentDocument，保持单层回退。
+        try {
+          if (owner.contentDocument && find(owner.contentDocument, src)) {
+            chain.push({ owner, doc });
+            return true;
+          }
+        } catch {
+          // 跨源 frame 不可读；由直接 src 匹配处理。
+        }
+      }
+      return false;
+    };
+    if (!find(document, location.href)) return null;
+    let px = x;
+    let py = y;
+    const owners = [];
+    // chain 是「目标在内、外层在后」，从内往外加 owner 的 viewport 四边形。
+    for (const entry of chain) {
+      const win = entry.doc.defaultView;
+      // Chromium 没有 getBoxQuads：只要 owner 或祖先带 transform/rotate/scale，
+      // 就放弃页面内 rect 投影，交给 CDP owner 链做完整仿射投影。
+      for (let node = entry.owner; node && node.nodeType === 1; node = node.parentElement) {
+        const cs = win.getComputedStyle(node);
+        if ((cs.transform && cs.transform !== 'none') ||
+            (cs.rotate && cs.rotate !== 'none') ||
+            (cs.scale && cs.scale !== 'none')) return null;
+      }
+      const rect = entry.owner.getBoundingClientRect();
+      const style = win.getComputedStyle(entry.owner);
+      const left = Number.parseFloat(style.borderLeftWidth) || 0;
+      const top = Number.parseFloat(style.borderTopWidth) || 0;
+      const width = Number(entry.owner.offsetWidth) || Number(entry.owner.clientWidth) || rect.width;
+      const height = Number(entry.owner.offsetHeight) || Number(entry.owner.clientHeight) || rect.height;
+      // 无变换时四边形退化为 axis-aligned rect；仍走同一仿射公式。
+      const p1 = { x: rect.left, y: rect.top };
+      const p2 = { x: rect.right, y: rect.top };
+      const p4 = { x: rect.left, y: rect.bottom };
+      const ux = { x: (p2.x - p1.x) / width, y: (p2.y - p1.y) / width };
+      const uy = { x: (p4.x - p1.x) / height, y: (p4.y - p1.y) / height };
+      const localX = left + px;
+      const localY = top + py;
+      px = p1.x + ux.x * localX + uy.x * localY;
+      py = p1.y + ux.y * localX + uy.y * localY;
+      owners.push({
+        url: normalize(entry.owner.getAttribute('src'), entry.doc.location ? entry.doc.location.href : location.href),
+        rect: { x: p1.x, y: p1.y, width, height },
+        scale: { x: Math.hypot(ux.x, ux.y), y: Math.hypot(uy.x, uy.y) },
+      });
+    }
+    return { x: px, y: py, frameUrl: target, owners };
+  }
+
+  function refSelector(args) {
+    const el = resolveElement(args);
+    if (!el || !el.tagName) return null;
+    if (el.id) return { selector: '#' + CSS.escape(el.id), frameUrl: location.href };
+    const parts = [];
+    let node = el;
+    for (let depth = 0; node && node.nodeType === 1 && depth < 8; depth += 1) {
+      let part = node.tagName.toLowerCase();
+      const parent = node.parentElement;
+      if (parent) {
+        const same = [...parent.children].filter((child) => child.tagName === node.tagName);
+        if (same.length > 1) part += ':nth-of-type(' + (same.indexOf(node) + 1) + ')';
+      }
+      parts.unshift(part);
+      if (node === document.body || node === document.documentElement) break;
+      node = parent;
+    }
+    return { selector: parts.join(' > '), frameUrl: location.href };
+  }
+
+  function actionPoint(args) {
+    const el = resolveElement(args);
+    scrollIntoView(el);
+    const rect = el.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, width: rect.width, height: rect.height };
+  }
+
+  const DATE_TYPES = new Set(['date', 'time', 'datetime-local', 'month', 'week']);
+
+  async function actionFill(args) {
+    const el = resolveElement(args);
+    if (typeof args.value !== 'string') pageError('E_BAD_ARG', 'fill 需要字符串 value');
+    const noClear = args.noClear === true;
+    scrollIntoView(el);
+    await ensureActionable(el, args, 'fill');
+    try {
+      if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+    } catch {
+      // 忽略
+    }
+    if (!el.isConnected) pageError('E_NOT_ACTIONABLE', '目标在聚焦时被替换（detached）');
+    const inputType = el.tagName === 'INPUT' ? String(el.type || '').toLowerCase() : '';
+    const dateLike = DATE_TYPES.has(inputType);
+    if (dateLike && noClear) {
+      pageError('E_BAD_ARG', '日期/时间输入不支持 --no-clear（浏览器会整体替换）');
+    }
+    if (dateLike) {
+      const normalizer = el.ownerDocument.createElement('input');
+      normalizer.type = inputType;
+      if (el.min) normalizer.min = el.min;
+      if (el.max) normalizer.max = el.max;
+      normalizer.value = String(args.value);
+      if (normalizer.value === '') {
+        pageError('E_BAD_ARG', '日期/时间值格式不合法：' + args.value);
+      }
+      if (normalizer.validity.rangeUnderflow || normalizer.validity.rangeOverflow) {
+        const bounds = [el.min && 'min ' + el.min, el.max && 'max ' + el.max].filter(Boolean).join(', ');
+        pageError('E_BAD_ARG', '日期/时间值 ' + normalizer.value + ' 超出允许范围（' + bounds + '）');
+      }
+    }
+    if (el.isContentEditable) {
+      const nextText = noClear ? String(el.textContent || '') + args.value : args.value;
+      el.textContent = nextText;
+      el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: args.value }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return { ok: true };
+    }
+    if (!('value' in el)) {
+      pageError('E_BAD_ARG', '目标元素不支持 fill（既不是输入控件也不是 contenteditable）');
+    }
+    // 用原生 setter 绕过 React/Vue 的 value 劫持
+    const proto =
+      el instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : el instanceof HTMLSelectElement
+          ? HTMLSelectElement.prototype
+          : HTMLInputElement.prototype;
+    const nextValue = noClear ? String(el.value == null ? '' : el.value) + args.value : args.value;
+    const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+    if (descriptor && typeof descriptor.set === 'function') {
+      descriptor.set.call(el, nextValue);
+    } else {
+      el.value = nextValue;
+    }
+    if (DATE_TYPES.has(String(el.type || '').toLowerCase()) && nextValue && !el.value) {
+      pageError('E_BAD_ARG', '日期/时间值不合法：' + nextValue);
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return { ok: true };
+  }
+

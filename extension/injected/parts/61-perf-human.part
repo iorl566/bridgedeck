@@ -1,0 +1,174 @@
+  function perfMetrics() {
+    const navEntry = performance.getEntriesByType('navigation')[0] || null;
+    const paints = performance.getEntriesByType('paint').map(function (entry) {
+      return { name: entry.name, startTime: Math.round(entry.startTime) };
+    });
+    const resources = performance.getEntriesByType('resource');
+    let transferBytes = 0;
+    for (const entry of resources) transferBytes += Number(entry.transferSize) || 0;
+    const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
+    return {
+      url: location.href,
+      ttfb: navEntry ? Math.round(navEntry.responseStart) : null,
+      domContentLoaded: navEntry ? Math.round(navEntry.domContentLoadedEventEnd) : null,
+      load: navEntry ? Math.round(navEntry.loadEventEnd) : null,
+      paints: paints,
+      lcp: lcpEntries.length ? Math.round(lcpEntries[lcpEntries.length - 1].startTime) : null,
+      cls: Math.round(clsValue * 1000) / 1000,
+      longTasks: { count: longTaskCount, maxMs: Math.round(longTaskMax) },
+      resources: { count: resources.length, transferBytes: transferBytes },
+    };
+  }
+
+  let lastHumanInputAt = 0;
+  function markHumanActivity(event) {
+    if (event && event.isTrusted === false) return; // 忽略 agent 自己派发的合成事件
+    lastHumanInputAt = Date.now();
+    try {
+      window.__bbHumanActivity = lastHumanInputAt;
+    } catch {
+      // 忽略
+    }
+  }
+  // Only completed actions yield control. Scrolling, modifier keys, focus and
+  // ineffective keys must not restart the quiet window.
+  for (const type of ['click', 'input', 'change']) {
+    document.addEventListener(type, markHumanActivity, { capture: true, passive: true });
+  }
+
+  function humanActivity() {
+    return { lastInputAt: lastHumanInputAt, active: lastHumanInputAt > 0 && Date.now() - lastHumanInputAt < 2000 };
+  }
+
+  function mediaProgress() {
+    const items = Array.from(document.querySelectorAll('video, audio')).slice(0, 10).map((element, index) => ({
+      index,
+      tag: element.tagName.toLowerCase(),
+      paused: element.paused === true,
+      ended: element.ended === true,
+      currentTime: Number(element.currentTime) || 0,
+      duration: Number.isFinite(element.duration) ? element.duration : 0,
+      readyState: Number(element.readyState) || 0,
+    }));
+    return {
+      count: items.length,
+      playing: items.filter((item) => item.paused === false && item.ended === false).length,
+      items,
+    };
+  }
+
+  function frameMeta() {
+    const top = window.top === window;
+    // 本地文档的 iframe 列表（嵌套 frame 也需要，供父帧把 iframe 元素连到子图根）。
+    const children = Array.from(document.querySelectorAll('iframe')).slice(0, 50).map(function (el, index) {
+      const rect = el.getBoundingClientRect();
+      const style = window.getComputedStyle(el);
+      const hidden =
+        rect.width < 1 ||
+        rect.height < 1 ||
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        Number(style.opacity) === 0 ||
+        el.hidden === true;
+      const offscreen = rect.bottom < 0 || rect.right < 0;
+      return {
+        index: index,
+        url: el.src || '',
+        id: el.id || null,
+        hidden,
+        offscreen,
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        reason: hidden ? 'not-visible' : offscreen ? 'offscreen' : null,
+      };
+    });
+    let frameElement = null;
+    try { frameElement = window.frameElement; } catch { frameElement = null; }
+    if (!frameElement) {
+      return { top, crossOrigin: !top, hidden: top ? false : null, reason: top ? null : 'cross-origin', children };
+    }
+    const rect = frameElement.getBoundingClientRect();
+    const style = window.getComputedStyle(frameElement);
+    const hidden =
+      rect.width < 1 ||
+      rect.height < 1 ||
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      Number(style.opacity) === 0 ||
+      frameElement.hidden === true;
+    const offscreen = rect.bottom < 0 || rect.right < 0 || rect.top > window.innerHeight || rect.left > window.innerWidth;
+    return {
+      top: false,
+      crossOrigin: false,
+      hidden,
+      offscreen,
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      display: style.display,
+      visibility: style.visibility,
+      opacity: style.opacity,
+      reason: hidden ? 'not-visible' : offscreen ? 'offscreen' : null,
+    };
+  }
+
+  function pageMetrics() {
+    const body = document.body;
+    const viewportHeight = window.innerHeight;
+    let fixedBottomHeight = 0;
+    let fixedTopHeight = 0;
+    const fixedBands = [];
+    // 只扫一层常见固定元素；用于长截图 final/footer 重绘，不做完整层树。
+    try {
+      let count = 0;
+      for (const element of document.querySelectorAll('body *')) {
+        count += 1;
+        if (count > 3000) break;
+        const style = getComputedStyle(element);
+        if (style.position !== 'fixed' && style.position !== 'sticky') continue;
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0 || rect.height > viewportHeight * 0.6) continue;
+        if (rect.bottom >= viewportHeight - 2 && rect.top > viewportHeight * 0.5) {
+          fixedBottomHeight = Math.max(fixedBottomHeight, Math.round(viewportHeight - rect.top));
+          if (fixedBands.length < 8) fixedBands.push({ edge: 'bottom', height: Math.round(rect.height), top: Math.round(rect.top), bottom: Math.round(rect.bottom) });
+        }
+        if (rect.top <= 2 && rect.bottom < viewportHeight * 0.5) {
+          fixedTopHeight = Math.max(fixedTopHeight, Math.round(rect.bottom));
+          if (fixedBands.length < 8) fixedBands.push({ edge: 'top', height: Math.round(rect.height), top: Math.round(rect.top), bottom: Math.round(rect.bottom) });
+        }
+      }
+    } catch { /* 受限文档忽略 */ }
+    return {
+      url: location.href,
+      title: document.title || '',
+      scrollHeight: Math.max(
+        document.documentElement ? document.documentElement.scrollHeight : 0,
+        body ? body.scrollHeight : 0,
+      ),
+      innerHeight: window.innerHeight,
+      innerWidth: window.innerWidth,
+      scrollY: window.scrollY,
+      scrollX: window.scrollX,
+      scrollWidth: Math.max(document.documentElement ? document.documentElement.scrollWidth : 0, document.body ? document.body.scrollWidth : 0),
+      dpr: window.devicePixelRatio || 1,
+      revision: currentRevision(),
+      fixedBottomHeight,
+      fixedTopHeight,
+      fixedBands,
+    };
+  }
+
+  function scrollToY(args) {
+    const y = Number(args.y);
+    window.scrollTo(0, Number.isFinite(y) ? y : 0);
+    return { scrollY: window.scrollY };
+  }
+
+  // ---------- 节点级签名（动态读取校验：target_detached / 节点级 observed_changes） ----------
+  //
+  // 页面级 revision 只能判断“整页变没变”。节点级校验需要能回答：
+  // - 观测到的那个节点还在不在（detached）；
+  // - 它自己的文本/值/属性/状态有没有变（而不是邻居变了）。
+  // 签名刻意做小：内容用 FNV-1a 哈希，几何只做记录、不作为阻断条件（滚动/重排不算内容变化）。
+
+
+  // ===========================================================================

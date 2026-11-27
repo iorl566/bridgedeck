@@ -266,6 +266,21 @@
     return '';
   };
 
+  let recordPort = null;
+  const connectRecordPort = () => {
+    if (recordPort) return;
+    try {
+      recordPort = chrome.runtime.connect({ name: 'bb-record' });
+      recordPort.postMessage({ type: 'bb.record.ready', documentId: state && state.documentId ? state.documentId : null, frameUrl: location.href });
+      recordPort.onDisconnect.addListener(() => { recordPort = null; });
+    } catch { recordPort = null; }
+  };
+  const disconnectRecordPort = () => {
+    if (!recordPort) return;
+    try { recordPort.disconnect(); } catch { /* ignore */ }
+    recordPort = null;
+  };
+
   const start = (options = {}) => {
     if (state && state.active) return { ok: true, existing: true };
     if (window.__bb_ops && window.__bb_ops.active) return { ok: true, existing: 'injected' };
@@ -278,6 +293,7 @@
       includeAgent: options.includeAgent === true,
       documentId: options.documentId || null,
     };
+    connectRecordPort();
     pending = [];
     sending = false;
     flushTimer = setInterval(flush, 500);
@@ -566,6 +582,7 @@
     flush();
     const events = state.seq;
     state = null;
+    disconnectRecordPort();
     window.__bb_record_capture = { active: false };
     return { ok: true, events };
   };

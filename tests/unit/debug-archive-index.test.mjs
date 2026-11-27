@@ -32,8 +32,8 @@ test('archive index enforces max entries', () => {
 test('archive stats and summary are stable', () => {
   const index = createArchiveIndex();
   index.add(archive('a', 1000, 9000000000000, 3));
-  assert.deepEqual(index.stats(5000), { total: 1, live: 1, requests: 3 });
+  assert.deepEqual(index.stats(5000), { total: 1, live: 1, requests: 3, bytes: 0 });
   assert.deepEqual(archiveSummary(archive('a', 1000, 9000000000000, 3)), {
-    id: 'a', createdAt: new Date(1000).toISOString(), expiresAt: new Date(9000000000000).toISOString(), requests: 3, console: 0, url: 'https://example.com/',
+    id: 'a', createdAt: new Date(1000).toISOString(), expiresAt: new Date(9000000000000).toISOString(), requests: 3, console: 0, journal: 0, bytes: 0, complete: false, url: 'https://example.com/',
   });
 });

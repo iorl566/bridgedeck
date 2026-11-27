@@ -1,0 +1,114 @@
+// injected/page-lib.js
+// 页面侧（ISOLATED world）能力库：observe / snapshot / 动作命令 / 等待探测。
+// 通过 chrome.scripting.executeScript(files) 按需补注入，也作为 content script 在 document_start 注入。
+// 所有状态挂在 globalThis.__BB_PAGE__（同一 frame 的隔离世界在多次注入间共享），导航后随文档重建。
+// 结构索引（同一 IIFE 内顺序）：\
+//   §A 状态与 DOM 代数（revision / mutation tracker）      → currentRevision、ensureMutationTracker
+//   §B 基础工具（文本 / 可见性 / 角色 / 无障碍名）           → roleOf、accessibleName、statusFlags
+//   §C 观察与页面图（VOM / 视觉扫描 / 命中 / 对比度 / graph） → buildObservation、walk、visualScan、hitAt、formatNode
+//   §D 目标解析（阻塞层 / 增量观察 / ref→element）           → observe、snapshot、resolveElement
+//   §E 动作（click / fill / press / focus / expect / help）  → actionClick、actionFill、actionPress、actionability
+//   §F 视觉与等待（坐标点击 / 滚动空闲 / 性能 / human）       → visualRefs、clickPoint、perfMetrics、humanActivity
+//   §G 签名与读取（nodeSignature / fieldInfo / actionRead）  → nodeSignatureOf、actionReadFields、actionRead
+//   §H 提取（table / list / grid / discover / 预算 / 覆盖度） → tableExtract、listExtract、gridExtract、actionExtract
+//   §I 指针 / 拖拽 / 滚轮 / 上传 / fetch                    → actionDrag、actionWheel、actionUpload、actionFetchRun
+//   §J 消息分派（handle）与 installHumanWatchers
+//
+(() => {
+  'use strict';
+
+  const KEY = '__BB_PAGE__';
+  const LIB_VERSION = 53;
+  if (globalThis[KEY] && globalThis[KEY].version >= LIB_VERSION) return;
+
+  const NAME_MAX = 80;
+  const TEXT_MAX = 120;
+  const SKIP_TAGS = new Set([
+    'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'LINK', 'META', 'TITLE', 'HEAD', 'SVG', 'MATH',
+  ]);
+  // 可交互角色：分配 @eN ref
+  const INTERACTIVE_ROLES = new Set([
+    'link', 'button', 'textbox', 'searchbox', 'checkbox', 'radio', 'combobox', 'listbox',
+    'option', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'switch', 'slider', 'spinbutton',
+    'tab', 'treeitem',
+  ]);
+  // 需要输出的语义角色（含上面的可交互角色）
+  const SEMANTIC_ROLES = new Set([
+    ...INTERACTIVE_ROLES,
+    'heading', 'paragraph', 'listitem', 'img', 'navigation', 'main', 'form', 'table', 'list',
+    'banner', 'contentinfo', 'complementary', 'dialog', 'iframe', 'progressbar', 'separator',
+    'group', 'region', 'toolbar', 'document',
+    'tree', 'menu', 'menubar', 'tablist', 'row', 'rowheader', 'columnheader', 'gridcell', 'article', 'figure', 'status', 'alert', 'note', 'tooltip',
+  ]);
+  const TAG_ROLES = {
+    A: 'link',
+    BUTTON: 'button',
+    SELECT: 'combobox',
+    TEXTAREA: 'textbox',
+    H1: 'heading',
+    H2: 'heading',
+    H3: 'heading',
+    H4: 'heading',
+    H5: 'heading',
+    H6: 'heading',
+    NAV: 'navigation',
+    MAIN: 'main',
+    FORM: 'form',
+    IMG: 'img',
+    TABLE: 'table',
+    LI: 'listitem',
+    P: 'paragraph',
+    UL: 'list',
+    OL: 'list',
+    HEADER: 'banner',
+    FOOTER: 'contentinfo',
+    ASIDE: 'complementary',
+    DIALOG: 'dialog',
+    IFRAME: 'iframe',
+    SUMMARY: 'button',
+    PROGRESS: 'progressbar',
+    HR: 'separator',
+    FIELDSET: 'group',
+    DETAILS: 'group',
+    OPTGROUP: 'group',
+    OPTION: 'option',
+  };
+  const INPUT_ROLES = {
+    text: 'textbox',
+    search: 'searchbox',
+    email: 'textbox',
+    url: 'textbox',
+    tel: 'textbox',
+    password: 'textbox',
+    number: 'spinbutton',
+    checkbox: 'checkbox',
+    radio: 'radio',
+    range: 'slider',
+    button: 'button',
+    submit: 'button',
+    reset: 'button',
+    image: 'button',
+    file: 'button',
+    color: 'button',
+    date: 'textbox',
+    'datetime-local': 'textbox',
+    month: 'textbox',
+    week: 'textbox',
+    time: 'textbox',
+  };
+
+  const state = {
+    version: LIB_VERSION,
+    refs: new Map(),
+    elRefs: new WeakMap(),
+    seq: 0,
+    lastObservation: null,
+    rowAnchors: new Map(),
+    // mutation log：上一次 observe 之后的 DOM/属性/布局变化，用于 unchanged 快路径与增量补丁。
+    mutation: { raw: [], layoutDirty: false, interactionDirty: false, started: false, docs: new WeakSet(), loadBound: false },
+  };
+
+  // 视觉候选表：index -> element。随文档重建而清空，命中校验按 index 判断"是不是它"。
+  const visualState = { candidates: new Map() };
+
+  // ===========================================================================

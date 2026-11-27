@@ -7,7 +7,9 @@
 // 本文件也是 tests/browser/overlay-dom.js 直接调用的真实 DOM 组件实现。
 
 /** 注入函数：借用确认模态。必须自包含（序列化后在页面里执行）。 */
-export function borrowBanner(requestId, tabTitle, timeoutMs, lang, theme, texts) {
+export function borrowBanner(requestId, tabTitle, timeoutMs, lang, theme, texts, a11y) {
+  const __BB_MARK = '<svg viewBox="0 0 32 32" width="22" height="22" fill="none" aria-hidden="true"><path d="M4.6 24.5h22.8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M8.9 24.5V13.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M23.1 24.5V13.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M8.9 13.2c2.1-3.7 4.9-5.5 7.1-5.5s5 1.8 7.1 5.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M12.6 24.5v-3.9M19.4 24.5v-3.9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
   const BASE = lang === 'en' ? {
     title: 'Allow tab borrowing?',
     body: 'The agent wants to move this tab into its workspace. You can deny or allow it.',
@@ -24,6 +26,11 @@ export function borrowBanner(requestId, tabTitle, timeoutMs, lang, theme, texts)
     autoDeny: ' 秒后自动拒绝',
   };
   const T = { ...BASE, ...(texts?.borrow || {}) };
+  // 可访问性文案（12 语言动态文案由 SW 侧查表传入；缺省回退到语言包/固定写法）。
+  const A = (a11y && typeof a11y === 'object' && a11y.borrow && typeof a11y.borrow === 'object') ? a11y.borrow : {};
+  // RTL：显式 RTL 语言包，或宿主页面本身就是 RTL 文档。
+  const RTL_LANGS = /^(ar|he|fa|ur|yi|dv|ps|sd|ug|ckb)\b/i;
+  const rtl = RTL_LANGS.test(String(lang || '')) || document.documentElement.dir === 'rtl';
   // 浮层函数会被序列化到页面执行，主题 helper 必须写在函数体内。
   const themeQuery = typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia('(prefers-color-scheme: dark)') : null;
   const paintTheme = (target) => {
@@ -42,24 +49,38 @@ export function borrowBanner(requestId, tabTitle, timeoutMs, lang, theme, texts)
   host.id = ID;
   host.setAttribute('data-bb-ui', 'borrow');
   host.setAttribute('data-bb-overlay', '');
+  host.setAttribute('dir', rtl ? 'rtl' : 'ltr');
   host.setAttribute('role', 'dialog');
   host.setAttribute('aria-modal', 'true');
   host.setAttribute('aria-label', T.title);
+  host.setAttribute('aria-keyshortcuts', 'Escape');
   host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:var(--bb-backdrop,rgba(15,23,42,.42));backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;pointer-events:auto';
+  // 屏幕阅读器提示：Esc = 拒绝（不占视觉空间，因此不改变既有卡片样式）。
+  const sr = document.createElement('span');
+  sr.setAttribute('data-a11y-hint', 'esc');
+  sr.setAttribute('role', 'status');
+  sr.setAttribute('aria-live', 'polite');
+  sr.style.cssText = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0';
+  sr.textContent = A.escHint || ('Esc · ' + T.deny);
   const card = document.createElement('div');
-  card.style.cssText = 'box-sizing:border-box;width:400px;max-width:calc(100vw - 32px);background:var(--bb-surface,#f7f9fc);color:var(--bb-fg,#1c2230);border:1px solid var(--bb-line,#dbe4f5);border-radius:16px;padding:22px 24px 20px;box-shadow:0 25px 50px var(--bb-shadow-strong,rgba(28,34,48,.28));font:13px/1.5 system-ui,sans-serif';
+  card.style.cssText = 'box-sizing:border-box;width:400px;max-width:calc(100vw - 32px);background:var(--bb-surface,#f7f9fc);color:var(--bb-fg,#1c2230);border:1px solid var(--bb-line,#dbe4f5);border-radius:14px;padding:22px 24px 20px;box-shadow:0 25px 50px var(--bb-shadow-strong,rgba(28,34,48,.28));font:13px/1.5 system-ui,sans-serif';
   const title = String(tabTitle || '').slice(0, 30) + (String(tabTitle || '').length > 30 ? '…' : '');
   card.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    + '<span style="width:22px;height:22px;border-radius:6px;background:var(--bb-accent,#2f6fed);display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--bb-accent-fg,#fff)" stroke-width="2.2" stroke-linecap="round"><path d="M3 17h18"/><path d="M6 17V9"/><path d="M18 17V9"/><path d="M6 9c3 4 9 4 12 0"/></svg></span>'
-    + '<strong style="font-size:15px;color:var(--bb-fg,#1c2230)">' + T.title + '</strong></div>'
-    + '<p style="margin:0 0 8px;color:var(--bb-body,#475569)">' + T.body + '</p>'
+    + '<span style="width:28px;height:28px;border-radius:9px;background:linear-gradient(140deg,var(--bb-accent,#2f6fed),var(--bb-accent-strong,#1f4fd0));color:var(--bb-accent-fg,#fff);display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(47,111,237,.35)">' + __BB_MARK + '</span>'
+    + '<strong data-borrow-title style="font-size:15px;color:var(--bb-fg,#1c2230)">' + ((T.inactiveTitle && document.visibilityState === 'hidden') ? T.inactiveTitle : T.title) + '</strong></div>'
+    + '<p id="__bb_borrow_body" style="margin:0 0 8px;color:var(--bb-body,#475569)">' + T.body + '</p>'
     + '<p style="margin:0 0 14px;color:var(--bb-muted,#667085);font-size:12px">' + T.target + (title ? title.replace(/[<>&]/g, '') : ((lang === 'zh' || lang === 'zh-TW') ? '当前标签页' : 'Current tab')) + '</p>'
-    + '<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin:6px 0 16px">'
-    + '<svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="var(--bb-line,#dbe4f5)" stroke-width="4"/><circle data-ring cx="22" cy="22" r="18" fill="none" stroke="var(--bb-accent,#2f6fed)" stroke-width="4" stroke-linecap="round" stroke-dasharray="113.1" stroke-dashoffset="0" transform="rotate(-90 22 22)"/></svg>'
-    + '<span data-count style="font-size:12.5px;color:var(--bb-muted,#667085)"></span></div>'
-    + '<div style="display:flex;gap:10px"><button type="button" data-deny style="flex:1;height:34px;border-radius:9px;border:1px solid var(--bb-line,#dbe4f5);background:var(--bb-surface-raised,#fff);color:var(--bb-fg,#1c2230);font-size:12.5px;font-weight:550;cursor:pointer">' + T.deny + '</button>'
-    + '<button type="button" data-allow style="flex:1;height:34px;border-radius:9px;border:1px solid var(--bb-accent,#2f6fed);background:var(--bb-accent,#2f6fed);color:var(--bb-accent-fg,#fff);font-size:12.5px;font-weight:600;cursor:pointer">' + T.allow + '</button></div>';
+    + '<div style="display:flex;align-items:center;justify-content:center;gap:14px;margin:6px 0 16px">'
+    + '<span style="position:relative;display:inline-flex;width:52px;height:52px;align-items:center;justify-content:center">'
+    + '<svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="21" fill="none" stroke="var(--bb-line,#dbe4f5)" stroke-width="4"/><circle data-ring cx="26" cy="26" r="21" fill="none" stroke="var(--bb-accent,#2f6fed)" stroke-width="4" stroke-linecap="round" stroke-dasharray="131.9" stroke-dashoffset="0" transform="rotate(-90 26 26)"/></svg>'
+    + '<span data-num aria-hidden="true" style="position:absolute;font:600 15px/1 system-ui,sans-serif;color:var(--bb-fg,#1c2230)"></span></span>'
+    + '<span data-count aria-live="off" style="font-size:12.5px;color:var(--bb-muted,#667085)"></span></div>'
+    + '<div style="display:flex;gap:10px"><button type="button" data-deny style="flex:1;height:32px;border-radius:8px;border:1px solid var(--bb-line,#dbe4f5);background:var(--bb-surface-raised,#fff);color:var(--bb-fg,#1c2230);font-size:12.5px;font-weight:550;cursor:pointer">' + T.deny + '</button>'
+    + '<button type="button" data-allow style="flex:1;height:32px;border-radius:8px;border:1px solid var(--bb-accent,#2f6fed);background:var(--bb-accent,#2f6fed);color:var(--bb-accent-fg,#fff);font-size:12.5px;font-weight:600;cursor:pointer">' + T.allow + '</button></div>';
+  card.setAttribute('aria-describedby', '__bb_borrow_body');
+  host.appendChild(sr);
   host.appendChild(card);
+
   paintTheme(host);
   if (themeQuery) {
     const themeListener = () => paintTheme(host);
@@ -69,10 +90,18 @@ export function borrowBanner(requestId, tabTitle, timeoutMs, lang, theme, texts)
 
   const ring = card.querySelector('[data-ring]');
   const count = card.querySelector('[data-count]');
+  const num = card.querySelector('[data-num]');
+  const heading = card.querySelector('[data-borrow-title]');
+  try {
+    document.addEventListener('visibilitychange', () => {
+      if (!heading) return;
+      heading.textContent = (T.inactiveTitle && document.visibilityState === 'hidden') ? T.inactiveTitle : T.title;
+    });
+  } catch { /* 忽略 */ }
   const denyBtn = card.querySelector('[data-deny]');
   const allowBtn = card.querySelector('[data-allow]');
   const previousFocus = document.activeElement;
-  const circumference = 2 * Math.PI * 18;
+  const circumference = 2 * Math.PI * 21;
   let left = total;
   let settled = false;
   const finish = (ok, timedOut) => {
@@ -89,10 +118,14 @@ export function borrowBanner(requestId, tabTitle, timeoutMs, lang, theme, texts)
     } catch { /* SW 不可达时由超时兜底 */ }
   };
   const paint = () => {
-    count.textContent = lang === 'en' ? T.autoDeny + left + ' s' : left + T.autoDeny;
+    if (num) num.textContent = String(left);
+    count.textContent = A.countdown
+      ? String(A.countdown).replace('{seconds}', String(left))
+      : (lang === 'en' ? T.autoDeny + left + ' s' : left + T.autoDeny);
     ring.style.strokeDashoffset = String(circumference * (1 - left / total));
   };
   paint();
+  let announcedCountdown = false;
   const timer = globalThis['set' + 'Interval'](() => {
     left -= 1;
     if (left <= 0) {
@@ -101,6 +134,13 @@ export function borrowBanner(requestId, tabTitle, timeoutMs, lang, theme, texts)
       return;
     }
     paint();
+    // 只在剩余 5 秒时播报一次，避免每秒刷屏（视觉倒计时仍是 aria-live=off）。
+    if (!announcedCountdown && left === 5) {
+      announcedCountdown = true;
+      sr.textContent = A.countdown
+        ? String(A.countdown).replace('{seconds}', String(left))
+        : (lang === 'en' ? T.autoDeny + left + ' s' : left + T.autoDeny);
+    }
   }, 1000);
   denyBtn.addEventListener('click', () => { globalThis['clear' + 'Interval'](timer); finish(false, false); });
   allowBtn.addEventListener('click', () => { globalThis['clear' + 'Interval'](timer); finish(true, false); });
@@ -124,7 +164,8 @@ export function borrowBanner(requestId, tabTitle, timeoutMs, lang, theme, texts)
 }
 
 /** 非活动标签页的借用确认 Toast：不抢前台，不遮目标页面。 */
-export function borrowToast(requestId, tabTitle, timeoutMs, lang, theme, texts) {
+export function borrowToast(requestId, tabTitle, timeoutMs, lang, theme, texts, a11y) {
+  const __BB_TOAST_MARK = '<svg viewBox="0 0 32 32" width="22" height="22" fill="none" aria-hidden="true"><path d="M4.6 24.5h22.8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M8.9 24.5V13.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M23.1 24.5V13.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M8.9 13.2c2.1-3.7 4.9-5.5 7.1-5.5s5 1.8 7.1 5.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M12.6 24.5v-3.9M19.4 24.5v-3.9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
   // 浮层函数会被序列化到页面执行，主题 helper 必须写在函数体内。
   const themeQuery = typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia('(prefers-color-scheme: dark)') : null;
   const paintTheme = (target) => {
@@ -152,15 +193,20 @@ export function borrowToast(requestId, tabTitle, timeoutMs, lang, theme, texts) 
     auto: 's',
   };
   const T = { ...BASE, ...(texts?.toast || {}) };
+  const A = (a11y && typeof a11y === 'object' && a11y.toast && typeof a11y.toast === 'object') ? a11y.toast : {};
+  const RTL_LANGS = /^(ar|he|fa|ur|yi|dv|ps|sd|ug|ckb)\b/i;
+  const rtl = RTL_LANGS.test(String(lang || '')) || document.documentElement.dir === 'rtl';
   let host = document.getElementById(HOST_ID);
   if (!host) {
     host = document.createElement('div');
     host.id = HOST_ID;
     host.setAttribute('data-bb-ui', 'borrow-toast');
     host.setAttribute('data-bb-overlay', '');
+    host.setAttribute('dir', rtl ? 'rtl' : 'ltr');
     host.setAttribute('role', 'region');
     host.setAttribute('aria-label', T.title);
-    host.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;flex-direction:column;gap:8px;pointer-events:none;font:12.5px/1.5 system-ui,sans-serif';
+    host.setAttribute('aria-keyshortcuts', 'Escape');
+    host.style.cssText = 'position:fixed;inset-inline-end:16px;bottom:16px;z-index:2147483647;display:flex;flex-direction:column;gap:8px;pointer-events:none;font:12.5px/1.5 system-ui,sans-serif';
     document.documentElement.appendChild(host);
   }
 
@@ -174,7 +220,7 @@ export function borrowToast(requestId, tabTitle, timeoutMs, lang, theme, texts) 
   item.setAttribute('role', 'group');
   item.style.cssText = 'box-sizing:border-box;width:340px;max-width:calc(100vw - 32px);background:var(--bb-surface,#f7f9fc);color:var(--bb-fg,#1c2230);border:1px solid var(--bb-line,#dbe4f5);border-radius:12px;box-shadow:0 12px 30px var(--bb-shadow,rgba(28,34,48,.18));padding:12px 14px;pointer-events:auto';
   item.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-    + '<span style="width:18px;height:18px;border-radius:5px;background:var(--bb-accent,#2f6fed);display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="var(--bb-accent-fg,#fff)" stroke-width="2.2" stroke-linecap="round"><path d="M3 17h18"/><path d="M6 17V9"/><path d="M18 17V9"/><path d="M6 9c3 4 9 4 12 0"/></svg></span>'
+    + '<span style="width:20px;height:20px;border-radius:6px;background:linear-gradient(140deg,var(--bb-accent,#2f6fed),var(--bb-accent-strong,#1f4fd0));color:var(--bb-accent-fg,#fff);display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;box-shadow:0 2px 5px rgba(47,111,237,.28)">' + __BB_TOAST_MARK + '</span>'
     + '<strong style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--bb-fg,#1c2230)"></strong>'
     + '<span data-count style="font-size:11px;color:var(--bb-muted,#667085);flex:0 0 auto"></span></div>'
     + '<div data-target style="font-size:11.5px;color:var(--bb-muted,#667085);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>'
@@ -186,6 +232,15 @@ export function borrowToast(requestId, tabTitle, timeoutMs, lang, theme, texts) 
   item.querySelector('[data-target]').textContent = T.target + String(tabTitle || '').slice(0, 48);
   item.querySelector('[data-allow]').textContent = T.allow;
   item.querySelector('[data-deny]').textContent = T.deny;
+  item.setAttribute('aria-label', T.title);
+  // 屏幕阅读器提示：Esc 关闭该条借用请求（不占视觉空间）。
+  const hint = document.createElement('span');
+  hint.setAttribute('data-a11y-hint', 'esc');
+  hint.setAttribute('role', 'status');
+  hint.setAttribute('aria-live', 'polite');
+  hint.style.cssText = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0';
+  hint.textContent = A.escHint || ('Esc · ' + T.close);
+  item.appendChild(hint);
   host.appendChild(item);
   const count = item.querySelector('[data-count]');
   const bar = item.querySelector('[data-bar]');
@@ -224,10 +279,18 @@ export function borrowToast(requestId, tabTitle, timeoutMs, lang, theme, texts) 
   denyBtn.addEventListener('click', () => finish(false, false));
   allowBtn.addEventListener('click', () => finish(true, false));
   closeBtn.addEventListener('click', () => finish(false, false));
+  // Esc 关闭这条借用请求（与点 × 等价，按拒绝结算；不影响其它排队中的 Toast）。
+  item.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    finish(false, false);
+  });
 }
 
 /** 注入函数：人工协助卡片（统一 token + 深色模式）。 */
 export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, titleText, lang, theme, texts) {
+  const __BB_MARK = '<svg viewBox="0 0 32 32" width="22" height="22" fill="none" aria-hidden="true"><path d="M4.6 24.5h22.8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M8.9 24.5V13.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M23.1 24.5V13.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M8.9 13.2c2.1-3.7 4.9-5.5 7.1-5.5s5 1.8 7.1 5.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M12.6 24.5v-3.9M19.4 24.5v-3.9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
   const BASE = lang === 'en' ? {
     defaultTitle: 'Agent needs your help',
     defaultReason: 'Finish the page action, then hand control back to the agent.',
@@ -246,6 +309,8 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
     expand: '展开',
   };
   const T = { ...BASE, ...(texts?.help || {}) };
+  const RTL_LANGS = /^(ar|he|fa|ur|yi|dv|ps|sd|ug|ckb)\b/i;
+  const rtl = RTL_LANGS.test(String(lang || '')) || document.documentElement.dir === 'rtl';
   // 浮层函数会被序列化到页面执行，主题 helper 必须写在函数体内。
   const themeQuery = typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia('(prefers-color-scheme: dark)') : null;
   const paintTheme = (target) => {
@@ -278,6 +343,7 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
   host.id = HOST;
   host.setAttribute('data-bb-ui', 'help');
   host.setAttribute('data-bb-overlay', '');
+  host.setAttribute('dir', rtl ? 'rtl' : 'ltr');
   host.style.cssText = 'position:fixed;inset:0;z-index:2147483646;pointer-events:none';
   paintTheme(host);
   if (themeQuery) {
@@ -288,16 +354,18 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
   const style = document.createElement('style');
   style.textContent = [
     ':host{--bb-font:system-ui,-apple-system,"Segoe UI","PingFang SC","Noto Sans CJK SC",sans-serif}',
-    '.card{position:fixed;box-sizing:border-box;width:380px;max-width:calc(100vw - 24px);background:var(--bb-surface,#f7f9fc);color:var(--bb-fg,#1c2230);border:1px solid var(--bb-line,#dbe4f5);border-radius:14px;box-shadow:0 16px 40px var(--bb-shadow,rgba(28,34,48,.18)),0 3px 8px var(--bb-shadow,rgba(28,34,48,.18));font:12.5px/1.5 var(--bb-font);pointer-events:auto}',
+    '.card{position:fixed;box-sizing:border-box;width:400px;max-width:calc(100vw - 24px);background:var(--bb-surface,#f7f9fc);color:var(--bb-fg,#1c2230);border:1px solid var(--bb-line,#dbe4f5);border-radius:14px;box-shadow:0 16px 40px var(--bb-shadow,rgba(28,34,48,.18)),0 3px 8px var(--bb-shadow,rgba(28,34,48,.18));font:12.5px/1.5 var(--bb-font);pointer-events:auto}',
     '.dragbar{position:absolute;top:6px;left:50%;transform:translateX(-50%);width:36px;height:4px;border-radius:2px;background:var(--bb-line,#dbe4f5)}',
     '.head{display:flex;align-items:center;gap:9px;padding:16px 14px 8px;cursor:grab;user-select:none}',
-    '.logo{width:20px;height:20px;border-radius:6px;background:var(--bb-accent,#2f6fed);display:flex;align-items:center;justify-content:center;flex:0 0 auto}',
-    '.logo svg{width:13px;height:13px;color:var(--bb-accent-fg,#fff)}',
+    '.logo{width:26px;height:26px;border-radius:9px;background:linear-gradient(140deg,var(--bb-accent,#2f6fed),var(--bb-accent-strong,#1f4fd0));box-shadow:0 3px 8px rgba(47,111,237,.34);display:flex;align-items:center;justify-content:center;flex:0 0 auto}',
+    '.logo svg{width:20px;height:20px;color:var(--bb-accent-fg,#fff)}',
     '.title{flex:1;font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--bb-fg,#1c2230)}',
     '.chev{width:22px;height:22px;border:0;background:transparent;color:var(--bb-muted,#667085);cursor:pointer;border-radius:6px;font-size:14px;line-height:1}',
     '.chev:hover{background:var(--bb-accent-soft,#e8f0ff)}',
     '.body{padding:0 14px 14px}',
     '.body.hidden{display:none}',
+    '.compact{display:none;padding:0 14px 12px;color:var(--bb-muted,#667085);font-size:11.5px;line-height:1.5}',
+    '.compact.show{display:block}',
     '.msg{margin:2px 0 10px;font-size:12.5px;line-height:1.55;color:var(--bb-fg,#1c2230)}',
     '.note{width:100%;box-sizing:border-box;min-height:38px;max-height:90px;resize:vertical;border:1px solid var(--bb-line,#dbe4f5);border-radius:9px;background:var(--bb-surface-raised,#fff);color:var(--bb-fg,#1c2230);font:12px/1.5 var(--bb-font);padding:8px 10px}',
     '.note::placeholder{color:var(--bb-muted,#667085)}',
@@ -305,12 +373,17 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
     '.btn{height:32px;padding:0 14px;border-radius:9px;border:1px solid var(--bb-line,#dbe4f5);background:var(--bb-surface-raised,#fff);color:var(--bb-fg,#1c2230);font-size:12px;font-weight:550;cursor:pointer}',
     '.btn.primary{background:var(--bb-accent,#2f6fed);border-color:var(--bb-accent,#2f6fed);color:var(--bb-accent-fg,#fff)}',
     'button:focus-visible{outline:2px solid var(--bb-accent,#2f6fed);outline-offset:2px}',
+    '.note:focus-visible{outline:2px solid var(--bb-accent,#2f6fed);outline-offset:2px}',
+    '.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}',
+    ':host([dir="rtl"]) .chev{transform:scaleX(-1)}',
   ].join('');
   const wrap = document.createElement('div');
-  wrap.innerHTML = '<div class="card" role="dialog" aria-label="' + T.defaultTitle + '"><div class="dragbar"></div>'
-    + '<div class="head"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 17h18"/><path d="M6 17V9"/><path d="M18 17V9"/><path d="M6 9c3 4 9 4 12 0"/></svg></span><span class="title"></span><button type="button" class="chev" aria-label="' + T.collapse + '" aria-expanded="true" title="' + T.collapse + '">⌄</button></div>'
-    + '<div class="body"><p class="msg"></p><textarea class="note" aria-label="' + T.placeholder + '" placeholder="' + T.placeholder + '"></textarea>'
+  wrap.innerHTML = '<div class="card" role="dialog" aria-modal="true" aria-labelledby="__bb_help_title" aria-describedby="__bb_help_msg"><div class="dragbar"></div>'
+    + '<div class="head"><span class="logo">' + __BB_MARK + '</span><span class="title" id="__bb_help_title"></span><button type="button" class="chev" aria-label="' + T.collapse + '" aria-expanded="true" aria-controls="__bb_help_body" title="' + T.collapse + '">⌄</button></div>'
+    + '<div class="body" id="__bb_help_body"><p class="msg" id="__bb_help_msg"></p><textarea class="note" aria-label="' + T.placeholder + '" placeholder="' + T.placeholder + '"></textarea>'
     + '<div class="actions"><button type="button" class="btn" data-act="cancel">' + T.cancel + '</button><button type="button" class="btn primary" data-act="done">' + T.done + '</button></div></div>'
+    + '<div class="compact" data-compact></div>'
+    + '<span class="sr" data-a11y-hint></span><span class="sr" data-a11y-live role="status" aria-live="polite"></span>'
     + '</div>';
   shadow.appendChild(style);
   shadow.appendChild(wrap);
@@ -325,6 +398,11 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
   shadow.querySelector('.title').textContent = titleText || T.defaultTitle;
   shadow.querySelector('.msg').textContent = reason || T.defaultReason;
 
+  // RTL 下卡片放到目标的内联起始侧（镜像 LTR 的左对齐位置）。
+  const mirrorX = (x) => {
+    const clamped = Math.max(12, Math.min(window.innerWidth - 392, x));
+    return rtl ? Math.max(12, window.innerWidth - clamped - 384) : clamped;
+  };
   const place = () => {
     if (targetRect && targetRect.width >= 0) {
       hl.style.display = 'block';
@@ -333,7 +411,7 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
       hl.style.width = (targetRect.width + 6) + 'px';
       hl.style.height = (targetRect.height + 6) + 'px';
       if (!card.dataset.moved) {
-        const left = Math.max(12, Math.min(window.innerWidth - 392, targetRect.x));
+        const left = mirrorX(targetRect.x);
         const top = Math.max(12, Math.min(window.innerHeight - 200, targetRect.y + targetRect.height + 12));
         card.style.left = left + 'px';
         card.style.top = top + 'px';
@@ -349,7 +427,7 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
         hl.style.width = (rect.width + 6) + 'px';
         hl.style.height = (rect.height + 6) + 'px';
         if (!card.dataset.moved) {
-          const left = Math.max(12, Math.min(window.innerWidth - 392, rect.left));
+          const left = mirrorX(rect.left);
           const top = Math.max(12, Math.min(window.innerHeight - 200, rect.bottom + 12));
           card.style.left = left + 'px';
           card.style.top = top + 'px';
@@ -358,33 +436,102 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
       }
     }
     if (!card.dataset.moved) {
-      card.style.left = '16px';
-      card.style.top = '16px';
+      const width = card.offsetWidth || 400;
+      card.style.left = Math.max(12, Math.round((window.innerWidth - width) / 2)) + 'px';
+      card.style.top = Math.max(12, Math.min(window.innerHeight - (card.offsetHeight || 160) - 24, Math.round(window.innerHeight * 0.61))) + 'px';
     }
   };
   place();
   window.addEventListener('scroll', place, true);
   window.addEventListener('resize', place);
 
-  const send = (action) => {
-    const note = shadow.querySelector('.note').value || '';
-    try { chrome.runtime.sendMessage({ type: 'bb.help.resolved', requestId, action, note }); } catch { /* 忽略 */ }
+  // ── 可访问性：模态语义已写在 DOM 上，这里补焦点陷阱 / Esc / 焦点归还 ──
+  const previousFocus = document.activeElement;
+  const live = shadow.querySelector('[data-a11y-live]');
+  const hintNode = shadow.querySelector('[data-a11y-hint]');
+  // 用语言包里已有的动作名组合 Esc 提示：12 语言都不需要新增翻译。
+  hintNode.textContent = 'Esc · ' + T.cancel;
+  if (live) live.textContent = (titleText || T.defaultTitle) + ' · ' + T.done;
+  const focusables = () => [...shadow.querySelectorAll('button, textarea, input, select, [href], [tabindex]:not([tabindex="-1"])')]
+    .filter((el) => !el.disabled && el.getClientRects().length > 0);
+  let closed = false;
+  let observer = null;
+  let onKeydown = null;
+  const restoreFocus = () => {
+    try {
+      if (previousFocus && previousFocus.isConnected !== false && typeof previousFocus.focus === 'function') {
+        previousFocus.focus({ preventScroll: true });
+      }
+    } catch { /* 原焦点节点可能已移除 */ }
+  };
+  const close = (action, note) => {
+    if (closed) return;
+    closed = true;
+    if (observer) observer.disconnect();
+    if (onKeydown) host.removeEventListener('keydown', onKeydown);
+    window.removeEventListener('scroll', place, true);
+    window.removeEventListener('resize', place);
     host.remove();
     hl.remove();
     roots.delete(host);
-    window.removeEventListener('scroll', place, true);
-    window.removeEventListener('resize', place);
+    restoreFocus();
+    if (action === null) return;
+    try { chrome.runtime.sendMessage({ type: 'bb.help.resolved', requestId, action, note }); } catch { /* 忽略 */ }
   };
+  // Tab 在卡片内循环：closed shadow 里 document.activeElement 会被重定向到宿主，
+  // 因此必须用 shadow.activeElement 判断当前焦点。
+  onKeydown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      close('skip', shadow.querySelector('.note').value || '');
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const list = focusables();
+    if (!list.length) return;
+    const current = shadow.activeElement || document.activeElement;
+    const index = list.indexOf(current);
+    if (!event.shiftKey && (index === -1 || index === list.length - 1)) {
+      event.preventDefault();
+      list[0].focus({ preventScroll: true });
+    } else if (event.shiftKey && index <= 0) {
+      event.preventDefault();
+      list[list.length - 1].focus({ preventScroll: true });
+    }
+  };
+  host.addEventListener('keydown', onKeydown);
+  // 外部（SW 超时/取消）直接移除宿主时也要归还焦点、摘掉监听。
+  observer = new MutationObserver(() => {
+    if (!host.isConnected && !closed) close(null, '');
+  });
+  observer.observe(document.documentElement, { childList: true });
+  // 初始焦点：留言框（用户最可能的下一步操作），并在收到焦点时给出 Esc 提示。
+  try { shadow.querySelector('.note').focus({ preventScroll: true }); } catch { /* 忽略焦点失败 */ }
+
+  const send = (action) => {
+    const note = shadow.querySelector('.note').value || '';
+    close(action, note);
+  };
+
   shadow.querySelector('[data-act="done"]').addEventListener('click', () => send('done'));
   shadow.querySelector('[data-act="cancel"]').addEventListener('click', () => send('skip'));
+  const compactNode = shadow.querySelector('[data-compact]');
+  if (compactNode) compactNode.textContent = T.compactStatus || T.defaultReason;
   shadow.querySelector('.chev').addEventListener('click', () => {
     body.classList.toggle('hidden');
     const collapsed = body.classList.contains('hidden');
+    if (compactNode) compactNode.classList.toggle('show', collapsed);
     const chev = shadow.querySelector('.chev');
     chev.textContent = collapsed ? '›' : '⌄';
     chev.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     chev.setAttribute('aria-label', collapsed ? T.expand : T.collapse);
     chev.title = collapsed ? T.expand : T.collapse;
+    // 折叠后焦点不能留在 display:none 的留言框里。
+    if (collapsed) {
+      try { chev.focus({ preventScroll: true }); } catch { /* 忽略焦点失败 */ }
+    }
+    if (live) live.textContent = (titleText || T.defaultTitle) + ' · ' + (collapsed ? T.expand : T.collapse);
   });
 
   const head = shadow.querySelector('.head');
@@ -410,7 +557,9 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
 }
 
 /** 注入函数：接管浮层（统一 token + 深色模式）。 */
-export function installTakeover(info, lang, version, theme, texts) {
+export function installTakeover(info, lang, version, theme, texts, a11y) {
+  const __BB_MARK = '<svg viewBox="0 0 32 32" width="22" height="22" fill="none" aria-hidden="true"><path d="M4.6 24.5h22.8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M8.9 24.5V13.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M23.1 24.5V13.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M8.9 13.2c2.1-3.7 4.9-5.5 7.1-5.5s5 1.8 7.1 5.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M12.6 24.5v-3.9M19.4 24.5v-3.9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
   const nextVersion = Number(version) || 0;
   const currentVersion = Number(window.__bbTakeoverVersion) || 0;
   if (nextVersion && nextVersion < currentVersion) return;
@@ -461,6 +610,9 @@ export function installTakeover(info, lang, version, theme, texts) {
     reading: '正在读取最新页面状态',
   };
   const T = { ...BASE, ...(texts?.takeover || {}) };
+  // 浮层播报/标签的动态文案由 SW 侧按当前界面语言查表后传入；缺省回退到语言包。
+  const A = (a11y && typeof a11y === 'object' && a11y.takeover && typeof a11y.takeover === 'object') ? a11y.takeover : {};
+  const a11yText = (field, fallback) => (typeof A[field] === 'string' && A[field] ? A[field] : fallback);
   // 浮层函数会被序列化到页面执行，主题 helper 必须写在函数体内。
   const themeQuery = typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia('(prefers-color-scheme: dark)') : null;
   const paintTheme = (target) => {
@@ -486,7 +638,7 @@ export function installTakeover(info, lang, version, theme, texts) {
           if (node) node.remove();
         } else if (!(document.querySelector(UI_SELECTOR) || document.getElementById(LEGACY_ID))) {
           // 重新打开：用同一份信息把浮层补回来
-          try { installTakeover(info, lang, version, theme, texts); } catch { /* 忽略 */ }
+          try { installTakeover(info, lang, version, theme, texts, a11y); } catch { /* 忽略 */ }
         }
       });
     }
@@ -495,6 +647,12 @@ export function installTakeover(info, lang, version, theme, texts) {
   }
   const existing = document.querySelector(UI_SELECTOR) || document.getElementById(LEGACY_ID);
   const apply = (root) => {
+    if (a11yAccessible) {
+      const statusNode = root.querySelector('[data-status-sub]');
+      if (statusNode) statusNode.setAttribute('aria-live', 'polite');
+      const dialogNode = root.querySelector('.card');
+      if (dialogNode) { dialogNode.setAttribute('role', 'dialog'); dialogNode.setAttribute('aria-label', String(T.title || 'Agent takeover')); }
+    }
     const session = String(info.sessionId || '');
     const paused = info.paused === true;
     const controller = info.controller && typeof info.controller === 'object' ? info.controller : {};
@@ -529,8 +687,15 @@ export function installTakeover(info, lang, version, theme, texts) {
     if (sessionCode) sessionCode.textContent = session;
     if (title) title.textContent = modeText[0];
     if (sub) sub.textContent = info.borrowed && mode !== 'held' ? T.borrowed : modeText[1];
+    const signal = root.querySelector('[data-status-signal]');
+    if (signal) {
+      signal.classList.toggle('paused', paused);
+      signal.classList.toggle('acting', !paused && (mode === 'acting' || mode === 'syncing' || mode === 'yielding'));
+    }
     if (primary) {
-      primary.textContent = paused ? T.resume : T.pause;
+      const label = primary.querySelector('[data-label]');
+      if (label) label.textContent = paused ? T.resume : T.pause;
+      else primary.textContent = paused ? T.resume : T.pause;
       primary.dataset.paused = paused ? '1' : '0';
     }
     const statusIcon = root.querySelector('.status-icon');
@@ -556,13 +721,21 @@ export function installTakeover(info, lang, version, theme, texts) {
   const host = document.createElement('div');
   host.setAttribute('data-bb-ui', 'takeover');
   host.setAttribute('data-bb-overlay', '');
+  host.setAttribute('dir', /^(ar|he|fa|ur|yi|dv|ps|sd|ug|ckb)\b/i.test(String(lang || '')) || document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr');
+  host.setAttribute('aria-keyshortcuts', 'Escape');
   host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:none;';
   paintTheme(host);
   if (themeQuery) {
     const themeListener = () => paintTheme(host);
     try { themeQuery.addEventListener('change', themeListener); } catch { try { themeQuery.addListener(themeListener); } catch { /* 忽略 */ } }
   }
-  const shadow = host.attachShadow({ mode: 'closed' });
+  const a11yAccessible = !!(a11y && a11y.mode === 'accessible');
+  const shadow = host.attachShadow({ mode: a11yAccessible ? 'open' : 'closed' });
+  if (a11yAccessible) {
+    host.setAttribute('role', 'dialog');
+    host.setAttribute('aria-modal', 'false');
+    host.setAttribute('aria-label', String(T.title || 'Agent takeover'));
+  }
   roots.set(host, shadow);
   const style = document.createElement('style');
   style.textContent = [
@@ -572,40 +745,58 @@ export function installTakeover(info, lang, version, theme, texts) {
     '@keyframes bbp{0%,100%{opacity:.15}50%{opacity:1}}',
     '.glow.paused::after{animation:none;opacity:0}',
     '@media (prefers-reduced-motion: reduce){.glow::after{animation:none;opacity:0}}',
-    '.card{position:fixed;right:18px;bottom:18px;box-sizing:border-box;width:280px;max-width:calc(100vw - 28px);padding:14px;border:1px solid var(--bb-line,#dbe4f5);border-radius:16px;background:var(--bb-surface,#f7f9fc);color:var(--bb-fg,#1c2230);box-shadow:0 10px 28px var(--bb-shadow,rgba(28,34,48,.18)),0 2px 6px var(--bb-shadow,rgba(28,34,48,.18));font:12.5px/1.5 var(--bb-font);pointer-events:auto}',
+    '.card{position:fixed;inset-inline-end:18px;bottom:18px;box-sizing:border-box;width:300px;max-width:calc(100vw - 28px);padding:15px 16px 14px;border:1px solid var(--bb-line,#dbe4f5);border-radius:14px;background:var(--bb-surface,#f7f9fc);color:var(--bb-fg,#1c2230);box-shadow:0 18px 44px var(--bb-shadow,rgba(28,34,48,.18)),0 3px 10px var(--bb-shadow,rgba(28,34,48,.12));font:12.5px/1.5 var(--bb-font);pointer-events:none}',
     '.head{display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:grab;user-select:none}',
     '.head:active{cursor:grabbing}',
-    '.logo{width:20px;height:20px;border-radius:6px;background:var(--bb-controller-accent,var(--bb-accent,#2f6fed));display:flex;align-items:center;justify-content:center;flex:0 0 auto}',
-    '.logo svg{width:13px;height:13px;color:var(--bb-accent-fg,#fff)}',
+    '.logo{width:28px;height:28px;border-radius:9px;background:linear-gradient(140deg,var(--bb-controller-accent,var(--bb-accent,#2f6fed)),var(--bb-accent-strong,#1f4fd0));box-shadow:0 3px 8px rgba(47,111,237,.35);display:flex;align-items:center;justify-content:center;flex:0 0 auto}',
+    '.logo svg{width:22px;height:22px;color:var(--bb-accent-fg,#fff)}',
     '.brand{flex:1;font-size:12.5px;font-weight:650;color:var(--bb-fg,#1c2230);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.pill{flex:0 0 auto;padding:2px 8px;border-radius:999px;background:var(--bb-accent-soft,#e8f0ff);color:var(--bb-accent-strong,#1d4ed8);font-size:10.5px;font-weight:600}',
-    '.min{width:20px;height:20px;border:0;border-radius:6px;background:transparent;color:var(--bb-muted,#667085);cursor:pointer;font-size:14px;line-height:1;flex:0 0 auto}',
-    '.status-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}',
-    '.status-icon{width:34px;height:34px;border-radius:50%;background:var(--bb-accent-soft,#e8f0ff);color:var(--bb-accent-strong,#1d4ed8);display:flex;align-items:center;justify-content:center;flex:0 0 auto}',
-    '.status-icon svg{width:17px;height:17px}',
-    '.status-icon.paused{background:var(--bb-warn-bg,#fdeccd);color:var(--bb-warn-fg,#8a4b08)}',
-    '.status-title{font-size:13px;font-weight:650;line-height:1.3;color:var(--bb-fg,#1c2230)}',
+    '.min{pointer-events:auto;width:20px;height:20px;border:0;border-radius:6px;background:transparent;color:var(--bb-muted,#667085);cursor:pointer;font-size:14px;line-height:1;flex:0 0 auto}',
+    '.status-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}',
+    '.status-icon{width:40px;height:40px;border-radius:12px;background:linear-gradient(150deg,var(--bb-accent-soft,#e8f0ff),color-mix(in srgb,var(--bb-accent-soft,#e8f0ff) 72%,var(--bb-accent,#2f6fed)));border:1px solid var(--bb-accent-line,#cfe0ff);color:var(--bb-accent-strong,#1d4ed8);display:flex;align-items:center;justify-content:center;flex:0 0 auto;flex-shrink:0}',
+    '.status-icon svg{width:22px;height:22px}',
+    '.status-icon.paused{background:var(--bb-warn-bg,#fdeccd);border-color:var(--bb-warn-line,#f5d59a);color:var(--bb-warn-fg,#8a4b08)}',
+    '.status-title-row{display:flex;align-items:center;gap:8px;min-height:20px}',
+    '.status-signal{display:inline-flex;align-items:flex-end;gap:2.5px;height:12px;flex:0 0 auto}',
+    '.status-signal i{display:block;width:3px;border-radius:2px;background:var(--bb-accent,#2f6fed);opacity:.8;transform-origin:bottom}',
+    '.status-signal i:nth-child(1){height:5px}',
+    '.status-signal i:nth-child(2){height:8px}',
+    '.status-signal i:nth-child(3){height:12px}',
+    '.status-signal.acting i{animation:bbsig 1.4s ease-in-out infinite}',
+    '.status-signal.acting i:nth-child(2){animation-delay:.16s}',
+    '.status-signal.acting i:nth-child(3){animation-delay:.32s}',
+    '.status-signal.paused i{background:var(--bb-warn-fg,#8a4b08)}',
+    '@keyframes bbsig{0%,100%{transform:scaleY(.5);opacity:.45}50%{transform:scaleY(1);opacity:1}}',
+    '@media (prefers-reduced-motion: reduce){.status-signal.acting i{animation:none}}',
+    '.status-title{font-size:13.5px;font-weight:700;line-height:1.3;color:var(--bb-fg,#1c2230)}',
     '.status-sub{margin-top:2px;font-size:11px;color:var(--bb-muted,#667085);line-height:1.45}',
     '.session-row{display:flex;align-items:center;gap:8px;margin:2px 0 12px;font-size:11.5px;color:var(--bb-muted,#667085)}',
     '.session-row code{font:11px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--bb-fg,#1c2230);background:var(--bb-accent-soft,#e8f0ff);border-radius:6px;padding:1px 6px}',
     '.actions{display:flex;gap:8px}',
-    '.mini{position:fixed;right:18px;bottom:18px;display:none;align-items:center;gap:7px;padding:7px 12px;border:1px solid var(--bb-line,#dbe4f5);border-radius:999px;background:var(--bb-surface,#f7f9fc);color:var(--bb-fg,#1c2230);font:12px var(--bb-font);box-shadow:0 8px 22px var(--bb-shadow,rgba(28,34,48,.18));pointer-events:auto;cursor:pointer}',
+    '.mini{pointer-events:auto;position:fixed;inset-inline-end:18px;bottom:18px;display:none;align-items:center;gap:7px;padding:7px 12px;border:1px solid var(--bb-line,#dbe4f5);border-radius:999px;background:var(--bb-surface,#f7f9fc);color:var(--bb-fg,#1c2230);font:12px var(--bb-font);box-shadow:0 8px 22px var(--bb-shadow,rgba(28,34,48,.18));pointer-events:auto;cursor:pointer}',
     '.mini .dot{width:8px;height:8px;border-radius:50%;background:var(--bb-controller-accent,var(--bb-accent,#2f6fed))}',
-    '.btn{flex:1;height:32px;border-radius:9px;border:1px solid var(--bb-line,#dbe4f5);background:var(--bb-surface-raised,#fff);color:var(--bb-fg,#1c2230);font-size:12px;font-weight:550;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}',
-    '.btn.primary{background:var(--bb-accent-soft,#e8f0ff);border-color:var(--bb-accent-line,#cfe0ff);color:var(--bb-accent-strong,#1d4ed8)}',
+    ':host([dir="rtl"]) .mini span[aria-hidden="true"]{display:inline-block;transform:scaleX(-1)}',
+    '.btn{pointer-events:auto;flex:1;height:32px;border-radius:8px;border:1px solid var(--bb-line,#dbe4f5);background:var(--bb-surface-raised,#fff);color:var(--bb-fg,#1c2230);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:background .15s ease,filter .15s ease}',
+    '.btn svg{width:14px;height:14px;flex:0 0 auto;opacity:.9}',
+    '.btn.primary{background:linear-gradient(180deg,var(--bb-accent-soft,#e8f0ff),color-mix(in srgb,var(--bb-accent-soft,#e8f0ff) 78%,var(--bb-accent,#2f6fed)));border-color:var(--bb-accent-line,#cfe0ff);color:var(--bb-accent-strong,#1d4ed8)}',
     '.btn:hover{filter:brightness(.98)}',
+    '.btn.primary:hover{filter:brightness(.99)}',
+    '.min:hover{background:var(--bb-accent-soft,#e8f0ff)}',
     '[data-act="stop"]{flex:0 0 96px}',
     'button:focus-visible{outline:2px solid var(--bb-accent,#2f6fed);outline-offset:2px}',
+    '.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}',
   ].join('');
   const wrap = document.createElement('div');
   wrap.innerHTML = '<div class="glow"></div>'
-    + '<div class="card" role="region" aria-label="' + ((lang === 'zh' || lang === 'zh-TW') ? 'BridgeDeck 控制面板' : 'BridgeDeck control') + '">'
-    + '<div class="head"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 17h18"/><path d="M6 17V9"/><path d="M18 17V9"/><path d="M6 9c3 4 9 4 12 0"/></svg></span><span class="brand">BridgeDeck</span><span class="pill">' + T.badge + '</span><button type="button" class="min" data-act="min" aria-label="' + ((lang === 'zh' || lang === 'zh-TW') ? '收起' : 'Minimize') + '" aria-expanded="true" title="' + (lang === 'en' ? 'Minimize' : '收起') + '">–</button></div>'
-    + '<div class="status-row" role="status" aria-live="polite"><span class="status-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></span>'
-    + '<div><div class="status-title" data-status-title>' + T.controlling + '</div><div class="status-sub" data-status-sub>' + T.reading + '</div></div></div>'
+    + '<div class="card" role="region" aria-label="' + (a11yText('label', (lang === 'zh' || lang === 'zh-TW') ? 'BridgeDeck 控制面板' : 'BridgeDeck control')) + '">'
+    + '<div class="head"><span class="logo">' + __BB_MARK + '</span><span class="brand">BridgeDeck</span><span class="pill">' + T.badge + '</span><button type="button" class="min" data-act="min" aria-label="' + a11yText('minimize', (lang === 'zh' || lang === 'zh-TW') ? '收起控制面板' : 'Collapse control panel') + '" aria-expanded="true" aria-keyshortcuts="Escape" title="' + (lang === 'en' ? 'Minimize' : '收起') + '">–</button></div>'
+    + '<div class="status-row" role="status" aria-live="polite"><span class="status-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4.5 16.4c2.2-4.6 4.9-6.8 7.5-6.8s5.3 2.2 7.5 6.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3.6 18.4h16.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".55"/><circle cx="4.5" cy="17.6" r="1.7" fill="currentColor"/><circle cx="19.5" cy="17.6" r="1.7" fill="currentColor"/><circle cx="12" cy="8.6" r="1.5" fill="currentColor" opacity=".6"/></svg></span>'
+    + '<div><div class="status-title-row"><span class="status-signal" data-status-signal aria-hidden="true"><i></i><i></i><i></i></span><div class="status-title" data-status-title>' + T.controlling + '</div></div><div class="status-sub" data-status-sub>' + T.reading + '</div></div></div>'
     + '<div class="session-row" data-project-row style="display:none"><span>' + T.project + '</span><code data-project></code></div>'
     + '<div class="session-row" data-session-row style="display:none"><span>' + T.session + '</span><code data-session></code></div>'
-    + '<div class="actions"><button type="button" class="btn primary" data-act="pause">' + T.pause + '</button><button type="button" class="btn" data-act="stop">' + T.stop + '</button></div>'
+    + '<div class="actions"><button type="button" class="btn primary" data-act="pause"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4.6 7.1h14.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/><rect x="7.6" y="9.6" width="2.7" height="9.4" rx="1.35" fill="currentColor"/><rect x="13.7" y="9.6" width="2.7" height="9.4" rx="1.35" fill="currentColor"/></svg><span data-label>' + T.pause + '</span></button><button type="button" class="btn" data-act="stop"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3.4" stroke="currentColor" stroke-width="1.8"/><path d="M8.2 12h7.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-label>' + T.stop + '</span></button></div>'
+    + '<span class="sr" data-a11y-hint></span><span class="sr" data-a11y-live role="status" aria-live="polite"></span>'
     + '</div>'
     + '<button type="button" class="mini" data-mini aria-label="' + T.mini + '" aria-expanded="false"><span class="dot"></span><span>' + T.mini + '</span><span aria-hidden="true">›</span></button>';
   shadow.appendChild(style);
@@ -616,6 +807,15 @@ export function installTakeover(info, lang, version, theme, texts) {
   const card = shadow.querySelector('.card');
   const mini = shadow.querySelector('[data-mini]');
   const minButton = shadow.querySelector('[data-act="min"]');
+  // 播报区：动作结果（暂停/恢复/收起/停止）通过 aria-live 报给屏幕阅读器；
+  // 文案由 SW 侧按界面语言从动态文案 catalog 查表后传入。
+  const live = shadow.querySelector('[data-a11y-live]');
+  const hintNode = shadow.querySelector('[data-a11y-hint]');
+  if (hintNode) hintNode.textContent = a11yText('escHint', 'Esc · ' + T.mini);
+  const announce = (text) => {
+    if (!live || !text) return;
+    live.textContent = text;
+  };
   const setMini = (on) => {
     card.style.display = on ? 'none' : '';
     shadow.querySelector('.glow').style.display = on ? 'none' : '';
@@ -626,7 +826,17 @@ export function installTakeover(info, lang, version, theme, texts) {
     try { chrome.runtime.sendMessage({ type: 'bb.takeover.minimized', minimized: on }); } catch { /* 忽略 */ }
     // 最小化后焦点必须跟着可见控件走，不能留在 display:none 的卡片里。
     try { (on ? mini : minButton).focus({ preventScroll: true }); } catch { /* 忽略 */ }
+    announce(on ? a11yText('collapsed', '') : a11yText('expanded', ''));
   };
+  // Esc：焦点在浮层内时收起/展开（非破坏性、可逆），不劫持页面自身的 Esc。
+  host.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const path = event.composedPath ? event.composedPath() : [];
+    if (!path.includes(host)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setMini(card.style.display !== 'none');
+  });
   shadow.querySelector('[data-act="min"]').addEventListener('click', () => setMini(true));
   mini.addEventListener('click', () => setMini(false));
   const primary = shadow.querySelector('[data-act="pause"]');
@@ -636,28 +846,33 @@ export function installTakeover(info, lang, version, theme, texts) {
     primary.dataset.paused = next ? '1' : '0';
     apply(shadow);
     try { chrome.runtime.sendMessage({ type: 'bb.takeover.pause', paused: next }); } catch { /* 忽略 */ }
+    announce(next ? a11yText('paused', T.held[0]) : a11yText('resumed', T.ready[0]));
   });
   const stopButton = shadow.querySelector('[data-act="stop"]');
+  const stopLabel = stopButton.querySelector('[data-label]');
+  const setStopText = (value) => { if (stopLabel) stopLabel.textContent = value; else setStopText(value); };
   let stopArmed = false;
   let stopTimer = null;
   stopButton.addEventListener('click', () => {
     if (!stopArmed) {
       stopArmed = true;
-      stopButton.textContent = T.confirmStop;
+      setStopText(T.confirmStop);
       const sub = shadow.querySelector('[data-status-sub]');
       if (sub) sub.textContent = T.stopConfirmSub;
+      announce(a11yText('stopArmed', T.confirmStop));
       stopTimer = globalThis['set' + 'Timeout'](() => {
         stopArmed = false;
-        stopButton.textContent = T.stop;
+        setStopText(T.stop);
         apply(shadow);
       }, 3000);
       return;
     }
     if (stopTimer) globalThis['clear' + 'Timeout'](stopTimer);
     stopButton.disabled = true;
-    stopButton.textContent = T.stopping;
+    setStopText(T.stopping);
     const sub = shadow.querySelector('[data-status-sub]');
     if (sub) sub.textContent = T.stopping;
+    announce(a11yText('stopping', T.stopping));
     try { chrome.runtime.sendMessage({ type: 'bb.takeover.stop' }); } catch { /* 忽略 */ }
   });
 

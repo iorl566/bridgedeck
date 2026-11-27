@@ -1,0 +1,790 @@
+{
+  "schema": "bdeval-e2e-metadata/1",
+  "source": "core.json",
+  "oracleLevel": "e2e-real",
+  "count": 127,
+  "cases": {
+    "13": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "24": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "25": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "26": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "29": {
+      "capability": "e2e.ui",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "31": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "35": {
+      "capability": "e2e.capture.video",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "36": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "37": {
+      "capability": "e2e.plugin",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20b": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "7b": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20c": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20d6": {
+      "capability": "e2e.record",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20d7": {
+      "capability": "e2e.record",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20e": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20f": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20n": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20o": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20p": {
+      "capability": "e2e.iframe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20s2": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20w": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23p": {
+      "capability": "e2e.iframe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23p2": {
+      "capability": "e2e.iframe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23p3": {
+      "capability": "e2e.iframe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23q": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23r": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23s": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23w": {
+      "capability": "e2e.protocol",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "24d": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "35b": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "35c": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "35d": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "35e": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23p4": {
+      "capability": "e2e.iframe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23p5": {
+      "capability": "e2e.iframe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20k": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "20s": {
+      "capability": "e2e.recipe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "20t": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "20u": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "20v": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "20y": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "20d4": {
+      "capability": "e2e.record",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "23b": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "23g": {
+      "capability": "e2e.protocol",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "23i": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "23j": {
+      "capability": "e2e.protocol",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "23j2": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "23k": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "23t": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "23x": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "23x4": {
+      "capability": "e2e.extract",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "24b2": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "29c": {
+      "capability": "e2e.pairing",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）",
+      "adversarial": true
+    },
+    "8b": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20b2": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23p8": {
+      "capability": "e2e.iframe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23v": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23x5": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "29d": {
+      "capability": "e2e.rtl",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "31b": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "31c": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "31d": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "35r": {
+      "capability": "e2e.capture.video",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23h2": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "35f": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q2": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q3": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q4": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "24b": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20b3": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20d10": {
+      "capability": "e2e.record",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20m": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "33d": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23p9": {
+      "capability": "e2e.iframe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "31e": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20d9": {
+      "capability": "e2e.record",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20j": {
+      "capability": "e2e.plugin",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "33b": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "33c": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "35g": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23h3": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23h4": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "31f": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23h5": {
+      "capability": "e2e.action",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "31g": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q5": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q6": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20e2": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q7": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q8": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q9": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20s1": {
+      "capability": "e2e.general",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20s3": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "29e": {
+      "capability": "e2e.ui",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20s4": {
+      "capability": "e2e.exec",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20s5": {
+      "capability": "e2e.plugin",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20s6": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23h6": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23j3": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "15b": {
+      "capability": "e2e.extract",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20s7": {
+      "capability": "e2e.exec",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q10": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q11": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20q12": {
+      "capability": "e2e.cooperation",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20s8": {
+      "capability": "e2e.exec",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23j4": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "15c": {
+      "capability": "e2e.extract",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "35h": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "15d": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "15e": {
+      "capability": "e2e.iframe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20d11": {
+      "capability": "e2e.session",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "15f": {
+      "capability": "e2e.extract",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20s9": {
+      "capability": "e2e.recipe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "31h": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "15g": {
+      "capability": "e2e.extract",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20u2": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20c2": {
+      "capability": "e2e.capture.video",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "31e2": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "5b2": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20p2": {
+      "capability": "e2e.iframe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "31f2": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23l": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "5b": {
+      "capability": "e2e.observe",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20b4": {
+      "capability": "e2e.network",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "23e6": {
+      "capability": "e2e.extract",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    },
+    "20v2": {
+      "capability": "e2e.capture.screenshot",
+      "oracleLevel": "e2e-real",
+      "expectedStatus": "passed",
+      "evidenceRule": "真实 E2E 必须输出 \"PASS <id>.\" 行；缺行 = unverified，FAIL = failed（unverified 绝不算 pass）"
+    }
+  }
+}

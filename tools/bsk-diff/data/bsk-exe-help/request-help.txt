@@ -1,0 +1,37 @@
+Ask the human to complete an in-page step (captcha / login / confirm)
+
+Usage: bsk.exe request-help [OPTIONS] --prompt <PROMPT>
+
+Options:
+      --session <SESSION>
+
+      --context <CONTEXT>
+          Control context returned by cooperate sync. Required for shared-tab actions
+      --scope <SCOPE>
+
+      --depends-on <DEPENDS_ON>
+          Legacy strict-policy decision regions. Target policy uses --expect instead
+      --prompt <PROMPT>
+          Message shown to the user explaining what they need to do
+      --observation <OBSERVATION>
+          Explicit observation ID for visual or untargeted actions; never inferred from cached state
+      --title <TITLE>
+          Optional custom title for the overlay panel
+      --expect <EXPECT>
+          JSON array of target facts to check before input: [{"target":"@e1","field":"text","equals":"Save"}]
+      --tab-id <TAB_ID>
+          Target tab. Defaults to the Agent Window's active tab
+      --json
+          Emit machine-readable JSON output (when meaningful)
+      --target <TARGET>
+          Component to highlight. Repeatable. Accepts a snapshot ref (`@e3`) or a CSS selector (`#login`). A value starting with `@` or matching `eN` is treated as a ref; everything else is a selector
+      --quiet
+          Suppress informational output
+      --timeout <TIMEOUT>
+          Hard timeout (default 5m). Accepts `5m`, `300s`, `300000ms` [default: 5m]
+      --completion-criteria <COMPLETION_CRITERIA>
+          JSON success detector, e.g. '{"any":[{"url_contains":"/dashboard"}],"stable_for_ms":1000}'
+  -v, --verbose...
+          Increase log verbosity (`-v` debug, `-vv` trace)
+  -h, --help
+          Print help

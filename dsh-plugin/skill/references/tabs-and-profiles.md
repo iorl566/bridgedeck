@@ -17,10 +17,24 @@
 
 ## 并行任务
 
-- 每个任务独立 session；同一浏览器可并行多个 session，但不要并发操作同一标签页。
+- 每个任务独立 session；同一浏览器可并行多个 session。
 - 每个 session 显式 `--session`；不要共享 context/observation。
 - 后台任务用 `session start --no-focus`；默认会新建并聚焦独立 Agent 窗口，让用户看得见 Agent 在哪个窗口里操作。
 - 并行抓取时注意站点限流；同一站点建议串行或降低频率。
+
+## 共享同一标签页（多 Agent）
+
+- 需要两个 Agent 看/动同一个页面时：主会话 `session start --json` 拿 `tabId`，另一方
+  `session start --tab <tabId> --share --json`。两者共用 tab/window，各自独立 context/observation。
+- 默认 `open` 模式：双方都能写（命令在 daemon 侧按 tab 队列串行）。只读动作不受限制。
+- 需要单写者仲裁时用 `--control exclusive`（或 `session control <id> --mode exclusive`）：
+  - 只有控制权持有者能写，其他人的动作返回 `E_CONTROL_NOT_HELD`；
+  - 控制权有租约（写动作续租，默认 60s），租约到期后 holder 变空、先到先得；
+  - `session control <id>` 看 `holder/epoch/租约`；`claim-control` 认领、`release-control` 放弃、
+    `session handoff <持有者> --to <目标>` 显式转交；`--expect-epoch` 防丢失更新（不符 `E_CONTROL_STALE`）。
+- 主会话停止时若有共享会话存活：标签页不关，控制权与主会话身份自动转交给最老的共享会话
+  （`session stop` 返回 `handedOff`）。
+- 两个 Agent 协作写同一页面时，先 `handoff`/`claim-control` 明确谁在写，不要“抢着点”。
 
 ## 窗口
 

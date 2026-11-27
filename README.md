@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://microsoftedge.microsoft.com/addons/detail/ieflpefpmlmmlfgmpfakaglhgmcbcnig"><img src="https://img.shields.io/badge/version-0.3.0-2f6fed" alt="version" />
+  <a href="https://microsoftedge.microsoft.com/addons/detail/ieflpefpmlmmlfgmpfakaglhgmcbcnig"><img src="https://img.shields.io/badge/version-0.3.1-2f6fed" alt="version" />
   <img src="https://img.shields.io/badge/Edge%20%E5%8A%A0%E8%BD%BD%E9%A1%B9-%E5%AE%89%E8%A3%85%E6%89%A9%E5%B1%95-2f6fed" alt="Edge 加载项" /></a>
   <a href="https://github.com/iorl566/bridgedeck/releases/latest"><img src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Windows%20%E5%AE%89%E8%A3%85%E5%8C%85-0b1220" alt="下载" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-64748b" alt="MIT" /></a>
@@ -24,7 +24,7 @@
   <a href="#第一个任务">第一个任务</a> ·
   <a href="#浏览器控制与隐私">隐私</a> ·
   <a href="#文档导航">文档</a> ·
-  <a href="docs/releases/0.3.0.md">更新日志</a>
+  <a href="docs/releases/0.3.1.md">更新日志</a>
 </p>
 
 **BridgeDeck 把你的 AI Agent 连接到 Chrome 或 Microsoft Edge，直接使用你已有的登录状态。** 交给它读取、点击、填表或排查问题；任务在独立的 **Agent Window** 中运行，需要时由你接手。已有标签页需要显式借用，任务结束后归还。默认只连接本机 daemon，不经过云端。
@@ -146,6 +146,21 @@ https://raw.githubusercontent.com/iorl566/bridgedeck/main/AGENT_INSTALL.md
 
 Agent 会按指南把 CLI 与 daemon 装到用户目录（`%LOCALAPPDATA%\BridgeDeck`，可用 `-Dest` 改），再引导你装扩展或自行解压加载；不会写死盘符，也不会动你的其它文件。安装与验证步骤见 [AGENT_INSTALL.md](AGENT_INSTALL.md)。
 
+## 打包与体积
+
+发布扩展包使用**我们自己的源码树打包**（`node tools/build-extension.mjs`）：把 `extension/` 逐文件
+校验后打成 `dist/BridgeDeck-extension-<version>.zip`（当前 **426 个文件 / 约 3.6 MB**），保持模块边界、
+方便审核与按文件升级；`tools/verify-extension-package.mjs` 会解压校验 manifest、service worker、
+content script 与全部静态 import 引用。
+
+```bash
+node tools/build-extension.mjs          # -> dist/BridgeDeck-extension-<version>.zip
+node tools/verify-extension-package.mjs # 解压 + 加载/引用校验
+```
+
+`apps/extension`（TypeScript/WXT 架构轨道）另有自己的构建产物，用于架构验证与 E2E 对照，
+**不作为发布包**。
+
 ## 第一个任务
 
 装好并显示"已连接"后，对 Agent 说：
@@ -209,6 +224,7 @@ BridgeDeck 没有必须使用的云服务，也不收集产品遥测。扩展不
 - **整页截图**：`bridge screenshot --mode auto --out page.png`，或在弹窗里打开"长截图"。[长截图](docs/long-screenshot.md)
 - **指定浏览器**：`bridge browsers` 查看实例，`bridge session start --browser "工作账号"` 绑定。[本地配对](docs/local-pairing.md)
 - **多 Agent 并行**：`session start --agent-name … --project …`，之后用 `--session-scope <名字>` 或 `BB_SESSION` 选会话。[会话作用域](docs/scope.md)
+- **共享同一 tab**：`session start --tab <id> --share`（默认共享写）；需要单写者仲裁用 `--control exclusive`，再用 `session control / claim-control / release-control / handoff` 管理控制权与租约。[共享 tab](docs/SHARED-TAB.md)
 - **远程连接**：扩展通过 WSS 连接服务器上的 daemon；server 模式需显式 TLS 证书与公网地址。[远程 server](docs/remote-server.md) · [本地配对](docs/local-pairing.md)
 - **任务视频**：`bridge video start --duration 60s --quality high`。[视频录制](docs/video-recording.md)
 - **操作审计**：`bridge audit list --limit 20`。[操作审计](docs/operation-audit.md)
@@ -216,6 +232,34 @@ BridgeDeck 没有必须使用的云服务，也不收集产品遥测。扩展不
 - **Trace 可视化**：`bridge record export --out trace` → `bridge trace view trace/trace.json`。[Trace Viewer](docs/trace-viewer.md)
 - **MCP / 插件**：`node mcp/server.mjs`、`dsh-plugin/`。[MCP](docs/mcp.md)
 - **Node/Python SDK**：`import { connect } from 'browser-bridge/sdk'` / `from browser_bridge import connect`，Playwright 风格的 `newPage()` / `page.click()`。[SDK](docs/sdk.md)
+
+## 命令索引
+
+<!-- bridge-commands:start（由 tools/readme-commands.mjs 生成，勿手改）-->
+> 本段由 `node tools/readme-commands.mjs` 从 `cli/lib/command-specs.mjs` 生成，`--check` 漂移即失败；参数表与示例用 `bridge help <命令>` 查看。
+
+| 命令 | 子命令 | 风险 | 说明 |
+| --- | --- | --- | --- |
+| `bridge session` | start / prepare / claim / cancel / request / stop / run-log / pause / resume / rebind / list / control / claim-control / release-control / handoff | `browser_mutation`（浏览器状态变更）<br>`daemon_state`（daemon 状态变更）<br>`read_only`（只读） | 会话生命周期、会话内控制权与 run log |
+| `bridge tab` | list / new / close / select / move / borrow / return / cleanup / alias / aliases / policy | `read_only`（只读）<br>`browser_mutation`（浏览器状态变更）<br>`daemon_state`（daemon 状态变更） | 标签页列表、创建、关闭、移动、别名与借用 |
+| `bridge plan` | （无子命令） / step / view | `browser_mutation`（浏览器状态变更）<br>`read_only`（只读） | 把多个动作合并成一次 RPC（带观察与 after 校验） |
+| `bridge replay` | （无子命令） | `browser_mutation`（浏览器状态变更） | 回放 Trace v3（record export 产物） |
+| `bridge step` | （无子命令） | `browser_mutation`（浏览器状态变更） | 执行单个协议动作（等价 plan 的单步） |
+| `bridge view` | （无子命令） | `read_only`（只读） | 查看观察缓存（或本地观察文件） |
+| `bridge recipe` | list / show / save / draft / approve / run / rm | `read_only`（只读）<br>`local_write`（本地写入）<br>`human_gate`（人工闸门）<br>`browser_mutation`（浏览器状态变更） | 回放配方：列表/查看/保存/草拟/审批/执行/删除 |
+| `bridge open` | （无子命令） | `browser_mutation`（浏览器状态变更） | 一步式：新建会话（可选直接导航/观察） |
+| `bridge extract` | （无子命令） / discover / table / list | `read_only`（只读） | 表格/列表导出（JSON/CSV、覆盖度、游标分页） |
+| `bridge wait-for-element` | （无子命令） | `read_only`（只读） | 等待元素满足状态（超时不是错误：satisfied=false 且退出码 0） |
+| `bridge wait-for-navigation` | （无子命令） | `read_only`（只读） | 等待页面导航完成 |
+| `bridge video` | start / stop / status / save / verify / durability / list / prune / discard / recover / info / merge / split / trim | `browser_mutation`（浏览器状态变更）<br>`read_only`（只读）<br>`daemon_state`（daemon 状态变更）<br>`local_write`（本地写入） | 录屏：开始/停止/查询/保存/校验/恢复/裁剪/合并/分段/清理 |
+| `bridge longshot` | recover | `local_write`（本地写入） | 长截图：从落盘分片恢复整图（校验 hash/缺片） |
+| `bridge record` | start / stop / status / list / export | `browser_mutation`（浏览器状态变更）<br>`read_only`（只读）<br>`local_write`（本地写入） | 操作录制：记录用户操作并导出 Trace v3 |
+| `bridge debug` | start / stop / status / requests / request / console / pages / performance / aggregate / duplicates / coverage / capabilities / pinned / pin / unpin / activity / operations / operation / journal / history / har / har-import / ws / export / archive / archives / query / evidence / analyze / rule_add / rule_list / rule_enable / rule_disable / rule_remove / rule_clear / rule_export / rule_import / fetch_probe / replay | `browser_mutation`（浏览器状态变更）<br>`read_only`（只读）<br>`local_write`（本地写入） | 调试采集：请求/控制台/WS/性能/规则/HAR/证据/归档/操作审计 |
+| `bridge trace` | start / status / stop / diff / summary / view | `browser_mutation`（浏览器状态变更）<br>`read_only`（只读）<br>`local_write`（本地写入） | 性能追踪：start/stop/status 采集，summary/diff/view 离线分析 |
+
+覆盖面：16 个命令 / 111 个子命令；参数层严格校验（未知 flag / 子命令 / 枚举越界在发 RPC 前退出 2）。
+支持 `--dry-run` 预检（该命令全部子命令）：`video`、`longshot`、`record`、`debug`、`trace`。
+<!-- bridge-commands:end -->
 
 ## 升级与版本兼容
 
@@ -301,6 +345,17 @@ docs/           用户文档与发布记录
 ```
 
 欢迎通过 [Issues](https://github.com/iorl566/bridgedeck/issues) 报告问题或提出建议；附浏览器证据前请先移除敏感数据。提交较大改动前建议先跑上面这组测试。
+
+## 质量与可验证性
+
+- **测试**：单测 5,051、CLI 自检 404、MCP 自检 216、Python 181、TS 649；真实 Edge E2E **222 条**（JS 与 TS 产物双栈，均含公开用例）。
+- **门禁**：协议 4 门禁、质量/长尾/性能预算/体量/依赖/文档/编码/模块加载等 15+ 类，全部可本地复跑。
+- **发布链路**：`docs/RELEASE-0.3.1-CI-RUNBOOK.md`（构建、签名、清单、校验、回滚）。
+
+```bash
+npm test                     # 主要门禁（CLI/扩展/MCP/配对/TLS/E2E）
+node --test 'tests/unit/*.test.mjs'
+```
 
 ## 多语言与贡献
 

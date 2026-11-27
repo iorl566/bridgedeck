@@ -52,5 +52,7 @@
   "manualFrame": "Capturar quadro",
   "manualDone": "Concluir",
   "manualCancel": "Cancelar",
-  "manualFrames": " quadros"
+  "manualFrames": " quadros",
+  "borrowInactiveTitle": "Agent solicita empréstimo da aba",
+  "helpCompactStatus": "O Agent ainda aguarda que você conclua esta etapa"
 }

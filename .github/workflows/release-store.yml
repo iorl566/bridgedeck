@@ -1,0 +1,92 @@
+name: release-store
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. v0.3.1)
+        required: true
+      submit:
+        description: Submit for review after upload
+        type: choice
+        options: [review, draft-only]
+        default: review
+
+permissions:
+  contents: read
+
+jobs:
+  edge:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Release brand scan
+        run: node tools/release-brand-scan.mjs
+
+      - name: Build extension zip
+        run: node tools/build-extension.mjs
+
+      - name: Verify extension package
+        run: node tools/verify-extension-package.mjs
+
+      - name: Upload and submit to Edge Add-ons
+        shell: pwsh
+        env:
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:EDGE_API_KEY -or -not $env:EDGE_PRODUCT_ID) {
+            throw 'EDGE_API_KEY / EDGE_PRODUCT_ID secrets are required'
+          }
+          $zip = Get-ChildItem dist/BridgeDeck-extension-*.zip | Select-Object -First 1
+          if (-not $zip) { throw 'extension zip not found' }
+          $auth = @{ Authorization = "ApiKey $($env:EDGE_API_KEY)" }
+          $base = "https://api.addons.microsoftedge.microsoft.com/v1/products/$($env:EDGE_PRODUCT_ID)"
+
+          Write-Host "Uploading $($zip.Name)"
+          $upload = Invoke-WebRequest -Method Post -Uri "$base/submissions/draft/package" `
+            -Headers $auth -ContentType 'application/zip' -InFile $zip.FullName
+          $opId = ($upload.Content | ConvertFrom-Json).operationId
+          if (-not $opId -and $upload.Headers.Location) {
+            $opId = ($upload.Headers.Location -split '/')[-1]
+          }
+          if (-not $opId) { throw 'upload operationId not returned: ' + $upload.Content }
+
+          for ($i = 0; $i -lt 90; $i++) {
+            Start-Sleep -Seconds 10
+            $state = Invoke-RestMethod -Uri "$base/submissions/draft/package/operations/$opId" -Headers $auth
+            Write-Host "upload status: $($state.status)"
+            if ($state.status -in @('Succeeded', 'Failed')) { break }
+          }
+          if ($state.status -ne 'Succeeded') { throw "upload failed: $($state.status)" }
+
+          if ('${{ inputs.submit }}' -eq 'review') {
+            $body = @{ notes = 'BridgeDeck 0.3.1 release' } | ConvertTo-Json
+            $submit = Invoke-WebRequest -Method Post -Uri "$base/submissions" `
+              -Headers @{ Authorization = "ApiKey $($env:EDGE_API_KEY)"; 'Content-Type' = 'application/json' } `
+              -Body $body
+            $submitId = ($submit.Content | ConvertFrom-Json).operationId
+            if (-not $submitId -and $submit.Headers.Location) {
+              $submitId = ($submit.Headers.Location -split '/')[-1]
+            }
+            for ($i = 0; $i -lt 90; $i++) {
+              Start-Sleep -Seconds 10
+              $review = Invoke-RestMethod -Uri "$base/submissions/operations/$submitId" -Headers $auth
+              Write-Host "review status: $($review.status)"
+              if ($review.status -in @('Succeeded', 'Failed')) { break }
+            }
+            if ($review.status -ne 'Succeeded') { throw "submission failed: $($review.status)" }
+            Write-Host 'Submitted for Edge Add-ons review'
+          } else {
+            Write-Host 'Draft package uploaded (submit skipped)'
+          }

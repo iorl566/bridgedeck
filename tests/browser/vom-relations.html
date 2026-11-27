@@ -1,0 +1,56 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>VOM_RELATIONS_PENDING</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 10px; font-size: 13px; }
+  .row { margin: 4px 0; }
+  #orders { border-collapse: collapse; }
+  #orders th, #orders td { border: 1px solid #999; padding: 2px 6px; }
+  #combo-list { margin: 0; padding: 0 0 0 18px; }
+</style>
+<body>
+  <main id="app-main" role="main" aria-label="主区域">
+    <form id="profile-form" aria-label="资料表单">
+      <div class="row"><label id="lbl-name" for="name-input">姓名</label><input id="name-input" type="text"></div>
+      <div class="row"><label id="lbl-email">邮箱 <input id="email-input" type="text"></label></div>
+      <div class="row">
+        <span id="chain-root">账号</span>
+        <span id="chain-mid" aria-labelledby="chain-root">昵称</span>
+        <input id="chain-input" type="text" aria-labelledby="chain-mid">
+      </div>
+      <div class="row">
+        <input id="invalid-input" type="text" aria-label="无效邮箱" aria-invalid="true"
+               aria-errormessage="err-invalid" aria-describedby="err-invalid">
+        <div id="err-invalid" role="alert">请输入有效邮箱</div>
+      </div>
+      <button id="submit-btn" type="button" aria-label="提交表单">提交</button>
+    </form>
+    <div class="row">
+      <a id="logo-link" href="#home" aria-label="返回首页"><img id="logo-img" alt="返回首页" width="16" height="16" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></a>
+      <button id="titled-btn" type="button" title="保存当前草稿">保存</button>
+    </div>
+    <div class="row">
+      <div id="tablist-one" role="tablist" aria-label="选项页签">
+        <button id="tab-one" role="tab" aria-controls="panel-one" aria-selected="true">选项一</button>
+        <button id="tab-two" role="tab" aria-controls="panel-two" aria-selected="false">选项二</button>
+      </div>
+      <div id="panel-one" role="tabpanel" aria-label="选项一面板">面板一</div>
+      <div id="panel-two" role="tabpanel" aria-label="选项二面板" hidden>面板二</div>
+    </div>
+    <div class="row">
+      <div id="combo" role="combobox" aria-controls="combo-list" aria-expanded="true" aria-label="角色下拉">角色下拉</div>
+      <ul id="combo-list" role="listbox" aria-label="角色选项">
+        <li id="opt-a" role="option">甲</li>
+        <li id="opt-b" role="option">乙</li>
+      </ul>
+    </div>
+    <table id="orders">
+      <caption id="orders-caption">订单表</caption>
+      <thead><tr><th id="th-name">名称</th><th id="th-qty">数量</th></tr></thead>
+      <tbody><tr><td><input id="cell-input" type="text" aria-label="单元格输入"></td><td>1</td></tr></tbody>
+    </table>
+    <iframe id="child-frame" title="子帧"></iframe>
+  </main>
+  <script src="/extension/injected/page-lib.js"></script>
+  <script type="module" src="./vom-relations.js"></script>
+</body>

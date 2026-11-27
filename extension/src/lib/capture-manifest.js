@@ -22,3 +22,12 @@ export function pruneManifests(list, { now = Date.now(), ttlMs = 7 * 24 * 60 * 6
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
     .slice(0, Math.max(1, Number(max) || 20));
 }
+
+/** 插入/替换一条 manifest，并按 TTL/数量清理；返回新列表（不修改入参）。 */
+export function upsertCaptureManifest(list, entry, options = {}) {
+  if (!entry || !entry.id) throw new Error('capture manifest 需要 id');
+  const next = (Array.isArray(list) ? list : [])
+    .filter((item) => item && item.id !== entry.id)
+    .concat([entry]);
+  return pruneManifests(next, options);
+}

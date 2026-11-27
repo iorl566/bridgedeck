@@ -2,13 +2,13 @@
 
 由 `node tools/i18n-coverage-report.mjs` 生成。
 
-DICT 词条：251
+DICT 词条：257
 
 | 页面 | 静态中文 | 缺失 |
 | --- | ---: | ---: |
 | audit.html | 13 | 0 |
 | debug.html | 37 | 0 |
-| longshot.html | 20 | 0 |
+| longshot.html | 24 | 0 |
 | ops.html | 18 | 0 |
 | options.html | 29 | 0 |
 | popup.html | 72 | 0 |

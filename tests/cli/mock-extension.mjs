@@ -139,6 +139,191 @@ const SCREENSHOT_PNG = makePng(300, 200);
 const SCREENSHOT_DATA_URL = `data:image/png;base64,${SCREENSHOT_PNG.toString('base64')}`;
 
 // ---------------------------------------------------------------------------
+// 恢复 / 调试 / trace mock 数据（形状与真实扩展回包一致，供 CLI 摘要断言用）
+// ---------------------------------------------------------------------------
+
+const MOCK_VIDEO_RECOVER = Object.freeze({
+  ok: true,
+  id: 'rec-mock-1',
+  recordingId: 'rec-mock-1',
+  bytes: 2048,
+  mime: 'video/webm',
+  completeness: 'partial',
+  recording_state: 'recovered',
+  recording_state_evidence: [{ from: 'recording', to: 'recovered', at: 1 }],
+  recovery: {
+    ok: true,
+    state: 'recovered',
+    bytes: 2048,
+    completeness: 'partial',
+    issues: 2,
+    plan: { recovered: true, completeness: 'partial', segments: 12, dropped: 2, truncated: 1 },
+  },
+  recovery_scan: {
+    ok: true,
+    skipped: false,
+    candidates: 2,
+    unsealed: 1,
+    recoverable: 1,
+    recordings: [
+      {
+        recordingId: 'rec-mock-1',
+        sealed: false,
+        parts: 12,
+        manifest: { segments: 12, bytes: 4096, sealed: false },
+        plan: { recovered: true, completeness: 'partial', bytes: 2048, reason: 'missing-parts' },
+      },
+      {
+        recordingId: 'rec-mock-2',
+        sealed: true,
+        parts: 3,
+        manifest: { segments: 3, bytes: 1000, sealed: true },
+        plan: { recovered: false, completeness: 'sealed', bytes: 1000, reason: 'already-sealed' },
+      },
+    ],
+  },
+});
+
+function mockLongshotRecover(longshotId) {
+  return {
+    ok: true,
+    longshotId: String(longshotId || 'ls-mock'),
+    width: 300,
+    height: 200,
+    tiles: 4,
+    gaps: [],
+    complete: false,
+    recovered: true,
+    sealed: false,
+    manifest: { segments: 4, bytes: 3000, dpr: 1 },
+    recovery: {
+      action: 'rebuild-partial',
+      present: ['0', '1', '3'],
+      missing: ['2'],
+      duplicates: ['1'],
+      invalid: [],
+      checked: 3,
+      hashVerified: false,
+      refetch: [{ index: 2, reason: 'missing', offset: 400, width: 300, height: 200 }],
+      nextIndex: 4,
+    },
+    bytes: 3000,
+    dataUrl: SCREENSHOT_DATA_URL,
+  };
+}
+
+const MOCK_DEBUG_GAPS = Object.freeze([
+  { kind: 'trace-subscription', phase: 'trace', reason: 'tracing-not-started', category: 'not-subscribed' },
+  { kind: 'request-pending', phase: 'network', reason: 'pending', category: 'incomplete', count: 1 },
+]);
+
+function mockCoverage() {
+  return {
+    version: 1,
+    phases: {
+      session: { subscribed: true, observed: true, count: 1, ratio: 1 },
+      network: { subscribed: true, observed: true, count: 3, ratio: 0.75 },
+      console: { subscribed: true, observed: true, count: 2, ratio: 1 },
+      trace: { subscribed: false, observed: false, count: 0, ratio: null },
+      journal: { subscribed: true, observed: true, count: 1, ratio: 1 },
+    },
+    counts: {
+      requests: { observed: 3, total: 4, finished: 2, pending: 1, failed: 1, httpErrors: 1, bytes: 512 },
+      console: { observed: 2, total: 2 },
+      frames: { observed: 1, subscribed: true, errors: 0 },
+      websockets: { observed: 0, total: 0 },
+      trace: { observed: 0, subscribed: false },
+      screenshots: { observed: 0, subscribed: false },
+      journal: { observed: 1, evicted: 0, byType: { start: 1 } },
+      session: { active: true, bodies: false, startedAt: 1, endedAt: null, durationMs: 1000 },
+    },
+    score: { phase: 0.9, request: 0.5, console: 1, journal: 1, overall: 0.82 },
+    subscribedPhases: ['session', 'network', 'console', 'journal'],
+    observedPhases: ['session', 'network', 'console', 'journal'],
+    complete: false,
+  };
+}
+
+const MOCK_DEBUG_CORRELATION = Object.freeze({
+  version: 1,
+  timeAligned: true,
+  requests: 3,
+  linked: 2,
+  unlinked: 1,
+  traceEvents: 0,
+  orphanTraceEvents: 0,
+  screenshots: 0,
+  linkedScreenshots: 0,
+  journalEvents: 1,
+  byMethod: { GET: 2, POST: 1 },
+  byStatus: { '200': 2, '500': 1 },
+  slowest: [{ id: 2, method: 'POST', url: '/api/order', durationMs: 700 }],
+});
+
+function mockDebugRequests() {
+  const now = Date.now();
+  return [
+    { id: 1, method: 'GET', url: 'https://example.test/api/cart', status: 200, type: 'Fetch', startedAt: now - 1200, durationMs: 40 },
+    { id: 2, method: 'POST', url: 'https://example.test/api/order', status: 500, type: 'Fetch', startedAt: now - 900, durationMs: 700 },
+    { id: 3, method: 'GET', url: 'https://example.test/api/cart', status: null, type: 'XHR', startedAt: now - 600, durationMs: 0, error: 'net::ERR_ABORTED' },
+  ];
+}
+
+function mockDebugCurrent(tabId) {
+  return {
+    ok: true,
+    active: true,
+    tabId,
+    name: 'mock-debug',
+    bodies: false,
+    url: currentUrl,
+    title: 'Mock Page',
+    startedAt: Date.now() - 1500,
+    requests: mockDebugRequests(),
+    console: [{ level: 'error', text: 'boom', at: Date.now() - 800 }],
+    context: { url: currentUrl, title: 'Mock Page' },
+    journal: [{ type: 'start', at: Date.now() - 1400, ok: true }],
+    journalSummary: { version: 1, count: 1, byType: { start: 1 }, evictions: { total: 0 }, timeRange: { from: Date.now() - 1400, to: Date.now() - 1400 } },
+    websockets: { sockets: [], total: 0 },
+    frames: [{ frameId: 0, url: currentUrl }],
+    screenshots: [],
+    coverage: mockCoverage(),
+    gaps: MOCK_DEBUG_GAPS,
+    complete: false,
+    correlation: MOCK_DEBUG_CORRELATION,
+    timeline: [],
+  };
+}
+
+const MOCK_TRACE_EVENTS = Object.freeze([
+  { ph: 'X', name: 'Task', cat: 'toplevel', pid: 1, tid: 1, ts: 1_000_000, dur: 300_000 },
+  { ph: 'X', name: 'FunctionCall', cat: 'v8.execute', pid: 1, tid: 1, ts: 1_010_000, dur: 120_000 },
+  { ph: 'X', name: 'Paint', cat: 'devtools.timeline', pid: 1, tid: 1, ts: 1_100_000, dur: 20_000 },
+  { ph: 'b', name: 'AsyncTask', cat: 'devtools.timeline', pid: 1, tid: 1, ts: 1_200_000, dur: 10_000, id: 'a1' },
+]);
+
+function mockTraceStop(tabId) {
+  return {
+    ok: true,
+    tabId,
+    categories: 'devtools.timeline,v8.execute',
+    startedAt: Date.now() - 1200,
+    durationMs: 1200,
+    events: MOCK_TRACE_EVENTS.length,
+    summary: {
+      events: MOCK_TRACE_EVENTS.length,
+      spanMs: 1100,
+      categories: [{ category: 'devtools.timeline', count: 3 }, { category: 'v8.execute', count: 1 }],
+      topNames: [{ name: 'FunctionCall', count: 1 }, { name: 'Task', count: 1 }],
+    },
+    trace: JSON.stringify({ traceEvents: MOCK_TRACE_EVENTS }),
+  };
+}
+
+let debugCaptureActive = false;
+
+
+// ---------------------------------------------------------------------------
 // 命令实现（按 PROTOCOL §5 的 result 形状回包）
 // ---------------------------------------------------------------------------
 
@@ -288,6 +473,73 @@ function dispatchCommand(method, params = {}) {
       return { entry: { id: 1, method: 'GET', url: currentUrl, status: 200 } };
     case 'network.replay':
       return { status: 200, headers: {}, body: '{"ok":true}', durationMs: 4 };
+    case 'video.recover':
+      return { ...MOCK_VIDEO_RECOVER };
+    case 'video.status':
+      return { ok: true, active: false };
+    case 'video.list':
+      return { ok: true, recordings: [] };
+    case 'longshot.recover':
+      return mockLongshotRecover(params.longshotId);
+    case 'debug.start':
+      debugCaptureActive = true;
+      return { ok: true, tabId, bodies: params.bodies === true };
+    case 'debug.stop':
+      // mock 允许重复 stop：自测里先用文本、再用 --json 各调一次（真实扩展会报 E_NOT_FOUND）。
+      debugCaptureActive = false;
+      return {
+        ok: true,
+        id: 'dbg-mock-1',
+        requests: 3,
+        console: 2,
+        coverage: mockCoverage(),
+        gaps: MOCK_DEBUG_GAPS,
+        complete: false,
+        correlation: MOCK_DEBUG_CORRELATION,
+        journalExport: { events: 5, requests: 3, gaps: 2, bytes: 900, verified: false, verifyReason: 'digest-mismatch' },
+        record: { journalSummary: { count: 5, byType: { start: 1, stop: 1 }, evictions: { total: 0 } } },
+      };
+    case 'debug.current':
+      return mockDebugCurrent(tabId);
+    case 'debug.coverage':
+      return {
+        ok: true,
+        tabId,
+        active: true,
+        requests: { total: 3, httpErrors: 1, truncatedUrls: 0 },
+        console: { total: 2, errors: 1 },
+        pinned: 0,
+        bufferTruncated: false,
+        coverage: mockCoverage(),
+        gaps: MOCK_DEBUG_GAPS,
+        complete: false,
+        journal: { version: 1, count: 1, byType: { start: 1 }, evictions: { total: 0 } },
+        journalStats: { events: 1, bytes: 200, sessions: 1, evictions: 0 },
+      };
+    case 'debug.performance':
+      return {
+        ok: true,
+        metrics: {
+          ttfb: 1200,
+          domContentLoaded: 2500,
+          load: 4000,
+          lcp: 3000,
+          cls: 0.2,
+          paints: [{ name: 'first-contentful-paint', startTime: 900 }],
+          resources: { count: 200, transferBytes: 3_145_728 },
+          longTasks: { count: 6, maxMs: 300 },
+        },
+      };
+    case 'debug.history':
+      return { ok: true, history: [{ id: 'dbg-mock-1', name: 'mock-debug', requests: 3, console: 2, startedAt: Date.now() - 5000 }] };
+    case 'operations.list':
+      return { ok: true, entries: [{ id: 'op-mock-1', method: 'click', ok: true, ts: Date.now() - 1000, durationMs: 20 }] };
+    case 'trace.start':
+      return { ok: true, tabId, categories: 'devtools.timeline,v8.execute', startedAt: Date.now() };
+    case 'trace.status':
+      return { ok: true, tabId, tracing: true, events: MOCK_TRACE_EVENTS.length, categories: 'devtools.timeline,v8.execute', startedAt: Date.now() - 1200 };
+    case 'trace.stop':
+      return mockTraceStop(tabId);
     case 'screenshot.manual.frame':
       return { ok: true, frames: 1, width: 300, height: 200 };
     case 'screenshot.manual.save':

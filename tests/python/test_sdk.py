@@ -11,7 +11,28 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "sdk" / "python"))
 
-from browser_bridge import BridgeError, BrowserBridge, connect, read_daemon_info, target_params, write_data_url  # noqa: E402
+from browser_bridge import (  # noqa: E402
+    BridgeError,
+    BrowserBridge,
+    FEATURE_FLOORS,
+    METHOD_FEATURE,
+    PAGINATED_TOOLS,
+    PARTIAL_METHODS,
+    PROTOCOL_UNSUPPORTED,
+    connect,
+    features_for_call,
+    method_floor,
+    next_page_params,
+    normalize_error_code,
+    pagination_markers,
+    protocol_gate,
+    protocol_supports,
+    read_daemon_info,
+    recovery_advice,
+    required_floor,
+    target_params,
+    write_data_url,
+)
 
 
 class MockDaemon(BaseHTTPRequestHandler):
@@ -159,6 +180,83 @@ class SdkTest(unittest.TestCase):
         output = Path(self.home, "h.png")
         write_data_url(output, "data:image/png;base64," + base64.b64encode(b"x").decode("ascii"))
         self.assertEqual(output.read_bytes(), b"x")
+
+
+    # ------------------------------------------------------------------
+    # W4-A：feature floor / 分页标记 / 错误 data / 本地能力门禁
+    # ------------------------------------------------------------------
+
+    def test_feature_floors_and_method_features(self):
+        self.assertEqual(len(FEATURE_FLOORS), 15)
+        self.assertEqual(FEATURE_FLOORS["video"], "1.9")
+        self.assertEqual(method_floor("video.start"), "1.9")
+        self.assertEqual(method_floor("read"), "1.9")
+        self.assertIsNone(method_floor("click"))
+        self.assertEqual(METHOD_FEATURE["network.replay"], "har")
+        self.assertEqual(METHOD_FEATURE["longshot.recover"], "capture.stream")
+        # 参数级门：delta=true 要求 observe-delta 特性
+        self.assertIn("observe-delta", features_for_call("observe", {"delta": True}))
+        self.assertIn("expect", features_for_call("click", {"expect": [{"type": "text"}]}))
+        self.assertIn("capture.stream", features_for_call("screenshot", {"stream": True}))
+        self.assertNotIn("capture.stream", features_for_call("click", {"stream": True}))
+        self.assertEqual(required_floor("video.start"), "1.9")
+        self.assertIsNone(required_floor("click", {}))
+
+    def test_protocol_supports_and_gate(self):
+        self.assertTrue(protocol_supports("1.9", "1.9"))
+        self.assertTrue(protocol_supports("2.0", "1.9"))
+        self.assertFalse(protocol_supports("1.8", "1.9"))
+        self.assertTrue(protocol_supports("1.8", None))
+        gate = protocol_gate("1.8", "read", {})
+        self.assertFalse(gate["ok"])
+        self.assertEqual(gate["code"], PROTOCOL_UNSUPPORTED)
+        self.assertEqual(gate["required_floor"], "1.9")
+        self.assertEqual(gate["missing"][0]["feature"], "read")
+        ok_gate = protocol_gate("1.9", "click", {})
+        self.assertTrue(ok_gate["ok"])
+        self.assertEqual(protocol_gate("1.8", "session.start", {})["ok"], True, "无 floor 的方法不受门禁影响")
+
+    def test_local_protocol_gate_blocks_old_peer(self):
+        info = {"pid": 1, "port": self.server.server_address[1], "token": "tok", "version": "test"}
+        bridge = BrowserBridge(info, home=self.home, protocol="1.8", enforce_features=True)
+        page = bridge.new_page()
+        with self.assertRaises(BridgeError) as caught:
+            page.call("read", {})
+        self.assertEqual(caught.exception.code, PROTOCOL_UNSUPPORTED)
+        self.assertEqual(caught.exception.method, "read")
+        self.assertEqual(caught.exception.data["required_floor"], "1.9")
+        self.assertEqual(MockDaemon.calls[-1]["method"], "session.start", "门禁应在发请求前拦截")
+
+        allowed = BrowserBridge(info, home=self.home, protocol="1.9", enforce_features=True)
+        allowed_page = allowed.new_page()
+        result = allowed_page.call("read", {})
+        self.assertEqual(result["ok"], True)
+        self.assertEqual(MockDaemon.calls[-1]["method"], "read")
+
+    def test_pagination_markers_and_next_page(self):
+        self.assertTrue(pagination_markers("browser_observe")["partial"])
+        self.assertEqual(pagination_markers("browser_observe")["methods"], ["observe"])
+        self.assertFalse(pagination_markers("browser_click")["partial"])
+        self.assertEqual(pagination_markers("browser_click")["methods"], [])
+        self.assertEqual(next_page_params("browser_observe", {"cursor": "c1"}), {"cursor": "c1"})
+        self.assertEqual(next_page_params("browser_observe", {"cursor": "", "truncated": True}), {})
+        self.assertEqual(next_page_params("browser_click", {"cursor": "x"}), {})
+        self.assertIn("browser_extract", PAGINATED_TOOLS)
+        self.assertIn("extract", PARTIAL_METHODS)
+        self.assertIn("network.waterfall", PARTIAL_METHODS)
+
+    def test_error_data_and_recovery_alignment(self):
+        error = BridgeError("E_SESSION_PAUSED", "会话已暂停", data={"effect_state": "unknown", "hint": "resume"})
+        self.assertEqual(error.code, "E_SESSION_PAUSED")
+        self.assertEqual(error.effect_state, "unknown")
+        payload = error.to_dict()
+        self.assertEqual(payload["retry"], "after-action")
+        self.assertIn("resume", payload["hint"])
+        self.assertEqual(payload["data"]["effect_state"], "unknown")
+        self.assertEqual(normalize_error_code("E_NOT_A_REAL_CODE"), "E_INTERNAL")
+        self.assertEqual(normalize_error_code("E_NO_SESSION"), "E_NO_SESSION")
+        self.assertEqual(recovery_advice("E_STALE_REF")["retry"], "after-action")
+        self.assertEqual(recovery_advice("E_UNKNOWN_XYZ"), {"retry": "no", "hint": ""})
 
 
 if __name__ == "__main__":

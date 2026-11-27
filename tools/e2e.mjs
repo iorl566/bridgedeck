@@ -6,10 +6,11 @@
 //         screenshot / session stop，逐项断言。
 //
 // 用法（node 需用绝对路径，见 README）：
-//   node tools/e2e.mjs [--browser edge|chrome] [--port 53907] [--keep]
+//   node tools/e2e.mjs [--browser edge|chrome] [--port 53907] [--keep] [--ext-dir <dir>]
+//   --ext-dir 默认 repo 根 extension/；架构路线用它可以对 TS 产物（apps/extension/.output/chrome-mv3）跑同一套验收。
 // 退出码：0 全通过，1 有失败。
 import { spawn, spawnSync } from 'node:child_process';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync, mkdirSync, copyFileSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -17,11 +18,12 @@ import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import readline from 'node:readline';
 import { browserArgs, prepareBrowserProfile } from './browser-launch.mjs';
+import { analyzeMp4 } from '../extension/src/lib/mp4-boxes.js';
+import { compatibilityReport } from '../lib/protocol-features.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const NODE = process.argv[0]; // 当前 node 可执行文件
 const CLI = path.join(ROOT, 'cli', 'bridge.mjs');
-const EXT_DIR = path.join(ROOT, 'extension');
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -29,25 +31,56 @@ const opt = (name, fallback) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : fallback;
 };
 const browser = opt('--browser', 'edge');
+const EXT_DIR = path.resolve(opt('--ext-dir', path.join(ROOT, 'extension')));
+if (browser !== 'edge') process.env.BB_E2E_FORCE_A11Y = '1';
 const keep = args.includes('--keep');
 // 默认每次 E2E 都同步 README 截图；需要保持工作树干净时设 BB_E2E_SYNC_DOCS=0。
 const SYNC_DOCS = process.env.BB_E2E_SYNC_DOCS !== '0';
 
-function browserCandidates(name) {
+const BROWSER_PATHS = (() => {
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const local = process.env.LOCALAPPDATA || '';
+  const programs = process.env.PROGRAMFILES || 'C:\\Program Files';
+  const programsX86 = process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)';
   if (process.platform === 'win32') {
-    return name === 'edge'
-      ? ['C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe']
-      : ['C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'];
+    return {
+      edge: [`${programsX86}\\Microsoft\\Edge\\Application\\msedge.exe`, `${programs}\\Microsoft\\Edge\\Application\\msedge.exe`],
+      chrome: [`${programs}\\Google\\Chrome\\Application\\chrome.exe`, `${programsX86}\\Google\\Chrome\\Application\\chrome.exe`],
+      brave: [`${programs}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`, `${local}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`],
+      vivaldi: [`${local}\\Vivaldi\\Application\\vivaldi.exe`, `${programs}\\Vivaldi\\Application\\vivaldi.exe`],
+      opera: [`${local}\\Programs\\Opera\\opera.exe`, `${programs}\\Opera\\opera.exe`],
+      arc: [`${local}\\Programs\\Arc\\Arc.exe`, `${programs}\\Arc\\Arc.exe`],
+      helium: [`${local}\\Programs\\Helium\\helium.exe`, `${programs}\\Helium\\helium.exe`],
+    };
   }
   if (process.platform === 'darwin') {
-    return name === 'edge'
-      ? ['/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', path.join(process.env.HOME || '', 'Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge')]
-      : ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', path.join(process.env.HOME || '', 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome')];
+    return {
+      edge: ['/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', path.join(home, 'Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge')],
+      chrome: ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', path.join(home, 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome')],
+      brave: ['/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'],
+      vivaldi: ['/Applications/Vivaldi.app/Contents/MacOS/Vivaldi'],
+      opera: ['/Applications/Opera.app/Contents/MacOS/Opera'],
+      arc: ['/Applications/Arc.app/Contents/MacOS/Arc'],
+      helium: ['/Applications/Helium.app/Contents/MacOS/Helium'],
+    };
   }
-  return name === 'edge'
-    ? ['/usr/bin/microsoft-edge', '/usr/bin/microsoft-edge-stable', '/opt/microsoft/msedge/msedge']
-    : ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/snap/bin/chromium'];
+  return {
+    edge: ['/usr/bin/microsoft-edge', '/usr/bin/microsoft-edge-stable', '/opt/microsoft/msedge/msedge'],
+    chrome: ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/snap/bin/chromium'],
+    brave: ['/usr/bin/brave-browser', '/opt/brave.com/brave/brave'],
+    vivaldi: ['/usr/bin/vivaldi', '/opt/vivaldi/vivaldi'],
+    opera: ['/usr/bin/opera', '/usr/lib/x86_64-linux-gnu/opera/opera'],
+    arc: ['/usr/bin/arc'],
+    helium: ['/usr/bin/helium', '/opt/helium/helium'],
+  };
+})();
+
+function browserCandidates(name) {
+  const override = process.env['BB_BROWSER_' + String(name || '').toUpperCase()];
+  if (override) return [override];
+  return BROWSER_PATHS[String(name || '').toLowerCase()] || [];
 }
+
 
 function findBrowser(name) {
   for (const candidate of browserCandidates(name)) {
@@ -66,7 +99,12 @@ function findBrowser(name) {
 const BROWSER_EXE = findBrowser(browser);
 
 const results = [];
+const E2E_FILTER = (process.env.BB_E2E_FILTER || '').split(',').map((item) => item.trim()).filter(Boolean);
+const E2E_ALWAYS = ['2.', '3.', '4.'];
 function check(name, fn) {
+  if (E2E_FILTER.length && !E2E_ALWAYS.some((prefix) => name.startsWith(prefix)) && !E2E_FILTER.some((prefix) => name.startsWith(prefix))) {
+    return Promise.resolve(true);
+  }
   return Promise.resolve()
     .then(fn)
     .then((detail) => { results.push({ name, ok: true, detail }); console.log(`  PASS  ${name}${detail ? ` — ${detail}` : ''}`); return true; })
@@ -109,6 +147,8 @@ async function pickPort(preferred) {
 
 // ---------------------------------------------------------------- 静态夹具服务
 let crossPort = 0;
+// 真实服务端副作用计数器：network replay 每次真的重发请求，命中数必须递增（证明不是缓存/伪造）。
+let replayHits = 0;
 const fixtureHandler = (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/api/script-mock') {
@@ -139,6 +179,12 @@ const fixtureHandler = (req, res) => {
   if (url.pathname === '/api/ping') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify({ ok: true, ts: Date.now() }));
+    return;
+  }
+  if (url.pathname === '/api/replay-count') {
+    replayHits += 1;
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ ok: true, hit: replayHits, at: Date.now() }));
     return;
   }
   const file = url.pathname === '/' ? 'test.html' : url.pathname.replace(/^\//, '');
@@ -302,6 +348,16 @@ function cli(args, { timeoutMs = 90000 } = {}) {
     child.on('close', (code) => settle(code));
   });
 }
+async function assertSessionAlive(label) {
+  const st = await cliJson(['status']);
+  const sessions = (st.json && (st.json.sessions || (st.json.result && st.json.result.sessions))) || [];
+  if (sessions.some((item) => item.sessionId === sessionId)) return;
+  let tail = '';
+  try {
+    tail = readFileSync(path.join(bbHome, 'daemon.log'), 'utf8').split(/\r?\n/).slice(-10).join('\n');
+  } catch { /* log may be gone */ }
+  throw new Error(`${label}: session ${sessionId} disappeared; daemon log tail:\n${tail}`);
+}
 async function cliJson(args, opts) {
   const r = await cli([...args, '--json'], opts);
   let parsed = null;
@@ -313,6 +369,44 @@ function expectOk(r, what) {
   assert(r.json, `${what}: 输出不是 JSON（stdout=${JSON.stringify(r.stdout).slice(0, 400)} stderr=${JSON.stringify(r.stderr).slice(0, 400)}）`);
   assert(r.json.ok === true, `${what}: 失败 ${JSON.stringify(r.json.error)}`);
   return r.json.result;
+}
+
+/**
+ * 直连 daemon 的 /rpc（真实 daemon 通道 + 真实 token）。
+ * 少数命令的 CLI JSON 只保留 0.3.0 字段（例如 longshot recover 会裁剪扩展原始证据），
+ * 这里读原始结果是为了断言扩展真的产出了 shard/restore 证据，不替代 CLI 用例。
+ */
+function rpcDirect(method, params = {}, timeoutMs = 60000) {
+  const info = JSON.parse(readFileSync(path.join(bbHome, 'daemon.json'), 'utf8'));
+  const payload = JSON.stringify({ method, params, timeoutMs });
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({
+      host: '127.0.0.1',
+      port: info.port,
+      path: '/rpc',
+      method: 'POST',
+      agent: false,
+      headers: {
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(payload),
+        'x-bridge-token': info.token,
+      },
+      timeout: Math.max(timeoutMs, 10000) + 5000,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        let json = null;
+        try { json = JSON.parse(text); } catch { /* 留给调用方报告原文 */ }
+        resolve({ status: res.statusCode, json, text });
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('rpcDirect 超时：' + method)));
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
 }
 
 function startMcp(env) {
@@ -435,7 +529,7 @@ try {
     );
   }))) throw new Error(`前置条件失败：浏览器没连上扩展 ${LOAD_HINT}，终止验收`);
 
-  if (!(await check('3. session start（开 agent 窗口）', async () => {
+  if (!(await check('3. session start（开 agent 窗口，默认不抢焦点）', async () => {
     const r = await cliJson(['session', 'start']);
     const res = expectOk(r, 'session start');
     sessionId = res.sessionId;
@@ -444,7 +538,11 @@ try {
     const st = expectOk(await cliJson(['status']), 'status after start');
     const row = (st.sessions || []).find((item) => item.sessionId === sessionId);
     assert(row && row.phase === 'active', 'session phase 不是 active：' + JSON.stringify(row));
-    return `session=${sessionId} tab=${res.tabId} window=${res.windowId}`;
+    const windows = expectOk(await cliJson(['window', 'list', '--session', sessionId]), 'window list after start');
+    const agentWindow = (windows.windows || []).find((win) => win.windowId === res.windowId);
+    assert(agentWindow, '找不到新建的 Agent Window');
+    assert(agentWindow.focused === false, 'session start 默认不应聚焦 Agent Window：' + JSON.stringify(agentWindow));
+    return `session=${sessionId} tab=${res.tabId} window=${res.windowId} focus=false`;
   }))) throw new Error('前置条件失败：session 未建立，终止验收');
 
   await check('4. navigate 到本地夹具页', async () => {
@@ -477,6 +575,8 @@ try {
     assert(button, 'vom 里没有 button：' + JSON.stringify(res.nodes.slice(0, 3)));
     assert(typeof button.name === 'string' && button.name.length > 0, 'vom button 没有 name');
     assert(button.ref && /^@e\d+$/.test(button.ref), 'vom button 没有 ref：' + JSON.stringify(button));
+    const negotiated = expectOk(await cliJson(['refs', 'negotiate', button.stableRef, '--session', sessionId]), 'refs negotiate');
+    assert(negotiated.refs && negotiated.refs[0] && negotiated.refs[0].ok === true && negotiated.refs[0].ref === button.ref, 'stableRef 协商失败：' + JSON.stringify(negotiated));
     assert(button.rect && Number.isFinite(button.rect.w) && Number.isFinite(button.rect.h), 'vom rect 不合法：' + JSON.stringify(button.rect));
     const textbox = res.nodes.find((node) => String(node.role || '').toLowerCase() === 'textbox');
     assert(textbox && textbox.rect, 'vom 里没有 textbox/rect');
@@ -484,10 +584,90 @@ try {
     assert(textbox.inputState === 'empty', 'vom textbox 初始 inputState 应为 empty：' + JSON.stringify(textbox.inputState));
     assert(button.clickable === true, 'vom button 应标记 clickable：' + JSON.stringify(button.clickable));
     assert(Number.isInteger(button.paintOrder), 'vom button 缺少 paintOrder：' + JSON.stringify(button.paintOrder));
+    assert(typeof res.ariaSnapshot === 'string' && /- (button|link|textbox)/.test(res.ariaSnapshot), 'vom ariaSnapshot 缺失：' + JSON.stringify(res.ariaSnapshot));
+    assert(res.semantic && res.semantic.version >= 1 && res.semantic.stats.members > 0, 'vom semantic graph 缺失：' + JSON.stringify(res.semantic && res.semantic.stats));
+    if (process.env.BB_E2E_DUMP_VOM) {
+      writeFileSync(path.resolve(process.env.BB_E2E_DUMP_VOM), JSON.stringify({
+        url: res.url || pageUrl,
+        title: res.title || '',
+        viewport: res.viewport || { width: 1280, height: 800 },
+        nodes: res.nodes,
+      }, null, 2) + '\n', 'utf8');
+    }
+    assert(res.vomWeights && res.vomWeights.billing && res.vomWeights.billing.totalTokens > 0, 'vom billing 缺失：' + JSON.stringify(res.vomWeights && res.vomWeights.billing));
+    assert(res.vomWeights.billing.groups > 0 && res.vomWeights.billing.grouped > 0, 'billing 未关联 semantic groups：' + JSON.stringify(res.vomWeights.billing));
+    const altBilling = expectOk(await cliJson(['observe', '--vom', '--vom-billing-model', 'chars-per-4', '--session', sessionId]), 'observe billing model');
+    assert(altBilling.vomWeights.billing.model === 'chars-per-4', 'vom billing model 没有生效：' + JSON.stringify(altBilling.vomWeights.billing));
+    const o200kBilling = expectOk(await cliJson(['observe', '--vom', '--vom-billing-model', 'o200k', '--session', sessionId]), 'observe o200k billing');
+    assert(o200kBilling.vomWeights.billing.model === 'o200k' && o200kBilling.vomWeights.billing.totalTokens > 0, 'o200k billing 没有生效：' + JSON.stringify(o200kBilling.vomWeights.billing));
+    assert(o200kBilling.vomWeights.estimatedTokens === o200kBilling.vomWeights.billing.totalTokens, 'estimatedTokens 未使用 o200k 账本：' + JSON.stringify({ estimated: o200kBilling.vomWeights.estimatedTokens, billing: o200kBilling.vomWeights.billing.totalTokens }));
+    const contextual = expectOk(await cliJson(['observe', '--vom', '--vom-semantic-max-groups', '2', '--vom-group-context', '--session', sessionId]), 'observe group context');
+    assert(contextual.vomWeights.semanticFiltered && typeof contextual.vomWeights.semanticFiltered.contextGroups === 'number', 'vom group context 没有生效：' + JSON.stringify(contextual.vomWeights.semanticFiltered));
+    const semanticFiltered = expectOk(await cliJson(['observe', '--vom', '--vom-semantic-max-groups', '1', '--session', sessionId]), 'observe semantic filter');
+    assert(semanticFiltered.vomWeights.semanticFiltered && semanticFiltered.vomWeights.semanticFiltered.groups >= 1, 'vom semantic filter 没有生效：' + JSON.stringify(semanticFiltered.vomWeights.semanticFiltered));
+    const semanticTokens = expectOk(await cliJson(['observe', '--vom', '--vom-semantic-max-tokens', '100', '--session', sessionId]), 'observe semantic tokens');
+    assert(semanticTokens.vomWeights.semanticFiltered && semanticTokens.vomWeights.semanticFiltered.tokensUsed >= 0, 'vom semantic token budget 没有生效：' + JSON.stringify(semanticTokens.vomWeights.semanticFiltered));
+    assert(semanticTokens.vomWeights.budgetPlan && semanticTokens.vomWeights.budgetPlan.nodes >= 0 && typeof semanticTokens.vomWeights.budgetPlan.tokens === 'number', 'vom budgetPlan 缺失：' + JSON.stringify(semanticTokens.vomWeights.budgetPlan));
+    assert(res.nodes.every((node) => Number.isInteger(node.vomScore)), 'vom 节点缺少 vomScore：' + JSON.stringify(res.nodes.slice(0, 2)));
+    const ranked = expectOk(await cliJson(['observe', '--vom', '--vom-rank', '--session', sessionId]), 'observe vom-rank');
+    assert(ranked.vomWeights && ranked.vomWeights.ranked === true, 'vom-rank 没有生效');
+    const custom = expectOk(await cliJson(['observe', '--vom', '--vom-weights', 'interactive=100,text=2', '--session', sessionId]), 'observe vom-weights');
+    assert(custom.vomWeights && Array.isArray(custom.vomWeights.custom) && custom.vomWeights.custom.includes('interactive'), 'vom-weights 没有生效：' + JSON.stringify(custom.vomWeights));
+    const topN = expectOk(await cliJson(['observe', '--vom', '--vom-rank', '--vom-top', '10', '--session', sessionId]), 'observe vom-top');
+    assert(topN.nodes.length <= 10 && topN.vomWeights.top === 10 && topN.vomWeights.tokenSafetyFactor === 1.1 && Number.isInteger(topN.vomWeights.estimatedTokens) && topN.vomWeights.estimatedTokens > 0, 'vom-top/token factor 没有生效：' + JSON.stringify({ count: topN.nodes.length, weights: topN.vomWeights }));
+    const minScored = expectOk(await cliJson(['observe', '--vom', '--vom-min-score', '20', '--session', sessionId]), 'observe vom-min-score');
+    assert(minScored.nodes.length > 0 && minScored.nodes.every((node) => node.vomScore >= 20) && minScored.vomWeights.minScore === 20, 'vom-min-score 没有生效：' + JSON.stringify({ count: minScored.nodes.length, score: minScored.nodes[0] && minScored.nodes[0].vomScore }));
+    const budgeted = expectOk(await cliJson(['observe', '--vom', '--vom-rank', '--vom-max-nodes', '10', '--session', sessionId]), 'observe vom budget');
+    assert(budgeted.nodes.length <= 10 && budgeted.vomWeights.budget && budgeted.vomWeights.budget.nodes > 0, 'vom 预算没有生效：' + JSON.stringify({ count: budgeted.nodes.length, budget: budgeted.vomWeights.budget }));
+    const explained = expectOk(await cliJson(['observe', '--vom', '--vom-explain', '--session', sessionId]), 'observe vom-explain');
+    const explainValues = Object.values(explained.vomExplain || {});
+    assert(explainValues.length > 0 && explainValues.some((factors) => Array.isArray(factors) && factors.some((factor) => typeof factor.score === 'number')), 'vom-explain 没有因素明细：' + JSON.stringify(explained.vomExplain).slice(0, 200));
+    const compact = expectOk(await cliJson(['observe', '--vom', '--vom-profile', 'compact', '--session', sessionId]), 'observe vom-profile');
+    assert(compact.nodes.length <= 80 && compact.vomWeights.profile === 'compact' && compact.vomWeights.minScore === 20, 'vom-profile compact 没有生效：' + JSON.stringify({ count: compact.nodes.length, weights: compact.vomWeights }));
+    const grouped = expectOk(await cliJson(['observe', '--vom', '--vom-rank', '--vom-per-group', '2', '--session', sessionId]), 'observe vom-per-group');
+    assert(grouped.vomWeights.perGroup === 2 && grouped.vomWeights.compacted, 'vom-per-group 没有生效：' + JSON.stringify({ count: grouped.nodes.length, weights: grouped.vomWeights }));
+    const groupTokens = expectOk(await cliJson(['observe', '--vom', '--vom-rank', '--vom-per-group', '3', '--vom-group-tokens', '30', '--session', sessionId]), 'observe vom-group-tokens');
+    assert(groupTokens.vomWeights.groupTokens === 30 && groupTokens.vomWeights.compacted, 'vom-group-tokens 没有生效：' + JSON.stringify({ count: groupTokens.nodes.length, weights: groupTokens.vomWeights }));
+    const visibleOnly = expectOk(await cliJson(['observe', '--vom', '--vom-exclude-hidden', '--session', sessionId]), 'observe vom-exclude-hidden');
+    assert(visibleOnly.vomWeights.excludeHidden === true && visibleOnly.nodes.length <= res.nodes.length, 'vom-exclude-hidden 没有生效：' + JSON.stringify({ count: visibleOnly.nodes.length, weights: visibleOnly.vomWeights }));
     const draggable = res.nodes.find((node) => node.dragHint === 'draggable');
-    assert(draggable, 'vom 里没有 draggable 节点：' + JSON.stringify(res.nodes.filter((node) => node.tag === 'div').slice(0, 3)));
+    assert(draggable, 'vom 里没有 draggable 节点：' + JSON.stringify({ total: res.nodes.length, tags: [...new Set(res.nodes.map((node) => node.tag))].slice(0, 20), drag: res.nodes.filter((node) => node.dragHint).length }));
     assert(typeof draggable.name === 'string' && draggable.name.length > 0, 'draggable 节点缺少 name');
     return 'nodes=' + res.nodes.length + ' button=' + button.ref;
+  });
+
+  await check('5b2. observe --vom-deep 六阶段过滤 + 绘制序 + token 预算', async () => {
+    const deep = expectOk(await cliJson(['observe', '--vom-deep', '--session', sessionId]), 'observe vom-deep');
+    const data = deep.deepVom;
+    assert(data && Array.isArray(data.nodes) && data.nodes.length >= 1, 'deepVom 没有节点：' + JSON.stringify(deep.issues));
+    assert(data.stages.collected >= data.stages.emitted, '漏斗 collect 计数不对：' + JSON.stringify(data.stages));
+    assert(data.stages.sorted === 'paint-order' && Number.isInteger(data.stages.tokens), 'deepVom 阶段元数据不完整：' + JSON.stringify(data.stages));
+    assert(data.vomFunnel && data.vomFunnel.collected >= data.vomFunnel.emitted && Array.isArray(data.vomFunnel.droppedReasons), 'deepVom 缺少漏斗摘要：' + JSON.stringify(data.vomFunnel));
+    const refs = data.nodes.filter((node) => typeof node.ref === 'string');
+    assert(refs.length >= 1 && refs.every((node) => /^@e[0-9]+$/.test(node.ref)), 'deepVom 交互节点没有 ref：' + JSON.stringify(data.nodes.filter((node) => node.interactive).slice(0, 3)));
+    const ys = data.nodes.map((node) => Number(node.rect && node.rect.y));
+    assert(ys.every((value, index) => index === 0 || value >= ys[index - 1]), 'deepVom 不是绘制序：' + JSON.stringify(ys.slice(0, 5)));
+    return 'nodes=' + data.nodes.length + ' tokens=' + data.stages.tokens;
+  });
+
+  await check('5i. upload 文件事务：CDP setFileInputFiles', async () => {
+    const file = path.join(outDir, 'upload.txt');
+    writeFileSync(file, 'bridge-upload', 'utf8');
+    const uploaded = expectOk(await cliJson(['upload', '#file', '--file', file, '--session', sessionId]), 'upload file');
+    assert(uploaded.effectState === 'committed', '上传事务字段不对：' + JSON.stringify(uploaded));
+    const got = expectOk(await cliJson(['evaluate', 'document.getElementById("file").files.length', '--session', sessionId]), 'upload read');
+    assert(Number(got.value) >= 1, '文件没有写入 input：' + JSON.stringify(got));
+    const mcp = startMcp({ ...process.env, BB_HOME: bbHome, BB_PORT: String(port), BB_NO_PROBE: '1' });
+    try {
+      await mcp.rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'e2e' } });
+      const mcpUpload = await mcp.rpc('tools/call', { name: 'browser_upload', arguments: { target: '#hidden-file', files: [file], session: sessionId } });
+      assert(mcpUpload.result.isError === false, 'MCP upload 失败：' + String(mcpUpload.result.content[0].text).slice(0, 160));
+    } finally {
+      mcp.close();
+    }
+    const hidden = expectOk(await cliJson(['evaluate', 'document.getElementById("hidden-file").files.length', '--session', sessionId]), 'upload read hidden');
+    assert(Number(hidden.value) >= 1, 'MCP 文件没有写入 hidden input：' + JSON.stringify(hidden));
+    return 'uploaded files=' + got.value;
   });
 
   await check('5c. observe --ax 返回 AX 树 + --vom 合并', async () => {
@@ -587,7 +767,9 @@ try {
 
   await check('6. fill 填输入框', async () => {
     const r = await cliJson(['fill', `@${textboxRef}`, '--value', 'hello bridge', '--session', sessionId]);
-    expectOk(r, 'fill');
+    const filled = expectOk(r, 'fill');
+    assert(filled.matches === true, 'fill 读回 matches 不为 true：' + JSON.stringify(filled));
+    assert(filled.expected_value === 'hello bridge' && filled.effectState === 'committed', 'fill 事务字段不对：' + JSON.stringify(filled));
     return '@' + textboxRef + ' ← "hello bridge"';
   });
 
@@ -659,12 +841,44 @@ try {
     return `${selectNote} click=@${buttonRef} effect=committed`;
   });
 
+  await check('7b. stableRef 驱动动作', async () => {
+    const obs = expectOk(await cliJson(['observe', '--vom', '--force', '--session', sessionId]), 'observe stable');
+    const detail = (obs.refDetails || []).find((item) => item.stableRef && item.ref);
+    assert(detail, 'observe 没有 stableRef：nodes=' + obs.nodeCount + ' refs=' + (obs.refs) + ' details=' + JSON.stringify((obs.refDetails || []).slice(0, 3)));
+    const clicked = expectOk(await cliJson(['click', '--stable-ref', detail.stableRef, '--session', sessionId]), 'click stableRef');
+    assert(clicked.via === 'cdp-backend', 'stableRef 未走 CDP：' + JSON.stringify(clicked));
+    return 'stableRef=' + detail.stableRef + ' via=' + clicked.via;
+  });
+
   await check('8. get-html 读回结果（#out 变成 clicked:...）', async () => {
     const r = await cliJson(['get-html', '--selector', '#out', '--session', sessionId]);
     const res = expectOk(r, 'get-html');
     const html = res.html || '';
     assert(html.includes('clicked:hello bridge'), `#out 内容不符：${JSON.stringify(html).slice(0, 300)}`);
     return html.replace(/\s+/g, ' ').slice(0, 120);
+  });
+
+  await check('8b. stableRef 驱动 fill/select/read/actionable（跨观察身份）', async () => {
+    const obs = expectOk(await cliJson(['observe', '--vom', '--force', '--session', sessionId]), 'observe stable fill');
+    const details = obs.refDetails || [];
+    const textbox = details.find((item) => item.stableRef && item.role === 'textbox' && /关键词/.test(String(item.name || '')))
+      || details.find((item) => item.stableRef && item.role === 'textbox');
+    assert(textbox, '没有 textbox 的 stableRef：' + JSON.stringify(details.slice(0, 6)));
+    expectOk(await cliJson(['fill', '--stable-ref', textbox.stableRef, '--value', 'stable-fill', '--session', sessionId]), 'fill stableRef');
+    const read = expectOk(await cliJson(['read', '--selector', '#kw', '--session', sessionId]), 'read stable fill');
+    assert(read.fields[0].value === 'stable-fill', 'stableRef fill 没写入：' + JSON.stringify(read.fields[0]));
+
+    let selectNote = 'no-combobox';
+    const combo = details.find((item) => item.stableRef && item.role === 'combobox');
+    if (combo) {
+      expectOk(await cliJson(['select', '--stable-ref', combo.stableRef, '--value', 'b', '--session', sessionId]), 'select stableRef');
+      const kind = expectOk(await cliJson(['read', '--selector', '#kind', '--session', sessionId]), 'read stable select');
+      assert(kind.fields[0].value === 'b', 'stableRef select 没生效：' + JSON.stringify(kind.fields[0]));
+      selectNote = 'select=b';
+    }
+    const actionable = await cliJson(['actionable', '--stable-ref', textbox.stableRef, '--session', sessionId]);
+    assert(actionable.code === 0, 'actionable stableRef 失败：' + JSON.stringify(actionable.json));
+    return 'fill + ' + selectNote + ' + actionable';
   });
 
   await check('9. evaluate 读 document.title', async () => {
@@ -763,6 +977,135 @@ try {
     const csv = readFileSync(csvPath, 'utf8');
     assert(csv.includes('姓名') && csv.includes('张三'), 'CSV 内容不对');
     return 'rows=3 csv=' + csvPath;
+  });
+
+  await check('15b. extract discover 跨 frame + frame 句柄导出', async () => {
+    const discovered = expectOk(await cliJson(['extract', 'discover', '--session', sessionId]), 'extract discover frames');
+    assert(Array.isArray(discovered.targets) && discovered.targets.length > 0, 'discover 没有 target：' + JSON.stringify(discovered));
+    assert(discovered.frameCount >= 1, 'discover 没有 frameCount：' + JSON.stringify(discovered.frameCount));
+    assert(discovered.targets.every((target) => Number.isInteger(target.frameId)), 'target 缺少 frameId：' + JSON.stringify(discovered.targets.slice(0, 2)));
+    assert(discovered.limits && discovered.limits.maxFrames === 16 && discovered.limits.maxTargets === 32 && discovered.limits.previewColumns === 8, 'discover 缺少上限说明：' + JSON.stringify(discovered.limits));
+    assert(discovered.targets.length <= 32, 'discover target 超过 32：' + discovered.targets.length);
+    assert(typeof discovered.truncated === 'boolean', 'discover 缺少 truncated');
+    assert(discovered.framesScanned === discovered.frameCount, 'framesScanned 与 frameCount 不一致：' + JSON.stringify({ scanned: discovered.framesScanned, frames: discovered.frameCount }));
+    assert(discovered.framesSeen >= discovered.frameCount, 'framesSeen 小于 frameCount：' + JSON.stringify({ seen: discovered.framesSeen, frames: discovered.frameCount }));
+    for (const target of discovered.targets) {
+      assert(target.preview && Array.isArray(target.preview.columns) && target.preview.columns.length <= 8, 'target preview 缺失或超 8 列：' + JSON.stringify(target));
+      assert(Array.isArray(target.preview.sample), 'target preview.sample 不是数组：' + JSON.stringify(target.preview));
+    }
+    const table = discovered.targets.find((target) => target.kind === 'table' && target.frameId === 0);
+    assert(table, 'discover 没有主文档 table target：' + JSON.stringify(discovered.targets.slice(0, 5)));
+    const extracted = expectOk(await cliJson(['extract', 'table', '--target', String(table.id), '--frame', String(table.frameId), '--session', sessionId]), 'extract table frame');
+    assert(extracted.rowCount >= 1, '按 frame 句柄导出失败：' + JSON.stringify(extracted));
+    return 'frames=' + discovered.frameCount + ' target=' + table.id + ' rows=' + extracted.rowCount;
+  });
+
+  await check('15c. extract 预算证据：max-rows / max-cells / max-bytes', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'extract budget navigate');
+    const limited = expectOk(await cliJson(['extract', '--max-rows', '1', '--session', sessionId]), 'extract budget rows');
+    assert(limited.truncated === true && limited.stopReason === 'max-rows', '--max-rows 没有截断证据：' + JSON.stringify({ truncated: limited.truncated, stopReason: limited.stopReason }));
+    assert(limited.budget && limited.budget.maxRows === 1 && limited.budget.rows === 1, '预算字段不对：' + JSON.stringify(limited.budget));
+    assert(Number.isInteger(limited.budget.bytes) && limited.budget.bytes > 0, 'budget.bytes 缺失：' + JSON.stringify(limited.budget));
+    assert(limited.coverage && limited.coverage.stopReason === 'max-rows', 'coverage 缺少 stopReason：' + JSON.stringify(limited.coverage));
+    assert(limited.coverage.omitted === null || Number.isInteger(limited.coverage.omitted), 'coverage.omitted 类型不对：' + JSON.stringify(limited.coverage));
+    assert(typeof limited.cells === 'number' && limited.cells > 0, 'cells 缺失：' + JSON.stringify(limited.cells));
+    const capped = expectOk(await cliJson(['extract', '--max-cells', '2', '--session', sessionId]), 'extract budget cells');
+    assert(capped.stopReason === 'max-cells' && capped.budget.maxCells === 2, '--max-cells 没有生效：' + JSON.stringify({ stopReason: capped.stopReason, budget: capped.budget }));
+    assert(capped.cells <= 2, '--max-cells 未限制单元格数：' + capped.cells);
+    const bytesCapped = expectOk(await cliJson(['extract', '--max-bytes', '1200', '--session', sessionId]), 'extract budget bytes');
+    assert(bytesCapped.budget && bytesCapped.budget.maxBytes === 1200, 'budget.maxBytes 不对：' + JSON.stringify(bytesCapped.budget));
+    assert(bytesCapped.budget.bytes <= 1200 || bytesCapped.stopReason === 'max-bytes', '--max-bytes 未生效：' + JSON.stringify({ bytes: bytesCapped.budget.bytes, stopReason: bytesCapped.stopReason }));
+    const full = expectOk(await cliJson(['extract', '--max-rows', '100', '--session', sessionId]), 'extract budget full');
+    assert(full.budget && full.budget.maxRows === 100 && full.budget.stopReason === 'end', '正常提取预算不对：' + JSON.stringify(full.budget));
+    return 'rows=' + limited.budget.rows + ' cells=' + capped.cells + ' bytes=' + bytesCapped.budget.bytes;
+  });
+
+  await check('15d. observe --frames --vom 跨源 iframe 子图', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'frame vom navigate');
+    const frames = expectOk(await cliJson(['observe', '--frames', '--vom', '--force', '--session', sessionId]), 'frame vom observe');
+    assert(Array.isArray(frames.frames) && frames.frames.length >= 2, 'frames 不足：' + JSON.stringify(frames.frames && frames.frames.length));
+    assert(frames.vomFrames && frames.vomFrames.count >= 2, '缺少 vomFrames 摘要：' + JSON.stringify(frames.vomFrames));
+    assert(frames.vomLimits && frames.vomLimits.frames === 16, '缺少 vomLimits：' + JSON.stringify(frames.vomLimits));
+    const main = frames.frames.find((frame) => Number(frame.frameId) === 0);
+    assert(main && main.vom && main.vom.available === true, '主文档缺少子图：' + JSON.stringify(main && main.vom));
+    assert(main.vom.nodes.some((node) => node.id === 'frame:0'), '主文档缺少 frame:0 节点');
+    const cross = frames.frames.find((frame) => Number(frame.frameId) > 0
+      && /\/frame-x\.html/.test(String(frame.url || ''))
+      && !String(frame.url || '').includes('hidden'));
+    assert(cross, '没有找到跨源 frame：' + JSON.stringify((frames.frames || []).map((frame) => ({ id: frame.frameId, url: frame.url }))));
+    assert(cross.vom && cross.vom.available === true, '跨源 frame 缺少子图：' + JSON.stringify(cross.vom));
+    const ids = new Set(cross.vom.nodes.map((node) => node.id));
+    assert(ids.has('frame:' + cross.frameId), '跨源子图缺少 frame 节点：' + JSON.stringify([...ids]));
+    assert([...ids].some((id) => id.startsWith('f' + cross.frameId + ':')), '跨源子图 id 未加帧前缀：' + JSON.stringify([...ids]));
+    for (const edge of cross.vom.edges) {
+      assert(ids.has(edge.from) && ids.has(edge.to), '跨源子图边端点越界：' + JSON.stringify(edge));
+    }
+    assert(cross.vom.edges.some((edge) => edge.type === 'frame' && edge.from === 'frame:' + cross.frameId), '缺少 frame 边');
+    // 主文档的 iframe 元素 → 跨源子图根
+    const link = (frames.vomFrames.links || []).find((item) => Number(item.fromFrameId) === 0 && Number(item.toFrameId) === Number(cross.frameId));
+    assert(link, '缺少 iframe→子图根 link：' + JSON.stringify(frames.vomFrames.links));
+    const mainIds = new Set(main.vom.nodes.map((node) => node.id));
+    assert(mainIds.has(link.ownerId), 'ownerId 不在主文档子图：' + link.ownerId);
+    assert(mainIds.has('frame:' + cross.frameId), '主文档缺少子帧节点：' + JSON.stringify([...mainIds].slice(0, 10)));
+    assert(main.vom.edges.some((edge) => edge.type === 'frame' && edge.from === link.ownerId && edge.to === 'frame:' + cross.frameId), '主文档缺少 iframe→frame 边');
+    assert(Number(frames.vomFrames.unlinked) === 0, '存在未匹配的 iframe owner：' + frames.vomFrames.unlinked);
+    return 'frames=' + frames.vomFrames.count + ' main=' + main.vom.counts.nodes + ' cross=' + cross.vom.counts.nodes + ' link=' + link.ownerId;
+  });
+
+  await check('15e. 嵌套 iframe 链：父帧把 iframe 元素接到自己的子图根', async () => {
+    const nestedUrl = new URL('nested-cross.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', nestedUrl, '--session', sessionId]), 'nested frame vom navigate');
+    const frames = expectOk(await cliJson(['observe', '--frames', '--vom', '--force', '--session', sessionId]), 'nested frame vom observe');
+    // 先回到主夹具页，失败时也不会污染后续用例。
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'nested frame vom restore');
+    const links = frames.vomFrames && Array.isArray(frames.vomFrames.links) ? frames.vomFrames.links : [];
+    const nested = links.filter((item) => Number(item.fromFrameId) > 0);
+    assert(nested.length >= 1, '没有嵌套 iframe 的 owner link：' + JSON.stringify({ links, frames: (frames.frames || []).map((frame) => ({ id: frame.frameId, parent: frame.parentFrameId, url: frame.url })) }));
+    const link = nested[0];
+    const parent = (frames.frames || []).find((frame) => Number(frame.frameId) === Number(link.fromFrameId));
+    assert(parent && parent.vom && parent.vom.available === true, '嵌套父帧缺少子图：' + JSON.stringify({ frameId: link.fromFrameId, frames: (frames.frames || []).map((frame) => frame.frameId) }));
+    const parentIds = new Set(parent.vom.nodes.map((node) => node.id));
+    assert(parentIds.has(link.ownerId), 'ownerId 不在父帧子图：' + link.ownerId);
+    assert(parentIds.has('frame:' + link.toFrameId), '父帧缺少子帧节点：' + link.toFrameId);
+    assert(parent.vom.edges.some((edge) => edge.type === 'frame' && edge.from === link.ownerId && edge.to === 'frame:' + link.toFrameId), '父帧缺少 iframe→frame 边');
+    const child = (frames.frames || []).find((frame) => Number(frame.frameId) === Number(link.toFrameId));
+    assert(child && child.vom && child.vom.available === true, '嵌套子帧缺少子图');
+    assert(Number(frames.vomFrames.unlinked) === 0, '存在未匹配 owner：' + frames.vomFrames.unlinked);
+    return 'nested link ' + link.fromFrameId + '→' + link.toFrameId;
+  });
+
+  await check('15f. extract 多页游标：续取 + 过期/类型校验', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'extract cursor navigate');
+    const first = expectOk(await cliJson(['extract', '--max-rows', '1', '--session', sessionId]), 'extract cursor first');
+    assert(first.offset === 0 && first.rows.length === 1, '首块 offset/rows 不对：' + JSON.stringify({ offset: first.offset, rows: first.rows.length }));
+    assert(first.hasMore === true && typeof first.cursor === 'string' && first.cursor.startsWith('x1.'), '首块缺少 cursor/hasMore：' + JSON.stringify({ hasMore: first.hasMore, cursor: first.cursor }));
+    const second = expectOk(await cliJson(['extract', '--cursor', first.cursor, '--session', sessionId]), 'extract cursor second');
+    assert(second.offset === 1 && second.rows.length >= 1, '续取 offset/rows 不对：' + JSON.stringify({ offset: second.offset, rows: second.rows.length }));
+    assert(JSON.stringify(second.rows[0]) !== JSON.stringify(first.rows[0]), '续取返回了同一行：' + JSON.stringify({ first: first.rows[0], second: second.rows[0] }));
+    const wrongKind = await cliJson(['extract', 'list', '--cursor', second.cursor, '--session', sessionId]);
+    assert(wrongKind.code === 1 && wrongKind.json && wrongKind.json.error && wrongKind.json.error.code === 'E_CURSOR_STALE', '类型不符应 E_CURSOR_STALE：' + JSON.stringify(wrongKind.json && wrongKind.json.error));
+    const bogus = await cliJson(['extract', '--cursor', 'x1.bogus', '--session', sessionId]);
+    assert(bogus.code === 1 && bogus.json && bogus.json.error && bogus.json.error.code === 'E_CURSOR_STALE', '非法 cursor 应 E_CURSOR_STALE：' + JSON.stringify(bogus.json && bogus.json.error));
+    const fresh = expectOk(await cliJson(['extract', '--max-rows', '1', '--session', sessionId]), 'extract cursor fresh');
+    expectOk(await cliJson(['evaluate', "document.getElementById('out').textContent='cursor-stale';'ok'", '--session', sessionId]), 'extract cursor mutate');
+    const stale = await cliJson(['extract', '--cursor', fresh.cursor, '--session', sessionId]);
+    assert(stale.code === 1 && stale.json && stale.json.error && stale.json.error.code === 'E_CURSOR_STALE', 'DOM 变化后 cursor 应失效：' + JSON.stringify(stale.json && stale.json.error));
+    return 'offset 0→1，kind/revision 校验生效';
+  });
+
+  await check('15g. view 分页缓存：offset/limit/grep 组合', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'view page navigate');
+    expectOk(await cliJson(['observe', '--force', '--session', sessionId]), 'view page observe');
+    const all = expectOk(await cliJson(['view', '--limit', '200', '--session', sessionId]), 'view all');
+    assert(Number(all.total) > 5, 'observation 行数太少，无法验证分页：' + JSON.stringify({ total: all.total }));
+    const first = expectOk(await cliJson(['view', '--limit', '3', '--session', sessionId]), 'view first');
+    assert(first.offset === 0 && first.lines.length === 3 && first.limit === 3, '第一页 offset/limit 不对：' + JSON.stringify({ offset: first.offset, limit: first.limit, lines: first.lines.length }));
+    const second = expectOk(await cliJson(['view', '--offset', '3', '--limit', '3', '--session', sessionId]), 'view second');
+    assert(second.offset === 3, '第二页 offset 不对：' + JSON.stringify(second.offset));
+    assert(JSON.stringify(second.lines) !== JSON.stringify(first.lines), '第二页与第一页内容相同');
+    const grep = expectOk(await cliJson(['view', '--grep', '搜索关键词', '--offset', '0', '--limit', '2', '--session', sessionId]), 'view grep');
+    assert(Number(grep.matched) >= 1 && Number(grep.matched) <= Number(grep.total), 'grep 命中数不合理：' + JSON.stringify({ matched: grep.matched, total: grep.total }));
+    return 'total=' + all.total + ' matched=' + grep.matched;
   });
 
   await check('16. drag 拖拽', async () => {
@@ -906,6 +1249,13 @@ try {
     await cliJson(['evaluate', "console.warn('bridge-e2e-console')", '--session', sessionId]);
     await sleep(900);
 
+    const debugJournal = expectOk(await cliJson(['debug', 'journal', '--session', sessionId]), 'debug journal');
+    assert(debugJournal.counts && debugJournal.counts.debug >= 1, 'debug journal 没有调试动作：' + JSON.stringify(debugJournal.counts));
+    assert((debugJournal.events || []).some((event) => event.type === 'debug' && event.action === 'start'), 'debug journal 缺少 start 事件');
+    const mergedJournal = expectOk(await cliJson(['debug', 'journal', '--merged', '--session', sessionId]), 'debug journal merged');
+    assert(mergedJournal.merged === true && Array.isArray(mergedJournal.timeline) && mergedJournal.timeline.length >= 1, 'debug journal --merged 时间线不完整');
+    assert(Number.isInteger(mergedJournal.timeline[0].elapsedMs), 'merged timeline 缺少 elapsedMs');
+
     const listed = expectOk(await cliJson(['debug', 'requests', '--filter', '/api/ping', '--session', sessionId]), 'debug requests');
     assert((listed.entries || []).length >= 1, 'debug requests 没抓到 /api/ping');
     const requestId = listed.entries[0].id;
@@ -916,6 +1266,12 @@ try {
 
     const consoleBody = expectOk(await cliJson(['debug', 'console', '--session', sessionId]), 'debug console');
     assert((consoleBody.entries || []).some((item) => String(item.text || '').includes('bridge-e2e-console')), '控制台里没有我们的 warn');
+    await cliJson(['evaluate', "try { window.__bbWs = new WebSocket('ws://127.0.0.1:1/'); window.__bbWs.onerror = () => {}; } catch (error) {} 'ok'", '--session', sessionId]);
+    await sleep(500);
+    const wsFile = path.join(outDir, 'ws-output.json');
+    const wsFrames = expectOk(await cliJson(['debug', 'ws', '--output', wsFile, '--session', sessionId]), 'debug ws');
+    assert(Number(wsFrames.total) >= 1 && Array.isArray(wsFrames.sockets), '没有捕获 WebSocket：' + JSON.stringify(wsFrames).slice(0, 200));
+    assert(existsSync(wsFile), 'WebSocket 导出文件不存在');
 
     const pages = expectOk(await cliJson(['debug', 'pages', '--session', sessionId]), 'debug pages');
     assert(pages.context && String(pages.context.url).includes('test.html'), '页面上下文 url 不对');
@@ -938,7 +1294,38 @@ try {
     expectOk(await cliJson(['debug', 'archive', '--output', archiveFile, '--session', sessionId]), 'debug archive');
     const archived = JSON.parse(readFileSync(archiveFile, 'utf8'));
     assert(archived.version === 1 && archived.summary.requests >= 1 && archived.expiresAt, '调试归档结构不完整');
+    assert(Array.isArray(archived.journal) && archived.journal.length >= 1, '调试归档没有保留 journal：' + JSON.stringify(archived.summary));
     assert(existsSync(path.join(outDir, '.bb-debug-index.json')), '归档索引文件未生成');
+    const harFile = path.join(outDir, 'debug.har');
+    const har = expectOk(await cliJson(['debug', 'har', '--output', harFile, '--session', sessionId]), 'debug har');
+    assert(har.entries >= 1, 'HAR 没有条目：' + JSON.stringify(har));
+    const harJson = JSON.parse(readFileSync(harFile, 'utf8'));
+    assert(harJson.log && harJson.log.version === '1.2' && harJson.log.entries.length >= 1, 'HAR 结构不完整');
+    const importedArchive = path.join(outDir, 'har-imported.json');
+    expectOk(await cliJson(['debug', 'har-import', harFile, '--output', importedArchive, '--session', sessionId]), 'debug har-import');
+    const importedAnalysis = expectOk(await cliJson(['debug', 'analyze', '--file', importedArchive, '--session', sessionId]), 'har imported analyze');
+    assert(importedAnalysis.counts && importedAnalysis.counts.requests >= 1, 'HAR 导入后分析没有请求');
+    const waterfall = expectOk(await cliJson(['network', 'waterfall', '--session', sessionId]), 'network waterfall');
+    assert(Array.isArray(waterfall.rows) && waterfall.rows.length >= 1 && waterfall.summary.count >= 1, 'waterfall 为空');
+    const mcp = startMcp({ ...process.env, BB_HOME: bbHome, BB_PORT: String(port), BB_NO_PROBE: '1' });
+    try {
+      await mcp.rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'e2e' } });
+      const mcpWaterfall = await mcp.rpc('tools/call', { name: 'browser_network_waterfall', arguments: { limit: 20, session: sessionId } });
+      assert(mcpWaterfall.result.isError === false, 'MCP waterfall 失败：' + String(mcpWaterfall.result.content[0].text).slice(0, 160));
+      assert(String(mcpWaterfall.result.content[0].text).includes('"rows"'), 'MCP waterfall 没有返回 rows');
+      const mcpReplay = await mcp.rpc('tools/call', { name: 'browser_network_replay_har', arguments: { file: harFile, entry: 0, session: sessionId } });
+      assert(mcpReplay.result.isError === false, 'MCP HAR 重放失败：' + String(mcpReplay.result.content[0].text).slice(0, 160));
+      const mcpHarPath = path.join(outDir, 'mcp-debug.har');
+      const mcpHar = await mcp.rpc('tools/call', { name: 'browser_debug_har', arguments: { out: mcpHarPath, session: sessionId } });
+      assert(mcpHar.result.isError === false && existsSync(mcpHarPath), 'MCP debug HAR 导出失败');
+      const mcpHarImport = path.join(outDir, 'mcp-debug-import.json');
+      const mcpHarImported = await mcp.rpc('tools/call', { name: 'browser_debug_har_import', arguments: { file: harFile, out: mcpHarImport } });
+      assert(mcpHarImported.result.isError === false && existsSync(mcpHarImport), 'MCP HAR 导入失败');
+    } finally {
+      mcp.close();
+    }
+    const replayed = expectOk(await cliJson(['network', 'replay-har', harFile, '--all', '--limit', '3', '--session', sessionId]), 'network replay-har');
+    assert(Array.isArray(replayed.results) && replayed.results.length >= 1, 'HAR 批量重放没有结果：' + JSON.stringify(replayed).slice(0, 200));
     const archiveIndex = expectOk(await cliJson(['debug', 'archives', '--dir', outDir, '--session', sessionId]), 'debug archives');
     assert(archiveIndex.stats && archiveIndex.entries.some((entry) => entry.id === archived.id), '归档索引没有包含新归档');
     const dirQuery = expectOk(await cliJson(['debug', 'query', '--dir', outDir, '--filter', '/api/ping', '--session', sessionId]), 'debug query dir');
@@ -1033,6 +1420,27 @@ try {
     return container + ' ' + buffer.length + ' 字节';
   });
 
+  await check('20c2. video 逐帧编码（--force-frames 默认 CanvasSource → MP4）', async () => {
+    const started = expectOk(await cliJson(['video', 'start', '--duration', '3s', '--force-frames', '--session', sessionId]), 'video encoder start');
+    const recordingId = started.recordingId;
+    assert(typeof recordingId === 'string' && recordingId, '缺少 recordingId');
+    await sleep(500);
+    await cliJson(['evaluate', "window.scrollBy(0, 40); document.body.style.outline='1px solid #eef'; 'ok'", '--session', sessionId]);
+    await sleep(700);
+    await cliJson(['evaluate', "window.scrollBy(0, -40); 'ok'", '--session', sessionId]);
+    await sleep(4000);
+    const status = expectOk(await cliJson(['video', 'status', recordingId, '--session', sessionId]), 'video encoder status');
+    assert(status.state === 'ready', '逐帧编码录制未完成：' + JSON.stringify(status));
+    assert(status.finish_via === 'encoder' && status.faststart === true, '没有走逐帧编码/faststart：' + JSON.stringify({ via: status.finish_via, faststart: status.faststart }));
+    assert(status.mime === 'video/mp4', '编码输出不是 mp4：' + JSON.stringify(status.mime));
+    const file = path.join(outDir, 'encoder.mp4');
+    const saved = expectOk(await cliJson(['video', 'save', recordingId, '--out', file, '--overwrite', '--session', sessionId]), 'video encoder save');
+    const buffer = readFileSync(file);
+    assert(buffer.length > 1000 && buffer.subarray(4, 8).toString('ascii') === 'ftyp', '编码输出容器不对：' + buffer.length + ' ' + buffer.subarray(0, 8).toString('hex'));
+    assert(saved.bytes === buffer.length, '保存字节不一致');
+    return 'encoder mp4 ' + buffer.length + 'B';
+  });
+
   await check('20d. record CLI：记录用户操作 → 事件 → 历史', async () => {
     expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record start');
     await cliJson(['click', '#submit-btn', '--session', sessionId]);
@@ -1060,17 +1468,34 @@ try {
     return 'steps=' + trace.steps.length + ' states=' + trace.states.length + ' shots=' + trace.screenshots.length;
   });
 
-  await check('20d3. record 记录 tab-switch 步骤', async () => {
-    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record tab-switch start');
+  await check('20d3. record 记录切换步骤（tab-select）', async () => {
     const opened = expectOk(await cliJson(['tab', 'new', 'about:blank', '--session', sessionId]), 'tab new for record');
+    const listed = expectOk(await cliJson(['window', 'list', '--session', sessionId]), 'window list for record');
+    let ownerWindowId = null;
+    for (const win of listed.windows || []) {
+      if ((win.tabs || []).some((tab) => tab.tabId === opened.tabId)) { ownerWindowId = win.windowId; break; }
+    }
+    assert(ownerWindowId !== null, '找不到新 tab 所在窗口：' + JSON.stringify(opened));
+    // 显式聚焦该窗口（用户意图）再做 tab-select；记录器至少应留下一次切换步骤。
+    expectOk(await cliJson(['window', 'focus', String(ownerWindowId), '--session', sessionId]), 'window focus for record');
+    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record switch start');
+    expectOk(await cliJson(['tab', 'select', String(opened.tabId), '--session', sessionId]), 'tab select for record');
     await sleep(700);
-    expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record tab-switch stop');
-    const listed = expectOk(await cliJson(['record', 'list', '--session', sessionId]), 'record list tab-switch');
-    const recording = (listed.recordings || [])[0] || {};
-    const switched = (recording.events || []).some((event) => event.kind === 'tab-switch');
-    if (opened && opened.tabId != null) await cliJson(['tab', 'close', String(opened.tabId), '--session', sessionId]);
-    assert(switched, '没有记录 tab-switch：' + JSON.stringify((recording.events || []).map((event) => event.kind)));
-    return 'tab-switch recorded';
+    expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record switch stop');
+    const recordingList = expectOk(await cliJson(['record', 'list', '--session', sessionId]), 'record list switch');
+    const recording = (recordingList.recordings || [])[0] || {};
+    const kinds = (recording.events || []).map((event) => event.kind);
+    const switched = kinds.some((kind) => kind === 'tab-switch' || kind === 'window-switch');
+    const after = expectOk(await cliJson(['window', 'list', '--session', sessionId]), 'window list after select');
+    let selected = null;
+    for (const win of after.windows || []) {
+      const found = (win.tabs || []).find((tab) => tab.tabId === opened.tabId);
+      if (found) selected = found;
+    }
+    await cliJson(['tab', 'close', String(opened.tabId), '--session', sessionId]);
+    assert(selected && selected.active === true, 'tab.select 后目标 tab 不是 active：' + JSON.stringify(selected));
+    assert(switched, '没有记录切换步骤：' + JSON.stringify(kinds));
+    return 'switched(' + kinds.join(',') + ')';
   });
 
   await check('20d4. record 导航后恢复记录器', async () => {
@@ -1104,7 +1529,7 @@ try {
   await check('20d6. record 记录 iframe 内操作', async () => {
     expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'record iframe navigate');
     expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record frame start');
-    await cliJson(['wait-ms', '800', '--session', sessionId]);
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
     const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'observe frames for record');
     const frame = (frames.frames || []).find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('框架内按钮'));
     assert(frame, '没有找到 iframe 按钮 frame');
@@ -1132,7 +1557,18 @@ try {
     assert(frame, '没有找到 iframe 菜单 frame');
     const local = /button "打开菜单" \[@(e\d+)\]/.exec(String(frame.observation || ''));
     assert(local, '没有找到 iframe 菜单触发 ref');
-    const alias = (frames.aliases || []).find((item) => item.ref === '@' + local[1]) || (frames.aliases || []).find((item) => Number(item.frameId) > 0 && String(item.url || '').includes('frame-x.html'));
+    // alias 选择：两套实现的 ref 命名不同（JS：全局 @eN；TS：@f<frameId>eN），
+    // 且观察里给出的 ref 可能是全局也可能是帧内 @eN。这里按“同一 frame + 四种等价写法”匹配，
+    // 不能再拿 ref 直接和帧内 @eN 比较（旧写法在两类实现间必有一边不中）。
+    const expectedFrameId = Number(frame.frameId);
+    const localRef = '@' + local[1];
+    const frameAliases = (frames.aliases || []).filter((item) => Number(item.frameId) === expectedFrameId
+      || String(item.url || '').includes('frame-x.html'));
+    const alias = frameAliases.find((item) => item.ref === localRef
+      || item.localRef === localRef
+      || item.ref === '@f' + expectedFrameId + 'e' + local[1]
+      || item.localRef === '@f' + expectedFrameId + 'e' + local[1])
+      || frameAliases.find((item) => String(item.url || '').includes('frame-x.html'));
     assert(alias, '没有 iframe 菜单别名');
     expectOk(await cliJson(['click', alias.ref, '--session', sessionId]), 'click iframe menu trigger');
     await sleep(3000);
@@ -1168,15 +1604,20 @@ try {
   });
 
   await check('20d9. record hover 停留', async () => {
-    expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record dwell start');
-    expectOk(await cliJson(['hover', '#more-link', '--session', sessionId]), 'hover link');
-    await sleep(1000);
-    expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record dwell stop');
-    const listed = expectOk(await cliJson(['record', 'list', '--session', sessionId]), 'record list dwell');
-    const recording = (listed.recordings || [])[0] || {};
-    const hoverEvent = (recording.events || []).find((event) => event.kind === 'hover' && event.dwellMs === 800);
-    assert(hoverEvent, '没有记录 hover 停留：' + JSON.stringify((recording.events || []).map((event) => ({ kind: event.kind, dwellMs: event.dwellMs }))));
-    return 'hover dwell=' + hoverEvent.dwellMs;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      expectOk(await cliJson(['record', 'start', '--include-agent', '--session', sessionId]), 'record dwell start');
+      expectOk(await cliJson(['hover', '#more-link', '--session', sessionId]), 'hover link');
+      await sleep(1200);
+      expectOk(await cliJson(['record', 'stop', '--session', sessionId]), 'record dwell stop');
+      const listed = expectOk(await cliJson(['record', 'list', '--session', sessionId]), 'record list dwell');
+      const recording = (listed.recordings || [])[0] || {};
+      const hoverEvent = (recording.events || []).find((event) => event.kind === 'hover' && event.dwellMs === 800);
+      if (hoverEvent) return 'hover dwell=' + hoverEvent.dwellMs;
+      if (attempt === 1) {
+        assert(hoverEvent, '没有记录 hover 停留：' + JSON.stringify((recording.events || []).map((event) => ({ kind: event.kind, dwellMs: event.dwellMs }))));
+      }
+    }
+    return 'hover dwell=800';
   });
 
   await check('20d10. record 默认过滤 Agent 动作', async () => {
@@ -1191,15 +1632,50 @@ try {
     return 'filtered';
   });
 
+  await check('20d11. 焦点策略：tab.new 默认不激活', async () => {
+    const created = expectOk(await cliJson(['tab', 'new', 'about:blank', '--session', sessionId]), 'focus tab new');
+    const listed = expectOk(await cliJson(['window', 'list', '--session', sessionId]), 'focus list after tab');
+    let createdTab = null;
+    let ownerWin = null;
+    for (const win of listed.windows || []) {
+      const found = (win.tabs || []).find((tab) => tab.tabId === created.tabId);
+      if (found) {
+        createdTab = found;
+        ownerWin = win;
+        break;
+      }
+    }
+    assert(createdTab, '找不到新 tab：' + JSON.stringify({ created, windows: (listed.windows || []).map((win) => ({ windowId: win.windowId, tabs: (win.tabs || []).map((tab) => tab.tabId) })) }));
+    assert(createdTab.active === false, 'tab.new 默认不应激活新 tab：' + JSON.stringify({ createdTab, windowId: ownerWin.windowId }));
+    expectOk(await cliJson(['tab', 'close', String(created.tabId), '--session', sessionId]), 'focus cleanup tab');
+    return 'tab.new 未激活（window=' + ownerWin.windowId + '）';
+  });
+
   await check('20e. debug duplicates 重复请求检测', async () => {
     expectOk(await cliJson(['debug', 'start', '--name', 'dup', '--session', sessionId]), 'debug start dup');
-    for (let i = 0; i < 3; i += 1) await cliJson(['click', '#ping-btn', '--session', sessionId]);
-    await sleep(400);
-    const dup = expectOk(await cliJson(['debug', 'duplicates', '--window-ms', '3000', '--filter', '/api/ping', '--session', sessionId]), 'debug duplicates');
+    for (let i = 0; i < 3; i += 1) {
+      expectOk(await cliJson(['click', '#ping-btn', '--session', sessionId]), 'dup click ' + i);
+      await sleep(150);
+    }
+    await sleep(1200);
+    const dup = expectOk(await cliJson(['debug', 'duplicates', '--window-ms', '10000', '--filter', '/api/ping', '--session', sessionId]), 'debug duplicates');
     assert(Array.isArray(dup.groups) && dup.groups.length >= 1, '没有检测到重复请求：' + JSON.stringify(dup));
     assert(dup.groups[0].count >= 3, '重复计数不对：' + dup.groups[0].count);
     await cliJson(['debug', 'stop', '--session', sessionId]);
     return 'count=' + dup.groups[0].count;
+  });
+
+  await check('20e2. debug coverage 明确缺口', async () => {
+    expectOk(await cliJson(['debug', 'start', '--session', sessionId]), 'debug coverage start');
+    expectOk(await cliJson(['click', '#ping-btn', '--session', sessionId]), 'debug coverage ping');
+    await sleep(300);
+    const coverage = expectOk(await cliJson(['debug', 'coverage', '--session', sessionId]), 'debug coverage');
+    assert(Number(coverage.requests && coverage.requests.total) >= 1, 'coverage 没有请求：' + JSON.stringify(coverage));
+    assert(Array.isArray(coverage.gaps), 'coverage 缺少 gaps');
+    assert(coverage.gaps.some((gap) => gap.kind === 'response-body'), '未开 bodies 时没有 response-body gap：' + JSON.stringify(coverage.gaps));
+    assert(coverage.complete === false, '有 gap 时 complete 应为 false');
+    await cliJson(['debug', 'stop', '--session', sessionId]);
+    return 'requests=' + coverage.requests.total + ' gaps=' + coverage.gaps.length;
   });
 
   await check('20f. debug rule_add fulfill/block 拦截请求', async () => {
@@ -1251,6 +1727,12 @@ try {
   await check('20g. video prune 清理过期录制', async () => {
     const started = expectOk(await cliJson(['video', 'start', '--duration', '1s', '--session', sessionId]), 'video for prune');
     await sleep(1800);
+    // 等录制真正落库后再 prune；否则全量高负载下 save 可能晚于 prune，导致“过期录制仍在”。
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const current = expectOk(await cliJson(['video', 'list', '--session', sessionId]), 'video list before prune');
+      if ((current.recordings || []).some((item) => item.id === started.recordingId)) break;
+      await sleep(200);
+    }
     const pruned = expectOk(await cliJson(['video', 'prune', '--ttl', '1ms', '--session', sessionId]), 'video prune');
     assert(pruned.removed >= 1, '没有清理过期录制：' + JSON.stringify(pruned));
     const listed = expectOk(await cliJson(['video', 'list', '--session', sessionId]), 'video list after prune');
@@ -1291,6 +1773,8 @@ try {
       const observedText = observed.result && observed.result.content && observed.result.content[0].text;
       assert(observed.result.isError === false, 'observe 失败：' + String(observedText).slice(0, 160));
       assert(String(observedText).includes('E2E 夹具页'), 'MCP observe 没返回页面内容');
+      const rankedObserve = await mcp.rpc('tools/call', { name: 'browser_observe', arguments: { vom: true, vom_rank: true, vom_top: 5, vom_profile: 'compact', vom_per_group: 2, vom_group_tokens: 30, session: sessionId } });
+      assert(rankedObserve.result.isError === false, 'MCP observe VOM flags 失败：' + String(rankedObserve.result.content[0].text).slice(0, 160));
 
       const brief = await mcp.rpc('tools/call', { name: 'browser_brief', arguments: { session: sessionId } });
       const briefText = brief.result && brief.result.content && brief.result.content[0].text;
@@ -1309,7 +1793,23 @@ try {
       const shot = await mcp.rpc('tools/call', { name: 'browser_screenshot', arguments: { out: shotPath, session: sessionId } });
       assert(shot.result.isError === false, 'MCP screenshot 失败：' + String(shot.result.content[0].text).slice(0, 160));
       assert(existsSync(shotPath) && readFileSync(shotPath).length > 1000, 'MCP 截图没有落盘');
-      return 'tools=' + tools.length + ', shot=' + readFileSync(shotPath).length + 'B';
+      const longPath = path.join(outDir, 'mcp-long.png');
+      const longShot = await mcp.rpc('tools/call', { name: 'browser_screenshot', arguments: { out: longPath, full_page: true, tile_size: 512, stale_attempts: 2, session: sessionId } });
+      assert(longShot.result.isError === false && /"tile_size"\s*:\s*512/.test(String(longShot.result.content[0].text)), 'MCP 长截图 tile_size 没有生效：' + String(longShot.result.content[0].text));
+      assert(existsSync(longPath) && readFileSync(longPath).subarray(1, 4).toString() === 'PNG', 'MCP 长截图没有落盘');
+      const pdfPath = path.join(outDir, 'mcp-doc.pdf');
+      const pdfResult = await mcp.rpc('tools/call', { name: 'browser_pdf', arguments: { out: pdfPath, page_ranges: '1', margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 }, scale: 1, session: sessionId } });
+      assert(pdfResult.result.isError === false, 'MCP pdf 失败：' + String(pdfResult.result.content[0].text).slice(0, 160));
+      const pdfBytes = readFileSync(pdfPath);
+      assert(pdfBytes.subarray(0, 5).toString('ascii') === '%PDF-', 'MCP PDF 头不对');
+
+      await cliJson(['session', 'resume', sessionId]).catch(() => {});
+      const traceStarted = await mcp.rpc('tools/call', { name: 'browser_trace_start', arguments: { session: sessionId } });
+      assert(traceStarted.result.isError === false, 'MCP trace_start 失败：' + String(traceStarted.result.content[0].text).slice(0, 160));
+      await sleep(300);
+      const traceStopped = await mcp.rpc('tools/call', { name: 'browser_trace_stop', arguments: { session: sessionId } });
+      assert(traceStopped.result.isError === false, 'MCP trace_stop 失败：' + String(traceStopped.result.content[0].text).slice(0, 160));
+      return 'tools=' + tools.length + ', shot=' + readFileSync(shotPath).length + 'B, trace ok';
     } finally {
       mcp.close();
     }
@@ -1413,7 +1913,7 @@ try {
 
   await check('20p. 跨源 iframe：统一 @eN ref（含 --frames）', async () => {
     await cliJson(['session', 'stop', sessionId]);
-    const fresh = expectOk(await cliJson(['session', 'start', '--browser', 'edge']), 'frames fresh session');
+    const fresh = expectOk(await cliJson(['session', 'start', '--browser', browser]), 'frames fresh session');
     sessionId = fresh.sessionId;
     expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'frames navigate');
     await cliJson(['wait-ms', '2000', '--session', sessionId]);
@@ -1436,6 +1936,10 @@ try {
   await check('20p2. observe --frames 标记隐藏 iframe', async () => {
     const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'observe hidden frame');
     assert(frames.hiddenFrames >= 1, '没有标记隐藏 frame：' + JSON.stringify((frames.frames || []).map((f) => ({ id: f.frameId, hidden: f.hidden, reason: f.hiddenReason }))));
+    assert(Array.isArray(frames.frameGaps), 'observe-frames 没有暴露 frameGaps：' + JSON.stringify(frames.frameGaps));
+    assert(frames.frameGapCounts && typeof frames.frameGapCounts === 'object', 'observe-frames 缺少 frameGapCounts');
+    assert(frames.frameRepairs && Number.isInteger(frames.frameRepairs.skippedHidden), 'observe-frames 缺少 frameRepairs 统计：' + JSON.stringify(frames.frameRepairs));
+    assert(Number.isInteger(frames.frameRepairs.pruned), 'frameRepairs 缺少 inventory 对账计数：' + JSON.stringify(frames.frameRepairs));
     const hidden = (frames.frames || []).find((frame) => frame.hidden === true);
     assert(hidden && hidden.frameId > 0, '隐藏 frame 记录不完整：' + JSON.stringify(hidden));
     const hiddenCross = (frames.frames || []).find((frame) => frame.hidden === true && String(frame.url || '').includes('frame-x.html'));
@@ -1482,6 +1986,362 @@ try {
       await cliJson(['tab', 'close', String(ensured.tabId), '--session', sessionId]).catch(() => {});
     }
     return 'window=' + ensured.windowId;
+  });
+
+  await check('20q5. read-only scope 拒绝变更动作', async () => {
+    const ro = expectOk(await cliJson(['session', 'start', '--scope', 'read']), 'readonly session start');
+    assert(ro.sessionId, '只读会话没有 sessionId');
+    try {
+      const click = await cliJson(['click', '#submit-btn', '--session', ro.sessionId]);
+      assert(click.json && click.json.ok === false, '只读会话允许了 click：' + JSON.stringify(click.json));
+      assert(click.json.error && click.json.error.code === 'E_READ_ONLY', '只读会话错误码不对：' + JSON.stringify(click.json.error));
+    } finally {
+      await cliJson(['session', 'stop', ro.sessionId]).catch(() => {});
+    }
+    return 'click=E_READ_ONLY';
+  });
+
+  await check('20q6. per-tab read-only / allowedOrigins', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'session list before tab policy');
+    const current = (listed.sessions || []).find((item) => item.sessionId === sessionId) || {};
+    assert(Number.isInteger(current.tabId), '当前会话没有 tabId');
+    try {
+      expectOk(await cliJson(['tab', 'policy', String(current.tabId), '--read-only', '--session', sessionId]), 'tab policy readonly');
+      const authority = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'authority readonly sync');
+      assert(authority.authority && authority.authority.four && authority.authority.four.action.allowed === false, '只读 tab 的 action 应为 false：' + JSON.stringify(authority.authority && authority.authority.four));
+      assert(authority.authority.four.action.deniedReason === 'read-only', '只读 tab 的 deniedReason 不对：' + JSON.stringify(authority.authority.four.action));
+      const click = await cliJson(['click', '#submit-btn', '--session', sessionId]);
+      assert(click.json && click.json.ok === false, 'per-tab 只读允许了 click：' + JSON.stringify(click.json));
+      assert(click.json.error && click.json.error.code === 'E_READ_ONLY', 'per-tab 只读错误码不对：' + JSON.stringify(click.json.error));
+      expectOk(await cliJson(['tab', 'policy', String(current.tabId), '--allow-origins', new URL(pageUrl).origin, '--session', sessionId]), 'tab policy origins');
+      const blocked = await cliJson(['navigate', 'https://example.com', '--session', sessionId]);
+      assert(blocked.json && blocked.json.ok === false, 'allowedOrigins 允许了跨源导航：' + JSON.stringify(blocked.json));
+      assert(blocked.json.error && blocked.json.error.code === 'E_FORBIDDEN', 'allowedOrigins 错误码不对：' + JSON.stringify(blocked.json.error));
+    } finally {
+      await cliJson(['tab', 'policy', String(current.tabId), '--clear', '--session', sessionId]).catch(() => {});
+    }
+    return 'readOnly + allowedOrigins enforced';
+  });
+
+  await check('20q7. tab group 命名标签组', async () => {
+    const created = expectOk(await cliJson(['tab', 'new', pageUrl, '--group', 'E2E-Group', '--session', sessionId]), 'tab new group');
+    assert(Number.isInteger(created.groupId), 'tab new 没有返回 groupId：' + JSON.stringify(created));
+    try {
+      const listed = expectOk(await cliJson(['tab', 'list', '--scope', 'all', '--session', sessionId]), 'tab list group');
+      const tab = (listed.tabs || []).find((item) => item.tabId === created.tabId);
+      assert(tab, '标签组里的 tab 不在列表：' + JSON.stringify(listed.tabs));
+      assert(tab.groupId === created.groupId, 'tab groupId 不一致：' + JSON.stringify(tab));
+      assert(tab.group === 'E2E-Group', 'tab group 标题不一致：' + JSON.stringify(tab));
+    } finally {
+      await cliJson(['tab', 'close', String(created.tabId), '--session', sessionId]).catch(() => {});
+    }
+    return 'group=' + created.groupId;
+  });
+
+  await check('20q8. 命名 tab alias 可驱动动作', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'session list alias');
+    const current = (listed.sessions || []).find((item) => item.sessionId === sessionId) || {};
+    assert(Number.isInteger(current.tabId), '当前会话没有 tabId');
+    expectOk(await cliJson(['tab', 'alias', String(current.tabId), 'e2e-alias', '--session', sessionId]), 'tab alias set');
+    try {
+      const aliases = expectOk(await cliJson(['tab', 'aliases', '--session', sessionId]), 'tab aliases');
+      assert(aliases.aliases && aliases.aliases['e2e-alias'] === current.tabId, 'alias 列表不对：' + JSON.stringify(aliases));
+      const clicked = expectOk(await cliJson(['click', '#submit-btn', '--tab-id', 'e2e-alias', '--session', sessionId]), 'click alias');
+      assert(clicked.effectState === 'committed', 'alias 点击未提交：' + JSON.stringify(clicked));
+    } finally {
+      await cliJson(['tab', 'alias', String(current.tabId), '--clear', 'e2e-alias', '--session', sessionId]).catch(() => {});
+    }
+    return 'alias→tab ' + current.tabId;
+  });
+
+  await check('20q9. tab keepOpen + idle cleanup dry-run', async () => {
+    const created = expectOk(await cliJson(['tab', 'new', pageUrl, '--keep-open', '--session', sessionId]), 'tab new keepOpen');
+    try {
+      const listed = expectOk(await cliJson(['tab', 'list', '--scope', 'all', '--session', sessionId]), 'tab list keepOpen');
+      const tab = (listed.tabs || []).find((item) => item.tabId === created.tabId);
+      assert(tab && tab.keepOpen === true, 'tab 没有 keepOpen：' + JSON.stringify(tab));
+      const cleanup = expectOk(await cliJson(['tab', 'cleanup', '--idle-ms', '0', '--dry-run', '--session', sessionId]), 'tab cleanup dry');
+      assert(cleanup.dryRun === true, 'cleanup 不是 dry-run：' + JSON.stringify(cleanup));
+      assert(!(cleanup.close || []).includes(created.tabId), 'keepOpen tab 被列入关闭：' + JSON.stringify(cleanup.close));
+      assert((cleanup.keep || []).some((item) => item.tabId === created.tabId && item.reason === 'keep-open'), 'keepOpen 未出现在 keep：' + JSON.stringify(cleanup.keep));
+    } finally {
+      await cliJson(['tab', 'close', String(created.tabId), '--session', sessionId]).catch(() => {});
+    }
+    return 'keepOpen=true, cleanup dry-run';
+  });
+
+  await check('20s1. seeded fixture：同 seed 可复现、异 seed 不同', async () => {
+    const seedA = (String(process.env.BB_E2E_SEED || 'alpha').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24)) || 'alpha';
+    const seedB = seedA + 'x';
+    const base = new URL('seeded.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', base + '?seed=' + seedA, '--session', sessionId]), 'seed navigate');
+    const first = expectOk(await cliJson(['observe', '--vom', '--force', '--session', sessionId]), 'seed observe');
+    const names = (first.nodes || []).map((node) => node.name).filter(Boolean).sort();
+    assert(names.some((name) => name.startsWith(seedA + '-item-')), 'seed 没有生成内容：' + JSON.stringify(names.slice(0, 5)));
+    expectOk(await cliJson(['navigate', base + '?seed=' + seedA, '--session', sessionId]), 'seed reload');
+    const second = expectOk(await cliJson(['observe', '--vom', '--force', '--session', sessionId]), 'seed observe 2');
+    const names2 = (second.nodes || []).map((node) => node.name).filter(Boolean).sort();
+    assert(JSON.stringify(names2) === JSON.stringify(names), '同 seed 观察结果不稳定');
+    expectOk(await cliJson(['navigate', base + '?seed=' + seedB, '--session', sessionId]), 'seed other navigate');
+    const third = expectOk(await cliJson(['observe', '--vom', '--force', '--session', sessionId]), 'seed other observe');
+    const names3 = (third.nodes || []).map((node) => node.name).filter(Boolean).sort();
+    assert(JSON.stringify(names3) !== JSON.stringify(names), '不同 seed 结果相同');
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'seed restore');
+    return seedA + '=' + names.length + ' ' + seedB + '=' + names3.length;
+  });
+
+  await check('20s3. stress smoke：连续 observe/read', async () => {
+    const base = new URL('seeded.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', base + '?seed=beta', '--session', sessionId]), 'stress seed navigate');
+    for (let round = 0; round < 5; round += 1) {
+      expectOk(await cliJson(['observe', '--force', '--session', sessionId]), 'stress observe ' + round);
+      const read = expectOk(await cliJson(['read', '#seed-input', '--session', sessionId]), 'stress read ' + round);
+      const value = (read.fields && read.fields[0] && read.fields[0].value) || '';
+      assert(String(value).startsWith('beta-'), 'stress read 值不对：' + JSON.stringify(read));
+    }
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'stress restore');
+    return '5 rounds';
+  });
+
+  await check('20s4. bridge exec 受限脚本', async () => {
+    const script = path.join(outDir, 'exec-script.mjs');
+    writeFileSync(script, [
+      "const observed = await page.observe({ maxNodes: 5 });",
+      "await page.waitFor('#submit-btn', { timeout: 2000 });",
+      "const button = page.locator('#submit-btn');",
+      "await button.click();",
+      "const text = await page.evaluate(\"document.getElementById('out').textContent\");",
+      // locator 读取面（vm 沙箱）：textContent / getAttribute / count
+      "const label = await page.locator('#out').textContent();",
+      "const attr = await page.locator('#out').getAttribute('id');",
+      "const buttons = await page.locator('button').count();",
+      "console.log('exec-ok', observed.title);",
+      "return { title: observed.title, text: text.value, label, attr, buttons };",
+    ].join('\n'));
+    const body = expectOk(await cliJson(['exec', '--file', script, '--session', sessionId]), 'exec script');
+    assert(body.result && String(body.result.text || '').includes('clicked'), 'exec 结果不对：' + JSON.stringify(body.result));
+    assert(String(body.result.label || '').includes('clicked'), 'vm locator.textContent 不对：' + JSON.stringify(body.result.label));
+    assert(body.result.attr === 'out', 'vm locator.getAttribute 不对：' + JSON.stringify(body.result.attr));
+    assert(Number(body.result.buttons) >= 1, 'vm locator.count 不对：' + JSON.stringify(body.result.buttons));
+    assert(Array.isArray(body.logs) && body.logs.some((item) => /exec-ok/.test(item.text)), 'exec 没有捕获 console：' + JSON.stringify(body.logs));
+    return 'exec result=' + body.result.text + ' buttons=' + body.result.buttons;
+  });
+
+  await check('20s5. WebMCP：list + call 页面工具', async () => {
+    const base = new URL('webmcp.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', base, '--session', sessionId]), 'webmcp navigate');
+    const listed = expectOk(await cliJson(['webmcp', 'list', '--session', sessionId]), 'webmcp list');
+    assert(listed.available === true, 'WebMCP 不可用：' + JSON.stringify(listed));
+    const names = (listed.tools || []).map((tool) => tool.name).sort();
+    assert(names.includes('echo') && names.includes('set_out'), 'WebMCP 工具缺失：' + JSON.stringify(names));
+    const echoed = expectOk(await cliJson(['webmcp', 'call', 'echo', '--input', '{"text":"hi"}', '--session', sessionId]), 'webmcp echo');
+    assert(echoed.result && echoed.result.echo === 'hi', 'webmcp echo 结果不对：' + JSON.stringify(echoed));
+    expectOk(await cliJson(['webmcp', 'call', 'set_out', '--input', '{"text":"written-by-webmcp"}', '--session', sessionId]), 'webmcp set_out');
+    const out = expectOk(await cliJson(['evaluate', "document.getElementById('out').textContent", '--session', sessionId]), 'webmcp out');
+    assert(out.value === 'written-by-webmcp', 'webmcp 写入未生效：' + JSON.stringify(out));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'webmcp restore');
+    return names.length + ' tools';
+  });
+
+  await check('20s6. VOM 阶段证据（facts/identity/relations/layout/paint/interact）', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'vom stages navigate');
+    const observed = expectOk(await cliJson(['observe', '--vom', '--facts', '--force', '--session', sessionId]), 'vom stages observe');
+    const stages = (observed.vom && observed.vom.stages) || [];
+    assert(JSON.stringify(stages.map((stage) => stage.stage)) === JSON.stringify(['facts', 'identity', 'relations', 'layout', 'paint', 'interact']), 'VOM 阶段缺失：' + JSON.stringify(stages));
+    for (const name of ['facts', 'identity', 'relations', 'layout', 'interact']) {
+      const stage = stages.find((item) => item.stage === name);
+      assert(stage && stage.ok === true, 'VOM 阶段未成立 ' + name + '：' + JSON.stringify(stage));
+    }
+    const nodes = (observed.vom && observed.vom.nodes) || [];
+    assert(nodes.some((node) => node.bounds && node.pointerEvents !== undefined), 'VOM 节点缺少 layout 证据：' + JSON.stringify(nodes.slice(0, 2)));
+    assert(nodes.some((node) => Array.isArray(node.ancestors) && node.ancestors.length > 0), 'VOM 节点缺少祖先关系：' + JSON.stringify(nodes.slice(0, 2)));
+    assert(Array.isArray(observed.vom.edges) && observed.vom.edges.length > 0, 'VOM 缺少关系边：' + JSON.stringify(observed.vom.edges && observed.vom.edges.slice(0, 2)));
+    return stages.map((stage) => stage.stage + '=' + stage.count).join(',');
+  });
+
+  await check('20s7. bridge exec QuickJS 沙箱（同步 page API）', async () => {
+    const script = path.join(outDir, 'exec-quickjs.mjs');
+    writeFileSync(script, [
+      // QuickJS 沙箱是同步 page API：host 调用会阻塞返回，不写 await。
+      "const observed = page.observe({ maxNodes: 5 });",
+      "page.click('#submit-btn');",
+      "const text = page.evaluate(\"document.getElementById('out').textContent\");",
+      "return { title: observed.title, text: text.value };",
+    ].join('\n'));
+    const body = expectOk(await cliJson(['exec', '--file', script, '--sandbox', 'quickjs', '--session', sessionId]), 'exec quickjs');
+    assert(body.result && String(body.result.text || '').includes('clicked'), 'QuickJS exec 结果不对：' + JSON.stringify(body.result));
+    return 'quickjs result=' + body.result.text;
+  });
+
+  await check('20s8. QuickJS locator 全量（同步链式 + 错误码）', async () => {
+    const script = path.join(outDir, 'exec-quickjs-locator.mjs');
+    writeFileSync(script, [
+      "page.locator('#kw').fill('quickjs-loc');",
+      "const before = page.locator('#out').textContent();",
+      "page.locator('#submit-btn').click();",
+      "const after = page.locator('#out').textContent();",
+      "const inputValue = page.locator('#kw').inputValue();",
+      "const visible = page.locator('#out').isVisible();",
+      "const attr = page.locator('#out').getAttribute('id');",
+      "const buttons = page.locator('button').count();",
+      "const enabled = page.locator('#submit-btn').isEnabled();",
+      "const act = page.locator('#submit-btn').actionable();",
+      "let errorCode = '';",
+      "try { page.locator('#no-such-element').click(); } catch (e) { errorCode = e.code; }",
+      "console.log('quickjs-locator', after);",
+      "return { before, after, inputValue, visible, attr, buttons, enabled, actOk: act.ok, errorCode };",
+    ].join('\n'));
+    const body = expectOk(await cliJson(['exec', '--file', script, '--sandbox', 'quickjs', '--session', sessionId]), 'exec quickjs locator');
+    const result = body.result || {};
+    assert(String(result.after || '').includes('clicked'), 'QuickJS locator 未驱动点击：' + JSON.stringify(result));
+    assert(result.inputValue === 'quickjs-loc', 'QuickJS locator.inputValue 不对：' + JSON.stringify(result.inputValue));
+    assert(result.visible === true, 'QuickJS locator.isVisible 不对：' + JSON.stringify(result.visible));
+    assert(result.attr === 'out', 'QuickJS locator.getAttribute 不对：' + JSON.stringify(result.attr));
+    assert(Number(result.buttons) >= 1, 'QuickJS locator.count 不对：' + JSON.stringify(result.buttons));
+    assert(result.enabled === true, 'QuickJS locator.isEnabled 不对：' + JSON.stringify(result.enabled));
+    assert(result.actOk === true, 'QuickJS locator.actionable 不对：' + JSON.stringify(result.actOk));
+    assert(result.errorCode === 'E_NOT_FOUND', 'QuickJS locator 错误码未保留：' + JSON.stringify(result.errorCode));
+    assert(Array.isArray(body.logs) && body.logs.some((item) => /quickjs-locator/.test(item.text)), 'QuickJS locator 没有捕获 console：' + JSON.stringify(body.logs));
+    // 同步契约：带 await 的脚本应被明确拒绝（E_BAD_ARG），而不是 wasm 断言。
+    const awaitScript = path.join(outDir, 'exec-quickjs-await.mjs');
+    writeFileSync(awaitScript, "const r = await page.observe(); return r.title;");
+    const rejected = await cliJson(['exec', '--file', awaitScript, '--sandbox', 'quickjs', '--session', sessionId]);
+    assert(rejected.code === 1 && rejected.json && rejected.json.error.code === 'E_BAD_ARG', 'QuickJS await 脚本应返回 E_BAD_ARG：' + JSON.stringify(rejected.json));
+    return 'locator ok, buttons=' + result.buttons + ', await→E_BAD_ARG';
+  });
+
+  await check('20s9. session run log → recipe draft（不含输入值）', async () => {
+    const fresh = expectOk(await cliJson(['session', 'start']), 'run-log session start');
+    const sid = fresh.sessionId;
+    const recipeName = 'e2e-runlog-draft';
+    try {
+      expectOk(await cliJson(['navigate', pageUrl, '--session', sid]), 'run-log navigate');
+      expectOk(await cliJson(['fill', '#kw', '--value', 'runlog-secret', '--session', sid]), 'run-log fill');
+      expectOk(await cliJson(['click', '#submit-btn', '--session', sid]), 'run-log click');
+      const log = expectOk(await cliJson(['session', 'run-log', sid]), 'session run-log');
+      assert(Array.isArray(log.steps) && log.steps.length >= 2, 'run log 步骤不足：' + JSON.stringify(log));
+      assert(log.steps.some((step) => step.kind === 'navigate' && String(step.path || '').includes('test.html')), 'run log 缺少 navigate：' + JSON.stringify(log.steps.map((step) => step.kind)));
+      assert(log.steps.some((step) => step.method === 'click' && step.target && step.target.selector === '#submit-btn'), 'run log 缺少 click target：' + JSON.stringify(log.steps));
+      assert(!JSON.stringify(log).includes('runlog-secret'), 'run log 不应保存输入值');
+      const drafted = expectOk(await cliJson(['recipe', 'draft', '--name', recipeName, '--session', sid]), 'recipe draft');
+      assert(Array.isArray(drafted.steps) && drafted.steps.length >= 1 && typeof drafted.file === 'string', 'recipe draft 结果不对：' + JSON.stringify(drafted));
+      assert(Array.isArray(drafted.skipped) && drafted.skipped.some((item) => item.method === 'fill'), 'fill 步骤应被跳过：' + JSON.stringify(drafted.skipped));
+      expectOk(await cliJson(['recipe', 'approve', recipeName, '--confirm-human', '--by', 'e2e']), 'draft recipe approve');
+      const ran = expectOk(await cliJson(['recipe', 'run', recipeName, '--session', sid]), 'draft recipe run');
+      assert((ran.completed || 0) >= 1, '草稿 recipe 未执行成功：' + JSON.stringify(ran));
+    } finally {
+      await cliJson(['recipe', 'rm', recipeName]).catch(() => {});
+      await cliJson(['session', 'stop', sid]).catch(() => {});
+    }
+    return 'run-log → draft → approve → run';
+  });
+
+  await check('20q10. 多 Agent session 共享同一 tab', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'share list');
+    const current = (listed.sessions || []).find((item) => item.sessionId === sessionId) || {};
+    assert(Number.isInteger(current.tabId), '共享测试缺少主会话 tabId');
+    const shared = expectOk(await cliJson(['session', 'start', '--tab', String(current.tabId), '--share']), 'session share start');
+    assert(shared.shared === true && shared.ownerSession === sessionId, '共享会话字段不对：' + JSON.stringify(shared));
+    try {
+      const observed = expectOk(await cliJson(['observe', '--force', '--session', shared.sessionId]), 'shared observe');
+      assert(observed.refs >= 1, '共享会话 observe 无 refs：' + JSON.stringify(observed.refs));
+      expectOk(await cliJson(['click', '#submit-btn', '--session', shared.sessionId]), 'shared click');
+      const after = expectOk(await cliJson(['observe', '--force', '--session', sessionId]), 'owner observe after share');
+      assert(String(after.observation || '').includes('clicked'), '主会话看不到共享会话改动：' + JSON.stringify(String(after.observation || '').slice(0, 200)));
+    } finally {
+      await cliJson(['session', 'stop', shared.sessionId]).catch(() => {});
+    }
+    const alive = expectOk(await cliJson(['evaluate', "document.title", '--session', sessionId]), 'owner alive after shared stop');
+    assert(String(alive.value || '').includes('E2E 夹具页'), '共享会话停止后主会话/标签页不可用：' + JSON.stringify(alive));
+    return 'shared=' + shared.sessionId + ' owner continues';
+  });
+
+  await check('20q11. 共享 tab 控制权：exclusive 闸门 + 租约 + handoff', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'control list');
+    const owner = (listed.sessions || []).find((item) => item.sessionId === sessionId) || {};
+    assert(Number.isInteger(owner.tabId), '控制权测试缺少主会话 tabId');
+    // 主会话先写一次拿到租约，保证后面的 exclusive 判定是确定性的。
+    expectOk(await cliJson(['click', '#submit-btn', '--session', sessionId]), 'owner acquire lease');
+    const shared = expectOk(await cliJson(['session', 'start', '--tab', String(owner.tabId), '--share', '--control', 'exclusive']), 'control share start');
+    const sharedId = shared.sessionId;
+    try {
+      assert(shared.shared === true && shared.ownerSession === sessionId, '共享会话字段不对：' + JSON.stringify(shared));
+      assert(shared.control && shared.control.mode === 'exclusive', '--control exclusive 没有生效：' + JSON.stringify(shared.control));
+      const status = expectOk(await cliJson(['session', 'control', sharedId]), 'control status');
+      assert(status.mode === 'exclusive' && status.shared === true, '控制状态不对：' + JSON.stringify(status));
+      assert(status.holder === sessionId && status.holdsControl === false, '控制权应暂由主会话持有：' + JSON.stringify(status));
+
+      // 1) exclusive：非持有者的变更动作被拒，且拒绝信息带 holder/epoch
+      const blocked = await cliJson(['click', '#submit-btn', '--session', sharedId]);
+      assert(blocked.code === 1 && blocked.json && blocked.json.error.code === 'E_CONTROL_NOT_HELD', 'exclusive 下非持有者点击应被拒：' + JSON.stringify(blocked.json));
+      assert(blocked.json.error.data && blocked.json.error.data.holder === sessionId, '拒绝信息应带 holder：' + JSON.stringify(blocked.json.error.data));
+      // 2) 只读动作不受影响
+      const observed = expectOk(await cliJson(['observe', '--force', '--session', sharedId]), 'control read allowed');
+      assert(observed.refs >= 1, '共享会话只读 observe 应允许：' + JSON.stringify(observed.refs));
+      // 3) 控制权被占用时认领 → E_CONTROL_BUSY
+      const busy = await cliJson(['session', 'claim-control', sharedId]);
+      assert(busy.code === 1 && busy.json && busy.json.error.code === 'E_CONTROL_BUSY', '控制权被占应返回 E_CONTROL_BUSY：' + JSON.stringify(busy.json));
+      // 4) handoff → 共享会话拿到控制权，写动作生效
+      const handed = expectOk(await cliJson(['session', 'handoff', sessionId, '--to', sharedId, '--lease', '2s']), 'handoff');
+      assert(handed.holder === sharedId && handed.epoch >= 1, 'handoff 结果不对：' + JSON.stringify(handed));
+      expectOk(await cliJson(['click', '#submit-btn', '--session', sharedId]), 'shared click after handoff');
+      const clicked = expectOk(await cliJson(['evaluate', "document.getElementById('out').textContent", '--session', sharedId]), 'shared click result');
+      assert(String(clicked.value).includes('clicked'), 'handoff 后共享会话点击未生效：' + JSON.stringify(clicked.value));
+      // 5) 控制权已转交：主会话写被拒
+      const ownerBlocked = await cliJson(['click', '#submit-btn', '--session', sessionId]);
+      assert(ownerBlocked.code === 1 && ownerBlocked.json && ownerBlocked.json.error.code === 'E_CONTROL_NOT_HELD', '转交后主会话应被拒：' + JSON.stringify(ownerBlocked.json));
+      // 6) 过期 epoch 的 CAS → E_CONTROL_STALE
+      const stale = await cliJson(['session', 'claim-control', sharedId, '--expect-epoch', '0']);
+      assert(stale.code === 1 && stale.json && stale.json.error.code === 'E_CONTROL_STALE', 'epoch 不符应返回 E_CONTROL_STALE：' + JSON.stringify(stale.json));
+      // 7) 租约到期 → 控制权空闲（holder 变空）
+      await sleep(2400);
+      const expired = expectOk(await cliJson(['session', 'control', sharedId]), 'control after lease');
+      assert(expired.holder === null, '租约到期后 holder 应为空：' + JSON.stringify(expired));
+      assert(expired.epoch > handed.epoch, '租约到期应推进 epoch：' + JSON.stringify({ before: handed.epoch, now: expired.epoch }));
+      // 8) 空闲后先到先得：显式 claim 一个长租约，释放后写动作自动认领（避免 2s 租约在慢机上过期）
+      expectOk(await cliJson(['session', 'claim-control', sharedId, '--lease', '30s']), 'claim long lease');
+      expectOk(await cliJson(['session', 'release-control', sharedId]), 'release long lease');
+      expectOk(await cliJson(['click', '#submit-btn', '--session', sharedId]), 'shared click after lease expiry');
+      const reclaimed = expectOk(await cliJson(['session', 'control', sharedId]), 'control after reclaim');
+      assert(reclaimed.holder === sharedId, '空闲控制权应由写者认领：' + JSON.stringify(reclaimed));
+      // 9) 主动释放 → 主会话可再写
+      expectOk(await cliJson(['session', 'release-control', sharedId]), 'release control');
+      const released = expectOk(await cliJson(['session', 'control', sharedId]), 'control after release');
+      assert(released.holder === null, '释放后 holder 应为空：' + JSON.stringify(released));
+      expectOk(await cliJson(['click', '#submit-btn', '--session', sessionId]), 'owner write after release');
+    } finally {
+      await cliJson(['session', 'control', sharedId, '--mode', 'open']).catch(() => {});
+      await cliJson(['session', 'stop', sharedId]).catch(() => {});
+    }
+    const alive = expectOk(await cliJson(['evaluate', 'document.title', '--session', sessionId]), 'owner alive after control test');
+    assert(String(alive.value || '').includes('E2E 夹具页'), '控制权测试后主会话不可用：' + JSON.stringify(alive.value));
+    return 'exclusive 拒写 → handoff → 租约到期 → 认领 → 释放';
+  });
+
+  await check('20q12. 主会话停止 → 控制权/主会话转交给共享会话（tab 存活）', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'handoff-on-stop list');
+    const owner = (listed.sessions || []).find((item) => item.sessionId === sessionId) || {};
+    assert(Number.isInteger(owner.tabId), '转交测试缺少主会话 tabId');
+    const shared = expectOk(await cliJson(['session', 'start', '--tab', String(owner.tabId), '--share']), 'handoff-on-stop share start');
+    const sharedId = shared.sessionId;
+    const stopped = expectOk(await cliJson(['session', 'stop', sessionId]), 'owner stop with handoff');
+    assert(stopped.handedOff && stopped.handedOff.sessionId === sharedId, '主会话停止没有转交控制权：' + JSON.stringify(stopped));
+    sessionId = null;
+    const after = expectOk(await cliJson(['session', 'list']), 'handoff-on-stop list after');
+    const promoted = (after.sessions || []).find((item) => item.sessionId === sharedId);
+    assert(promoted, '转交后共享会话消失了：' + JSON.stringify(after.sessions));
+    assert(promoted.shared === false && promoted.ownerSession === null, '共享会话未被提升为主会话：' + JSON.stringify(promoted));
+    const title = expectOk(await cliJson(['evaluate', 'document.title', '--session', sharedId]), 'promoted evaluate');
+    assert(String(title.value || '').includes('E2E 夹具页'), '转交后标签页不可用：' + JSON.stringify(title.value));
+    expectOk(await cliJson(['click', '#submit-btn', '--session', sharedId]), 'promoted click');
+    // 收尾：停掉被提升的主会话（关 tab），再重建主会话给后续用例。
+    expectOk(await cliJson(['session', 'stop', sharedId]), 'promoted stop');
+    const remaining = expectOk(await cliJson(['session', 'list']), 'handoff-on-stop list final');
+    assert((remaining.sessions || []).length === 0, '收尾还有会话：' + JSON.stringify(remaining.sessions));
+    const fresh = expectOk(await cliJson(['session', 'start']), 'handoff-on-stop fresh session');
+    sessionId = fresh.sessionId;
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'handoff-on-stop fresh navigate');
+    return 'handedOff=' + sharedId + ' tab 存活并重建主会话';
   });
 
   await check('20r. 协议协商（protocol + capabilities）', async () => {
@@ -1652,6 +2512,11 @@ try {
     await sleep(300);
     const sessions = expectOk(await cliJson(['session', 'list']), 'session list for focus');
     const current = (sessions.sessions || []).find((item) => item.sessionId === sessionId);
+    if (current && Number.isInteger(current.windowId)) {
+      // 可信输入依赖窗口前台；显式 focus 属用户命令，避免 headed 浏览器被其它窗口遮挡导致 0 个 mousemove。
+      expectOk(await cliJson(['window', 'focus', String(current.windowId), '--session', sessionId]), 'antibot window focus');
+      await sleep(400);
+    }
     let focusState = null;
     let focusInfo = { visibility: 'unknown', focus: false };
     for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -1690,6 +2555,39 @@ try {
     const drop = expectOk(await cliJson(['evaluate', "document.getElementById('drop-out').textContent", '--session', sessionId]), 'trusted drop');
     assert(drop.value === 'dropped', '可信拖拽没有触发 drop：' + JSON.stringify(drop.value));
     return 'passed, trustedMoves=' + parsed.trustedMoves + ' typed=' + typed.value + ' drag=' + drop.value;
+  });
+
+  await check('20u2. CDP 性能追踪：trace start/stop 落 Trace JSON', async () => {
+    await cliJson(['session', 'resume', sessionId]).catch(() => {});
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'trace navigate');
+    const started = expectOk(await cliJson(['trace', 'start', '--session', sessionId]), 'trace start');
+    assert(Number.isInteger(started.tabId), 'trace.start 没有 tabId');
+    await cliJson(['evaluate', "window.scrollBy(0, 20); document.body.style.outline='1px solid #ddd'; 'ok'", '--session', sessionId]);
+    await sleep(400);
+    const tracePath = path.join(outDir, 'perf-trace.json');
+    const stopped = expectOk(await cliJson(['trace', 'stop', '--out', tracePath, '--session', sessionId]), 'trace stop');
+    assert(Number(stopped.events) > 0, 'trace 没有采集到事件：' + JSON.stringify(stopped.summary));
+    assert(stopped.summary && stopped.summary.events === stopped.events, 'trace summary 不一致');
+    const parsed = JSON.parse(readFileSync(tracePath, 'utf8'));
+    assert(Array.isArray(parsed.traceEvents) && parsed.traceEvents.length > 0, 'trace 文件没有 traceEvents');
+    const traceSummary = expectOk(await cliJson(['trace', 'summary', tracePath, '--session', sessionId]), 'trace summary');
+    assert(traceSummary.events > 0 && Array.isArray(traceSummary.topNames), 'trace summary 不完整：' + JSON.stringify(traceSummary).slice(0, 200));
+    const traceDiff = expectOk(await cliJson(['trace', 'diff', tracePath, tracePath, '--session', sessionId]), 'trace diff');
+    assert(traceDiff.events && traceDiff.events.delta === 0 && Array.isArray(traceDiff.topChanges), 'trace diff 不完整');
+    const status = expectOk(await cliJson(['trace', 'status', '--session', sessionId]), 'trace status');
+    assert(status.tracing === false, 'trace.stop 后仍在 tracing');
+    return 'events=' + stopped.events + ' span=' + (stopped.summary.spanMs || 0) + 'ms';
+  });
+
+  await check('20v2. PDF 导出：Page.printToPDF 落盘', async () => {
+    await cliJson(['session', 'resume', sessionId]).catch(() => {});
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'pdf navigate');
+    const pdfPath = path.join(outDir, 'fixture.pdf');
+    const result = expectOk(await cliJson(['pdf', '--out', pdfPath, '--pages', '1', '--margins', '0.5,0.5,0.5,0.5', '--scale', '1', '--session', sessionId]), 'pdf export');
+    assert(result.bytes > 1000, 'PDF 太小：' + JSON.stringify(result));
+    const pdf = readFileSync(pdfPath);
+    assert(pdf.subarray(0, 5).toString('ascii') === '%PDF-', 'PDF 头不对：' + pdf.subarray(0, 8).toString('hex'));
+    return 'pdf=' + pdf.length + 'B';
   });
 
   await check('21. emulate 视口覆盖与重置', async () => {
@@ -1879,20 +2777,234 @@ try {
     assert(typeof result.browserPath === 'string' && result.browserPath, 'JSON 里缺少 browserPath');
     assert(typeof result.transferBytes === 'number' && result.transferBytes > 0, '下载没有走 transfer staging：' + JSON.stringify(result));
     assert(result.transferReleased === true, '下载 staging 没有在 CLI 提交后释放：' + JSON.stringify(result));
+    assert(result.effectState === 'committed' && result.cleanupState === 'ok', '下载事务字段不对：' + JSON.stringify(result));
+    const mcpPath = path.join(outDir, 'mcp-download.txt');
+    const mcp = startMcp({ ...process.env, BB_HOME: bbHome, BB_PORT: String(port), BB_NO_PROBE: '1' });
+    try {
+      await mcp.rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'e2e' } });
+      const mcpDownload = await mcp.rpc('tools/call', { name: 'browser_download', arguments: { target: '#dl', out: mcpPath, session: sessionId } });
+      assert(mcpDownload.result.isError === false, 'MCP download 失败：' + String(mcpDownload.result.content[0].text).slice(0, 160));
+      assert(existsSync(mcpPath) && readFileSync(mcpPath, 'utf8').includes('browser-bridge download sample'), 'MCP 下载文件不对');
+    } finally {
+      mcp.close();
+    }
     return '拒绝覆盖 → --overwrite 成功（' + result.bytes + ' 字节，transfer=' + result.transferBytes + '）';
+  });
+
+  await check('23g2. download 无结果 → effect_state=unknown', async () => {
+    const missed = await cliJson(['download', '#noop', '--timeout', '1500', '--session', sessionId]);
+    assert(missed.code === 1 && missed.json && missed.json.error.code === 'E_NO_DOWNLOAD', '无下载应报 E_NO_DOWNLOAD：' + JSON.stringify(missed.json));
+    const data = missed.json.error.data || {};
+    assert(data.effect_state === 'unknown' && data.dispatched === true, '无下载应标 unknown/dispatched：' + JSON.stringify(data));
+    return 'no-download → unknown';
   });
 
   await check('23h. cooperate sync + --context 授权动作', async () => {
     expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'sync navigate');
     const sync = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'cooperate sync');
     assert(sync.cooperation && sync.cooperation.frameState && Number.isInteger(sync.cooperation.frameState.revision), 'cooperate sync 缺少 frameState：' + JSON.stringify(sync.cooperation && sync.cooperation.frameState));
+    assert(Array.isArray(sync.cooperation.frames) && sync.cooperation.frames.length >= 1, 'cooperate sync 缺少按帧快照：' + JSON.stringify(sync.cooperation && sync.cooperation.frames));
+    assert(sync.cooperation.aggregateFrameState && Number.isInteger(sync.cooperation.aggregateFrameState.revision), 'cooperate sync 缺少聚合 frameState');
+    assert(Array.isArray(sync.cooperation.frameGaps), 'cooperate sync 缺少 frameGaps');
     assert(sync.authority && sync.authority.generation >= 1 && Number.isInteger(sync.authority.revision), 'cooperate sync 缺少 authority：' + JSON.stringify(sync.authority));
+    assert(sync.authority.four && ['tab', 'control', 'observation', 'action'].every((key) => sync.authority.four[key]), '缺少四类权威：' + JSON.stringify(sync.authority.four));
+    assert(Number.isInteger(sync.authority.controlRevision) && Number.isInteger(sync.authority.authorityRevision), 'authority 独立计数缺失：' + JSON.stringify(sync.authority));
+    assert(Number(sync.authority.epoch) >= 1 && Number(sync.authority.frameEpoch) >= 1, 'authority epoch/frameEpoch 未推进：' + JSON.stringify(sync.authority));
+    assert(sync.authority.four.control.controlRevision === sync.authority.controlRevision, 'four.control 计数不一致');
+    assert(sync.authority.four.observation.epoch === sync.authority.epoch && sync.authority.four.action.authorityRevision === sync.authority.authorityRevision, 'four 计数与顶层不一致');
     assert(sync.control_policy === 'target', 'control_policy 不对：' + JSON.stringify(sync.control_policy));
     assert(typeof sync.context_id === 'string' && sync.context_id, '缺少 context_id');
     assert(typeof sync.observation_id === 'string' && sync.observation_id, '缺少 observation_id');
     assert(sync.observation && String(sync.observation.text).includes('E2E 夹具页'), 'sync 没返回观察文本');
     expectOk(await cliJson(['click', '#submit-btn', '--context', sync.context_id, '--session', sessionId]), 'click with context');
     return 'context=' + sync.context_id.slice(0, 8) + '… policy=' + sync.control_policy;
+  });
+
+  await check('23h2. cooperation frameState 计数器：DOM/滚动推进 revision', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'coop counters session list');
+    const current = (listed.sessions || []).find((item) => item.sessionId === sessionId);
+    if (current && Number.isInteger(current.windowId)) {
+      // 归因/滚动依赖窗口前台；显式 focus 属于用户命令，不违反默认不抢焦点。
+      expectOk(await cliJson(['window', 'focus', String(current.windowId), '--session', sessionId]), 'coop counters focus');
+    }
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'coop counters navigate');
+    const first = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'coop counters sync1');
+    const before = first.cooperation && first.cooperation.frameState;
+    assert(before && Number.isInteger(before.revision), 'sync1 缺少 frameState：' + JSON.stringify(before));
+    expectOk(await cliJson(['evaluate', "const tall=document.createElement('div'); tall.id='__coop_tall'; tall.style.height='3000px'; document.body.appendChild(tall); document.body.appendChild(document.createElement('div')).id='__coop_probe'; const outNode=document.getElementById('out'); if (outNode && outNode.firstChild) outNode.firstChild.data='coop-text'; window.scrollTo(0, 320); 'ok'", '--session', sessionId]), 'coop counters mutate');
+    const scrolled = expectOk(await cliJson(['evaluate', 'window.scrollY', '--session', sessionId]), 'coop counters scrollY');
+    assert(Number(scrolled.value) > 0, '夹具页没有滚动起来：' + JSON.stringify(scrolled.value));
+    await sleep(350);
+    const second = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'coop counters sync2');
+    const after = second.cooperation && second.cooperation.frameState;
+    assert(after, 'sync2 缺少 frameState');
+    assert(Number(after.revision) > Number(before.revision), 'frameState.revision 没有推进：' + before.revision + ' → ' + after.revision);
+    assert(Number(after.mutations) > Number(before.mutations), 'mutations 没有推进：' + before.mutations + ' → ' + after.mutations);
+    assert(Number(after.structure) >= 1, 'structure 没有推进：' + JSON.stringify({ structure: after.structure }));
+    assert(Array.isArray(after.texts) && after.texts.length >= 1, 'texts 没有记录文本变更：' + JSON.stringify({ texts: after.texts }));
+    assert(typeof after.document === 'string' && after.document.includes('test.html') && Array.isArray(after.events), 'document/events 元数据缺失：' + JSON.stringify({ document: after.document, events: after.events }));
+    assert(typeof after.focusNeutral === 'boolean', 'focusNeutral 缺失：' + JSON.stringify(after.focusNeutral));
+    assert(typeof after.selection === 'string', 'selection 缺失：' + JSON.stringify(after.selection));
+    assert(Array.isArray(after.media), 'media 缺失：' + JSON.stringify(after.media));
+    assert(typeof after.mediaComplete === 'boolean', 'mediaComplete 缺失：' + JSON.stringify(after.mediaComplete));
+    assert(typeof after.textsComplete === 'boolean', 'textsComplete 缺失：' + JSON.stringify(after.textsComplete));
+    assert(typeof after.eventsComplete === 'boolean', 'eventsComplete 缺失：' + JSON.stringify(after.eventsComplete));
+    assert(after.fieldsComplete === true && typeof after.focusIsDocument === 'boolean', 'frameState 缺少 focus/fields 元数据：' + JSON.stringify({ fieldsComplete: after.fieldsComplete, focusIsDocument: after.focusIsDocument }));
+    assert(Number(after.scroll) > Number(before.scroll), 'scroll 没有推进：' + before.scroll + ' → ' + after.scroll);
+    return 'revision ' + before.revision + '→' + after.revision + ' mutations=' + after.mutations + ' scroll=' + after.scroll;
+  });
+
+  await check('23h3. 归因时钟：Agent 点击计入 agentAttributed', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'attribution session list');
+    const current = (listed.sessions || []).find((item) => item.sessionId === sessionId);
+    // 可信输入依赖窗口前台；headed 浏览器可能被其它窗口遮挡，重试并显式 focus（用户命令）。
+    let frame = null;
+    let sync = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (current && Number.isInteger(current.windowId)) {
+        expectOk(await cliJson(['window', 'focus', String(current.windowId), '--session', sessionId]), 'attribution focus');
+      }
+      if (current && Number.isInteger(current.tabId)) {
+        expectOk(await cliJson(['tab', 'select', String(current.tabId)]), 'attribution tab select');
+      }
+      await sleep(300);
+      expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'attribution navigate');
+      await sleep(250);
+      expectOk(await cliJson(['click', '#submit-btn', '--trusted', '--session', sessionId]), 'attribution click');
+      await sleep(250);
+      sync = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'attribution sync');
+      frame = sync.cooperation && sync.cooperation.frameState;
+      if (frame && Number(frame.agentAttributed) >= 1) break;
+    }
+    assert(frame, '归因 sync 缺少 frameState');
+    assert(Number(frame.agentAttributed) >= 1, 'Agent 点击没有计入 agentAttributed：' + JSON.stringify(frame));
+    assert(frame.expectationPending === false, 'expectation 未消费：' + JSON.stringify(frame));
+    // 环境里的真实 focus 事件可能被记为 human；只要最后不是 pointer，就说明点击没有被误记。
+    assert(frame.lastHumanKind !== 'pointer', 'Agent 点击被误记为 human：' + JSON.stringify(frame));
+    assert(Number(frame.inputClock) >= 1, '输入时钟没有推进：' + JSON.stringify(frame));
+    assert(frame.timeToleranceMs === 1.5, '归因时间戳容差不是 1.5ms：' + JSON.stringify(frame.timeToleranceMs));
+    assert(Number.isInteger(Number(frame.agentAttributedByTimestamp)) && Number.isInteger(Number(frame.agentAttributedByCoordinate)), '归因分项计数缺失：' + JSON.stringify(frame));
+    assert(frame.attribution && typeof frame.attribution.owner === 'string', '缺少最近归因结果：' + JSON.stringify(frame.attribution));
+    assert(Number(frame.agentAttributedByTimestamp) + Number(frame.agentAttributedByCoordinate) <= Number(frame.agentAttributed), '归因分项计数超过总数：' + JSON.stringify(frame));
+    const control = sync.cooperation && sync.cooperation.control;
+    assert(control && control.inputLocked === false && control.humanActive === false, 'control authority 状态不对：' + JSON.stringify(control));
+    assert(sync.held === false, '未接管时 held 应为 false：' + JSON.stringify(sync.held));
+    return 'agent=' + frame.agentAttributed + ' human=' + frame.humanAttributed;
+  });
+
+  await check('23h4. 归因时钟：Agent 按键计入 agentAttributed', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'attribution key session list');
+    const current = (listed.sessions || []).find((item) => item.sessionId === sessionId);
+    if (current && Number.isInteger(current.windowId)) {
+      expectOk(await cliJson(['window', 'focus', String(current.windowId), '--session', sessionId]), 'attribution key focus');
+    }
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'attribution key navigate');
+    const observed = expectOk(await cliJson(['observe', '--force', '--session', sessionId]), 'attribution key observe');
+    const kwMatch = /textbox "搜索关键词" \[@(e\d+)\]/.exec(String(observed.observation || ''));
+    assert(kwMatch, '归因按键测试找不到关键词输入框 ref');
+    const kwRef = '@' + kwMatch[1];
+    // 先 fill（建立 recentFillFocus），再 press --trusted --ref：trustedPress 会跳过 pointer 点击，
+    // 只派发 keydown，避免焦点事件触发人工接管判定。
+    expectOk(await cliJson(['fill', kwRef, '--value', 'key-attr', '--session', sessionId]), 'attribution key fill');
+    expectOk(await cliJson(['press', 'Tab', '--trusted', '--ref', kwRef, '--session', sessionId]), 'attribution press');
+    await sleep(200);
+    const sync = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'attribution key sync');
+    const frame = sync.cooperation && sync.cooperation.frameState;
+    assert(frame, '按键归因 sync 缺少 frameState');
+    assert(Number(frame.agentAttributed) >= 1, 'Agent 按键没有计入 agentAttributed：' + JSON.stringify(frame));
+    // 同 23h3：真实 focus 事件可能被记为 human；只要最后不是 keydown，就说明按键没有被误记。
+    assert(frame.lastHumanKind !== 'keydown', 'Agent 按键被误记为 human：' + JSON.stringify(frame));
+    assert(Number(frame.inputClock) >= 1, '按键没有推进输入时钟：' + JSON.stringify(frame));
+    assert(frame.timeToleranceMs === 1.5, '按键归因时间戳容差不是 1.5ms：' + JSON.stringify(frame));
+    assert(Number.isInteger(Number(frame.agentAttributedByTimestamp)) && Number.isInteger(Number(frame.agentAttributedByCoordinate)), '按键归因分项计数缺失：' + JSON.stringify(frame));
+    return 'agent=' + frame.agentAttributed + ' human=' + frame.humanAttributed;
+  });
+
+  await check('23h6. cooperate hold：held 时拒绝 Agent 动作，release 后恢复', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'hold navigate');
+    expectOk(await cliJson(['cooperate', 'hold', '--session', sessionId]), 'hold on');
+    try {
+      const heldSync = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'hold sync');
+      assert(heldSync.held === true, 'hold 后 sync.held 应为 true：' + JSON.stringify(heldSync.held));
+      const blocked = await cliJson(['click', '#submit-btn', '--session', sessionId]);
+      assert(blocked.code === 1 && blocked.json && blocked.json.error.code === 'E_SESSION_PAUSED', 'held 时点击应被拒绝：' + JSON.stringify(blocked.json));
+    } finally {
+      expectOk(await cliJson(['cooperate', 'hold', '--release', '--session', sessionId]), 'hold release');
+    }
+    const released = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'hold release sync');
+    assert(released.held === false, 'release 后 held 应为 false：' + JSON.stringify(released.held));
+    expectOk(await cliJson(['click', '#submit-btn', '--session', sessionId]), 'hold release click');
+    return 'held→E_SESSION_PAUSED→release';
+  });
+
+  await check('23j3. 观察代际：DOM 变化后旧 observation 被拒绝', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'revision navigate');
+    const sync = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'revision sync');
+    expectOk(await cliJson(['evaluate', "document.getElementById('out').textContent='changed-after-sync';'ok'", '--session', sessionId]), 'revision mutate');
+    const stale = await cliJson(['click', '#submit-btn', '--observation', sync.observation_id, '--session', sessionId]);
+    assert(stale.code === 1 && stale.json && stale.json.error.code === 'E_OBSERVATION_STALE', '旧 observation 应失效：' + JSON.stringify(stale.json));
+    assert(stale.json.error.data && stale.json.error.data.observed_changes, '缺少 observed_changes：' + JSON.stringify(stale.json.error));
+    const fresh = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'revision fresh sync');
+    expectOk(await cliJson(['click', '#submit-btn', '--observation', fresh.observation_id, '--session', sessionId]), 'revision fresh click');
+    return 'E_OBSERVATION_STALE → fresh';
+  });
+
+  await check('23j4. 节点级动态读取校验（--node-scope / target_detached）', async () => {
+    const buttonRefOf = (payload) => {
+      const match = /button "提交查询" \[@(e\d+)\]/.exec(String((payload && payload.observation && payload.observation.text) || ''));
+      return match ? '@' + match[1] : '';
+    };
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'node-scope navigate');
+    const sync = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'node-scope sync');
+    assert(sync.node_scope && sync.node_scope.count > 0, 'cooperate sync 未记录节点签名：' + JSON.stringify(sync.node_scope));
+    const buttonRef = buttonRefOf(sync);
+    assert(buttonRef, '同步观察里找不到提交按钮 ref');
+    // 1) 无关节点变化：--node-scope 只校验目标节点 → 动作放行
+    expectOk(await cliJson(['evaluate', "document.getElementById('out').textContent='unrelated';'ok'", '--session', sessionId]), 'node-scope unrelated mutate');
+    const allowed = expectOk(await cliJson(['click', buttonRef, '--observation', sync.observation_id, '--node-scope', '--session', sessionId]), 'node-scope click unrelated');
+    assert(allowed.ok !== false, '无关变化不应拦动作：' + JSON.stringify(allowed));
+    // 2) 目标节点自身文本变化 → E_OBSERVATION_CHANGED（节点级 observed_changes）
+    const fresh = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'node-scope sync fresh');
+    const freshRef = buttonRefOf(fresh);
+    assert(freshRef, '新同步里找不到提交按钮 ref');
+    expectOk(await cliJson(['evaluate', "document.getElementById('submit-btn').textContent='已被改名';'ok'", '--session', sessionId]), 'node-scope target mutate');
+    const changed = await cliJson(['click', freshRef, '--observation', fresh.observation_id, '--node-scope', '--session', sessionId]);
+    assert(changed.code === 1 && changed.json && changed.json.error.code === 'E_OBSERVATION_CHANGED', '目标节点变化应拒绝：' + JSON.stringify(changed.json));
+    const observed = changed.json.error.data && changed.json.error.data.observed_changes;
+    assert(observed && observed.scope === 'node' && (observed.kinds || []).includes('text'), '缺少节点级 text 证据：' + JSON.stringify(observed));
+    // 3) 目标节点被移除 → E_TARGET_DETACHED
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'node-scope detach restore');
+    const detachSync = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'node-scope sync detach');
+    const detachRef = buttonRefOf(detachSync);
+    assert(detachRef, '脱离测试找不到提交按钮 ref');
+    expectOk(await cliJson(['evaluate', "const b=document.getElementById('submit-btn'); b.replaceWith(document.createElement('i')); 'ok'", '--session', sessionId]), 'node-scope detach');
+    const detached = await cliJson(['click', detachRef, '--observation', detachSync.observation_id, '--node-scope', '--session', sessionId]);
+    assert(detached.code === 1 && detached.json && detached.json.error.code === 'E_TARGET_DETACHED', '节点移除应 E_TARGET_DETACHED：' + JSON.stringify(detached.json));
+    // 4) 读取类同样支持：目标没变时，页面别处变化不拦 read
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'node-scope read restore');
+    const readSync = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'node-scope sync read');
+    const kwMatch = /textbox "搜索关键词" \[@(e\d+)\]/.exec(String((readSync.observation && readSync.observation.text) || ''));
+    assert(kwMatch, '同步观察里找不到关键词输入框 ref');
+    expectOk(await cliJson(['evaluate', "document.getElementById('out').textContent='read-scope';'ok'", '--session', sessionId]), 'node-scope read mutate');
+    const readOk = expectOk(await cliJson(['read', '@' + kwMatch[1], '--observation', readSync.observation_id, '--node-scope', '--session', sessionId]), 'node-scope read');
+    assert(Array.isArray(readOk.fields) && readOk.fields.length >= 1, 'node-scope read 结果不对：' + JSON.stringify(readOk));
+    // 5) 兼容：未开 --node-scope 仍是整页 stale
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'node-scope compat restore');
+    const compat = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'node-scope compat sync');
+    expectOk(await cliJson(['evaluate', "document.getElementById('out').textContent='compat';'ok'", '--session', sessionId]), 'node-scope compat mutate');
+    const pageStale = await cliJson(['click', '#submit-btn', '--observation', compat.observation_id, '--session', sessionId]);
+    assert(pageStale.code === 1 && pageStale.json && pageStale.json.error.code === 'E_OBSERVATION_STALE', '未开 node-scope 应仍整页 stale：' + JSON.stringify(pageStale.json));
+    return 'unrelated 放行 → text E_OBSERVATION_CHANGED → E_TARGET_DETACHED → read 放行 → 兼容 stale';
+  });
+
+  await check('23h5. 拟人输入：--human 产生多段鼠标轨迹', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'human navigate');
+    expectOk(await cliJson(['evaluate', "window.__bbMoves=0; addEventListener('mousemove',()=>window.__bbMoves++); 'ok'", '--session', sessionId]), 'human hook');
+    const clicked = expectOk(await cliJson(['click', '#submit-btn', '--human', '--trusted', '--session', sessionId]), 'human click');
+    assert(clicked.effectState === 'committed', '拟人点击未提交：' + JSON.stringify(clicked));
+    const moves = expectOk(await cliJson(['evaluate', 'window.__bbMoves', '--session', sessionId]), 'human moves');
+    assert(Number(moves.value) >= 3, '拟人点击没有多段轨迹：' + JSON.stringify(moves.value));
+    return 'moves=' + moves.value;
   });
 
   await check('23i. --expect 事实校验（失败带 actual，成功后动作执行）', async () => {
@@ -1913,6 +3025,24 @@ try {
     return 'E_CONTEXT_STALE';
   });
 
+  await check('23j2. cooperation authority stale：generation 单调 + 旧 context/observation 拒绝', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'stale navigate');
+    const first = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'sync first');
+    const g1 = Number(first.authority && first.authority.generation);
+    assert(Number.isInteger(g1) && g1 >= 1, '缺少 authority.generation：' + JSON.stringify(first.authority));
+    const second = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'sync second');
+    const g2 = Number(second.authority && second.authority.generation);
+    assert(g2 === g1 + 1, 'generation 没有严格递增：' + g1 + ' → ' + g2);
+    assert(second.context_id !== first.context_id, '重新 sync 应换发 context');
+    const stale = await cliJson(['click', '#submit-btn', '--context', first.context_id, '--session', sessionId]);
+    assert(stale.code === 1 && stale.json && stale.json.error.code === 'E_CONTEXT_STALE', '旧 context 应拒绝：' + JSON.stringify(stale.json));
+    const staleObservation = await cliJson(['evaluate', '1+1', '--observation', first.observation_id, '--session', sessionId]);
+    assert(staleObservation.code === 1 && staleObservation.json && staleObservation.json.error.code === 'E_OBSERVATION_STALE', '旧 observation 应拒绝：' + JSON.stringify(staleObservation.json));
+    const good = await cliJson(['click', '#submit-btn', '--context', second.context_id, '--session', sessionId]);
+    assert(good.code === 0, '新 context 应可执行：' + JSON.stringify(good.json));
+    return 'generation ' + g1 + '→' + g2 + '；旧 context/observation 均拒绝';
+  });
+
   await check('23k. --observation 收据校验', async () => {
     const sync = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'sync obs');
     const bad = await cliJson(['evaluate', '1+1', '--observation', 'bogus', '--session', sessionId]);
@@ -1927,6 +3057,7 @@ try {
   await check('23l. observe --max-tokens/--cursor 分页', async () => {
     const first = expectOk(await cliJson(['observe', '--max-tokens', '20', '--session', sessionId]), 'observe chunk');
     assert(first.truncated === true && first.cursor, '首块应截断并给 cursor：' + JSON.stringify({ truncated: first.truncated, cursor: first.cursor }));
+    assert(first.budget && first.budget.omittedChars > 0, '首块缺少 omitted 统计：' + JSON.stringify(first.budget));
     let text = first.observation;
     let cursor = first.cursor;
     let pages = 1;
@@ -2005,7 +3136,7 @@ try {
   await check('23p2. 嵌套 iframe：owner 链逐层投影', async () => {
     const nestedUrl = new URL('nested.html', pageUrl).href;
     expectOk(await cliJson(['navigate', nestedUrl, '--session', sessionId]), 'nested navigate');
-    await cliJson(['wait-ms', '800', '--session', sessionId]);
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
     const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'nested observe');
     const frame = (frames.frames || []).find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('嵌套按钮'));
     assert(frame, '没有找到嵌套按钮 frame：' + JSON.stringify((frames.frames || []).map((item) => ({ id: item.frameId, url: item.url }))));
@@ -2034,6 +3165,112 @@ try {
     assert(out.value === 'cross2-clicked', 'OOPIF 点击没有回传：' + JSON.stringify(out.value));
     expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'oopif restore');
     return 'oopif via=' + clicked.via;
+  });
+
+  await check('23p4. 缩放 iframe：owner 链 scale 投影', async () => {
+    const scaledUrl = new URL('scaled-frame.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', scaledUrl, '--session', sessionId]), 'scaled navigate');
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'scaled observe');
+    const frame = (frames.frames || []).find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('框架内按钮'));
+    assert(frame, '没有缩放的 iframe 按钮：' + JSON.stringify((frames.frames || []).map((item) => ({ id: item.frameId, url: item.url }))));
+    const ref = /button "框架内按钮" \[@(e\d+)\]/.exec(String(frame.observation || ''));
+    assert(ref, '缩放 iframe 按钮没有 ref');
+    const clicked = expectOk(await cliJson(['click', '@' + ref[1], '--session', sessionId]), 'scaled click');
+    assert(['frame-projected', 'cdp-frame-owner'].includes(clicked.via), '缩放 iframe 未走投影：' + JSON.stringify(clicked));
+    await sleep(400);
+    const out = expectOk(await cliJson(['evaluate', "document.getElementById('scaled').contentDocument.getElementById('frame-out').textContent", '--session', sessionId]), 'scaled out');
+    assert(out.value === '框架已点击', '缩放 iframe 点击没有回传：' + JSON.stringify(out.value));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'scaled restore');
+    return 'scaled via=' + clicked.via;
+  });
+
+  await check('23p5. 滚动容器 iframe：rect 投影', async () => {
+    const scrollUrl = new URL('scroll-frame.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', scrollUrl, '--session', sessionId]), 'scroll navigate');
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'scroll observe');
+    const frame = (frames.frames || []).find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('框架内按钮'));
+    assert(frame, '滚动容器里没有 iframe 按钮');
+    const ref = /button "框架内按钮" \[@(e\d+)\]/.exec(String(frame.observation || ''));
+    assert(ref, '滚动容器 iframe 按钮没有 ref');
+    const clicked = expectOk(await cliJson(['click', '@' + ref[1], '--session', sessionId]), 'scroll click');
+    assert(clicked.via === 'frame-projected', '滚动容器未走投影：' + JSON.stringify(clicked));
+    await sleep(400);
+    const out = expectOk(await cliJson(['evaluate', "document.getElementById('inner').contentDocument.getElementById('frame-out').textContent", '--session', sessionId]), 'scroll out');
+    assert(out.value === '框架已点击', '滚动容器 iframe 点击没有回传：' + JSON.stringify(out.value));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'scroll restore');
+    return 'scroll via=' + clicked.via;
+  });
+
+  await check('23p6. 变换 iframe：rotate + skew 矩阵投影（同源）', async () => {
+    const transformedUrl = new URL('transform-frame.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', transformedUrl, '--session', sessionId]), 'transform navigate');
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'transform observe');
+    const frame = (frames.frames || []).find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('框架内按钮'));
+    assert(frame, '没有变换 iframe 按钮：' + JSON.stringify((frames.frames || []).map((item) => ({ id: item.frameId, url: item.url }))));
+    const ref = /button "框架内按钮" \[@(e\d+)\]/.exec(String(frame.observation || ''));
+    assert(ref, '变换 iframe 按钮没有 ref');
+    const clicked = expectOk(await cliJson(['click', '@' + ref[1], '--session', sessionId]), 'transform click');
+    assert(['frame-projected', 'cdp-frame-owner'].includes(clicked.via), '变换 iframe 未走投影：' + JSON.stringify(clicked));
+    await sleep(400);
+    const out = expectOk(await cliJson(['evaluate', "document.getElementById('transformed').contentDocument.getElementById('frame-out').textContent", '--session', sessionId]), 'transform out');
+    assert(out.value === '框架已点击', '变换 iframe 点击没有回传：' + JSON.stringify(out.value));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'transform restore');
+    return 'rotate+skew via=' + clicked.via;
+  });
+
+  await check('23p7. 变换 OOPIF：矩阵 owner 投影（跨源）', async () => {
+    const crossUrl = new URL('transform-cross.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', crossUrl, '--session', sessionId]), 'transform oopif navigate');
+    await cliJson(['wait-ms', '1500', '--session', sessionId]);
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'transform oopif observe');
+    const alias = (frames.aliases || []).find((item) => String(item.url || '').includes('frame-transform.html'));
+    assert(alias, '没有跨源变换 alias：' + JSON.stringify((frames.frames || []).map((item) => ({ id: item.frameId, url: item.url }))));
+    const clicked = expectOk(await cliJson(['click', alias.ref, '--session', sessionId]), 'transform oopif click');
+    assert(clicked.via === 'cdp-frame-owner', '跨源变换未走 CDP owner 投影：' + JSON.stringify(clicked));
+    await sleep(600);
+    const out = expectOk(await cliJson(['evaluate', "document.getElementById('xform-out').textContent", '--session', sessionId]), 'transform oopif out');
+    assert(out.value === 'matrix-clicked', '跨源变换点击没有回传：' + JSON.stringify(out.value));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'transform oopif restore');
+    return 'rotate+scale via=' + clicked.via;
+  });
+
+  await check('23p8. 3D 变换 iframe：matrix3d 投影', async () => {
+    const t3dUrl = new URL('transform3d-frame.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', t3dUrl, '--session', sessionId]), '3d transform navigate');
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), '3d transform observe');
+    const frame = (frames.frames || []).find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('框架内按钮'));
+    assert(frame, '没有 3D 变换 iframe 按钮：' + JSON.stringify((frames.frames || []).map((item) => ({ id: item.frameId, url: item.url }))));
+    const ref = /button "框架内按钮" \[@(e\d+)\]/.exec(String(frame.observation || ''));
+    assert(ref, '3D 变换 iframe 按钮没有 ref');
+    const clicked = expectOk(await cliJson(['click', '@' + ref[1], '--session', sessionId]), '3d transform click');
+    assert(clicked.via === 'cdp-frame-owner', '3D 变换未走 CDP owner 投影：' + JSON.stringify(clicked));
+    await sleep(400);
+    const out = expectOk(await cliJson(['evaluate', "document.getElementById('t3d').contentDocument.getElementById('frame-out').textContent", '--session', sessionId]), '3d transform out');
+    assert(out.value === '框架已点击', '3D 变换点击没有回传：' + JSON.stringify(out.value));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), '3d transform restore');
+    return 'matrix3d via=' + clicked.via;
+  });
+
+  await check('23p9. perspective 3D iframe：homography 投影', async () => {
+    const perspectiveUrl = new URL('perspective-frame.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', perspectiveUrl, '--session', sessionId]), 'perspective navigate');
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
+    const frames = expectOk(await cliJson(['observe', '--frames', '--force', '--session', sessionId]), 'perspective observe');
+    const frame = (frames.frames || []).find((item) => Number(item.frameId) > 0 && String(item.observation || '').includes('框架内按钮'));
+    assert(frame, '没有 perspective iframe 按钮：' + JSON.stringify((frames.frames || []).map((item) => ({ id: item.frameId, url: item.url }))));
+    const ref = /button "框架内按钮" \[@(e\d+)\]/.exec(String(frame.observation || ''));
+    assert(ref, 'perspective iframe 按钮没有 ref');
+    const clicked = expectOk(await cliJson(['click', '@' + ref[1], '--session', sessionId]), 'perspective click');
+    assert(clicked.via === 'cdp-frame-owner', 'perspective 未走 CDP owner 投影：' + JSON.stringify(clicked));
+    await sleep(400);
+    const out = expectOk(await cliJson(['evaluate', "document.getElementById('p3d').contentDocument.getElementById('frame-out').textContent", '--session', sessionId]), 'perspective out');
+    assert(out.value === '框架已点击', 'perspective 点击没有回传：' + JSON.stringify(out.value));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'perspective restore');
+    return 'perspective via=' + clicked.via;
   });
 
   await check('23q. screenshot --annotate + 按图坐标点击', async () => {
@@ -2106,7 +3343,9 @@ try {
     await sleep(2100);
     const idle = expectOk(await cliJson(['cooperate', 'wait', '--timeout', '500ms', '--session', sessionId]), 'wait idle');
     assert(idle.ready === true, '人工停手后应恢复 ready：' + JSON.stringify(idle));
-    return 'human → ready';
+    const reconciled = expectOk(await cliJson(['cooperate', 'sync', '--session', sessionId]), 'human reconcile sync');
+    assert(reconciled.reconciliation && reconciled.reconciliation.humanEdits >= 1, 'sync 没有报告人工编辑：' + JSON.stringify(reconciled.reconciliation));
+    return 'human → ready → edits=' + reconciled.reconciliation.humanEdits;
   });
 
   await check('23v. scroll-to 返回边界 + 性能 CLS/长任务', async () => {
@@ -2148,7 +3387,18 @@ try {
   });
 
   await check('23x. cooperate handback：人工交回后立刻 ready', async () => {
-    const pressed = uiaClick('提交查询', 'BridgeDeck E2E 夹具页');
+    // UIA 只能点到前台窗口；headed 浏览器可能被遮挡/最小化，先显式 focus 并重试一次。
+    const listed = expectOk(await cliJson(['session', 'list']), 'uia session list');
+    const current = (listed.sessions || []).find((item) => item.sessionId === sessionId);
+    let pressed = uiaClick('提交查询', 'BridgeDeck E2E 夹具页');
+    for (let attempt = 0; attempt < 2 && !(pressed.code === 0 && /INVOKED|CLICKED/.test(pressed.stdout)); attempt += 1) {
+      if (current && Number.isInteger(current.windowId)) {
+        await cliJson(['window', 'focus', String(current.windowId), '--session', sessionId]);
+      }
+      if (current && Number.isInteger(current.tabId)) await cliJson(['tab', 'select', String(current.tabId)]);
+      await sleep(600);
+      pressed = uiaClick('提交查询', 'BridgeDeck E2E 夹具页');
+    }
     assert(pressed.code === 0 && /INVOKED|CLICKED/.test(pressed.stdout), 'UIA 人工点击失败：' + JSON.stringify(pressed));
     const busy = expectOk(await cliJson(['cooperate', 'wait', '--timeout', '400ms', '--session', sessionId]), 'wait busy');
     assert(busy.ready === false, '应检测到人工操作：' + JSON.stringify(busy));
@@ -2346,7 +3596,22 @@ try {
   async function openPageAndReadTitle(page, query) {
     const args = ['ui', '--page', page];
     if (query) args.push('--query', query);
-    const opened = expectOk(await cliJson(args), 'ui open ' + page);
+    let openedResult = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      openedResult = await cliJson(args);
+      if (openedResult.json && openedResult.json.ok === true) break;
+      const message = String((openedResult.json && openedResult.json.error && openedResult.json.error.message) || '');
+      if (!/cannot be edited|dragging a tab/i.test(message)) break;
+      await sleep(800);
+    }
+    const opened = expectOk(openedResult, 'ui open ' + page);
+    if (page === 'longshot') {
+      const tabs = expectOk(await cliJson(['tab', 'list', '--scope', 'all']), 'tab list longshot focus');
+      const tab = (tabs.tabs || []).find((item) => item.tabId === opened.tabId);
+      if (tab && Number.isInteger(tab.windowId)) await cliJson(['window', 'focus', String(tab.windowId)]);
+      await cliJson(['tab', 'select', String(opened.tabId)]).catch(() => {});
+      await sleep(300);
+    }
     let title = '';
     for (let attempt = 0; attempt < 60; attempt += 1) {
       await sleep(500);
@@ -2380,6 +3645,13 @@ try {
     return 'controlHint + 远程配对设置 写入/还原正常';
   });
 
+  await check('29e. 可访问性基础自检（lang/按钮名/switch/alt）', async () => {
+    const opened = await openPageAndReadTitle('popup', 'selftest=a11y');
+    await closePage(opened.tabId);
+    assert(opened.title === 'SELFTEST:ok:a11y:0', '可访问性自检失败：' + JSON.stringify(opened.title));
+    return 'a11y ok';
+  });
+
   await check('29c. CLI 不能通过 daemonUrl 完成本机配对', async () => {
     const before = expectOk(await cliJson(['browsers']), 'browsers before pair');
     assert((before.browsers || []).some((item) => item.localAuth === 'unpaired'), '默认应为未配对');
@@ -2388,6 +3660,27 @@ try {
     const denied = await cliJson(['settings', 'set', '--daemon-url', 'ws://127.0.0.1:1/ws', '--daemon-token', paired.token]);
     assert(denied.code === 1 && denied.json && denied.json.error && denied.json.error.code === 'E_FORBIDDEN', 'CLI 修改配对地址应被拒绝：' + JSON.stringify(denied.json));
     return 'E_FORBIDDEN';
+  });
+
+  await check('29d. 阿拉伯语 / 希伯来语界面（完整 RTL 语言包）', async () => {
+    const readUiTitle = async (query) => {
+      const opened = expectOk(await cliJson(['ui', '--page', 'options', '--query', query]), 'ui open options ' + query);
+      let title = '';
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        await sleep(400);
+        const tabs = expectOk(await cliJson(['tab', 'list', '--scope', 'all']), 'tab list ' + query);
+        const tab = (tabs.tabs || []).find((item) => item.tabId === opened.tabId);
+        title = tab && tab.title ? tab.title : '';
+        if (/[\u0600-\u06FF\u0590-\u05FF]/.test(title)) break;
+      }
+      await closePage(opened.tabId);
+      return title;
+    };
+    const arabic = await readUiTitle('lang=ar');
+    assert(/[\u0600-\u06FF]/.test(arabic), '阿拉伯语标题未生效：' + JSON.stringify(arabic));
+    const hebrew = await readUiTitle('lang=he');
+    assert(/[\u0590-\u05FF]/.test(hebrew), '希伯来语标题未生效：' + JSON.stringify(hebrew));
+    return 'ar=' + arabic.slice(0, 24) + ' he=' + hebrew.slice(0, 24);
   });
 
   await check('30. 快捷功能页渲染 5 个入口', async () => {
@@ -2420,10 +3713,28 @@ try {
   });
 
   await check('31. 长截图页（真实整页截图）', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'longshot focus list');
+    const current = (listed.sessions || []).find((item) => item.sessionId === sessionId);
+    if (current && Number.isInteger(current.windowId)) expectOk(await cliJson(['window', 'focus', String(current.windowId), '--session', sessionId]), 'longshot window focus');
+    await sleep(300);
     const { title, tabId } = await openPageAndReadTitle('longshot', 'selftest=1');
     await closePage(tabId);
     assert(/^SELFTEST:ok:longshot:\d+x\d+$/.test(title), '长截图自测失败：' + JSON.stringify(title));
     return title.replace('SELFTEST:ok:longshot:', '');
+  });
+
+  await check('31b. 长截图恢复：本地分片 → 重新拼接', async () => {
+    const listed = expectOk(await cliJson(['session', 'list']), 'longshot focus list');
+    const current = (listed.sessions || []).find((item) => item.sessionId === sessionId);
+    if (current && Number.isInteger(current.windowId)) expectOk(await cliJson(['window', 'focus', String(current.windowId), '--session', sessionId]), 'longshot window focus');
+    await sleep(300);
+    const { title, tabId } = await openPageAndReadTitle('longshot', 'selftest=restore');
+    await closePage(tabId);
+    assert(/^SELFTEST:ok:restore:\d+:\d+x\d+$/.test(title), '长截图恢复失败：' + JSON.stringify(title));
+    const parts = title.replace('SELFTEST:ok:restore:', '').split(':');
+    assert(Number(parts[0]) >= 1, '恢复的分片数不对：' + title);
+    assert(/^\d+x\d+$/.test(parts[1]), '恢复尺寸不对：' + title);
+    return 'tiles=' + parts[0] + ' ' + parts[1];
   });
 
   await check('32. 操作录制页（真实开始/停止录制）', async () => {
@@ -2474,12 +3785,119 @@ try {
   });
 
   await check('35. 视频录制页（真实录 MP4 并落库）', async () => {
+    await cliJson(['session', 'resume', sessionId]).catch(() => {});
     const { title, tabId } = await openPageAndReadTitle('record', 'selftest=1');
     await closePage(tabId);
     assert(/^SELFTEST:ok:video:\d+:(mp4|webm):\d+$/.test(title), '视频录制自测失败：' + JSON.stringify(title));
     const parts = title.replace('SELFTEST:ok:video:', '').split(':');
     assert(Number(parts[2]) > 0, '录出来的视频是空文件：' + parts[2] + ' 字节');
-    return parts[1] + ' ' + parts[2] + ' 字节';
+    const state = expectOk(await cliJson(['video', 'status', '--session', sessionId]), 'video status');
+    assert(state.completeness === 'complete', '正常录制不是 complete：' + JSON.stringify(state));
+    assert(state.stop_reason === 'user' || state.stop_reason === 'duration', '正常录制 stop_reason 不对：' + JSON.stringify(state));
+    assert(Array.isArray(state.fragments) && state.fragments.length >= 1, '正常录制没有分片日记：' + JSON.stringify(state.fragments));
+    const fragmentBytes = state.fragments.reduce((sum, item) => sum + Number(item.bytes || 0), 0);
+    assert(fragmentBytes > 0, '分片日记字节为 0：' + JSON.stringify(state.fragments));
+    assert(state.fragments.every((item) => /^[0-9a-f]{64}$/.test(String(item.sha256 || ''))), '分片日记缺少 SHA-256：' + JSON.stringify(state.fragments));
+    const listedAfterRecord = expectOk(await cliJson(['video', 'list', '--session', sessionId]), 'video list storage');
+    const recorded = (listedAfterRecord.recordings || []).find((item) => item.id === String(state.recordingId || state.id));
+    assert(recorded && typeof recorded.storage_persisted === 'boolean', '录制缺少 storage_persisted：' + JSON.stringify(recorded));
+    assert(recorded.durability_policy === 'browser-readback' && recorded.fsync_supported === false, '录制 durability policy 不对：' + JSON.stringify({ policy: recorded.durability_policy, fsync: recorded.fsync_supported }));
+    const verified = expectOk(await cliJson(['video', 'verify', String(state.recordingId || state.id), '--session', sessionId]), 'video verify');
+    assert(verified.verified === true && verified.mismatches.length === 0, '分片校验失败：' + JSON.stringify(verified));
+    assert(verified.container && verified.container.format === 'mp4', 'MP4 容器解析失败：' + JSON.stringify(verified.container));
+    assert(typeof state.complete_frames === 'boolean', '录制缺少完帧标记：' + JSON.stringify(state));
+    assert(['worker', 'main', 'encoder'].includes(state.finish_via), '录制缺少完帧重封装来源：' + JSON.stringify(state.finish_via));
+    if (verified.container.fragmented) {
+      assert(state.journal && Number(state.journal.fragments) >= 1, 'fMP4 缺少分片日记：' + JSON.stringify(state.journal));
+      assert(state.journal.complete_bytes > 0, '分片日记缺少 complete_bytes：' + JSON.stringify(state.journal));
+    }
+    const savedPath = path.join(outDir, 'video-frames.mp4');
+    const saved = expectOk(await cliJson(['video', 'save', String(state.recordingId || state.id), '--out', savedPath, '--overwrite', '--session', sessionId]), 'video save');
+    const savedBuffer = readFileSync(savedPath);
+    assert(saved.bytes > 0 && savedBuffer.length === saved.bytes, '视频保存失败：' + JSON.stringify(saved));
+    const savedContainer = analyzeMp4(savedBuffer);
+    assert(savedContainer.format === 'mp4', '保存文件不是 MP4：' + JSON.stringify(savedContainer));
+    const trimPath = path.join(outDir, 'video-trim.mp4');
+    const trimmed = expectOk(await cliJson(['video', 'trim', savedPath, '--out', trimPath, '--start', '0s', '--end', '5s', '--session', sessionId]), 'video trim');
+    const trimBuffer = readFileSync(trimPath);
+    assert(trimmed.packets >= 1 && trimBuffer.length > 0, '裁剪没有输出帧：' + JSON.stringify(trimmed));
+    assert(trimBuffer.subarray(4, 8).toString() === 'ftyp', '裁剪输出不是 MP4：' + trimBuffer.subarray(0, 8).toString('hex'));
+    const info = expectOk(await cliJson(['video', 'info', savedPath, '--session', sessionId]), 'video info');
+    assert(info.codec && info.bytes > 0 && info.packets >= 1 && Number.isFinite(info.duration), 'video info 不完整：' + JSON.stringify(info));
+    assert(Number.isInteger(info.width) && Number.isInteger(info.height), 'video info 缺少尺寸：' + JSON.stringify(info));
+    const splitDir = path.join(outDir, 'video-split');
+    const split = expectOk(await cliJson(['video', 'split', savedPath, '--out-dir', splitDir, '--parts', '2', '--session', sessionId]), 'video split');
+    assert(split.count >= 1 && Array.isArray(split.outputs) && split.outputs.length === split.count, 'video split 输出不足：' + JSON.stringify(split));
+    for (const part of split.outputs) {
+      assert(existsSync(part.path), '分段文件不存在：' + part.path);
+      const bytes = readFileSync(part.path);
+      assert(bytes.subarray(4, 8).toString() === 'ftyp', '分段不是 MP4：' + part.path);
+    }
+    const mergedPath = path.join(outDir, 'video-merged.mp4');
+    const merged = expectOk(await cliJson(['video', 'merge', savedPath, savedPath, '--out', mergedPath, '--session', sessionId]), 'video merge');
+    assert(merged.packets >= 2 && Number.isInteger(merged.width) && Number.isInteger(merged.height) && existsSync(mergedPath) && readFileSync(mergedPath).subarray(4, 8).toString() === 'ftyp', '合并输出不完整：' + JSON.stringify(merged));
+    const mcp = startMcp({ ...process.env, BB_HOME: bbHome, BB_PORT: String(port), BB_NO_PROBE: '1' });
+    try {
+      await mcp.rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'e2e' } });
+      const mcpInfo = await mcp.rpc('tools/call', { name: 'browser_video_info', arguments: { input: savedPath } });
+      assert(mcpInfo.result.isError === false && String(mcpInfo.result.content[0].text).includes('codec'), 'MCP video info 失败：' + String(mcpInfo.result.content[0].text).slice(0, 160));
+      const mcpTrimPath = path.join(outDir, 'mcp-trim.mp4');
+      const mcpTrim = await mcp.rpc('tools/call', { name: 'browser_video_trim', arguments: { input: savedPath, out: mcpTrimPath, start: '0s', end: '1s' } });
+      assert(mcpTrim.result.isError === false && existsSync(mcpTrimPath) && readFileSync(mcpTrimPath).subarray(4, 8).toString() === 'ftyp', 'MCP video trim 失败');
+      const mcpSplitDir = path.join(outDir, 'mcp-split');
+      const mcpSplit = await mcp.rpc('tools/call', { name: 'browser_video_split', arguments: { input: savedPath, out_dir: mcpSplitDir, parts: 2 } });
+      assert(mcpSplit.result.isError === false && existsSync(mcpSplitDir), 'MCP video split 失败');
+      const mcpMergePath = path.join(outDir, 'mcp-merge.mp4');
+      const mcpMerge = await mcp.rpc('tools/call', { name: 'browser_video_merge', arguments: { inputs: [savedPath, savedPath], out: mcpMergePath } });
+      assert(mcpMerge.result.isError === false && existsSync(mcpMergePath) && readFileSync(mcpMergePath).subarray(4, 8).toString() === 'ftyp', 'MCP video merge 失败');
+    } finally {
+      mcp.close();
+    }
+    assert(state.faststart === true, '录制收尾没有 faststart 重封装：' + JSON.stringify({ faststart: state.faststart }));
+    if (saved.faststart === true) {
+      assert(savedContainer.hasMoov === true && savedContainer.hasMoof === false, 'faststart 文件不是 moov 前置：' + JSON.stringify(savedContainer.boxes));
+      const moovAt = savedContainer.boxes.indexOf('moov');
+      const mdatAt = savedContainer.boxes.indexOf('mdat');
+      assert(moovAt >= 0 && mdatAt > moovAt, 'faststart 文件 moov 不在 mdat 前：' + JSON.stringify(savedContainer.boxes));
+    } else {
+      const expectedBytes = Number(state.bytes) + (state.indexed ? Number(state.sidx_bytes || 0) : 0);
+      assert(saved.bytes === expectedBytes, '保存字节不一致：' + saved.bytes + ' != ' + expectedBytes + '（indexed=' + Boolean(state.indexed) + '）');
+      if (state.indexed) {
+        assert(Number(state.sidx_bytes) > 0 && savedContainer.hasSidx === true, '可 seek 索引缺失：' + JSON.stringify({ sidx: state.sidx_bytes, container: savedContainer.boxes }));
+      }
+    }
+    return parts[1] + ' ' + parts[2] + ' 字节 completeness=' + state.completeness + ' fragmented=' + verified.container.fragmented + ' fmp4=' + Number((state.journal && state.journal.fragments) || 0) + ' saved=' + saved.bytes + ' sidx=' + (state.indexed ? state.sidx_bytes : 0) + (saved.faststart ? ' faststart=' + saved.bytes : '');
+  });
+
+  await check('35r. 视频完帧恢复：分片扫描 → 重建可播放文件', async () => {
+    await cliJson(['session', 'resume', sessionId]).catch(() => {});
+    const seeded = await openPageAndReadTitle('record', 'selftest=seed');
+    await closePage(seeded.tabId);
+    assert(/^SELFTEST:ok:seed:/.test(seeded.title), '生成恢复分片失败：' + JSON.stringify(seeded.title));
+    const parts = seeded.title.replace('SELFTEST:ok:seed:', '').split(':');
+    const recordingId = parts[0];
+    const expectedBytes = Number(parts[1]);
+    assert(recordingId && expectedBytes > 0, '分片元数据不完整：' + seeded.title);
+    const recovered = expectOk(await cliJson(['video', 'recover', '--session', sessionId]), 'video recover');
+    const recoveredId = recovered.id || recovered.recordingId;
+    assert(recoveredId === recordingId, '恢复 id 不一致：' + JSON.stringify(recovered));
+    assert(Number(recovered.bytes) === expectedBytes, '恢复字节数不一致：' + recovered.bytes + ' != ' + expectedBytes);
+    assert(recovered.stop_reason === 'recovered', '恢复记录 stop_reason 不对：' + JSON.stringify(recovered));
+    assert(recovered.completeness === 'partial', '恢复记录 completeness 不对：' + JSON.stringify(recovered));
+    assert(Array.isArray(recovered.fragments) && recovered.fragments.length >= 1, '恢复记录没有分片日记：' + JSON.stringify(recovered.fragments));
+    const fragmentBytes = recovered.fragments.reduce((sum, item) => sum + Number(item.bytes || 0), 0);
+    assert(fragmentBytes === expectedBytes, '分片日记字节不一致：' + fragmentBytes + ' != ' + expectedBytes);
+    const listed = expectOk(await cliJson(['video', 'list', '--session', sessionId]), 'video list recovered');
+    assert((listed.recordings || []).some((item) => item.id === recoveredId && Number(item.bytes) === expectedBytes), 'video list 没有恢复记录：' + JSON.stringify(listed.recordings));
+    const out = path.join(outDir, 'recovered.mp4');
+    expectOk(await cliJson(['video', 'save', recoveredId, '--out', out, '--overwrite', '--session', sessionId]), 'video save recovered');
+    const magic = readFileSync(out).subarray(0, 8);
+    const isMp4 = magic.subarray(4, 8).toString() === 'ftyp';
+    const isWebm = magic[0] === 0x1a && magic[1] === 0x45;
+    assert(isMp4 || isWebm, '恢复文件不是可识别视频：' + magic.toString('hex'));
+    const second = await cli(['video', 'recover', '--json']);
+    assert(second.code !== 0, '分片恢复后再次 recover 不应成功');
+    return 'recovered ' + recovered.bytes + 'B ' + (isMp4 ? 'mp4' : 'webm');
   });
 
   await check('35b. observe --vom 命中测试：遮挡 / pointer-events / 屏外', async () => {
@@ -2488,6 +3906,10 @@ try {
     await cliJson(['session', 'resume', sessionId]).catch(() => {});
     expectOk(await cliJson(['navigate', vomUrl, '--session', sessionId]), 'navigate vom');
     const res = expectOk(await cliJson(['observe', '--vom', '--session', sessionId]), 'observe vom');
+    assert(res.stages && res.stages.visited >= 1 && Number.isInteger(res.stages.tokens), 'observe 缺少 VOM 阶段指标：' + JSON.stringify(res.stages));
+    assert(Number.isInteger(res.stages.lineTokens) && Number.isInteger(res.stages.maxLineTokens), 'observe 缺少逐行 token 计量：' + JSON.stringify(res.stages));
+    assert(res.stages.ms && Number.isFinite(res.stages.ms.visibility) && Number.isFinite(res.stages.ms.semantics), 'observe 缺少阶段耗时：' + JSON.stringify(res.stages.ms));
+    assert(Array.isArray(res.refDetails) && res.refDetails.every((item) => typeof item.cdpSessionId === 'string' && item.cdpSessionId.endsWith(':0')), 'refDetails 缺少 cdpSessionId');
     const byId = (id) => (res.nodes || []).find((node) => node.id === id);
     const normal = byId('normal-btn');
     assert(normal, 'vom 里没有 normal-btn：' + JSON.stringify((res.nodes || []).map((node) => node.id)));
@@ -2538,6 +3960,89 @@ try {
     return 'good=' + good.contrast + ' bad=' + bad.contrast + ' oklch=' + oklch.contrast;
   });
 
+  await check('35f. VOM visualObjects：稳定身份 + 动作闭环', async () => {
+    const visualUrl = new URL('visual.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', visualUrl, '--session', sessionId]), 'visual navigate');
+    await sleep(400);
+    const observed = expectOk(await cliJson(['observe', '--vom', '--session', sessionId]), 'observe visual');
+    const objects = Array.isArray(observed.visualObjects) ? observed.visualObjects : [];
+    assert(objects.length > 0, 'observe --vom 没有 visualObjects');
+    assert(objects.some((item) => item.kind === 'region' && String(item.tag || '') === 'canvas'), 'visualObjects 没有 canvas region：' + JSON.stringify(objects.slice(0, 5)));
+    const visualRef = objects.find((item) => item.kind === 'ref' && item.stableRef);
+    assert(visualRef, 'visualObjects 的 ref 缺少 stableRef：' + JSON.stringify(objects.slice(0, 8)));
+    const vomVisual = Array.isArray(observed.vom && observed.vom.visual) ? observed.vom.visual : [];
+    assert(vomVisual.some((item) => item.stableRef), 'VOM visual 缺少 stableRef');
+    const clicked = expectOk(await cliJson(['click', '--stable-ref', visualRef.stableRef, '--session', sessionId]), 'click visual stableRef');
+    assert(clicked.effectState === 'committed', 'visual stableRef 点击未提交：' + JSON.stringify(clicked));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'visual restore');
+    return 'objects=' + objects.length + ' visualRef=' + visualRef.ref + ' via=' + clicked.via;
+  });
+
+  await check('35g. paint-order 分层 + capture issues', async () => {
+    const layersUrl = new URL('layers.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', layersUrl, '--session', sessionId]), 'layers navigate');
+    await sleep(400);
+    const observed = expectOk(await cliJson(['observe', '--vom', '--facts', '--ax', '--force', '--session', sessionId]), 'observe layers');
+    const layers = Array.isArray(observed.layers) ? observed.layers : [];
+    assert(layers.length >= 1, 'observe 没有 layers：' + JSON.stringify({ layers: observed.layers, issues: observed.issues }));
+    const modal = layers.find((item) => item.kind === 'modal');
+    const mask = layers.find((item) => item.kind === 'mask');
+    assert(modal, 'layers 缺少 modal 带：' + JSON.stringify(layers));
+    assert(mask, 'layers 缺少 mask 带：' + JSON.stringify(layers));
+    assert(Number.isInteger(modal.paintOrder), 'modal 缺少 paintOrder：' + JSON.stringify(modal));
+    assert(Number(modal.members) >= 1, 'modal 缺少 members：' + JSON.stringify(modal));
+    assert(Array.isArray(observed.issues) && observed.issues.length === 0, '正常页面不应有 issues：' + JSON.stringify(observed.issues));
+    assert(Array.isArray(observed.vom && observed.vom.issues) && observed.vom.issues.length === 0, 'vom.issues 不为空');
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'layers restore');
+    return 'layers=' + layers.length + ' modal=' + modal.coverage + ' mask=' + mask.coverage;
+  });
+
+  await check('35h. VOM 完整关系图：containment / ownership / roots', async () => {
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'vom graph navigate');
+    const observed = expectOk(await cliJson(['observe', '--vom', '--ax', '--facts', '--force', '--session', sessionId]), 'vom graph observe');
+    const vom = observed.vom || {};
+    const graph = vom.graph;
+    assert(graph && graph.available === true, '缺少 vom.graph：' + JSON.stringify({ hasGraph: Boolean(graph), vomKeys: Object.keys(vom) }));
+    assert(Array.isArray(graph.nodes) && graph.nodes.length > 10, 'graph.nodes 太少：' + JSON.stringify(graph.counts));
+    assert(Array.isArray(graph.edges) && graph.edges.length > 5, 'graph.edges 太少：' + JSON.stringify(graph.counts));
+    assert(Array.isArray(graph.roots) && graph.roots.length >= 1, '缺少 roots：' + JSON.stringify(graph.roots));
+    const ids = new Set(graph.nodes.map((node) => node.id));
+    for (const edge of graph.edges.slice(0, 200)) {
+      assert(ids.has(edge.from) && ids.has(edge.to), '边端点必须落在 graph.nodes 里：' + JSON.stringify(edge));
+    }
+    for (const node of vom.nodes || []) {
+      assert(typeof node.id === 'string' && node.id.length > 0, 'VOM 节点缺少 id：' + JSON.stringify(node.ref));
+      for (const ancestorId of node.ancestorIds || []) {
+        assert(ids.has(ancestorId), 'VOM 节点的祖先 id 不在图里：' + ancestorId);
+      }
+    }
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+    const nested = (vom.nodes || []).find((node) => Array.isArray(node.ancestorIds) && node.ancestorIds.length >= 2);
+    assert(nested, '没有节点给出 ≥2 层祖先链');
+    const chain = [];
+    let current = byId.get(nested.id);
+    let guard = 0;
+    while (current && current.parentId && guard < 40) {
+      chain.push(current.parentId);
+      current = byId.get(current.parentId);
+      guard += 1;
+    }
+    assert(chain.length === nested.ancestorIds.length, 'ancestorIds 与 parentId 链不一致：' + JSON.stringify({ chain, ancestorIds: nested.ancestorIds }));
+    if (!graph.truncated) {
+      assert(current && graph.roots.includes(current.id), '祖先链没有通到 roots：' + JSON.stringify({ tail: current && current.id, roots: graph.roots }));
+    }
+    const labelEdges = graph.edges.filter((edge) => edge.type === 'label');
+    assert(labelEdges.length >= 1, '缺少 label 关系边：' + JSON.stringify(graph.counts.byType));
+    const axEdges = graph.edges.filter((edge) => edge.type === 'ax');
+    assert(axEdges.length >= 1, '缺少 AX 父子边：' + JSON.stringify(graph.counts.byType));
+    assert(axEdges.every((edge) => ids.has(edge.from) && ids.has(edge.to)), 'AX 边端点必须落在 graph.nodes 里：' + JSON.stringify(axEdges.slice(0, 3)));
+    assert(graph.nodes.some((node) => node.ax === true), '缺少 AX 上下文节点（ax:<nodeId>）');
+    const child = (vom.edges || []).find((edge) => edge.type === 'child' && edge.child && edge.parent);
+    assert(child, 'vom.edges 缺少兼容 child/parent：' + JSON.stringify((vom.edges || []).slice(0, 3)));
+    assert(child.child === child.to && child.parent === child.from, '兼容字段与 from/to 不一致：' + JSON.stringify(child));
+    return 'nodes=' + graph.counts.nodes + ' edges=' + graph.counts.edges + ' roots=' + graph.roots.length + ' label=' + labelEdges.length;
+  });
+
   await check('35d. 动作前目标被替换：fail closed，不重放', async () => {
     const vomUrl = pageUrl.replace(/test\.html.*$/, 'vom.html');
     expectOk(await cliJson(['navigate', vomUrl, '--session', sessionId]), 'swap navigate');
@@ -2561,11 +4066,523 @@ try {
     return 'followed=' + clicked.followed.url;
   });
 
-  await check('36. 收尾：清空 session + status', async () => {
-    const before = expectOk(await cliJson(['session', 'list']), 'session list');
-    for (const session of before.sessions || []) {
-      await cliJson(['session', 'stop', session.sessionId]);
+  await check('31c. 超长页面 capture：CDP 分块拼接', async () => {
+    await assertSessionAlive('31c');
+    const tallUrl = new URL('tall.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', tallUrl, '--session', sessionId]), 'tall navigate');
+    await sleep(500);
+    const out = path.join(outDir, 'tall.png');
+    const shot = expectOk(await cliJson(['screenshot', '--full-page', '--timeout', '180000', '--out', out, '--session', sessionId]), 'tall screenshot');
+    assert(Number(shot.height) >= 20000, '超长截图高度不足：' + JSON.stringify({ width: shot.width, height: shot.height, tiles: shot.tiled }));
+    assert(Number(shot.tiled) >= 3, '超长截图没有走分块：' + JSON.stringify(shot.tiled));
+    const png = readFileSync(out);
+    assert(png.length > 5000, '超长截图文件太小：' + png.length);
+    const width = png.readUInt32BE(16);
+    const height = png.readUInt32BE(20);
+    assert(width === shot.width && height === shot.height, 'PNG 尺寸与结果不一致：' + width + 'x' + height + ' vs ' + shot.width + 'x' + shot.height);
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'tall restore');
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
+    return shot.width + 'x' + shot.height + ' tiles=' + shot.tiled;
+  });
+
+  await check('31d. 超宽页面 capture：横向分块拼接', async () => {
+    await assertSessionAlive('31d');
+    const wideUrl = new URL('wide.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', wideUrl, '--session', sessionId]), 'wide navigate');
+    await sleep(500);
+    const out = path.join(outDir, 'wide.png');
+    const shot = expectOk(await cliJson(['screenshot', '--full-page', '--timeout', '180000', '--out', out, '--session', sessionId]), 'wide screenshot');
+    assert(Number(shot.width) >= 16000, '超宽截图宽度不足：' + JSON.stringify({ width: shot.width, height: shot.height, tiles: shot.tiled }));
+    assert(Number(shot.tiled) >= 2, '超宽截图没有横向分块：' + JSON.stringify(shot.tiled));
+    const png = readFileSync(out);
+    const width = png.readUInt32BE(16);
+    const height = png.readUInt32BE(20);
+    assert(width === shot.width && height === shot.height, 'PNG 尺寸与结果不一致：' + width + 'x' + height + ' vs ' + shot.width + 'x' + shot.height);
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'wide restore');
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
+    return shot.width + 'x' + shot.height + ' tiles=' + shot.tiled;
+  });
+
+  await check('31e. 超大高度 capture：>30000px 分块', async () => {
+    await assertSessionAlive('31e');
+    const tallUrl = new URL('tall35.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', tallUrl, '--session', sessionId]), 'tall35 navigate');
+    await sleep(500);
+    const out = path.join(outDir, 'tall35.png');
+    const shot = expectOk(await cliJson(['screenshot', '--full-page', '--timeout', '180000', '--out', out, '--session', sessionId]), 'tall35 screenshot');
+    assert(Number(shot.height) >= 35000, '超大截图高度不足：' + JSON.stringify({ width: shot.width, height: shot.height, tiles: shot.tiled }));
+    assert(Number(shot.tiled) >= 5, '超大截图分块不足：' + JSON.stringify(shot.tiled));
+    const png = readFileSync(out);
+    const width = png.readUInt32BE(16);
+    const height = png.readUInt32BE(20);
+    assert(width === shot.width && height === shot.height, 'PNG 尺寸与结果不一致：' + width + 'x' + height + ' vs ' + shot.width + 'x' + shot.height);
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'tall35 restore');
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
+    return shot.width + 'x' + shot.height + ' tiles=' + shot.tiled;
+  });
+
+  await check('31e2. 超过单画布上限：分段 PNG 输出', async () => {
+    await assertSessionAlive('31e2');
+    const tallUrl = new URL('tall35.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', tallUrl, '--session', sessionId]), 'segmented navigate');
+    await cliJson(['evaluate', "document.documentElement.style.height='45000px'; document.body.style.height='45000px'; window.scrollTo(0,0); 'ok'", '--session', sessionId]);
+    await sleep(500);
+    const out = path.join(outDir, 'segmented.png');
+    const shot = expectOk(await cliJson(['screenshot', '--full-page', '--timeout', '240000', '--out', out, '--session', sessionId]), 'segmented screenshot');
+    assert(shot.segmented === true && Number(shot.segment_count) >= 2, '没有分段输出：' + JSON.stringify({ segmented: shot.segmented, count: shot.segment_count, height: shot.height }));
+    assert(Number(shot.height) >= 45000, '分段总高度不足：' + shot.height);
+    assert(Array.isArray(shot.segments) && shot.segments.length === shot.segment_count, 'segments 元数据不完整');
+    for (const part of shot.segments) assert(existsSync(part.path), '分段文件不存在：' + part.path);
+    const first = readFileSync(out);
+    assert(first.subarray(1, 4).toString() === 'PNG', '第一段不是 PNG');
+    const firstHeight = first.readUInt32BE(20);
+    assert(firstHeight > 0 && firstHeight <= 40000, '第一段高度异常：' + firstHeight);
+    const second = readFileSync(shot.segments[1].path);
+    assert(second.subarray(1, 4).toString() === 'PNG', '第二段不是 PNG');
+    return 'segments=' + shot.segment_count + ' first=' + firstHeight + ' total=' + shot.height;
+  });
+
+  await check('31f. 固定页脚重绘：final footer overlay', async () => {
+    await assertSessionAlive('31f');
+    const footerUrl = new URL('footer.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', footerUrl, '--session', sessionId]), 'footer navigate');
+    await sleep(500);
+    const out = path.join(outDir, 'footer.png');
+    const shot = expectOk(await cliJson(['screenshot', '--full-page', '--tile-size', '512', '--timeout', '180000', '--out', out, '--session', sessionId]), 'footer screenshot');
+    assert(shot.tile_size === 512, '--tile-size 没有生效：' + JSON.stringify(shot.tile_size));
+    assert(Number(shot.height) >= 15000, '页脚页截图高度不足：' + JSON.stringify({ width: shot.width, height: shot.height, tiled: shot.tiled }));
+    assert(Number(shot.fixedFooter) >= 60, '没有识别/重绘固定页脚：' + JSON.stringify(shot.fixedFooter));
+    assert(Number(shot.fixedTop) >= 40, '没有识别/重绘固定顶栏：' + JSON.stringify(shot.fixedTop));
+    assert(Number(shot.fixedBands) >= 2, '没有记录多段固定带：' + JSON.stringify(shot.fixedBands));
+    assert(shot.stale !== true, '稳定页面不应标记 stale：' + JSON.stringify(shot.stale));
+    assert(Number(shot.tiles_persisted) >= 1 && typeof shot.longshot_id === 'string', '长截图没有落盘 tile：' + JSON.stringify({ tiles: shot.tiles_persisted, id: shot.longshot_id }));
+    const recoveredPath = path.join(outDir, 'footer-recovered.png');
+    const recovered = expectOk(await cliJson(['longshot', 'recover', shot.longshot_id, '--out', recoveredPath, '--session', sessionId]), 'longshot recover');
+    assert(recovered.width === shot.width && recovered.height === shot.height && existsSync(recoveredPath), '长截图恢复尺寸不对：' + JSON.stringify(recovered));
+    const mcp = startMcp({ ...process.env, BB_HOME: bbHome, BB_PORT: String(port), BB_NO_PROBE: '1' });
+    try {
+      await mcp.rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'e2e' } });
+      const mcpShot = path.join(outDir, 'mcp-longshot.png');
+      const mcpResult = await mcp.rpc('tools/call', { name: 'browser_longshot_recover', arguments: { longshot_id: shot.longshot_id, out: mcpShot, session: sessionId } });
+      assert(mcpResult.result.isError === false, 'MCP longshot recover 失败：' + String(mcpResult.result.content[0].text).slice(0, 160));
+      assert(existsSync(mcpShot) && readFileSync(mcpShot).subarray(1, 4).toString() === 'PNG', 'MCP 长截图没有落盘');
+    } finally {
+      mcp.close();
     }
+    const png = readFileSync(out);
+    assert(png.readUInt32BE(20) === shot.height, 'PNG 高度不一致');
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'footer restore');
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
+    return shot.width + 'x' + shot.height + ' footer=' + shot.fixedFooter + ' header=' + shot.fixedTop + ' dpr=' + shot.dpr;
+  });
+
+  await check('31h3. stale 页面：重复变化触发 stale 补拍', async () => {
+    await assertSessionAlive('31h3');
+    const staleUrl = new URL('stale.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', staleUrl, '--session', sessionId]), 'stale navigate');
+    await sleep(300);
+    const out = path.join(outDir, 'stale.png');
+    const shot = expectOk(await cliJson(['screenshot', '--full-page', '--tile-size', '1024', '--stale-attempts', '2', '--timeout', '180000', '--out', out, '--session', sessionId]), 'stale screenshot');
+    assert(shot.stale === true, '持续变化页面没有标记 stale：' + JSON.stringify({ stale: shot.stale, attempts: shot.stale_attempts }));
+    assert(Number(shot.stale_repairs) >= 1 || Number(shot.stale_attempts) >= 2, 'stale 没有触发补拍/重拍：' + JSON.stringify({ repairs: shot.stale_repairs, attempts: shot.stale_attempts }));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'stale restore');
+    return 'stale attempts=' + shot.stale_attempts;
+  });
+
+  await check('31f2. 长截图分数 DPR（1.5）与固定顶栏/页脚', async () => {
+    await assertSessionAlive('31f2');
+    const footerUrl = new URL('footer.html', pageUrl).href;
+    expectOk(await cliJson(['emulate', '--width', '1241', '--height', '800', '--dpr', '1.5', '--session', sessionId]), 'emulate dpr');
+    expectOk(await cliJson(['navigate', footerUrl, '--session', sessionId]), 'dpr footer navigate');
+    await sleep(500);
+    const out = path.join(outDir, 'footer-dpr15.png');
+    const shot = expectOk(await cliJson(['screenshot', '--full-page', '--timeout', '180000', '--out', out, '--session', sessionId]), 'dpr footer screenshot');
+    assert(Number(shot.dpr) === 1.5, '截图没有使用分数 DPR：' + JSON.stringify({ dpr: shot.dpr }));
+    // 模拟视口含滚动条时 CSS 内容宽会少 ~15px；只约束“确实按 1.5 倍放大”的区间。
+    assert(Number(shot.width) >= Math.round(1226 * 1.5) - 3 && Number(shot.width) <= Math.round(1241 * 1.5) + 3, '宽度没有按 1.5 DPR 放大：' + shot.width);
+    assert(Math.abs(Number(shot.height) - Math.round(15000 * 1.5)) <= 5, '高度没有按 1.5 DPR 放大：' + shot.height);
+    assert(Number(shot.fixedTop) >= Math.round(56 * 1.5) - 2, '固定顶栏没有按 DPR 重绘：' + shot.fixedTop);
+    assert(Number(shot.fixedFooter) >= Math.round(80 * 1.5) - 2, '固定页脚没有按 DPR 重绘：' + shot.fixedFooter);
+    const png = readFileSync(out);
+    assert(png.readUInt32BE(16) === shot.width && png.readUInt32BE(20) === shot.height, 'DPR 截图 PNG 尺寸不一致');
+    expectOk(await cliJson(['emulate', '--reset', '--session', sessionId]), 'emulate reset');
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'dpr footer restore');
+    expectOk(await cliJson(['wait-ms', '800', '--session', sessionId]), 'restore wait');
+    return shot.width + 'x' + shot.height + ' dpr=' + shot.dpr + ' header=' + shot.fixedTop + ' footer=' + shot.fixedFooter;
+  });
+
+  await check('31g. 截图差分：YIQ changed pixels', async () => {
+    await assertSessionAlive('31g');
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'diff navigate');
+    await sleep(300);
+    const first = expectOk(await cliJson(['screenshot', '--out', path.join(outDir, 'diff-a.png'), '--session', sessionId]), 'diff screenshot 1');
+    assert(Number(first.height) > 0, '基线截图失败');
+    const same = expectOk(await cliJson(['screenshot', '--diff', '--out', path.join(outDir, 'diff-a2.png'), '--session', sessionId]), 'diff screenshot 1b');
+    assert(same.diff && same.diff.sizeMatch === true, '同页差分尺寸不匹配：' + JSON.stringify(same.diff));
+    expectOk(await cliJson(['evaluate', "document.body.style.background='#ff0000'; 'ok'", '--session', sessionId]), 'diff mutate');
+    await sleep(300);
+    const second = expectOk(await cliJson(['screenshot', '--diff', '--out', path.join(outDir, 'diff-b.png'), '--session', sessionId]), 'diff screenshot 2');
+    assert(second.diff && second.diff.sizeMatch === true, '差分尺寸不匹配：' + JSON.stringify(second.diff));
+    assert(Number(second.diff.changed) > 0, '差分没有检测到变化：' + JSON.stringify(second.diff));
+    assert(Number(second.diff.ratio) > 0, '差分 ratio 为 0：' + JSON.stringify(second.diff));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'diff restore');
+    return 'changed=' + second.diff.changed + ' ratio=' + second.diff.ratio;
+  });
+
+  await check('31h. 大截图流式读（--stream + screenshot.read/release）', async () => {
+    await assertSessionAlive('31h');
+    const tallUrl = new URL('tall.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', tallUrl, '--session', sessionId]), 'stream navigate');
+    await sleep(400);
+    const out = path.join(outDir, 'tall-stream.png');
+    const streamed = expectOk(await cliJson(['screenshot', '--out', out, '--full', '--stream', '--session', sessionId]), 'stream screenshot');
+    assert(streamed.streamed === true, '截图没有走流式：' + JSON.stringify(streamed));
+    const buffer = readFileSync(out);
+    assert(buffer.length > 10000, '流式截图文件太小：' + buffer.length);
+    assert(buffer.length === Number(streamed.bytes), '流式字节数与落盘不一致：' + JSON.stringify({ bytes: streamed.bytes, file: buffer.length }));
+    assert(buffer.subarray(1, 4).toString('latin1') === 'PNG', '流式截图不是 PNG');
+    const inlineOut = path.join(outDir, 'tall-inline.png');
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'inline navigate');
+    await sleep(300);
+    const inline = expectOk(await cliJson(['screenshot', '--out', inlineOut, '--session', sessionId]), 'inline screenshot');
+    assert(inline.streamed !== true, '默认截图不应流式：' + JSON.stringify(inline));
+    assert(readFileSync(inlineOut).subarray(1, 4).toString('latin1') === 'PNG', '默认截图不是 PNG');
+    return 'streamed=' + buffer.length + 'B height=' + (streamed.height || '?');
+  });
+
+  // ---------------------------------------------------------------- 第十二批 A：深层子系统扩围
+  // 全部走真实 CLI/daemon/Edge：network/debug replay、status 兼容证据、daemon batch/lease、
+  // status --views、HAR 自检、video 持久化、longshot 分片恢复。扩展未产出的加法字段
+  // 在断言里按“有证据就必须一致”处理，保证 JS 基线（含 replay/persist/shard 接线）全量校验。
+  const batchItems = JSON.stringify([
+    { url: pageUrl, key: 'e2e-batch-a', label: 'batch A' },
+    { url: pageUrl, key: 'e2e-batch-b', label: 'batch B' },
+  ]);
+
+  await check('38. network replay 确定性：真实重放两次 + replay 证据', async () => {
+    await assertSessionAlive('38');
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'replay navigate');
+    expectOk(await cliJson(['network', 'start', '--session', sessionId]), 'replay network start');
+    try {
+      expectOk(await cliJson([
+        'evaluate',
+        "window.__bbReplayHit = null; fetch('/api/replay-count').then((r) => r.json()).then((j) => { window.__bbReplayHit = j; }); 'started'",
+        '--session', sessionId,
+      ]), 'replay-count fetch');
+      let hitValue = '';
+      for (let attempt = 0; attempt < 30 && !hitValue; attempt += 1) {
+        await sleep(100);
+        const probe = await cliJson(['evaluate', "window.__bbReplayHit ? JSON.stringify(window.__bbReplayHit) : ''", '--session', sessionId]);
+        const value = String((probe.json && probe.json.ok && probe.json.result && probe.json.result.value) || '');
+        if (value.includes('"hit"')) hitValue = value;
+      }
+      assert(hitValue.includes('"hit"'), '页面内 /api/replay-count 没有返回计数：' + JSON.stringify(hitValue));
+      await sleep(600);
+      const listed = expectOk(await cliJson(['network', 'list', '--filter', '/api/replay-count', '--session', sessionId]), 'replay list');
+      const entry = (listed.entries || []).find((item) => String(item.url || '').includes('/api/replay-count')) || (listed.entries || [])[0];
+      assert(entry && Number.isInteger(Number(entry.id)), '没有抓到 /api/replay-count 请求：' + JSON.stringify(listed).slice(0, 300));
+      const first = expectOk(await cliJson(['network', 'replay', String(entry.id), '--session', sessionId]), 'replay #1');
+      const second = expectOk(await cliJson(['network', 'replay', String(entry.id), '--session', sessionId]), 'replay #2');
+      assert(Number(first.status) === 200 && Number(second.status) === 200, '重放没有返回 200：' + JSON.stringify({ first: first.status, second: second.status }));
+      let firstBody = null;
+      let secondBody = null;
+      try {
+        firstBody = JSON.parse(String(first.body || ''));
+        secondBody = JSON.parse(String(second.body || ''));
+      } catch { /* 下面的断言会给出原文 */ }
+      assert(firstBody && Number.isInteger(firstBody.hit), '第一次重放响应不是计数 JSON：' + JSON.stringify(String(first.body || '').slice(0, 200)));
+      assert(secondBody && secondBody.hit === firstBody.hit + 1, '两次重放没有真实执行（服务端计数不递增）：' + JSON.stringify({ first: firstBody, second: secondBody }));
+      const stillThere = expectOk(await cliJson(['evaluate', 'location.pathname', '--session', sessionId]), 'replay location');
+      assert(stillThere.value === '/test.html', '重放导致页面导航（页面副作用不可复现）：' + JSON.stringify(stillThere.value));
+      const evidence = [];
+      if (first.replay || second.replay) {
+        assert(first.replay && second.replay, '两次重放只有一次带 replay 字段：' + JSON.stringify({ first: Boolean(first.replay), second: Boolean(second.replay) }));
+        for (const [index, replay] of [first.replay, second.replay].entries()) {
+          assert(replay.ok === true, 'replay#' + (index + 1) + ' 计划不 ok：' + JSON.stringify(replay.blockers || replay));
+          assert(Number.isInteger(replay.version), 'replay#' + (index + 1) + ' 缺少版本：' + JSON.stringify(replay.version));
+          assert(typeof replay.token === 'string' && replay.token.length > 0, 'replay#' + (index + 1) + ' 缺少幂等 token');
+          assert(/^[0-9a-f]{8,}$/.test(String(replay.fingerprint || '')), 'replay#' + (index + 1) + ' fingerprint 不合法：' + JSON.stringify(replay.fingerprint));
+          assert(replay.deterministic === true && replay.executed === true, 'replay#' + (index + 1) + ' 缺少确定性/已执行标记：' + JSON.stringify({ deterministic: replay.deterministic, executed: replay.executed }));
+          assert(Number(replay.steps) >= 1, 'replay#' + (index + 1) + ' steps 为空：' + JSON.stringify(replay.steps));
+          assert(replay.network && replay.network.sideEffect === true, 'replay#' + (index + 1) + ' 缺少 network 副作用证据：' + JSON.stringify(replay.network));
+        }
+        assert(first.replay.token === second.replay.token, '同一请求两次重放的 token 不一致：' + JSON.stringify({ first: first.replay.token, second: second.replay.token }));
+        assert(first.replay.fingerprint === second.replay.fingerprint, '同一请求两次重放的 fingerprint 不一致：' + JSON.stringify({ first: first.replay.fingerprint, second: second.replay.fingerprint }));
+        evidence.push('token=' + String(first.replay.token).slice(0, 16) + ' fp=' + first.replay.fingerprint);
+      }
+      return 'hit=' + firstBody.hit + '→' + secondBody.hit + ' ' + (evidence.join(' ') || 'replay 字段未接线');
+    } finally {
+      await cliJson(['network', 'stop', '--session', sessionId]);
+    }
+  });
+
+  await check('38b. debug replay CLI：debug start → replay → stop', async () => {
+    await assertSessionAlive('38b');
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'debug replay navigate');
+    expectOk(await cliJson(['network', 'start', '--session', sessionId]), 'debug replay network start');
+    try {
+      expectOk(await cliJson(['debug', 'start', '--name', 'e2e-deep-replay', '--bodies', '--session', sessionId]), 'debug replay start');
+      expectOk(await cliJson(['click', '#ping-btn', '--session', sessionId]), 'debug replay click');
+      await sleep(900);
+      const listed = expectOk(await cliJson(['network', 'list', '--filter', '/api/ping', '--session', sessionId]), 'debug replay requests');
+      const entry = (listed.entries || [])[0];
+      assert(entry && Number.isInteger(Number(entry.id)), 'debug 采集没有 /api/ping：' + JSON.stringify(listed).slice(0, 300));
+      const first = expectOk(await cliJson(['debug', 'replay', String(entry.id), '--session', sessionId]), 'debug replay #1');
+      const second = expectOk(await cliJson(['debug', 'replay', String(entry.id), '--session', sessionId]), 'debug replay #2');
+      assert(Number(first.status) === 200 && Number(second.status) === 200, 'debug replay 没有返回 200：' + JSON.stringify({ first: first.status, second: second.status }));
+      assert(String(first.body || '').includes('ok'), 'debug replay 响应里没有 ok：' + String(first.body || '').slice(0, 160));
+      const tokens = [];
+      for (const [index, replay] of [first.replay, second.replay].entries()) {
+        if (!replay) continue;
+        assert(replay.ok === true && replay.executed === true && replay.deterministic === true, 'debug replay#' + (index + 1) + ' 证据不完整：' + JSON.stringify({ ok: replay.ok, executed: replay.executed, deterministic: replay.deterministic }));
+        assert(typeof replay.token === 'string' && replay.token.length > 0, 'debug replay#' + (index + 1) + ' 缺少 token');
+        tokens.push(replay.token);
+      }
+      if (tokens.length === 2) assert(tokens[0] === tokens[1], 'debug replay 两次 token 不一致：' + JSON.stringify(tokens));
+      return 'HTTP ' + first.status + (tokens.length ? ' token=' + tokens[0].slice(0, 16) : ' replay 字段未接线');
+    } finally {
+      await cliJson(['debug', 'stop', '--session', sessionId]);
+      await cliJson(['network', 'stop', '--session', sessionId]);
+    }
+  });
+
+  await check('38c. status 兼容证据：obligations + upgradePlan 真实载荷', async () => {
+    await assertSessionAlive('38c');
+    const st = expectOk(await cliJson(['status']), 'compat status');
+    const compat = st.compatibility;
+    assert(compat && compat.daemon && compat.daemon.features, 'status 缺少 compatibility.daemon.features：' + JSON.stringify(Object.keys(st)));
+    const feature = compat.daemon.features.video;
+    assert(feature && feature.available === true, 'daemon 的 video 特性不可用：' + JSON.stringify(feature && feature.available));
+    const obligations = feature.obligations;
+    assert(obligations && obligations.feature === 'video', 'video 缺少 obligations：' + JSON.stringify(obligations));
+    assert(obligations.counts && Number(obligations.counts.obligations) >= 60, 'video obligations 计数不足：' + JSON.stringify(obligations.counts));
+    assert(Number(obligations.methodCount) === 9, 'video obligations 方法数不对：' + JSON.stringify(obligations.methodCount));
+    assert(obligations.risks && Number.isInteger(Number(obligations.risks.safe) + Number(obligations.risks.guarded) + Number(obligations.risks.risky)), 'video obligations 缺少风险画像：' + JSON.stringify(obligations.risks));
+    assert(obligations.profiles && Object.keys(obligations.profiles).length >= 1, 'video obligations 缺少 profile：' + JSON.stringify(obligations.profiles));
+    assert(feature.support && feature.support.monotone === true && feature.support.currentAllowed === true, 'video 缺少支持画像：' + JSON.stringify(feature.support));
+    const browserRow = (compat.browsers || [])[0];
+    assert(browserRow, 'status.compatibility.browsers 为空');
+    assert(/^\d+\.\d+$/.test(String(browserRow.protocol)), '浏览器协议版本格式不对：' + JSON.stringify(browserRow.protocol));
+    const harFeature = browserRow.features && browserRow.features.har;
+    assert(harFeature && harFeature.obligations && Number(harFeature.obligations.counts.obligations) === 7, '浏览器 har 特性 obligations 不对：' + JSON.stringify(harFeature && harFeature.obligations && harFeature.obligations.counts));
+    const report = compatibilityReport({ protocol: String(browserRow.protocol) });
+    assert(report.obligations && Object.keys(report.obligations.features || {}).length === 15, 'compatibilityReport obligations 特性数不对：' + JSON.stringify(Object.keys((report.obligations && report.obligations.features) || {})));
+    assert(Object.keys((report.obligations && report.obligations.dimensions) || {}).length >= 3 && Object.keys((report.obligations && report.obligations.risks) || {}).length >= 3, 'compatibilityReport obligations 维度/风险聚合不完整');
+    const upgradePlan = report.upgradePlan || {};
+    assert(upgradePlan.from === String(browserRow.protocol) && upgradePlan.to === report.current, 'upgradePlan 起止版本不对：' + JSON.stringify({ from: upgradePlan.from, to: upgradePlan.to }));
+    assert(upgradePlan.verdict === 'compatible' && upgradePlan.feasible === true && upgradePlan.upgradeRequired === false, 'upgradePlan 对同版本对端判定不对：' + JSON.stringify({ verdict: upgradePlan.verdict, feasible: upgradePlan.feasible }));
+    assert(/^[0-9a-f]{8}$/.test(String(upgradePlan.fingerprint || '')), 'upgradePlan 缺少稳定 fingerprint：' + JSON.stringify(upgradePlan.fingerprint));
+    assert(Array.isArray(upgradePlan.batches) && upgradePlan.batches.length >= 3 && upgradePlan.batches.every((batch) => batch.phase && Array.isArray(batch.steps)), 'upgradePlan batches 不完整：' + JSON.stringify(upgradePlan.batches));
+    const legacy = compatibilityReport({ protocol: '1.8' });
+    const legacyPlan = legacy.upgradePlan || {};
+    assert(legacyPlan.from === '1.8' && legacyPlan.to === '1.9' && legacyPlan.verdict === 'upgrade-required' && legacyPlan.feasible === true, '1.8→1.9 升级计划判定不对：' + JSON.stringify({ verdict: legacyPlan.verdict, feasible: legacyPlan.feasible }));
+    assert(legacyPlan.upgradeRequired === true && legacyPlan.requiredVersion === '1.9', '1.8 升级计划缺少必须升级标记：' + JSON.stringify({ upgradeRequired: legacyPlan.upgradeRequired, requiredVersion: legacyPlan.requiredVersion }));
+    assert(Array.isArray(legacyPlan.gainedFeatures) && legacyPlan.gainedFeatures.length === 15, '1.8 升级计划获得特性数不对：' + JSON.stringify(legacyPlan.gainedFeatures));
+    assert(Array.isArray(legacyPlan.batches) && legacyPlan.batches.length >= 3, '1.8 升级计划缺少执行批次：' + JSON.stringify(legacyPlan.batches && legacyPlan.batches.length));
+    return 'obligations=' + obligations.counts.obligations + ' fp=' + upgradePlan.fingerprint + ' legacy=' + legacyPlan.verdict;
+  });
+
+  await check('38e. daemon batch plan：配额准入 dry-run + strict schema', async () => {
+    const planned = expectOk(await cliJson(['daemon', 'batch', 'plan', '--items', batchItems, '--strict']), 'batch plan');
+    assert(planned.kind === 'bridge/session-batch-plan' && planned.dryRun === true, 'batch plan 形状不对：' + JSON.stringify({ kind: planned.kind, dryRun: planned.dryRun }));
+    assert(planned.schema === 1, 'batch plan schema 版本不对：' + JSON.stringify(planned.schema));
+    assert(Number(planned.summary && planned.summary.total) === 2, 'batch plan 条目数不对：' + JSON.stringify(planned.summary));
+    assert(Number(planned.summary && planned.summary.admissable) >= 2, '配额没有准入 2 个条目：' + JSON.stringify(planned.summary));
+    const items = planned.items || [];
+    assert(items.length === 2 && items.every((item) => item.admission === 'admit'), 'batch plan 条目未全部准入：' + JSON.stringify(items.map((item) => ({ key: item.key, admission: item.admission, reason: item.reason }))));
+    assert(planned.quota && planned.quota.policy && Number(planned.quota.policy.maxSessions) >= 2, 'batch plan 缺少配额策略：' + JSON.stringify(planned.quota && planned.quota.policy));
+    assert(planned.quota.decisions && planned.quota.decisions[0] && Number(planned.quota.decisions[0].granted) === 2, 'batch plan 缺少配额决策证据：' + JSON.stringify(planned.quota && planned.quota.decisions));
+    return 'admit=' + items.length + ' maxSessions=' + planned.quota.policy.maxSessions;
+  });
+
+  await check('38f. daemon batch start/status：真建 2 会话 + 导航 + 幂等', async () => {
+    await assertSessionAlive('38f');
+    const started = expectOk(await cliJson(['daemon', 'batch', 'start', '--items', batchItems, '--batch-id', 'e2e-batch-38', '--on-error', 'continue', '--concurrency', '2']), 'batch start');
+    assert(started.batchId === 'e2e-batch-38' && started.state === 'completed', 'batch start 未完成：' + JSON.stringify({ batchId: started.batchId, state: started.state, warnings: started.warnings }));
+    assert(started.kind === 'bridge/session-batch', 'batch start kind 不对：' + JSON.stringify(started.kind));
+    assert(Number(started.summary && started.summary.succeeded) === 2 && Number(started.summary.failed) === 0, 'batch start 成功数不对：' + JSON.stringify(started.summary));
+    const created = (started.items || []).map((item) => ({ index: item.index, sessionId: item.sessionId, navigated: item.navigated, state: item.state }));
+    const batchSessionIds = created.map((item) => item.sessionId);
+    assert(created.length === 2 && created.every((item) => /^[a-z]{4}$/.test(String(item.sessionId))), 'batch start 没有真建 2 个会话：' + JSON.stringify(created));
+    assert(created.every((item) => item.state === 'succeeded' && item.navigated === true), 'batch start 条目没有导航成功：' + JSON.stringify(created));
+    const status = expectOk(await cliJson(['daemon', 'batch', 'status', 'e2e-batch-38']), 'batch status');
+    assert(status.batchId === 'e2e-batch-38' && status.state === 'completed', 'batch status 不对：' + JSON.stringify({ batchId: status.batchId, state: status.state }));
+    assert(JSON.stringify((status.items || []).map((item) => item.sessionId)) === JSON.stringify(batchSessionIds), 'batch status 的会话 id 与 start 不一致：' + JSON.stringify({ start: batchSessionIds, status: (status.items || []).map((item) => item.sessionId) }));
+    const snapshot = expectOk(await cliJson(['status', '--views', 'batch']), 'status --views batch');
+    assert(Array.isArray(snapshot.views) && snapshot.views.includes('batch'), 'status --views batch 没有回显视图：' + JSON.stringify(snapshot.views));
+    assert(snapshot.batch && Array.isArray(snapshot.batch.recent) && snapshot.batch.recent.some((item) => item.batchId === 'e2e-batch-38'), 'status --views batch 没有最近批次：' + JSON.stringify(snapshot.batch && snapshot.batch.recent));
+    const again = expectOk(await cliJson(['daemon', 'batch', 'start', '--items', batchItems, '--batch-id', 'e2e-batch-38']), 'batch start idempotent');
+    assert(again.reused === true && again.state === 'completed' && again.note === 'batch-already-finished', '同一 batchId 重启不幂等：' + JSON.stringify({ reused: again.reused, state: again.state, note: again.note }));
+    const before = expectOk(await cliJson(['status']), 'status before batch stop');
+    assert((before.sessions || []).length >= 3, 'batch 会话没有出现在 status.sessions：' + JSON.stringify((before.sessions || []).map((item) => item.sessionId)));
+    for (const id of batchSessionIds) expectOk(await cliJson(['session', 'stop', String(id)]), 'batch stop ' + id);
+    const after = expectOk(await cliJson(['status']), 'status after batch stop');
+    assert(!(after.sessions || []).some((item) => batchSessionIds.includes(item.sessionId)), 'batch 会话没有停止：' + JSON.stringify((after.sessions || []).map((item) => item.sessionId)));
+    const cancelled = expectOk(await cliJson(['daemon', 'batch', 'cancel', 'e2e-batch-38']), 'batch cancel finished');
+    assert(cancelled.cancelled === false && cancelled.state === 'completed', '已完成的批次 cancel 语义不对：' + JSON.stringify(cancelled));
+    return 'sessions=' + batchSessionIds.join(',') + ' succeeded=2';
+  });
+
+  await check('38g. daemon lease report/arbitrate：dry-run 与 apply 护栏', async () => {
+    await assertSessionAlive('38g');
+    const report = expectOk(await cliJson(['daemon', 'lease', 'report', '--include-clean', '--strict']), 'lease report');
+    assert(report.kind === 'bridge/lease-arbitration' && report.mode === 'plan', 'lease report 形状不对：' + JSON.stringify({ kind: report.kind, mode: report.mode }));
+    assert(report.summary && Number(report.summary.sessions) >= 1, 'lease report 没有看到活动会话：' + JSON.stringify(report.summary));
+    assert(Number(report.summary.tabs) >= 1, 'lease report 没有看到 tab：' + JSON.stringify(report.summary));
+    assert(Array.isArray(report.verdicts) && Array.isArray(report.steps), 'lease report 缺少 verdicts/steps');
+    for (const verdict of report.verdicts.slice(0, 5)) {
+      assert(Number.isInteger(Number(verdict.tabId)) && typeof verdict.action === 'string' && Array.isArray(verdict.conflictCodes), 'lease verdict 字段不完整：' + JSON.stringify(verdict));
+    }
+    const plan = expectOk(await cliJson(['daemon', 'lease', 'arbitrate', '--strategy', 'lru', '--limit', '5']), 'lease arbitrate');
+    assert(plan.mode === 'plan' && plan.applied === null && plan.residual === null && plan.appliedAt === 0, 'dry-run 不应执行任何裁决步骤：' + JSON.stringify({ mode: plan.mode, applied: plan.applied, residual: plan.residual, appliedAt: plan.appliedAt }));
+    assert(plan.policy && plan.policy.strategy === 'lru' && Number(plan.policy.limit) === 5, 'arbitrate 策略/上限参数没有生效：' + JSON.stringify(plan.policy));
+    assert(plan.summary && Number.isInteger(Number(plan.summary.steps)) && Number.isInteger(Number(plan.summary.verdicts)), 'arbitrate summary 不完整：' + JSON.stringify(plan.summary));
+    assert(Array.isArray(plan.steps), 'arbitrate steps 不是数组');
+    const denied = await cliJson(['daemon', 'lease', 'arbitrate', '--apply']);
+    assert(denied.code === 2 && denied.json && denied.json.ok === false && denied.json.error && denied.json.error.code === 'E_ARG_USAGE', '--apply 未带 --yes 应本地拒绝（退出码 2）：' + JSON.stringify({ code: denied.code, error: denied.json && denied.json.error }));
+    return 'sessions=' + report.summary.sessions + ' strategy=' + plan.policy.strategy + ' apply-guard=exit2';
+  });
+
+  await check('38h. status --views queues：队列诊断 + 默认载荷兼容', async () => {
+    await assertSessionAlive('38h');
+    const base = expectOk(await cliJson(['status']), 'status base');
+    assert(base.views === undefined, '默认 status 不应回显 views（0.3.0 载荷兼容）：' + JSON.stringify(base.views));
+    assert(Array.isArray(base.queues), '默认 status 缺少 0.3.0 queues 字段');
+    const view = expectOk(await cliJson(['status', '--views', 'queues', '--limit', '10']), 'status --views queues');
+    assert(Array.isArray(view.views) && view.views.length === 1 && view.views[0] === 'queues', 'views 回显不对：' + JSON.stringify(view.views));
+    const queue = view.queue;
+    assert(queue && Number(queue.capacity) > 0, 'queue 视图缺少容量：' + JSON.stringify(queue && queue.capacity));
+    assert(queue.limits && Number(queue.limits.maxInflightPerSession) >= 1, 'queue 视图缺少会话并发上限：' + JSON.stringify(queue && queue.limits));
+    assert(queue.inflight && Number.isInteger(Number(queue.inflight.current)) && Number(queue.inflight.limit) > 0, 'queue inflight 证据不完整：' + JSON.stringify(queue && queue.inflight));
+    assert(queue.fairness && queue.fairness.strategy === 'round-robin-per-tab', 'queue 公平策略缺失：' + JSON.stringify(queue && queue.fairness && queue.fairness.strategy));
+    assert(Array.isArray(queue.sessions), 'queue.sessions 不是数组');
+    const mine = queue.sessions.find((item) => item.sessionId === sessionId);
+    assert(mine, 'queue 视图没有当前会话：' + JSON.stringify(queue.sessions.map((item) => item.sessionId)));
+    assert(Number.isInteger(Number(mine.inflight)) && Number.isInteger(Number(mine.dispatched)) && mine.wait && typeof mine.wait === 'object', 'queue 会话统计不完整：' + JSON.stringify(mine));
+    const unknown = expectOk(await cliJson(['status', '--views', 'queues,not-a-view']), 'status unknown view');
+    assert(Array.isArray(unknown.unknownViews) && unknown.unknownViews.length === 1 && unknown.unknownViews[0] === 'not-a-view', '未知视图没有回显：' + JSON.stringify(unknown.unknownViews));
+    assert(Array.isArray(unknown.views) && unknown.views.includes('queues') && unknown.queue, '未知视图不应吞掉已知视图');
+    return 'capacity=' + queue.capacity + ' session=' + sessionId + ' peak=' + mine.inflightPeak;
+  });
+
+  await check('38i. debug har 导出即自检：log._validation', async () => {
+    await assertSessionAlive('38i');
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'har navigate');
+    expectOk(await cliJson(['debug', 'start', '--name', 'e2e-deep-har', '--bodies', '--session', sessionId]), 'har debug start');
+    let result;
+    try {
+      expectOk(await cliJson(['click', '#ping-btn', '--session', sessionId]), 'har click');
+      await sleep(900);
+      const out = path.join(outDir, 'deep-debug.har');
+      result = expectOk(await cliJson(['debug', 'har', '--output', out, '--session', sessionId]), 'debug har');
+      assert(Number(result.entries) >= 1 && existsSync(out), 'HAR 没有条目：' + JSON.stringify(result));
+      const har = JSON.parse(readFileSync(out, 'utf8'));
+      assert(har.log && har.log.version === '1.2', 'HAR 版本不是 1.2：' + JSON.stringify(har.log && har.log.version));
+      assert(Array.isArray(har.log.entries) && har.log.entries.length === Number(result.entries), 'HAR 条目数与 CLI 结果不一致：' + JSON.stringify({ file: har.log.entries.length, cli: result.entries }));
+      const v = har.log._validation;
+      assert(v && v.ok === true, 'HAR 缺少通过的 _validation：' + JSON.stringify(v && v.counts));
+      assert(v.counts && Number(v.counts.errors) === 0, 'HAR 自检有错误：' + JSON.stringify(v.issues && v.issues.slice(0, 3)));
+      assert(Array.isArray(v.issues) && Array.isArray(v.explain), '_validation 缺少 issues/explain：' + JSON.stringify({ issues: v.issues, explain: v.explain }));
+      assert(typeof v.truncated === 'boolean', '_validation.truncated 缺失');
+      const entry = har.log.entries[0];
+      assert(entry.request && entry.response && entry.timings, 'HAR 条目结构不完整：' + JSON.stringify(entry && Object.keys(entry)));
+    } finally {
+      await cliJson(['debug', 'stop', '--session', sessionId]);
+    }
+    return 'entries=' + result.entries + ' validation=ok';
+  });
+
+  await check('38j. video status 持久化：persist_*/durability/journal 回读', async () => {
+    await assertSessionAlive('38j');
+    const listed = expectOk(await cliJson(['video', 'list', '--session', sessionId]), 'video list');
+    const recordings = listed.recordings || [];
+    assert(recordings.length >= 1, 'video list 为空');
+    const record = recordings.find((item) => item.persistence && item.persistence.state && item.completeness === 'complete')
+      || recordings.find((item) => item.persistence && item.persistence.state)
+      || recordings.find((item) => typeof item.storage_persisted === 'boolean')
+      || recordings[0];
+    assert(record && record.id, '找不到可断言持久化的录制：' + JSON.stringify(recordings.map((item) => ({ id: item.id, completeness: item.completeness }))));
+    assert(typeof record.storage_persisted === 'boolean', '录制缺少 storage_persisted：' + JSON.stringify(record.storage_persisted));
+    assert(typeof record.durability_policy === 'string' && record.durability_policy.length > 0, '录制缺少 durability_policy：' + JSON.stringify(record.durability_policy));
+    const status = expectOk(await cliJson(['video', 'status', String(record.id), '--session', sessionId]), 'video status persisted');
+    assert(status.state === 'ready' && status.id === record.id, 'video status 没有返回就绪录制：' + JSON.stringify({ state: status.state, id: status.id }));
+    assert(Number(status.bytes) === Number(record.bytes), 'video status 字节数与列表不一致：' + JSON.stringify({ status: status.bytes, list: record.bytes }));
+    const durability = expectOk(await cliJson(['video', 'durability', String(record.id), '--session', sessionId]), 'video durability');
+    assert(durability.id === record.id && durability.durability_policy === record.durability_policy, 'video durability 与录制不一致：' + JSON.stringify(durability));
+    assert(durability.storage_persisted === record.storage_persisted, 'video durability 的 storage_persisted 不一致：' + JSON.stringify({ durability: durability.storage_persisted, record: record.storage_persisted }));
+    const verified = expectOk(await cliJson(['video', 'verify', String(record.id), '--session', sessionId]), 'video verify persisted');
+    assert(verified.verified === true && Array.isArray(verified.mismatches) && verified.mismatches.length === 0, '录制分片校验失败：' + JSON.stringify(verified.mismatches));
+    let persistEvidence = null;
+    if (record.persistence && record.persistence.state) {
+      const persistence = record.persistence;
+      assert(['recording', 'sealing', 'sealed', 'recovered', 'degraded', 'failed'].includes(String(persistence.state)), 'persistence.state 取值不合法：' + JSON.stringify(persistence.state));
+      assert(Number.isInteger(Number(persistence.journal_entries)), '缺少 persistence.journal_entries：' + JSON.stringify(persistence.journal_entries));
+      assert(typeof persistence.journal_valid === 'boolean' || persistence.journal_valid === null, 'persistence.journal_valid 类型不对：' + JSON.stringify(persistence.journal_valid));
+      assert(Number(persistence.frames) >= 0 && Number.isInteger(Number(persistence.frames)), 'persistence.frames 不合法：' + JSON.stringify(persistence.frames));
+      assert(status.persistence && status.persistence.state === persistence.state, 'video status 没有回读持久化摘要：' + JSON.stringify({ status: status.persistence, list: persistence }));
+      assert(Number(status.persistence.journal_entries) === Number(persistence.journal_entries), 'video status 的 journal_entries 不一致：' + JSON.stringify({ status: status.persistence.journal_entries, list: persistence.journal_entries }));
+      const verifiedPersistence = verified.persistence;
+      assert(verifiedPersistence && typeof verifiedPersistence === 'object' && typeof verifiedPersistence.state === 'string', 'video verify 缺少持久化视图：' + JSON.stringify(verifiedPersistence));
+      assert(verifiedPersistence.journal && typeof verifiedPersistence.journal === 'object', 'video verify 持久化视图缺少 journal：' + JSON.stringify(verifiedPersistence.journal));
+      persistEvidence = 'persist=' + persistence.state + '/journal=' + persistence.journal_entries + '/verify=' + verifiedPersistence.state;
+    }
+    return 'id=' + record.id + ' storage_persisted=' + record.storage_persisted + ' ' + (persistEvidence || 'persist 字段未接线');
+  });
+
+  await check('38k. longshot recover：分片/恢复证据（shard/restore）', async () => {
+    await assertSessionAlive('38k');
+    const footerUrl = new URL('footer.html', pageUrl).href;
+    expectOk(await cliJson(['navigate', footerUrl, '--session', sessionId]), 'longshot navigate');
+    await sleep(500);
+    const out = path.join(outDir, 'deep-longshot.png');
+    const shot = expectOk(await cliJson(['screenshot', '--full-page', '--tile-size', '1024', '--timeout', '180000', '--out', out, '--session', sessionId]), 'longshot screenshot');
+    assert(typeof shot.longshot_id === 'string' && shot.longshot_id.length > 0, '长截图没有落盘 longshot_id：' + JSON.stringify({ id: shot.longshot_id, tiles: shot.tiles_persisted }));
+    assert(Number(shot.tiles_persisted) >= 1, '长截图没有持久化分片：' + JSON.stringify(shot.tiles_persisted));
+    const recoveredPath = path.join(outDir, 'deep-longshot-recovered.png');
+    const recovered = expectOk(await cliJson(['longshot', 'recover', shot.longshot_id, '--out', recoveredPath, '--session', sessionId]), 'longshot recover');
+    assert(existsSync(recoveredPath) && readFileSync(recoveredPath).subarray(1, 4).toString('latin1') === 'PNG', '长截图恢复没有写出 PNG');
+    assert(Number(recovered.width) === Number(shot.width) && Number(recovered.height) === Number(shot.height), '恢复尺寸与截图不一致：' + JSON.stringify({ shot: [shot.width, shot.height], recovered: [recovered.width, recovered.height] }));
+    const summary = recovered.summary;
+    assert(summary && summary.kind === 'longshot-recovery', 'longshot recover 缺少恢复摘要：' + JSON.stringify(summary && summary.kind));
+    assert(Number(summary.width) === Number(shot.width) && Number(summary.height) === Number(shot.height), '恢复摘要尺寸不对：' + JSON.stringify({ width: summary.width, height: summary.height }));
+    assert(Array.isArray(summary.warnings) && Array.isArray(summary.nextSteps), '恢复摘要缺少 warnings/nextSteps');
+    assert(summary.classification && typeof summary.classification.code === 'string', '恢复摘要缺少分类：' + JSON.stringify(summary.classification));
+    let restoreEvidence = null;
+    if (summary.verification) {
+      assert(Number.isInteger(Number(summary.verification.checked)) && Number(summary.verification.checked) >= 1, '恢复校验没有 checked：' + JSON.stringify(summary.verification));
+      assert(summary.verification.hashVerified === true, '恢复分片哈希校验未通过：' + JSON.stringify(summary.verification));
+      assert(Array.isArray(summary.verification.missing) && Array.isArray(summary.verification.duplicates), '恢复校验缺少 missing/duplicates');
+      assert(Number.isInteger(Number(summary.verification.refetch)), '恢复校验缺少 refetch 计数：' + JSON.stringify(summary.verification.refetch));
+      restoreEvidence = 'checked=' + summary.verification.checked;
+    }
+    const raw = await rpcDirect('longshot.recover', { longshotId: shot.longshot_id, session: sessionId }, 120000);
+    assert(raw.status === 200 && raw.json && raw.json.ok === true, 'daemon 原始 longshot.recover 失败：' + JSON.stringify(raw.json && raw.json.error));
+    const rawResult = raw.json.result || {};
+    assert(Number(rawResult.tiles) >= 1 && rawResult.complete === true && Array.isArray(rawResult.gaps) && rawResult.gaps.length === 0, '原始恢复结果不完整：' + JSON.stringify({ tiles: rawResult.tiles, complete: rawResult.complete, gaps: rawResult.gaps }));
+    assert(typeof rawResult.dataUrl === 'string' && rawResult.dataUrl.startsWith('data:image/png;base64,'), '原始恢复结果没有 PNG dataUrl');
+    assert(rawResult.manifest && typeof rawResult.manifest === 'object', '原始恢复结果缺少 manifest：' + JSON.stringify(rawResult.manifest));
+    let shardEvidence = null;
+    if (rawResult.recovery && rawResult.recovery.shards) {
+      const shards = rawResult.recovery.shards;
+      assert(Number(shards.count) >= 1 && shards.ok === true, '分片证据没有分片或状态异常：' + JSON.stringify({ count: shards.count, ok: shards.ok }));
+      assert(/^shards:\d+:/.test(String(shards.signature || '')), '分片签名不合法：' + JSON.stringify(shards.signature));
+      assert(shards.index && Number(shards.index.shardCount) >= 1 && /^[0-9a-f]{8,}$/.test(String(shards.index.indexSha || '')), '分片索引不完整：' + JSON.stringify(shards.index && { count: shards.index.shardCount, sha: shards.index.indexSha }));
+      const resume = rawResult.recovery.resume_decision;
+      assert(resume && typeof resume.action === 'string', '断点恢复结论缺失：' + JSON.stringify(resume));
+      assert(Number(resume.total) >= 1 && Array.isArray(resume.done) && Array.isArray(resume.pending), '断点恢复计数不完整：' + JSON.stringify({ total: resume.total, done: resume.done, pending: resume.pending }));
+      assert(resume.action === 'done' || resume.action === 'resume' || resume.action === 'restart', '断点恢复动作不合法：' + JSON.stringify(resume.action));
+      shardEvidence = 'shards=' + shards.count + ' sig=' + String(shards.signature).slice(0, 16) + ' resume=' + resume.action + ' done=' + resume.done.length;
+    }
+    assert(rawResult.canvas === undefined || (Number(rawResult.canvas.width) > 0 && Number(rawResult.canvas.dpr) > 0), '画布规划证据不合法：' + JSON.stringify(rawResult.canvas));
+    assert(rawResult.manifest_parse === undefined || rawResult.manifest_parse.ok === true, 'manifest 解析失败：' + JSON.stringify(rawResult.manifest_parse));
+    expectOk(await cliJson(['navigate', pageUrl, '--session', sessionId]), 'longshot restore');
+    expectOk(await cliJson(['wait-ms', '600', '--session', sessionId]), 'longshot restore wait');
+    return 'tiles=' + shot.tiles_persisted + ' ' + (restoreEvidence || 'restore 未接线') + ' ' + (shardEvidence || 'shard 未接线');
+  });
+
+  await check('36. 收尾：清空 session（stop --all）+ status', async () => {
+    const stopped = expectOk(await cliJson(['session', 'stop', '--all']), 'session stop all');
+    assert((stopped.count || 0) >= 1, 'session stop --all 没有停止任何会话：' + JSON.stringify(stopped));
     sessionId = null;
     const st = expectOk(await cliJson(['status']), 'status');
     assert((st.sessions || []).length === 0, '还有 ' + (st.sessions || []).length + ' 个 session');

@@ -1,0 +1,3 @@
+<!doctype html><meta charset="utf-8"><title>跨源变换按钮</title>
+<button id="xbtn" aria-label="跨源变换按钮" onclick="parent.postMessage({ type: 'xform', text: 'cross-transform' }, '*'); document.getElementById('xframe-out').textContent = '跨源已点击';">跨源按钮</button>
+<div id="xframe-out">none</div>

@@ -1,0 +1,197 @@
+  // ---------- 颜色对比度（oklch/lab/color-mix 交给浏览器 canvas 归一化） ----------
+
+  const colorParseCache = new Map();
+  let colorCanvas = null;
+  let colorContext = null;
+
+  function parseCssColor(value) {
+    const text = String(value || '').trim();
+    if (!text) return null;
+    if (colorParseCache.has(text)) return colorParseCache.get(text);
+    let parsed = null;
+    try {
+      if (!colorContext) {
+        colorCanvas = document.createElement('canvas');
+        colorCanvas.width = 1;
+        colorCanvas.height = 1;
+        colorContext = colorCanvas.getContext('2d', { willReadFrequently: true });
+      }
+      if (colorContext) {
+        colorContext.clearRect(0, 0, 1, 1);
+        colorContext.fillStyle = text;
+        colorContext.fillRect(0, 0, 1, 1);
+        const data = colorContext.getImageData(0, 0, 1, 1).data;
+        parsed = { r: data[0], g: data[1], b: data[2], a: data[3] / 255 };
+      }
+    } catch {
+      parsed = null;
+    }
+    colorParseCache.set(text, parsed);
+    return parsed;
+  }
+
+  function compositeColor(top, bottom) {
+    const alpha = Math.min(1, Math.max(0, Number(top && top.a) || 0));
+    const base = bottom || { r: 255, g: 255, b: 255, a: 1 };
+    return {
+      r: (top.r * alpha) + (base.r * (1 - alpha)),
+      g: (top.g * alpha) + (base.g * (1 - alpha)),
+      b: (top.b * alpha) + (base.b * (1 - alpha)),
+      a: 1,
+    };
+  }
+
+  function effectiveBackgroundColor(el) {
+    const layers = [];
+    let node = el;
+    while (node && node.nodeType === 1) {
+      let color = null;
+      try {
+        color = parseCssColor(getComputedStyle(node).backgroundColor);
+      } catch {
+        color = null;
+      }
+      if (color && color.a > 0) layers.push(color);
+      if (color && color.a >= 1) break;
+      node = node.parentElement;
+    }
+    let base = { r: 255, g: 255, b: 255, a: 1 };
+    for (let index = layers.length - 1; index >= 0; index -= 1) base = compositeColor(layers[index], base);
+    return base;
+  }
+
+  function linearChannel(channel) {
+    const value = Math.min(255, Math.max(0, Number(channel) || 0)) / 255;
+    return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+  }
+
+  function relativeLuminance(color) {
+    return 0.2126 * linearChannel(color.r) + 0.7152 * linearChannel(color.g) + 0.0722 * linearChannel(color.b);
+  }
+
+  function contrastRatio(foreground, background) {
+    const a = relativeLuminance(foreground);
+    const b = relativeLuminance(background);
+    const light = Math.max(a, b);
+    const dark = Math.min(a, b);
+    return (light + 0.05) / (dark + 0.05);
+  }
+
+  /** 元素文字色对有效背景的 WCAG 对比度；解析失败返回 null。 */
+  function nodeContrast(el) {
+    try {
+      const style = getComputedStyle(el);
+      const foreground = parseCssColor(style.color);
+      if (!foreground) return null;
+      const background = effectiveBackgroundColor(el);
+      const text = foreground.a < 1 ? compositeColor(foreground, background) : foreground;
+      const ratio = contrastRatio(text, background);
+      return Number.isFinite(ratio) ? ratio : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** VOM：表单控件的输入状态（比单纯的 filled/empty 更贴近 AX）。 */
+  function nodeInputState(el) {
+    if (el.tagName === 'INPUT') {
+      const type = String(el.type || 'text').toLowerCase();
+      if (type === 'checkbox' || type === 'radio') return el.checked ? 'checked' : 'unchecked';
+      if (type === 'file') return el.files && el.files.length ? 'filled' : 'empty';
+      return String(el.value || '') ? 'filled' : 'empty';
+    }
+    if (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return String(el.value || '') ? 'filled' : 'empty';
+    if (el.isContentEditable) return normalizeText(el.textContent || '') ? 'filled' : 'empty';
+    return null;
+  }
+
+  /** VOM：拖拽提示（draggable / drag-handle / drop-target）。 */
+  function nodeDragHint(el) {
+    if (el.draggable === true || normalizeText(el.getAttribute('draggable') || '').toLowerCase() === 'true') return 'draggable';
+    const cls = typeof el.className === 'string' ? el.className : '';
+    if (el.hasAttribute('data-drag-handle') || /(^|[\s-])(drag-handle|draghandle|drag_handle)([\s-]|$)/i.test(cls)) return 'drag-handle';
+    if (el.hasAttribute('data-drop-target') || /(^|[\s-])(drop-target|dropzone|drop-zone)([\s-]|$)/i.test(cls)) return 'drop-target';
+    return null;
+  }
+
+  /**
+   * VOM affordance 页面侧事实：一次把所有规则需要的 DOM/样式事实收齐。
+   * 纯读取；hit-at 会把它随命中结果返回，lib/vom-affordance.js 再用同一份事实归约。
+   */
+  function affordanceFactsOf(el) {
+    if (!el || el.nodeType !== 1) return null;
+    const role = roleOf(el) || '';
+    const tag = String(el.tagName || '').toLowerCase();
+    const inputType = tag === 'input' ? String(el.type || 'text').toLowerCase() : null;
+    let style = null;
+    try {
+      style = getComputedStyle(el);
+    } catch {
+      style = null;
+    }
+    let scrollable = false;
+    try {
+      const overflow = String(style ? style.overflowX : '') + ' ' + String(style ? style.overflowY : '');
+      scrollable = /(auto|scroll)/.test(overflow)
+        && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1);
+    } catch {
+      scrollable = false;
+    }
+    const readBool = (value) => (value == null ? null : normalizeText(value).toLowerCase() === 'true');
+    const tabIndexAttr = el.hasAttribute('tabindex') ? Number(el.getAttribute('tabindex')) : null;
+    const name = truncate(normalizeText(accessibleName(el, role)), NAME_MAX);
+    return {
+      role: role || null,
+      tag,
+      name: name || null,
+      inputType,
+      href: typeof el.href === 'string' && el.href ? String(el.href).slice(0, 200) : null,
+      contentEditable: el.isContentEditable === true,
+      tabIndex: Number.isFinite(tabIndexAttr) ? tabIndexAttr : null,
+      checked: typeof el.checked === 'boolean' ? el.checked : null,
+      expanded: readBool(el.getAttribute('aria-expanded')),
+      selected: readBool(el.getAttribute('aria-selected')),
+      pressed: readBool(el.getAttribute('aria-pressed')),
+      hasPopup: el.getAttribute('aria-haspopup') || null,
+      disabled: disabledNode(el),
+      readOnly: readOnlyNode(el),
+      multiple: el.multiple === true,
+      scrollable,
+      draggable: el.draggable === true || normalizeText(el.getAttribute('draggable') || '').toLowerCase() === 'true',
+      dragHint: nodeDragHint(el),
+      pointerEvents: style ? style.pointerEvents : null,
+      cursor: style ? style.cursor : null,
+      position: style ? style.position : null,
+      zIndex: style && /^-?\d+$/.test(normalizeText(style.zIndex || '')) ? Number(style.zIndex) : null,
+      topLayer: topLayerKindOf(el),
+    };
+  }
+
+  /** VOM：邻近文本（用于消歧；只看兄弟/叔伯节点，避免把整页文本带进来）。 */
+  function nodeNearbyText(el) {
+    const own = normalizeText(el.textContent || '');
+    const parent = el.parentElement;
+    const candidates = [el.previousElementSibling, el.nextElementSibling,
+      parent ? parent.previousElementSibling : null, parent ? parent.nextElementSibling : null];
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const text = normalizeText(candidate.textContent || '');
+      if (text && (!own || !text.includes(own))) return truncate(text, 80);
+    }
+    return null;
+  }
+
+  // ---------- VOM 完整关系图（containment / ownership / label / form） ----------
+  //
+  // 旧版只有每个节点自己的 ancestors（best-effort，最多 4 层，父节点用 tag#id 猜）。
+  // 这里在页面侧一次性收集一张可解析的图：
+  // - 每个被观察到的元素 + 其祖先链都分配一个观测内唯一的 key；
+  // - `child` 边从祖先指向元素（完整到 documentElement，受上限保护）；
+  // - `aria-controls/labelledby/describedby/owns`、`<label for>`、`form` 边尽量解析到目标元素；
+  // - 只输出结构（tag/id/role/ref/parentKey），不带文本内容，避免放大观测体积。
+
+  const GRAPH_NODE_LIMIT = 800;
+  const GRAPH_EDGE_LIMIT = 2000;
+  const GRAPH_ANCESTOR_LIMIT = 16;
+  const GRAPH_OWNER_TARGET_LIMIT = 8;
+

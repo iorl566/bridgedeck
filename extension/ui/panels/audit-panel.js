@@ -1,5 +1,7 @@
 /** Inline audit panel: toggle, recent entries, and full-viewer entry. */
 
+import { errorText } from '../common.js';
+
 const $ = (id) => document.getElementById(id);
 
 function setStatus(text, error = false) {
@@ -62,7 +64,7 @@ export async function refreshAuditPanel() {
     setStatus(`已开启 · 最近 ${list.entries.length} 条 / 共 ${list.total} 条`);
     renderEntries(list.entries);
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : '审计状态读取失败', true);
+    setStatus(errorText(error instanceof Error ? error.message : '审计状态读取失败'), true);
   }
 }
 
@@ -75,7 +77,7 @@ export function mountAuditPanel() {
       await setEnabled(next);
       await refreshAuditPanel();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '保存失败', true);
+      setStatus(errorText(error instanceof Error ? error.message : '保存失败'), true);
     } finally {
       $('auditToggle').disabled = false;
     }

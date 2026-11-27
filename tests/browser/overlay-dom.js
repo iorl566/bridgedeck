@@ -309,6 +309,51 @@ test('深色 token：Borrow/Toast/Help/Takeover 都跟随 data-bb-theme=dark', (
   clean();
 });
 
+test('RTL：借用 Toast / 接管卡片 / 协助卡片跟随 RTL 语言', () => {
+  const en = overlayTexts('en');
+  borrowToast('rtl-toast', 'RTL tab', 3000, 'ar', OVERLAY_THEME, en);
+  const toast = document.getElementById('__bb_borrow_toast_host');
+  assert(toast && toast.getAttribute('dir') === 'rtl', '借用 Toast 缺 RTL 方向');
+  const toastRect = toast.getBoundingClientRect();
+  assert(toastRect.left <= 24, 'RTL Toast 没有贴左边：' + toastRect.left);
+  clean();
+
+  installTakeover({ sessionId: 'rtl', mode: 'ready' }, 'ar', 500, OVERLAY_THEME, en);
+  const takeover = document.querySelector('[data-bb-ui="takeover"]');
+  assert(takeover && takeover.getAttribute('dir') === 'rtl', '接管浮层缺 RTL 方向');
+  const shadow = globalThis.__bbTakeoverRoots.get(takeover);
+  const card = shadow.querySelector('.card');
+  const cardRect = card.getBoundingClientRect();
+  assert(cardRect.left <= 24, 'RTL 接管卡片没有贴左边：' + cardRect.left);
+  const mini = shadow.querySelector('[data-mini]');
+  const miniRect = mini.getBoundingClientRect();
+  assert(miniRect.left <= 24 || mini.style.display === 'none', 'RTL 迷你卡片没有贴左边：' + miniRect.left);
+  clean();
+
+  helpOverlayFunc('rtl-help', 'RTL help', '', null, '', 'ar', OVERLAY_THEME, en);
+  const helpHost = document.getElementById('__bb_help_host');
+  assert(helpHost && helpHost.getAttribute('dir') === 'rtl', '协助浮层缺 RTL 方向');
+  const helpShadow = globalThis.__bbHelpRoots.get(helpHost);
+  const helpCard = helpShadow.querySelector('.card').getBoundingClientRect();
+  assert(Math.abs((helpCard.left + helpCard.width / 2) - window.innerWidth / 2) <= 40, 'RTL 协助卡片没有居中：' + helpCard.left);
+  helpHost.remove();
+  document.getElementById('__bb_help_highlight')?.remove();
+
+  installRecordOverlay(Date.now(), 'ar', OVERLAY_THEME, en);
+  const recordHost = document.getElementById('__bb_record_host');
+  assert(recordHost && recordHost.getAttribute('dir') === 'rtl', '录制浮层缺 RTL 方向');
+  const recordPill = recordHost.shadowRoot.querySelector('.pill').getBoundingClientRect();
+  assert(Math.abs((recordPill.left + recordPill.width / 2) - window.innerWidth / 2) <= 40, 'RTL 录制胶囊没有居中：' + recordPill.left);
+  recordHost.remove();
+
+  manualOverlayFunc(0, 'ar', OVERLAY_THEME, en);
+  const manualHost = document.getElementById('__bb_manual_host');
+  assert(manualHost && manualHost.getAttribute('dir') === 'rtl', '手动长截图浮层缺 RTL 方向');
+  const manualPill = manualHost.shadowRoot.querySelector('.pill').getBoundingClientRect();
+  assert(manualPill.right >= window.innerWidth - 40, 'RTL 手动长截图胶囊没有贴右侧：' + manualPill.right);
+  manualHost.remove();
+});
+
 (async () => {
   let passed = 0;
   for (const { name, fn } of tests) {

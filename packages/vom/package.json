@@ -1,0 +1,11 @@
+{
+  "name": "@bridge-deck/vom",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "BridgeDeck VOM TypeScript 包：affordance / layers / rows 的类型化移植（与 extension/src/lib/vom-*.js 逐字段等价）",
+  "scripts": {
+    "typecheck": "node ../../apps/extension/node_modules/typescript/bin/tsc --noEmit -p .",
+    "test": "node --test test/*.test.ts"
+  }
+}

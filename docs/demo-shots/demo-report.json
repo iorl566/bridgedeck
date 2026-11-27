@@ -1,0 +1,83 @@
+{
+  "at": "2026-11-25T01:31:51.817Z",
+  "session": "s_1",
+  "observation": {
+    "lines": 21,
+    "refs": 21
+  },
+  "record": {
+    "status": {
+      "sessionId": "s_1",
+      "recording": true,
+      "recordingId": "rec_1",
+      "started_at": "2026-11-25T01:31:43.699Z",
+      "start_url": "file:///C:/Users/CFT/AppData/Local/Temp/bb-live-1795569962597/demo.html",
+      "purpose": "演示：登录表单流程",
+      "redacted": true
+    },
+    "mid": {
+      "sessionId": "s_1",
+      "session_id": "s_1",
+      "recording": true,
+      "started_at": "2026-11-25T01:31:43.699Z",
+      "started_at_ms": 1795570303699,
+      "duration_ms": 1300,
+      "url": "file:///C:/Users/CFT/AppData/Local/Temp/bb-live-1795569962597/demo.html",
+      "purpose": "演示：登录表单流程",
+      "redacted": true,
+      "states": 0,
+      "steps": 0,
+      "skipped": 0,
+      "found": true,
+      "configured": true
+    },
+    "trace": {
+      "found": false,
+      "steps": 0,
+      "digest": null
+    }
+  },
+  "help": {
+    "pending": {
+      "ok": true,
+      "action": "request_status",
+      "found": false,
+      "request_id": null,
+      "sessionId": "s_1",
+      "session_id": "s_1",
+      "state": "unknown",
+      "pending": false,
+      "expired": false,
+      "answered": false,
+      "cancelled": false,
+      "resolved": false,
+      "message": null,
+      "created_at": null,
+      "created_at_ms": null,
+      "expires_at": null,
+      "expires_at_ms": null,
+      "timeout_ms": null,
+      "remaining_ms": null,
+      "resolved_at": null,
+      "resolved_at_ms": null,
+      "resolvedAt": null,
+      "resolution": null,
+      "resolution_source": null,
+      "answer": null,
+      "answered_by": null,
+      "by": null,
+      "resolution_extension": null,
+      "extension": null,
+      "can_operate": false,
+      "note": "no help request recorded for this id/session (never requested or evicted)"
+    },
+    "answered": false
+  },
+  "screenshots": [
+    "01-popup-recording.png",
+    "02-page-capsule.png",
+    "03-popup-summary.png",
+    "04-popup-help-pending.png",
+    "06-dashboard.png"
+  ]
+}

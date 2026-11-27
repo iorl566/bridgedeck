@@ -1,0 +1,7 @@
+﻿<!doctype html><meta charset="utf-8"><title>滚动容器 iframe 夹具</title>
+<div id="box" style="height:220px;overflow:auto;border:1px solid #ccc">
+  <div style="height:400px">上方空白</div>
+  <iframe id="inner" src="frame.html" style="width:400px;height:200px;border:1px solid #ddd"></iframe>
+  <div style="height:400px">下方空白</div>
+</div>
+<script>document.getElementById('box').scrollTop = 420;</script>

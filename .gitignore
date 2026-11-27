@@ -1,4 +1,4 @@
-﻿# 参考材料与逆向产物：不随发布
+# 参考材料与逆向产物：不随发布
 .ref/
 # 依赖与运行产物
 node_modules/
@@ -18,3 +18,12 @@ __pycache__/
 
 # 临时分析文件
 .tmp-*
+
+# 架构路线（TS/React/WXT）本地产物
+apps/extension/.wxt/
+apps/extension/.output/
+apps/extension/coverage/
+crates/*/target/
+
+# ������ʱ/��֤��Կ���ͼ
+.tmp/

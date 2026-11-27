@@ -5,16 +5,67 @@ import { acquire, release, send as cdpSend } from './debugger.js';
 import { execPage } from './inject.js';
 import { getTab, sleep } from './tabs.js';
 import { log } from './log.js';
+import { annotateShot, gridShot, profileShot, blobToDataUrl } from './screenshot-visual.js';
+export { blobToDataUrl } from './screenshot-visual.js';
 import { withOverlaysHidden } from './overlay-suppress.js';
 import { planCaptureTiles, pruneCaptures, sameFrame } from './longshot.js';
 import { layoutCanvas } from './longshot-render.js';
 import { nextGrowthTiles, tileForScroll } from './longshot-schedule.js';
+import { persistLongshotCapture } from './capture-persist.js';
+import { captureTiledFullPage } from './tiled-capture.js';
+import { staleMetrics, planStaleRecovery } from './lib/capture-freshness.js';
+import { planFinalExposure } from './lib/longshot-final.js';
+import { diffRgba } from './lib/pixel-diff.js';
+import { focusRequested } from './lib/focus-policy.js';
+import { createCaptureStore } from './lib/capture-stream.js';
+
+const captureStreams = createCaptureStore();
+
+/** screenshot.read：按 base64 字符 offset 分块读取暂存的大截图。 */
+export function screenshotRead(params = {}) {
+  const chunk = captureStreams.read(params.captureId, { offset: params.offset, length: params.length });
+  if (!chunk) throw bridgeError('E_NOT_FOUND', '截图 capture 不存在或已过期（重新截图）');
+  return chunk;
+}
+
+/** screenshot.release：释放暂存的大截图。 */
+export function screenshotRelease(params = {}) {
+  return { ok: true, released: captureStreams.release(params.captureId) };
+}
+
+/** 大截图改走 captureId + 分块读取，避免单次 RPC 携带数 MB base64。 */
+function maybeStreamCapture(result, input = {}) {
+  if (!result || typeof result.dataUrl !== 'string') return result;
+  const wantStream = input.stream === true || result.dataUrl.length > 1_500_000;
+  if (!wantStream) return result;
+  const stored = captureStreams.put({ dataUrl: result.dataUrl, width: result.width, height: result.height, via: result.via });
+  if (!stored) return result;
+  const streamed = { ...result };
+  delete streamed.dataUrl;
+  streamed.captureId = stored.captureId;
+  streamed.streamed = true;
+  streamed.bytes = stored.bytes;
+  return streamed;
+}
 
 const CAPTURE_INTERVAL_MS = 550; // captureVisibleTab 限速约 2 次/秒
 const MAX_FULL_PAGE_FRAMES = 8;
 const MAX_CANVAS_HEIGHT = 16000;
+const MAX_SINGLE_CAPTURE_HEIGHT = 12000;
+const MAX_SINGLE_CAPTURE_WIDTH = 12000;
 let lastCdpFailure = '';
 const captures = new Map(); // captureId -> { tabId, scale, scrollX, scrollY, width, height, refs, at, url }
+
+/** tab 关闭时清掉该 tab 的视觉 capture 与差分基线。 */
+export function forgetScreenshotTab(tabId) {
+  const id = Number(tabId);
+  if (!Number.isInteger(id)) return;
+  lastShots.delete(id);
+  for (const [captureId, capture] of captures) {
+    if (Number(capture && capture.tabId) === id) captures.delete(captureId);
+  }
+}
+const lastShots = new Map(); // tabId -> { dataUrl, width, height, at }
 const CAPTURE_TTL_MS = 10 * 60 * 1000;
 const CAPTURE_MAX = 20;
 
@@ -48,40 +99,6 @@ function uuid() {
 }
 
 /** 在截图上画 @eN 方框与标签。 */
-async function annotateShot(dataUrl, refs, scale) {
-  const blob = await (await fetch(dataUrl)).blob();
-  const bitmap = await createImageBitmap(blob);
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(bitmap, 0, 0);
-  bitmap.close();
-  ctx.lineWidth = 2;
-  ctx.font = 'bold ' + Math.max(12, Math.round(12 * scale)) + 'px Segoe UI, sans-serif';
-  for (const item of refs) {
-    const x = Math.round(item.x * scale);
-    const y = Math.round(item.y * scale);
-    const width = Math.round(item.width * scale);
-    const height = Math.round(item.height * scale);
-    ctx.strokeStyle = 'rgba(47,111,237,0.95)';
-    ctx.fillStyle = 'rgba(47,111,237,0.12)';
-    ctx.fillRect(x, y, width, height);
-    ctx.strokeRect(x, y, width, height);
-    const label = item.ref;
-    const metrics = ctx.measureText(label);
-    const padX = Math.round(4 * scale);
-    const padY = Math.round(2 * scale);
-    const labelHeight = Math.round(14 * scale);
-    const labelWidth = Math.round(metrics.width + padX * 2);
-    const labelY = y - labelHeight < 0 ? y : y - labelHeight;
-    ctx.fillStyle = 'rgba(47,111,237,0.95)';
-    ctx.fillRect(x, labelY, labelWidth, labelHeight);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(label, x + padX, labelY + labelHeight - padY * 2);
-  }
-  const output = await canvas.convertToBlob({ type: 'image/png' });
-  return blobToDataUrl(output);
-}
-
 /**
  * 把截图像素坐标换算成页面坐标（含滚动与缩放）。
  * 视觉定位的统一入口：clickByImage / dragByImage 都走这里，保证两处换算一致。
@@ -123,86 +140,11 @@ export function resolveCapturePoint(captureId, tabId, imageX, imageY, options = 
  * 在截图上叠加坐标网格，并把图片像素坐标直接标在图上。
  * 目的：让"看图取坐标"有据可依，而不是凭感觉估。
  */
-async function gridShot(dataUrl, scale, step) {
-  const blob = await (await fetch(dataUrl)).blob();
-  const bitmap = await createImageBitmap(blob);
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(bitmap, 0, 0);
-  bitmap.close();
-  const gap = Math.max(10, Math.round(Number(step) || 50));
-  ctx.font = 'bold 11px Segoe UI, sans-serif';
-  ctx.textBaseline = 'top';
-  for (let x = 0; x < canvas.width; x += gap) {
-    const major = x % (gap * 2) === 0;
-    ctx.strokeStyle = major ? 'rgba(220,38,38,0.55)' : 'rgba(220,38,38,0.22)';
-    ctx.lineWidth = major ? 1.5 : 1;
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, 0);
-    ctx.lineTo(x + 0.5, canvas.height);
-    ctx.stroke();
-    if (major) {
-      ctx.fillStyle = 'rgba(220,38,38,0.9)';
-      ctx.fillText(String(x), x + 2, 2);
-    }
-  }
-  for (let y = 0; y < canvas.height; y += gap) {
-    const major = y % (gap * 2) === 0;
-    ctx.strokeStyle = major ? 'rgba(37,99,235,0.55)' : 'rgba(37,99,235,0.22)';
-    ctx.lineWidth = major ? 1.5 : 1;
-    ctx.beginPath();
-    ctx.moveTo(0, y + 0.5);
-    ctx.lineTo(canvas.width, y + 0.5);
-    ctx.stroke();
-    if (major) {
-      ctx.fillStyle = 'rgba(37,99,235,0.95)';
-      ctx.fillText(String(y), 2, y + 1);
-    }
-  }
-  const output = await canvas.convertToBlob({ type: 'image/png' });
-  return blobToDataUrl(output);
-}
-
 /**
  * 返回图像的一维差分剖面：沿 axis 求相邻像素亮度差的累计。
  * 不判断"那是什么"，只给出"哪里变化最剧烈"的位置与强度，
  * 由调用方（模型或脚本）自己决定要不要用、怎么用。
  */
-async function profileShot(dataUrl, axis) {
-  const blob = await (await fetch(dataUrl)).blob();
-  const bitmap = await createImageBitmap(blob);
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(bitmap, 0, 0);
-  bitmap.close();
-  const { width, height } = canvas;
-  const data = ctx.getImageData(0, 0, width, height).data;
-  const gray = (x, y) => {
-    const i = (y * width + x) * 4;
-    return 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-  };
-  const along = axis === 'y' ? height : width;
-  const across = axis === 'y' ? width : height;
-  const scores = new Float64Array(along);
-  for (let a = 1; a < along; a += 1) {
-    let sum = 0;
-    for (let b = 0; b < across; b += 1) {
-      const prev = axis === 'y' ? gray(b, a - 1) : gray(a - 1, b);
-      const cur = axis === 'y' ? gray(b, a) : gray(a, b);
-      sum += Math.abs(cur - prev);
-    }
-    scores[a] = sum / across;
-  }
-  const peaks = [];
-  for (let a = 0; a < along; a += 1) {
-    const prev = a > 0 ? scores[a - 1] : 0;
-    const next = a < along - 1 ? scores[a + 1] : 0;
-    if (scores[a] > prev && scores[a] >= next) peaks.push({ pos: a, score: Math.round(scores[a] * 100) / 100 });
-  }
-  peaks.sort((a, b) => b.score - a.score);
-  return { axis, width, height, peaks: peaks.slice(0, 12) };
-}
-
 /**
  * 视觉命中校验：派发前确认"这个页面坐标下面真的是可操作的东西"。
  * 把"点被浮层吃掉/页面已变"从"事后看结果"变成"派发前就失败"，
@@ -292,14 +234,10 @@ export function pngSize(dataUrl) {
   return { width: view.getUint32(16), height: view.getUint32(20) };
 }
 
-export async function blobToDataUrl(blob) {
-  const buffer = new Uint8Array(await blob.arrayBuffer());
-  const chunk = 0x8000;
-  let binary = '';
-  for (let i = 0; i < buffer.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, buffer.subarray(i, i + chunk));
-  }
-  return `data:image/png;base64,${btoa(binary)}`;
+async function bitmapToDataUrl(bitmap) {
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  canvas.getContext('2d').drawImage(bitmap, 0, 0);
+  return blobToDataUrl(await canvas.convertToBlob({ type: 'image/png' }));
 }
 
 /**
@@ -319,11 +257,14 @@ async function captureVisible(windowId) {
     } catch (error) {
       lastError = error;
       const message = String((error && error.message) || error);
-      if (!/readback|failed to capture/i.test(message)) break;
+      if (!/readback|failed to capture|MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND|quota/i.test(message)) break;
       log(`截图失败第 ${attempt + 1} 次（${message}），置前后重试`);
+      if (/MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND|quota/i.test(message)) {
+        await sleep(1200 + CAPTURE_INTERVAL_MS * attempt);
+        continue;
+      }
       try {
         await withTimeout(chrome.windows.update(windowId, { state: 'normal' }), 3000, 'windows.update');
-        await withTimeout(chrome.windows.update(windowId, { focused: true }), 3000, 'windows.update');
       } catch {
         // 窗口可能已关闭，交给下面统一报错
       }
@@ -399,6 +340,25 @@ async function captureFullPage(tab, options = {}) {
       frames.push({ bitmap, drawY });
       if (i + 1 >= positions.length && positions[i] + step >= metrics.scrollHeight) break;
     }
+    // final exposure：底部尚未被完整覆盖时，再滚到底拍一帧并贴底绘制。
+    const last = frames[frames.length - 1];
+    const finalPlan = planFinalExposure({
+      scrollHeight: metrics.scrollHeight,
+      innerHeight: metrics.innerHeight,
+      scale,
+      lastBottom: last ? last.drawY + last.bitmap.height : 0,
+      viewportHeight: viewport ? viewport.height : 0,
+    });
+    if (finalPlan) {
+      await execPage(tab.id, 'scroll-to-y', { y: finalPlan.scrollY });
+      await sleep(CAPTURE_INTERVAL_MS);
+      const dataUrl = await captureVisible(tab.windowId);
+      const blob = await (await fetch(dataUrl)).blob();
+      const bitmap = await createImageBitmap(blob);
+      if (!viewport) viewport = { width: bitmap.width, height: bitmap.height };
+      const drawY = Math.max(0, Math.min(finalPlan.drawY, totalHeight - bitmap.height));
+      frames.push({ bitmap, drawY });
+    }
   } finally {
     await execPage(tab.id, 'scroll-to-y', { y: metrics.scrollY || 0 }).catch(() => {});
   }
@@ -415,15 +375,38 @@ async function captureFullPage(tab, options = {}) {
   const context = canvas.getContext('2d');
   context.fillStyle = '#ffffff';
   context.fillRect(0, 0, width, height);
+  const chunks = [];
   for (const placement of layout.placements) {
     const frame = frames[placement.index];
+    try {
+      chunks.push({
+        dataUrl: await bitmapToDataUrl(frame.bitmap),
+        width: frame.bitmap.width,
+        height: frame.bitmap.height,
+        drawY: placement.drawY,
+      });
+    } catch (error) {
+      log('长截图分片序列化失败：' + ((error && error.message) || error));
+    }
     context.drawImage(frame.bitmap, 0, placement.drawY);
     frame.bitmap.close();
   }
   const blob = await canvas.convertToBlob({ type: 'image/png' });
   const dataUrl = await blobToDataUrl(blob);
   log(`整页截图拼合 ${frames.length} 帧，尺寸 ${width}x${height}`);
-  return { dataUrl, width, height };
+  await persistLongshotCapture({ url: tab.url || '', width, height, frames: chunks });
+  const afterMetrics = await execPage(tab.id, 'page-metrics', {}).catch(() => null);
+  const freshness = staleMetrics(metrics, afterMetrics, { tolerance: 1 });
+  if (freshness.stale && options.__staleRetry !== true) {
+    log('滚动长截图 stale（' + JSON.stringify(freshness.changed) + '），重拍一次');
+    return captureFullPage(tab, { ...options, __staleRetry: true });
+  }
+  return {
+    dataUrl, width, height,
+    stale: freshness.stale === true,
+    stale_retries: options.__staleRetry === true ? 1 : 0,
+    fixedBands: Array.isArray(metrics.fixedBands) ? metrics.fixedBands.length : 0,
+  };
 }
 
 async function captureElement(tab, params) {
@@ -484,6 +467,9 @@ async function captureRegion(tab, region, scale) {
   return { dataUrl, width: size.width, height: size.height };
 }
 
+/** 超长/超宽页面：单次 captureScreenshot 会超出纹理/内存上限，按 8000px 网格分块拍再拼。
+ *  支持分数 DPR：tile 边界按设备像素推进，裁剪坐标用 CSS 像素（x/scale），
+ *  绘制时按设备像素拉伸，避免 1px 接缝；同时重绘固定顶栏与固定页脚。 */
 /** CDP 截图：不受窗口焦点影响，后台标签页也能拍；失败时由调用方回退。 */
 async function captureViaCdp(tab, params) {
   const tabId = tab.id;
@@ -528,6 +514,9 @@ async function captureViaCdp(tab, params) {
       const metrics = await execPage(tabId, 'page-metrics', {});
       const width = Math.max(1, Math.round(metrics.scrollWidth || metrics.innerWidth));
       const height = Math.max(1, Math.round(metrics.scrollHeight));
+      if (height > MAX_SINGLE_CAPTURE_HEIGHT || width > MAX_SINGLE_CAPTURE_WIDTH) {
+        return await captureTiledFullPage(tabId, tab.url || '', width, height, metrics.dpr, 0, { segmented: params.segmented !== false, tileSize: params.tileSize, staleAttempts: params.staleAttempts });
+      }
       options = {
         format: 'png',
         captureBeyondViewport: true,
@@ -583,6 +572,14 @@ async function captureViaCdp(tab, params) {
     }
     let dataUrl = 'data:image/png;base64,' + result.data;
     const size = pngSize(dataUrl);
+    if (params.fullPage === true) {
+      await persistLongshotCapture({
+        url: tab.url || '',
+        width: size.width,
+        height: size.height,
+        frames: [{ dataUrl, width: size.width, height: size.height, drawY: 0 }],
+      });
+    }
     if (visualRegion) {
       // 候选截图：坐标语义是"区域相对"，由 resolveCapturePoint 归一化回页面坐标。
       const captureId = uuid();
@@ -712,16 +709,19 @@ async function takeScreenshotRaw(input = {}) {
   } catch {
     previousActiveId = null;
   }
-  // 截图需要目标窗口可见可读（后台/最小化窗口会 readback failed），临时置前后恢复
+  // captureVisibleTab 回退需要目标窗口可见可读；只有显式 --focus 才置前，避免普通截图抢焦点。
+  const focusWanted = focusRequested(params);
   let previousFocusedId = null;
-  try {
-    const focused = await withTimeout(chrome.windows.getLastFocused(), 3000, 'windows.getLastFocused');
-    previousFocusedId = focused && focused.id != null ? focused.id : null;
-  } catch {
-    previousFocusedId = null;
+  if (focusWanted) {
+    try {
+      const focused = await withTimeout(chrome.windows.getLastFocused(), 3000, 'windows.getLastFocused');
+      previousFocusedId = focused && focused.id != null ? focused.id : null;
+    } catch {
+      previousFocusedId = null;
+    }
   }
   let focusedByUs = false;
-  if (previousFocusedId !== windowId) {
+  if (focusWanted && previousFocusedId !== windowId) {
     try {
       const targetWindow = await withTimeout(chrome.windows.get(windowId), 3000, 'windows.get');
       if (targetWindow.state === 'minimized') {
@@ -736,7 +736,7 @@ async function takeScreenshotRaw(input = {}) {
   }
 
   let activated = false;
-  if (!tab.active) {
+  if (focusWanted && !tab.active) {
     try {
       await withTimeout(chrome.tabs.update(tabId, { active: true }), 3000, 'tabs.update');
       activated = true;
@@ -772,6 +772,42 @@ async function takeScreenshotRaw(input = {}) {
 
 export async function takeScreenshot(input = {}) {
   const tabId = input && input.tabId;
-  if (!Number.isInteger(tabId)) return takeScreenshotRaw(input);
-  return withOverlaysHidden(tabId, () => takeScreenshotRaw(input));
+  if (!Number.isInteger(tabId)) return maybeStreamCapture(await takeScreenshotRaw(input), input);
+  const result = await withOverlaysHidden(tabId, () => takeScreenshotRaw(input));
+  return maybeStreamCapture(await attachScreenshotDiff(tabId, result, input), input);
+}
+
+async function decodePixels(dataUrl) {
+  const blob = await (await fetch(dataUrl)).blob();
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d');
+    context.drawImage(bitmap, 0, 0);
+    return { width: bitmap.width, height: bitmap.height, data: context.getImageData(0, 0, bitmap.width, bitmap.height).data };
+  } finally {
+    bitmap.close();
+  }
+}
+
+async function attachScreenshotDiff(tabId, result, input = {}) {
+  if (!result || typeof result.dataUrl !== 'string') return result;
+  const previous = lastShots.get(tabId);
+  if (lastShots.size >= 12 && !lastShots.has(tabId)) lastShots.delete(lastShots.keys().next().value);
+  lastShots.set(tabId, { dataUrl: result.dataUrl, width: result.width, height: result.height, at: Date.now() });
+  if (input.diff !== true) return result;
+  if (!previous || Date.now() - previous.at > 5 * 60 * 1000) {
+    return { ...result, diff: { baseline: true, changed: 0, total: 0, ratio: 0, sizeMatch: true } };
+  }
+  try {
+    const [before, after] = await Promise.all([decodePixels(previous.dataUrl), decodePixels(result.dataUrl)]);
+    if (before.width !== after.width || before.height !== after.height) {
+      return { ...result, diff: { sizeMatch: false, before: { width: before.width, height: before.height }, after: { width: after.width, height: after.height }, changed: 0, total: 0, ratio: 0 } };
+    }
+    const diff = diffRgba(before.data, after.data, after.width, after.height, { threshold: 0.1 });
+    return { ...result, diff: diff ? { sizeMatch: true, ...diff } : { sizeMatch: false, changed: 0, total: 0, ratio: 0 } };
+  } catch (error) {
+    log('截图差分失败（忽略）：' + ((error && error.message) || error));
+    return { ...result, diff: { error: String((error && error.message) || error) } };
+  }
 }

@@ -20,7 +20,7 @@ export async function shadowRefClick(tabId, entry) {
     const point = rect && rect.result ? rect.result.value : null;
     if (!point) return null;
     await acquire(tabId, 'shadow-ref');
-    await cdpSend(tabId, 'Page.bringToFront').catch(() => {});
+    // 后台派发：只开焦点仿真，不把标签页/窗口置前（与 interaction.js 的策略一致）。
     await cdpSend(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
     try {
       await cdpSend(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none', buttons: 0, clickCount: 0 });

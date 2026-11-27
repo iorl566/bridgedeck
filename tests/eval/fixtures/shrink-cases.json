@@ -1,0 +1,388 @@
+{
+  "schema": "eval-shrink-vectors/1",
+  "integerShrinkArgs": {
+    "min": -100,
+    "max": 1000
+  },
+  "cases": [
+    {
+      "kind": "number",
+      "input": -77,
+      "candidates": [
+        0,
+        -1,
+        -38,
+        -76
+      ]
+    },
+    {
+      "kind": "number",
+      "input": -3,
+      "candidates": [
+        0,
+        -1,
+        -2
+      ]
+    },
+    {
+      "kind": "number",
+      "input": 0,
+      "candidates": [
+        -50,
+        -100
+      ]
+    },
+    {
+      "kind": "number",
+      "input": 1,
+      "candidates": [
+        0
+      ]
+    },
+    {
+      "kind": "number",
+      "input": 5,
+      "candidates": [
+        0,
+        1,
+        2,
+        4
+      ]
+    },
+    {
+      "kind": "number",
+      "input": 10,
+      "candidates": [
+        0,
+        1,
+        5,
+        9
+      ]
+    },
+    {
+      "kind": "number",
+      "input": 63,
+      "candidates": [
+        0,
+        1,
+        -18,
+        31,
+        62
+      ]
+    },
+    {
+      "kind": "number",
+      "input": 1000,
+      "candidates": [
+        0,
+        1,
+        -100,
+        450,
+        500,
+        999
+      ]
+    },
+    {
+      "kind": "string",
+      "input": "",
+      "candidates": []
+    },
+    {
+      "kind": "string",
+      "input": "a",
+      "candidates": [
+        ""
+      ]
+    },
+    {
+      "kind": "string",
+      "input": "ab",
+      "candidates": [
+        "",
+        "a",
+        "b"
+      ]
+    },
+    {
+      "kind": "string",
+      "input": "abcd",
+      "candidates": [
+        "",
+        "ab",
+        "cd",
+        "abc",
+        "abd",
+        "acd",
+        "bcd"
+      ]
+    },
+    {
+      "kind": "string",
+      "input": "观察节点",
+      "candidates": [
+        "",
+        "节点",
+        "观察",
+        "察节点",
+        "观察点",
+        "观察节",
+        "观节点"
+      ]
+    },
+    {
+      "kind": "string",
+      "input": "😀x",
+      "candidates": [
+        "",
+        "x",
+        "😀"
+      ]
+    },
+    {
+      "kind": "string",
+      "input": "ba",
+      "candidates": [
+        "",
+        "a",
+        "b"
+      ]
+    },
+    {
+      "kind": "array",
+      "input": [],
+      "candidates": []
+    },
+    {
+      "kind": "array",
+      "input": [
+        0
+      ],
+      "candidates": [
+        []
+      ]
+    },
+    {
+      "kind": "array",
+      "input": [
+        0,
+        10
+      ],
+      "candidates": [
+        [],
+        [
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          5
+        ],
+        [
+          0,
+          9
+        ],
+        [
+          10
+        ]
+      ]
+    },
+    {
+      "kind": "array",
+      "input": [
+        5,
+        5,
+        5
+      ],
+      "candidates": [
+        [],
+        [
+          5
+        ],
+        [
+          5,
+          5
+        ],
+        [
+          0,
+          5,
+          5
+        ],
+        [
+          5,
+          0,
+          5
+        ],
+        [
+          5,
+          5,
+          0
+        ],
+        [
+          1,
+          5,
+          5
+        ],
+        [
+          5,
+          1,
+          5
+        ],
+        [
+          5,
+          5,
+          1
+        ],
+        [
+          2,
+          5,
+          5
+        ],
+        [
+          5,
+          2,
+          5
+        ],
+        [
+          5,
+          5,
+          2
+        ],
+        [
+          4,
+          5,
+          5
+        ],
+        [
+          5,
+          4,
+          5
+        ],
+        [
+          5,
+          5,
+          4
+        ]
+      ]
+    },
+    {
+      "kind": "record",
+      "input": {
+        "text": "",
+        "list": []
+      },
+      "candidates": []
+    },
+    {
+      "kind": "record",
+      "input": {
+        "text": "ab",
+        "list": [
+          9,
+          1
+        ]
+      },
+      "candidates": [
+        {
+          "text": "ab",
+          "list": []
+        },
+        {
+          "text": "ab",
+          "list": [
+            1
+          ]
+        },
+        {
+          "text": "ab",
+          "list": [
+            0,
+            1
+          ]
+        },
+        {
+          "text": "ab",
+          "list": [
+            1,
+            1
+          ]
+        },
+        {
+          "text": "ab",
+          "list": [
+            4,
+            1
+          ]
+        },
+        {
+          "text": "",
+          "list": [
+            9,
+            1
+          ]
+        },
+        {
+          "text": "ab",
+          "list": [
+            9
+          ]
+        },
+        {
+          "text": "ab",
+          "list": [
+            8,
+            1
+          ]
+        },
+        {
+          "text": "ab",
+          "list": [
+            9,
+            0
+          ]
+        },
+        {
+          "text": "a",
+          "list": [
+            9,
+            1
+          ]
+        },
+        {
+          "text": "b",
+          "list": [
+            9,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "record",
+      "input": {
+        "text": "b",
+        "list": [
+          0
+        ]
+      },
+      "candidates": [
+        {
+          "text": "",
+          "list": [
+            0
+          ]
+        },
+        {
+          "text": "b",
+          "list": []
+        }
+      ]
+    }
+  ]
+}

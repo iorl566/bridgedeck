@@ -3,6 +3,7 @@ import z from '@deepseek-ai/schemastery';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { createRunner } from './bridge.mjs';
 import { buildToolSpecs } from './tools.mjs';
+import { renderToolResult, wrapToolExecute } from './tool-output.mjs';
 import { createPluginStartJournal, defaultJournalPath, recoverOrphanStarts } from './start-journal.mjs';
 import { safeRegisterBundledSkill } from './skill-register.mjs';
 
@@ -31,13 +32,7 @@ function readConfig(config, key, fallback) {
   return value === undefined || value === null || value === '' ? fallback : value;
 }
 
-function renderValue(value) {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch (error) {
-    return String((error && error.message) || value);
-  }
-}
+// 工具输出统一由 lib/tool-output.mjs 渲染：成功值是 JSON，失败值带错误码与下一步动作。
 
 export function apply(ctx, config) {
   const settings = {
@@ -91,9 +86,10 @@ export function apply(ctx, config) {
         parameters: spec.parameters,
         output: {
           schema: { type: 'object', additionalProperties: true },
-          render: (_args, value) => [{ type: 'text', text: renderValue(value) }],
+          render: (args, value) => renderToolResult(args, value),
         },
-        execute: (args, exec) => spec.execute(args || {}, exec),
+        // 失败不抛给运行时，而是转成带恢复指引的结构化结果（见 lib/tool-output.mjs）。
+        execute: wrapToolExecute(spec),
       })),
       'browser-bridge-tools:' + spec.name,
     );

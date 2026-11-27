@@ -1,0 +1,43 @@
+/* ui/page-brand.css —— 页面级品牌头与留白（对齐兼容目标的页面观感）。 */
+.page { max-width: 1100px; margin: 0 auto; padding: 26px 34px 56px; }
+.page-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  border-bottom: 1px solid var(--line, #e2e8f0);
+  padding-bottom: 18px;
+  margin-bottom: 22px;
+}
+.page-brand-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted, #667085); }
+.page-brand-row img { width: 22px; height: 22px; border-radius: 6px; flex: 0 0 auto; }
+.page-brand-name { font-size: 14px; font-weight: 700; color: var(--fg, #1c2230); }
+.page-brand-sep { opacity: .55; }
+.page-brand-crumb { color: var(--muted, #667085); }
+.page-brand-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  background: var(--bg, #fff);
+  color: var(--fg, #1c2230);
+  margin-inline-end: 2px;
+}
+.page-brand-back:hover { border-color: var(--accent, #2f6fed); color: var(--accent, #2f6fed); }
+.page-header h1 { font-size: 26px; font-weight: 700; letter-spacing: -.01em; line-height: 1.2; margin: 0; }
+.page-header .sub { font-size: 13px; color: var(--muted, #667085); margin-top: 6px; line-height: 1.5; }
+.page > .panel, .page > section.panel { border-radius: 14px; }
+.page .panel h2 { font-size: 15px; font-weight: 650; margin: 0 0 10px; }
+.page > .panel + .panel { margin-top: 14px; }
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 40px; }
+  .page-header h1 { font-size: 22px; }
+}
+/* options 设置页：沿用自身 header.brand，仅统一标题层级 */
+body.options header.brand h1 { font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+body.options header.brand img { width: 28px; height: 28px; }
+body.options { max-width: 760px; margin: 0 auto; padding: 28px 24px 64px; }

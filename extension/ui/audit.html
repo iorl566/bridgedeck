@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <title>操作审计 · BridgeDeck</title>
-  <link rel="stylesheet" href="ui.css" />
+  <script src="direction.js"></script>
+<link rel="stylesheet" href="ui.css" />
+  <link rel="stylesheet" href="page-brand.css" />
 <script type="module" src="i18n.js"></script>
 </head>
 <body>
@@ -29,7 +31,7 @@
       <div class="toolbar">
         <h2 style="margin:0">全部任务</h2>
         <span class="grow"></span>
-        <select id="range" class="inline-input" style="min-width:110px">
+        <select id="range" aria-label="全部任务" class="inline-input" style="min-width:110px">
           <option value="3600000">最近 1 小时</option>
           <option value="86400000" selected>最近 24 小时</option>
           <option value="604800000">最近 7 天</option>
@@ -37,12 +39,18 @@
         <button id="openFolder" class="btn">清空记录</button>
         <button id="refresh" class="btn">刷新</button>
       </div>
+      <div id="auditTools" class="filters"></div>
+      <div id="auditSummary" class="kv-inline" style="margin-top:10px" role="status" aria-live="polite"></div>
+      <div id="auditTimeline" hidden></div>
       <div id="list" class="list" style="margin-top:12px"></div>
       <div id="empty" class="muted" style="margin-top:10px">还没有任务记录。后续通过 BridgeDeck 执行的操作会显示在这里。</div>
+      <div id="auditPager" class="pager"></div>
+      <div id="auditDetail" hidden></div>
     </section>
 
     <div id="note" class="note"></div>
   </main>
   <script type="module" src="audit.js"></script>
+  <script type="module" src="page-brand.js"></script>
 </body>
 </html>

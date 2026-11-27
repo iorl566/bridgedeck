@@ -23,6 +23,14 @@
 
 账本文件：`~/.browser-bridge/ledger.json`（`BB_HOME` 可覆盖），保留最近 300 条。
 
+## 写前日志（WAL）
+
+- 每次 `begin` 先把脱敏记录追加到 `ledger.wal`，再更新内存；
+- `finish/resolve` 也追加状态变更；
+- daemon 启动时 `ledger.json` + `ledger.wal` 合并，遗留 `active` 一律转 `stale`；
+- snapshot 成功落盘后截断 WAL；
+- 这样“begin 后、snapshot 前”崩溃也能在重启后恢复并拦截盲重放。
+
 ## 状态
 
 | 状态 | 含义 | 是否拦截同 tab 新操作 |

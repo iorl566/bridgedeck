@@ -76,5 +76,47 @@
   },
   "上的本地 daemon；远程连接必须由你主动配置并授权。": {
     "en": ""
+  },
+  "本地分片": {
+    "en": "Local chunks"
+  },
+  "扫描": {
+    "en": "Scan"
+  },
+  "恢复最新": {
+    "en": "Restore latest"
+  },
+  "尚未扫描": {
+    "en": "Not scanned yet"
+  },
+  "没有本地分片": {
+    "en": "No local chunks"
+  },
+  "没有可恢复的本地分片": {
+    "en": "No recoverable local chunks"
+  },
+  "已保存": {
+    "en": "Saved"
+  },
+  "已恢复默认": {
+    "en": "Defaults restored"
+  },
+  "已复制：": {
+    "en": "Copied: "
+  },
+  "复制失败，请手动复制：": {
+    "en": "Copy failed, copy manually: "
+  },
+  "配对码需为 6 位数字": {
+    "en": "Pairing code must be 6 digits"
+  },
+  "地址格式不正确": {
+    "en": "Invalid address format"
+  },
+  "已清空本机任务审计记录": {
+    "en": "Local task audit records cleared"
+  },
+  "目标标签页": {
+    "en": "Target tab"
   }
 }

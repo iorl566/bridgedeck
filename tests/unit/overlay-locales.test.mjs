@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { OVERLAY_PACKS } from '../../extension/src/overlay-locales.js';
 
-const langs = ['zh', 'en', 'ja', 'ko', 'de', 'es', 'fr', 'it', 'pt', 'zh-TW'];
+const langs = ['zh', 'en', 'ja', 'ko', 'de', 'es', 'fr', 'it', 'pt', 'zh-TW', 'ar', 'he'];
 
-test('浮层语言包 10 语言 × 54 键，空白/省略号语义保留', () => {
+test('浮层语言包 12 语言 × 56 键，空白/省略号语义保留', () => {
   const base = OVERLAY_PACKS.en;
   const keys = Object.keys(base);
-  assert.equal(keys.length, 54);
+  assert.equal(keys.length, 56);
   for (const lang of langs) {
     const pack = OVERLAY_PACKS[lang];
     assert.ok(pack, lang + ' 缺浮层语言包');

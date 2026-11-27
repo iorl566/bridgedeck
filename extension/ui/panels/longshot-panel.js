@@ -1,6 +1,9 @@
 /** Inline auto/visible long-screenshot panel; the full page keeps manual stitching. */
 
 import { buildCaptureManifest, pruneManifests } from '../../src/lib/capture-manifest.js';
+import { saveLongshot } from '../../src/lib/longshot-store.js';
+
+import { errorText } from '../common.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -28,17 +31,20 @@ export async function captureActiveTab() {
   try {
     const result = await chrome.runtime.sendMessage({ type: 'bb.capture', mode, preview: true, tabId: tab.id });
     if (!result?.ok) {
-      setStatus(result?.error || '截图失败', true);
+      setStatus(errorText(result?.error || '截图失败'), true);
       return;
     }
     await chrome.storage.session.set({ 'bb.longshot.last': { dataUrl: result.dataUrl, width: result.width, height: result.height } });
+    const captureId = 'longshot-' + Date.now();
+    const frames = Array.isArray(result.frames) && result.frames.length ? result.frames : [{ dataUrl: result.dataUrl, width: result.width, height: result.height }];
+    const savedFrames = await saveLongshot(captureId, frames).catch(() => 0);
     const stored = await chrome.storage.local.get('bb.capture.manifests');
     const list = Array.isArray(stored && stored['bb.capture.manifests']) ? stored['bb.capture.manifests'] : [];
-    const manifest = buildCaptureManifest({ id: 'longshot-' + Date.now(), width: result.width, height: result.height, tiles: result.tiles || 0, url: tab.url || '' });
+    const manifest = buildCaptureManifest({ id: captureId, width: result.width, height: result.height, tiles: savedFrames, url: tab.url || '' });
     await chrome.storage.local.set({ 'bb.capture.manifests': pruneManifests([manifest, ...list]) });
     setStatus(`完成：${result.width} × ${result.height} px`);
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : '截图失败', true);
+    setStatus(errorText(error instanceof Error ? error.message : '截图失败'), true);
   } finally {
     $('longshotStart').disabled = false;
   }

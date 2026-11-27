@@ -1,0 +1,88 @@
+  // §C 观察与页面图：VOM markers、walk/nodeBrief、视觉扫描、命中、对比度、graph
+  // ===========================================================================
+  function probeHoverEntries(el) {
+    const selector =
+      '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="menu"] a';
+    const roots = [];
+    const controls = normalizeText(el.getAttribute('aria-controls') || '');
+    for (const id of controls.split(/\s+/).filter(Boolean)) {
+      const target = document.getElementById(id);
+      if (target) roots.push(target);
+    }
+    // 常见实现：菜单紧跟触发器作为兄弟节点；没有 aria-controls 时退化为看兄弟/自身
+    if (!roots.length && el.nextElementSibling) roots.push(el.nextElementSibling);
+    if (!roots.length) roots.push(el);
+    const names = [];
+    for (const root of roots) {
+      const candidates = root.matches && root.matches(selector) ? [root] : root.querySelectorAll(selector);
+      for (const candidate of candidates) {
+        const text = normalizeText(candidate.textContent || '');
+        if (!text) continue;
+        const name = truncate(text, 40);
+        if (!names.includes(name)) names.push(name);
+        if (names.length >= 5) break;
+      }
+      if (names.length >= 5) break;
+    }
+    return names;
+  }
+
+  // ---------- observe / snapshot ----------
+
+  /** 清理 observe 临时标记（含 open shadow / 同源 iframe）。 */
+  function clearVomMarkers() {
+    let removed = 0;
+    function walk(root) {
+      if (!root || typeof root.querySelectorAll !== 'function') return;
+      for (const el of root.querySelectorAll('[data-bb-vom]')) {
+        el.removeAttribute('data-bb-vom');
+        removed += 1;
+      }
+      for (const el of root.querySelectorAll('*')) {
+        if (el.shadowRoot) walk(el.shadowRoot);
+        if (el.tagName === 'IFRAME') {
+          try {
+            if (el.contentDocument) walk(el.contentDocument);
+          } catch {
+            // 跨源 iframe 不可访问
+          }
+        }
+      }
+    }
+    walk(document);
+    return { removed };
+  }
+
+  function buildObservation(options) {
+    const withRefs = !!options.withRefs;
+    const probeHover = !!options.probeHover;
+    const walkStartedAt = performance.now();
+    if (options.markVom) clearVomMarkers();
+    if (withRefs) {
+      // 清掉已脱离文档的旧 ref，保留仍可用的编号，保证多次 observe 稳定
+      for (const [refId, el] of state.refs) {
+        if (!el.isConnected) {
+          state.refs.delete(refId);
+          state.elRefs.delete(el);
+        }
+      }
+    }
+    const lines = [];
+    const lineMap = [];
+    const mark = (node, depth) => { lineMap.push({ node, depth, index: lines.length - 1 }); };
+    const title = normalizeText(document.title || '');
+    if (!options.only) {
+      lines.push(title ? `- document ${quoteName(truncate(title, NAME_MAX))}` : '- document');
+    }
+    const maxDepth = Number(options.maxDepth);
+    const ctx = {
+      lines, withRefs, probeHover, refs: 0, nodes: options.collectNodes ? [] : null, paintSeq: 0,
+      markVom: !!options.markVom, vomSeq: 0,
+      graph: options.collectGraph ? createGraph() : null,
+      maxDepth: Number.isFinite(maxDepth) && maxDepth > 0 ? maxDepth : 0, truncated: false,
+      surfaces: { iframes: 0, shadows: 0 }, consumedCaptions: new Set(),
+      funnel: { visited: 0, hidden: 0, stealth: 0, skippedTag: 0, emitted: 0, refs: 0, truncated: false, ms: { visibility: 0, stealth: 0 }, walkMs: 0 },
+    };
+
+    // 提示注入剥离：隐藏不可交互的"视觉不可见"子树（opacity/字号/尺寸/离屏），保留可交互控件。
+  const STEALTH_INTERACTIVE = new Set(['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'SUMMARY', 'LABEL']);

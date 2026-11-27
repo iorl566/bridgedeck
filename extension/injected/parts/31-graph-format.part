@@ -1,0 +1,296 @@
+  function createGraph() {
+    return { keyOf: new WeakMap(), nodes: new Map(), edges: [], edgeSeen: new Set(), domKeys: new Map(), seq: 0, truncated: false };
+  }
+
+  /** 页面图必须能跨 executeScript 序列化：只输出纯数组/对象。 */
+  function snapshotGraph(graph) {
+    if (!graph) return null;
+    return {
+      nodes: Array.from(graph.nodes.values()).map((node) => ({
+        key: node.key,
+        ref: node.ref,
+        tag: node.tag,
+        domId: node.domId,
+        role: node.role,
+        parentKey: node.parentKey,
+        frameIndex: Number.isInteger(node.frameIndex) ? node.frameIndex : null,
+        srcUrl: node.srcUrl || null,
+      })),
+      edges: graph.edges.map((edge) => ({ type: edge.type, from: edge.from, to: edge.to })),
+      truncated: graph.truncated === true,
+      nodeLimit: GRAPH_NODE_LIMIT,
+      edgeLimit: GRAPH_EDGE_LIMIT,
+    };
+  }
+
+  function frameIndexOf(el) {
+    try {
+      const all = document.querySelectorAll('iframe');
+      const index = Array.prototype.indexOf.call(all, el);
+      return index >= 0 ? index : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function graphKeyOf(el, graph) {
+    if (!graph || !el || el.nodeType !== 1) return null;
+    const existing = graph.keyOf.get(el);
+    if (existing) return existing;
+    if (graph.nodes.size >= GRAPH_NODE_LIMIT) {
+      graph.truncated = true;
+      return null;
+    }
+    const key = 'n' + (++graph.seq);
+    graph.keyOf.set(el, key);
+    const refSeq = state.elRefs.get(el);
+    graph.nodes.set(key, {
+      key: key,
+      ref: Number.isInteger(refSeq) ? '@e' + refSeq : null,
+      tag: String(el.tagName || '').toLowerCase(),
+      domId: el.id || null,
+      role: el.getAttribute('role') || null,
+      parentKey: null,
+      frameIndex: el.tagName === 'IFRAME' ? frameIndexOf(el) : null,
+      srcUrl: el.tagName === 'IFRAME' ? String(el.src || '').slice(0, 300) : null,
+    });
+    if (el.id) graph.domKeys.set(String(el.id), key);
+    return key;
+  }
+
+  /** DOM id → 图节点 key（已存在则复用，不存在则建节点）；关系链展开用。 */
+  function graphKeyOfDomId(graph, domId) {
+    if (!graph || !domId) return null;
+    const existing = graph.domKeys.get(String(domId));
+    if (existing) return existing;
+    let target = null;
+    try {
+      target = document.getElementById(String(domId));
+    } catch {
+      target = null;
+    }
+    return target ? graphKeyOf(target, graph) : null;
+  }
+
+  function graphEdgeOf(graph, type, from, to) {
+    if (!graph || !from || !to || from === to) return;
+    const id = type + '\u0000' + from + '\u0000' + to;
+    if (graph.edgeSeen.has(id)) return;
+    if (graph.edges.length >= GRAPH_EDGE_LIMIT) {
+      graph.truncated = true;
+      return;
+    }
+    graph.edgeSeen.add(id);
+    graph.edges.push({ type: type, from: from, to: to });
+  }
+
+  /** 记录元素 + 祖先链（child 边）与它自己的语义关系边，返回元素 key。 */
+  function recordElementGraph(el, graph) {
+    if (!graph) return null;
+    const key = graphKeyOf(el, graph);
+    if (!key) return null;
+    let childKey = key;
+    let childEl = el;
+    let depth = 0;
+    while (childEl && childEl.parentElement && depth < GRAPH_ANCESTOR_LIMIT) {
+      const parentEl = childEl.parentElement;
+      const parentKey = graphKeyOf(parentEl, graph);
+      if (!parentKey) break;
+      graphEdgeOf(graph, 'child', parentKey, childKey);
+      graph.nodes.get(childKey).parentKey = parentKey;
+      childKey = parentKey;
+      childEl = parentEl;
+      depth += 1;
+    }
+    if (el.labels && el.labels.length) {
+      for (const label of Array.from(el.labels).slice(0, 4)) {
+        const labelKey = graphKeyOf(label, graph);
+        if (!labelKey) continue;
+        // 显式 <label for>（htmlFor 指向本元素）与隐式包裹 label 分开记：关系来源/置信度不同。
+        const explicit = label.htmlFor && el.id && String(label.htmlFor) === String(el.id);
+        graphEdgeOf(graph, explicit ? 'html-for' : 'label', labelKey, key);
+      }
+    }
+    if (el.form) {
+      const formKey = graphKeyOf(el.form, graph);
+      // form 边的方向统一为“表单 → 控件”（关系方向，见 lib/vom-relations.js 的 form → owns）。
+      if (formKey) graphEdgeOf(graph, 'form', formKey, key);
+    }
+    const roleAttr = normalizeText(el.getAttribute('role') || '').toLowerCase();
+    // 关系边按“关系方向”记录（与 lib/vom-relations.js 的映射一一对应，避免同一网页事实两种方向）：
+    //   label/html-for: 标签 → 控件；labelledby/describedby/errormessage: 目标 → 元素；controls: 元素 → 目标。
+    const emitRelationEdges = (attr, type, reverse) => {
+      const ids = String(el.getAttribute(attr) || '').split(/\s+/).filter(Boolean);
+      for (const targetId of ids.slice(0, GRAPH_OWNER_TARGET_LIMIT)) {
+        let target = null;
+        try { target = document.getElementById(targetId); } catch { target = null; }
+        if (!target) continue;
+        const targetKey = graphKeyOf(target, graph);
+        if (!targetKey) continue;
+        if (reverse) graphEdgeOf(graph, type, targetKey, key);
+        else graphEdgeOf(graph, type, key, targetKey);
+      }
+    };
+    emitRelationEdges('aria-controls', roleAttr === 'tab' ? 'tab-controls' : 'controls', false);
+    emitRelationEdges('aria-owns', 'owns', false);
+    emitRelationEdges('aria-labelledby', 'labelledby', true);
+    emitRelationEdges('aria-describedby', 'describedby', true);
+    emitRelationEdges('aria-errormessage', 'errormessage', true);
+    // labelledby 链：把链上每一跳的节点与 labelledby 边补进图，关系层才能解析出 aria-labelledby-chain。
+    const chainFacts = labelledByChainOf(el);
+    if (chainFacts) {
+      const ordered = chainFacts
+        .filter((hop) => hop && hop.id)
+        .slice()
+        .sort((left, right) => (Number(left.depth) || 0) - (Number(right.depth) || 0));
+      for (const hop of ordered) {
+        const targetKey = graphKeyOfDomId(graph, hop.id);
+        if (!targetKey) continue;
+        const sourceKey = hop.from ? graphKeyOfDomId(graph, hop.from) : key;
+        if (sourceKey) graphEdgeOf(graph, 'labelledby', targetKey, sourceKey);
+      }
+    }
+    return key;
+  }
+
+  function formatNode(el, role, depth, ctx) {
+    const indent = '  '.repeat(depth);
+    const interactive = INTERACTIVE_ROLES.has(role);
+    let prefix = `- ${role}`;
+    let textPart = '';
+    const name = truncate(accessibleName(el, role), NAME_MAX);
+
+    if (role === 'paragraph' || role === 'listitem') {
+      const ariaLabel = normalizeText(el.getAttribute('aria-label') || '');
+      const body = ariaLabel || normalizeText(el.textContent || '');
+      if (body) textPart = `: ${truncate(body, TEXT_MAX)}`;
+    } else if (name) {
+      prefix += ` ${quoteName(name)}`;
+    }
+
+    let line = indent + prefix + textPart;
+    let refId = null;
+    if (interactive && ctx.withRefs) {
+      refId = refFor(el);
+      ctx.refs += 1;
+      line += ` [@e${refId}]`;
+    }
+    if (ctx.nodes && ctx.nodes.length < 500) {
+      const rect = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      const rawValue = 'value' in el ? String(el.value == null ? '' : el.value) : '';
+      const sensitive = /password/i.test(String(el.type || '')) || /(password|token|secret|one-time-code)/i.test(String(el.getAttribute('autocomplete') || ''));
+      const hit = hitTestNode(el, rect, style);
+      const clickableBase = interactive || el.onclick != null || (el.getAttribute('onclick') || '').length > 0 || style.cursor === 'pointer';
+      const clickable = clickableBase && hit.state !== 'blocked' && hit.state !== 'pointer-events-none';
+      const contrast = nodeContrast(el);
+      const textBearing = Boolean(name) || ['paragraph', 'heading', 'listitem', 'cell', 'link', 'button', 'textbox'].includes(role);
+      const vomId = ctx.markVom ? 'v' + (++ctx.vomSeq) : null;
+      if (vomId) el.setAttribute('data-bb-vom', vomId);
+      const graphKey = ctx.graph ? recordElementGraph(el, ctx.graph) : null;
+      // 行事实（虚拟列表契约）与页面侧 paint/裁剪事实：扩展侧 lib/vom-visibility.js 统一归约。
+      const anchor = rowFactsOf(el);
+      const paint = paintVisibilityOf(el, style);
+      const clip = interactive || clickableBase ? clipFactsOf(el, rect) : null;
+      ctx.nodes.push({
+        ref: refId != null ? '@e' + refId : null,
+        vomId,
+        graphKey,
+        tag: String(el.tagName || '').toLowerCase(),
+        id: el.id || null,
+        role: role || null,
+        name: name || null,
+        value: sensitive ? (rawValue ? '********' : '') : truncate(rawValue, TEXT_MAX),
+        checked: typeof el.checked === 'boolean' ? el.checked : null,
+        focused: document.activeElement === el,
+        disabled: el.disabled === true || String(el.getAttribute('aria-disabled') || '').toLowerCase() === 'true',
+        expanded: el.getAttribute('aria-expanded') == null ? null : String(el.getAttribute('aria-expanded')).toLowerCase() === 'true',
+        selected: el.getAttribute('aria-selected') == null ? null : String(el.getAttribute('aria-selected')).toLowerCase() === 'true',
+        required: el.required === true || String(el.getAttribute('aria-required') || '').toLowerCase() === 'true',
+        invalid: String(el.getAttribute('aria-invalid') || '').toLowerCase() === 'true' || (typeof el.matches === 'function' && el.matches(':invalid')),
+        busy: String(el.getAttribute('aria-busy') || '').toLowerCase() === 'true',
+        readonly: el.readOnly === true,
+        placeholder: el.getAttribute('placeholder') || null,
+        ariaControls: el.getAttribute('aria-controls') || null,
+        ariaLive: el.getAttribute('aria-live') || null,
+        ariaPressed: el.getAttribute('aria-pressed') == null ? null : String(el.getAttribute('aria-pressed')).toLowerCase() === 'true',
+        ariaCurrent: el.getAttribute('aria-current') || null,
+        ariaHasPopup: el.getAttribute('aria-haspopup') || null,
+        ariaValueNow: el.getAttribute('aria-valuenow') == null ? null : Number(el.getAttribute('aria-valuenow')),
+        ariaValueMin: el.getAttribute('aria-valuemin') == null ? null : Number(el.getAttribute('aria-valuemin')),
+        ariaValueMax: el.getAttribute('aria-valuemax') == null ? null : Number(el.getAttribute('aria-valuemax')),
+        ariaHidden: String(el.getAttribute('aria-hidden') || '').toLowerCase() === 'true',
+        ariaLabelledBy: el.getAttribute('aria-labelledby') || null,
+        ariaDescribedBy: el.getAttribute('aria-describedby') || null,
+        ariaOwns: el.getAttribute('aria-owns') || null,
+        ariaErrorMessage: el.getAttribute('aria-errormessage') || null,
+        ariaInvalid: el.getAttribute('aria-invalid') || null,
+        labels: el.labels ? Array.from(el.labels).map((label) => normalizeText(label.textContent || '').slice(0, 80)).filter(Boolean) : [],
+        labelIds: el.labels ? Array.from(el.labels).map((label) => label.id).filter(Boolean).slice(0, 8) : [],
+        labelledByChain: labelledByChainOf(el),
+        title: normalizeText(el.getAttribute('title') || '') || null,
+        alt: el.tagName === 'IMG' ? (normalizeText(el.getAttribute('alt') || '') || null) : null,
+        ...(el.tagName === 'TABLE' ? (() => {
+          const tableFacts = tableFactsOf(el);
+          return tableFacts ? { tableFacts } : {};
+        })() : {}),
+        formId: el.form && el.form.id ? String(el.form.id) : null,
+        ancestors: (() => {
+          const out = [];
+          let parent = el.parentElement;
+          while (parent && out.length < 4) {
+            const refSeq = state.elRefs.get(parent);
+            out.push({
+              tag: String(parent.tagName || '').toLowerCase(),
+              role: parent.getAttribute('role') || null,
+              id: parent.id || null,
+              ref: Number.isInteger(refSeq) ? '@e' + refSeq : null,
+              // 上下文分组（lib/vom-context.js）用祖先的可访问名做 landmark/form/table 标签。
+              name: normalizeText(parent.getAttribute('aria-label') || parent.getAttribute('title') || '') || null,
+            });
+            parent = parent.parentElement;
+          }
+          return out;
+        })(),
+        href: role === 'link' && el.href && /^https?:/i.test(el.href) ? el.href : null,
+        inputType: String(el.type || '').toLowerCase() || null,
+        inputState: nodeInputState(el),
+        inForm: el.form != null,
+        clickable: clickable === true,
+        hitTest: hit.state,
+        occludedBy: hit.by,
+        draggable: el.draggable === true,
+        dragHint: nodeDragHint(el),
+        nearbyText: nodeNearbyText(el),
+        paintOrder: ctx.paintSeq++,
+        pointerEvents: style.pointerEvents,
+        cursor: style.cursor,
+        ...(anchor ? { anchor } : {}),
+        paintVisible: paint.paintVisible,
+        hiddenReason: paint.hiddenReason || null,
+        ...(clip && clip.clipped ? { clipped: true, clippedBy: clip.clippedBy || null } : {}),
+        rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+        inViewport: rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth,
+        contrast: contrast == null ? null : Number(contrast.toFixed(2)),
+        lowContrast: contrast != null && textBearing && contrast < 4.5,
+      });
+    }
+    if (role === 'link' && el.href && /^https?:/i.test(el.href)) {
+      line += ' → ' + truncate(el.href.replace(/^https?:\/\//i, ''), 90);
+    }
+    line += statusFlags(el, role, ctx, name)
+      .map((flag) => ` ${flag}`)
+      .join('');
+    if (ctx.probeHover && interactive) {
+      const hoverable =
+        testAttr(el, 'aria-haspopup') || testAttr(el, 'aria-expanded') === 'false';
+      if (hoverable) {
+        const entries = probeHoverEntries(el);
+        if (entries.length) line += ` [hover first: ${entries.join(' | ')}]`;
+      }
+    }
+    return line;
+  }
+
+
+  // ===========================================================================

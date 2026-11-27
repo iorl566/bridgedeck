@@ -1,0 +1,177 @@
+  // §A 状态与 DOM 代数：revision、变更摘要、MutationObserver
+  // ===========================================================================
+  function getVisualState() {
+    return visualState;
+  }
+
+  // 观测代数：DOM 每次变更递增。observe 返回当时的代数，动作可带 expectRevision 要求"同一代数内"。
+  const revisionState = { value: 0 };
+  function bumpRevision() {
+    revisionState.value += 1;
+  }
+  try {
+    new MutationObserver(bumpRevision).observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      characterData: true,
+    });
+  } catch {
+    // 观察器不可用时代数恒为 0，expectRevision 只接受 0
+  }
+  function currentRevision() {
+    return revisionState.value;
+  }
+
+  // <mutation-summary>
+  function summarizeMutations(records, flags = {}) {
+    const counts = { text: 0, added: 0, removed: 0, attributes: 0 };
+    for (const record of Array.isArray(records) ? records : []) {
+      if (!record) continue;
+      if (record.type === 'characterData') counts.text += 1;
+      else if (record.type === 'childList') {
+        counts.added += Number(record.added) || 0;
+        counts.removed += Number(record.removed) || 0;
+      } else if (record.type === 'attribute') counts.attributes += 1;
+    }
+    const total = counts.text + counts.added + counts.removed + counts.attributes;
+    return {
+      ...counts,
+      total,
+      structural: counts.added > 0 || counts.removed > 0,
+      layout: flags.layout === true,
+      interaction: flags.interaction === true,
+    };
+  }
+
+  function shouldFastUnchanged(snapshot) {
+    return !!snapshot && snapshot.total === 0 && snapshot.layout !== true && snapshot.interaction !== true;
+  }
+
+  function canIncremental(snapshot, records) {
+    return !!snapshot && snapshot.total > 0 && snapshot.structural === false && snapshot.attributes === 0
+      && Array.isArray(records) && records.length > 0 && records.every((record) => record && record.type === 'characterData');
+  }
+  // </mutation-summary>
+
+  function handleMutationRecords(records) {
+    const mutation = state.mutation;
+    for (const record of records) {
+      // 忽略桥自己注入的浮层（documentElement 下），否则每次浮层出现都会被当成结构变化。
+      if (record.target && record.target.nodeType === 1 && record.target.closest && record.target.closest('[data-bb-ui="takeover"], #__bb_takeover_host')) continue;
+      if (record.type === 'childList') {
+        const addedNodes = record.addedNodes ? Array.from(record.addedNodes) : [];
+        const removedNodes = record.removedNodes ? Array.from(record.removedNodes) : [];
+        const touchesOverlay = addedNodes.concat(removedNodes).some((node) => node && node.nodeType === 1 && ((node.getAttribute && node.getAttribute('data-bb-ui') === 'takeover') || node.id === '__bb_takeover_host' || (node.closest && node.closest('[data-bb-ui="takeover"], #__bb_takeover_host'))));
+        if (touchesOverlay) continue;
+        if (mutation.raw.length < 200) mutation.raw.push({ type: 'childList', target: record.target, added: addedNodes.length, removed: removedNodes.length });
+      } else if (record.type === 'characterData') {
+        if (mutation.raw.length < 200) mutation.raw.push({ type: 'characterData', target: record.target });
+      } else if (record.type === 'attributes') {
+        const name = String(record.attributeName || '');
+        // VOM 自己的标记属性不算页面变化。
+        if (name.startsWith('data-bb-')) continue;
+        if (mutation.raw.length < 200) mutation.raw.push({ type: 'attribute', target: record.target, name });
+      }
+    }
+  }
+
+  function attachMutationObservers() {
+    const mutation = state.mutation;
+    const attachDoc = (doc, depth) => {
+      if (!doc || depth > 4 || mutation.docs.has(doc)) return;
+      mutation.docs.add(doc);
+      try {
+        new MutationObserver(handleMutationRecords).observe(doc, { subtree: true, childList: true, characterData: true, attributes: true });
+      } catch {
+        // 观察器不可用时退回逐次重建
+      }
+      for (const type of ['input', 'change', 'focusin', 'paste', 'drop']) {
+        try {
+          doc.addEventListener(type, () => { mutation.interactionDirty = true; }, true);
+        } catch {
+          // 某些文档不允许监听
+        }
+      }
+      // 滚动/缩放会改变元素的可见性和位置；window 与 document 都挂。
+      const win = doc.defaultView;
+      for (const target of [win, doc]) {
+        if (!target) continue;
+        for (const type of ['scroll', 'resize']) {
+          try {
+            target.addEventListener(type, () => { mutation.layoutDirty = true; }, { capture: true, passive: true });
+          } catch {
+            // 忽略
+          }
+        }
+      }
+      // 同源 iframe 的文档也要观察，否则 iframe 内部变化不会进入 mutation log。
+      let frames = [];
+      try { frames = Array.from(doc.querySelectorAll('iframe')); } catch { frames = []; }
+      for (const frame of frames) {
+        try {
+          if (frame.contentDocument) attachDoc(frame.contentDocument, depth + 1);
+        } catch {
+          // 跨源 iframe 不可访问
+        }
+      }
+    };
+    attachDoc(document, 0);
+    if (!mutation.loadBound) {
+      mutation.loadBound = true;
+      try {
+        document.addEventListener('load', (event) => {
+          if (event.target && event.target.tagName === 'IFRAME') attachMutationObservers();
+        }, true);
+      } catch {
+        // 忽略
+      }
+    }
+  }
+
+  function ensureMutationTracker() {
+    const mutation = state.mutation;
+    if (mutation.started) {
+      attachMutationObservers();
+      return;
+    }
+    mutation.started = true;
+    attachMutationObservers();
+  }
+
+  function takeMutations() {
+    const mutation = state.mutation;
+    const records = mutation.raw.slice();
+    const snapshot = summarizeMutations(records, { layout: mutation.layoutDirty, interaction: mutation.interactionDirty });
+    snapshot.records = records;
+    mutation.raw = [];
+    mutation.layoutDirty = false;
+    mutation.interactionDirty = false;
+    return snapshot;
+  }
+
+  const formerPasswordFields = new WeakSet();
+  const sensitiveTokens = /(^|\s)(current-password|new-password|one-time-code|cc-[a-z0-9-]+)(\s|$)/i;
+  const sensitiveField = (el) => {
+    if (!(el instanceof HTMLInputElement)) return false;
+    if (el.type === 'password') {
+      formerPasswordFields.add(el);
+      return true;
+    }
+    return formerPasswordFields.has(el) || sensitiveTokens.test(String(el.getAttribute('autocomplete') || ''));
+  };
+  try {
+    new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.oldValue && record.oldValue.toLowerCase() === 'password' && record.target instanceof Element) {
+          formerPasswordFields.add(record.target);
+        }
+      }
+    }).observe(document, { attributes: true, attributeFilter: ['type'], attributeOldValue: true, subtree: true });
+  } catch {
+    // 观察器不可用时仍按当前 type/autocomplete 判断
+  }
+
+  // 稳定 ref：同一个元素在多次 observe 之间复用同一个编号
+
+  // ===========================================================================

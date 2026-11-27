@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>BridgeDeck 运行时浮层演示</title>
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: #f6f8fb; color: #0b1220; }
+    .demo { max-width: 760px; margin: 40px auto; padding: 24px; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p { color: #64748b; font-size: 13px; }
+    .fake-page { margin-top: 24px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+    .fake-page button { padding: 8px 14px; }
+  </style>
+</head>
+<body>
+  <main class="demo">
+    <h1>BridgeDeck 运行时浮层演示</h1>
+    <p>执行期间 UI：借用确认 / 人工协助 / 接管控制条 / 录制指示器（与扩展注入使用同一渲染函数与主题 token）。</p>
+    <div class="fake-page">
+      <p>示例网页内容（背景页）</p>
+      <button type="button">Submit Query</button>
+    </div>
+  </main>
+  <script type="module">
+    import { borrowBanner, helpOverlayFunc, installTakeover } from '../extension/src/overlay-ui.js';
+    import { installRecordOverlay } from '../extension/src/record-overlay.js';
+    import { installStatusChip } from '../extension/src/status-chip.js';
+    import { borrowToast } from '../extension/src/overlay-ui.js';
+    import { OVERLAY_THEME } from '../extension/src/overlay-theme.js';
+
+    const view = new URLSearchParams(location.search).get('view') || 'borrow';
+    try {
+      if (view === 'borrow') {
+        borrowBanner('demo-borrow', '示例标签页', 30000, 'zh', OVERLAY_THEME);
+      } else if (view === 'help') {
+        helpOverlayFunc('demo-help', '请登录后点击“继续”，Agent 会在你完成后自动接管。', '', null, '需要你完成一步操作', 'zh', OVERLAY_THEME);
+      } else if (view === 'takeover') {
+        installTakeover({ sessionId: 'demo-session', project: '示例项目', controller: { name: 'Agent', color: '#2f6fed' }, mode: 'ready', paused: false, borrowed: false, minimized: false }, 'zh', 50, OVERLAY_THEME);
+      } else if (view === 'record') {
+        installRecordOverlay(Date.now(), 'zh', OVERLAY_THEME);
+      } else if (view === 'longshot') {
+        installStatusChip({ kind: 'capture', label: '正在截取整页', detail: '分片 3/8 · 已拼接 2.4k px', lang: 'zh', theme: OVERLAY_THEME });
+      } else if (view === 'video') {
+        installStatusChip({ kind: 'video', label: '正在录制视频', detail: '标准 · 1280/15fps', lang: 'zh', theme: OVERLAY_THEME, startedAt: Date.now() - 12000 });
+      } else if (view === 'toast') {
+        borrowToast('demo-toast', '示例标签页', 30000, 'zh', OVERLAY_THEME);
+      }
+      document.title = 'READY:' + view;
+    } catch (error) {
+      document.title = 'ERROR:' + view + ':' + (error && error.message ? error.message : error);
+    }
+  </script>
+</body>
+</html>

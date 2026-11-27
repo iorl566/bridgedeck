@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <title>视频录制 · BridgeDeck</title>
-  <link rel="stylesheet" href="ui.css" />
+  <script src="direction.js"></script>
+<link rel="stylesheet" href="ui.css" />
+  <link rel="stylesheet" href="page-brand.css" />
 <script type="module" src="i18n.js"></script>
 </head>
 <body>
@@ -21,7 +23,7 @@
     <section class="panel">
       <h2>录制</h2>
       <div class="toolbar">
-        <select id="tabSelect" class="inline-input" style="min-width:220px"></select>
+        <select id="tabSelect" aria-label="目标标签页" class="inline-input" style="min-width:220px"></select>
         <button id="start" class="btn primary">开始录制</button>
         <button id="stop" class="btn danger" disabled>停止录制</button>
         <span id="status" class="muted">未开始</span>
@@ -38,8 +40,12 @@
         <span class="grow"></span>
         <button id="refresh" class="btn">刷新</button>
       </div>
+      <div id="recordTools" class="filters"></div>
       <div id="list" class="list" style="margin-top:12px"></div>
       <div id="empty" class="muted" style="margin-top:10px">还没有录制文件</div>
+      <div id="recordPager" class="pager"></div>
+      <div id="recordTimeline" hidden></div>
+      <div id="recordDetail" hidden></div>
       <div id="previewWrap" class="video-wrap" hidden>
         <div class="toolbar">
           <span id="previewTitle" class="muted"></span>
@@ -54,5 +60,6 @@
     <div id="note" class="note"></div>
   </main>
   <script type="module" src="record.js"></script>
+  <script type="module" src="page-brand.js"></script>
 </body>
 </html>

@@ -54,7 +54,9 @@ export const OVERLAY_PACKS = {
     "manualFrame": "拍一帧",
     "manualDone": "完成",
     "manualCancel": "取消",
-    "manualFrames": " 帧"
+    "manualFrames": " 帧",
+    "borrowInactiveTitle": "Agent 请求借用标签页",
+    "helpCompactStatus": "当前 Agent 仍在等待你完成此步骤"
   },
   "en": {
     "borrowTitle": "Allow tab borrowing?",
@@ -110,7 +112,9 @@ export const OVERLAY_PACKS = {
     "manualFrame": "Capture frame",
     "manualDone": "Done",
     "manualCancel": "Cancel",
-    "manualFrames": " frames"
+    "manualFrames": " frames",
+    "borrowInactiveTitle": "Agent requests tab borrowing",
+    "helpCompactStatus": "The agent is still waiting for you to complete this step"
   },
   "ja": {
     "borrowTitle": "タブの借用を許可しますか？",
@@ -166,7 +170,9 @@ export const OVERLAY_PACKS = {
     "manualFrame": "フレームを撮影",
     "manualDone": "完了",
     "manualCancel": "キャンセル",
-    "manualFrames": " フレーム"
+    "manualFrames": " フレーム",
+    "borrowInactiveTitle": "Agent がタブの借用を要求しています",
+    "helpCompactStatus": "Agent はまだこの手順の完了を待っています"
   },
   "ko": {
     "borrowTitle": "탭 사용을 허용할까요?",
@@ -222,7 +228,9 @@ export const OVERLAY_PACKS = {
     "manualFrame": "프레임 캡처",
     "manualDone": "완료",
     "manualCancel": "취소",
-    "manualFrames": "프레임"
+    "manualFrames": "프레임",
+    "borrowInactiveTitle": "Agent가 탭 대여를 요청합니다",
+    "helpCompactStatus": "Agent가 아직 이 단계의 완료를 기다리고 있습니다"
   },
   "de": {
     "borrowTitle": "Tab-Ausleihe erlauben?",
@@ -278,7 +286,9 @@ export const OVERLAY_PACKS = {
     "manualFrame": "Frame aufnehmen",
     "manualDone": "Fertig",
     "manualCancel": "Abbrechen",
-    "manualFrames": " Frames"
+    "manualFrames": " Frames",
+    "borrowInactiveTitle": "Agent fordert Tab-Ausleihe an",
+    "helpCompactStatus": "Der Agent wartet noch darauf, dass Sie diesen Schritt abschließen"
   },
   "es": {
     "borrowTitle": "¿Permitir tomar prestada la pestaña?",
@@ -334,7 +344,9 @@ export const OVERLAY_PACKS = {
     "manualFrame": "Capturar fotograma",
     "manualDone": "Hecho",
     "manualCancel": "Cancelar",
-    "manualFrames": " fotogramas"
+    "manualFrames": " fotogramas",
+    "borrowInactiveTitle": "Agent solicita el préstamo de una pestaña",
+    "helpCompactStatus": "El Agent sigue esperando que completes este paso"
   },
   "fr": {
     "borrowTitle": "Autoriser l'emprunt de l'onglet ?",
@@ -390,7 +402,9 @@ export const OVERLAY_PACKS = {
     "manualFrame": "Capturer une image",
     "manualDone": "Terminer",
     "manualCancel": "Annuler",
-    "manualFrames": " images"
+    "manualFrames": " images",
+    "borrowInactiveTitle": "L'Agent demande l'emprunt d'un onglet",
+    "helpCompactStatus": "L'Agent attend toujours que vous terminiez cette étape"
   },
   "it": {
     "borrowTitle": "Consentire il prestito della scheda?",
@@ -446,7 +460,9 @@ export const OVERLAY_PACKS = {
     "manualFrame": "Cattura fotogramma",
     "manualDone": "Fine",
     "manualCancel": "Annulla",
-    "manualFrames": " fotogrammi"
+    "manualFrames": " fotogrammi",
+    "borrowInactiveTitle": "L'Agent richiede il prestito della scheda",
+    "helpCompactStatus": "L'Agent sta ancora aspettando che tu completi questo passaggio"
   },
   "pt": {
     "borrowTitle": "Permitir empréstimo da guia?",
@@ -502,7 +518,9 @@ export const OVERLAY_PACKS = {
     "manualFrame": "Capturar quadro",
     "manualDone": "Concluir",
     "manualCancel": "Cancelar",
-    "manualFrames": " quadros"
+    "manualFrames": " quadros",
+    "borrowInactiveTitle": "Agent solicita empréstimo da aba",
+    "helpCompactStatus": "O Agent ainda aguarda que você conclua esta etapa"
   },
   "zh-TW": {
     "borrowTitle": "允許借用分頁？",
@@ -558,6 +576,124 @@ export const OVERLAY_PACKS = {
     "manualFrame": "擷取一格",
     "manualDone": "完成",
     "manualCancel": "取消",
-    "manualFrames": " 格"
+    "manualFrames": " 格",
+    "borrowInactiveTitle": "Agent 請求借用分頁",
+    "helpCompactStatus": "目前 Agent 仍在等待你完成此步驟"
+  },
+  "ar": {
+    "borrowTitle": "السماح باستعارة علامة التبويب؟",
+    "borrowBody": "يريد الوكيل تولي علامة التبويب هذه مؤقتًا والعمل في متصفحك. يمكنك الرفض أو السماح.",
+    "borrowTarget": "علامة التبويب الهدف: ",
+    "borrowDeny": "رفض",
+    "borrowAllow": "سماح",
+    "borrowAutoDeny": " رفض تلقائي بعد ",
+    "toastTitle": "الوكيل يريد استعارة علامة تبويب",
+    "toastTarget": "الهدف: ",
+    "toastAllow": "سماح",
+    "toastDeny": "رفض",
+    "toastClose": "إغلاق",
+    "helpTitle": "الوكيل يحتاج مساعدتك",
+    "helpReason": "أكمل إجراء الصفحة ثم أعد التحكم إلى الوكيل.",
+    "helpCollapse": "طي",
+    "helpPlaceholder": "رسالة للوكيل (اختياري)",
+    "helpCancel": "إلغاء الطلب",
+    "helpDone": "تم، أعد التحكم",
+    "helpExpand": "توسيع",
+    "takeoverReadyTitle": "الوكيل جاهز",
+    "takeoverReadySub": "يمكنك تولي الأمر في أي وقت",
+    "takeoverActingTitle": "الوكيل يعمل",
+    "takeoverActingSub": "يمكنك تولي الأمر في أي وقت",
+    "takeoverSyncingTitle": "الوكيل يزامن",
+    "takeoverSyncingSub": "يقرأ أحدث حالة للصفحة",
+    "takeoverHeldTitle": "تم إيقاف الوكيل مؤقتًا",
+    "takeoverHeldSub": "أعد التحكم عندما تكون جاهزًا",
+    "takeoverHumanTitle": "أنت تتحكم الآن",
+    "takeoverHumanSub": "يتابع الوكيل عندما تتوقف",
+    "takeoverEditingTitle": "أنت تحرّر",
+    "takeoverEditingSub": "أعد التحكم عند الانتهاء",
+    "takeoverYieldingTitle": "الوكيل يتوقف",
+    "takeoverYieldingSub": "بانتظار انتهاء الإجراء الحالي",
+    "takeoverUnavailableTitle": "الصفحة غير قابلة للمراقبة",
+    "takeoverUnavailableSub": "توقف الوكيل",
+    "takeoverBorrowed": "يعمل على علامة التبويب المستعارة",
+    "takeoverPause": "إيقاف الوكيل",
+    "takeoverResume": "تسليم للوكيل",
+    "takeoverStop": "إيقاف المهمة",
+    "takeoverConfirmStop": "انقر مرة أخرى للإيقاف",
+    "takeoverStopConfirmSub": "انقر مرة أخرى خلال 3 ثوانٍ. استخدم الإيقاف المؤقت إذا أردت التعليق فقط.",
+    "takeoverStopping": "جارٍ إيقاف المهمة…",
+    "takeoverMini": "الوكيل يتحكم",
+    "takeoverProject": "المشروع",
+    "takeoverSession": "الجلسة",
+    "takeoverBadge": "تعاون بشري",
+    "takeoverControlling": "الوكيل يتحكم",
+    "takeoverReading": "يقرأ أحدث حالة للصفحة",
+    "recordLabel": "يسجّل إجراءاتك",
+    "recordFinish": "إنهاء",
+    "manualLabel": "لقطة صفحة يدوية",
+    "manualFrame": "التقاط إطار",
+    "manualDone": "تم",
+    "manualCancel": "إلغاء",
+    "manualFrames": " إطار",
+    "borrowInactiveTitle": "يطلب الوكيل استعارة علامة تبويب",
+    "helpCompactStatus": "لا يزال الوكيل في انتظار إكمالك هذه الخطوة"
+  },
+  "he": {
+    "borrowTitle": "לאשר שאילת לשונית?",
+    "borrowBody": "הסוכן רוצה להשתלט זמנית על הלשונית הזו ולפעול בדפדפן שלך. ניתן לסרב או לאשר.",
+    "borrowTarget": "לשונית יעד: ",
+    "borrowDeny": "סרב",
+    "borrowAllow": "אשר",
+    "borrowAutoDeny": " סירוב אוטומטי בעוד ",
+    "toastTitle": "הסוכן רוצה לשאול לשונית",
+    "toastTarget": "יעד: ",
+    "toastAllow": "אשר",
+    "toastDeny": "סרב",
+    "toastClose": "סגור",
+    "helpTitle": "הסוכן זקוק לעזרתך",
+    "helpReason": "השלם את פעולת העמוד ואז החזר שליטה לסוכן.",
+    "helpCollapse": "כווץ",
+    "helpPlaceholder": "הודעה לסוכן (אופציונלי)",
+    "helpCancel": "בטל בקשה",
+    "helpDone": "סיום, החזר שליטה",
+    "helpExpand": "הרחב",
+    "takeoverReadyTitle": "הסוכן מוכן",
+    "takeoverReadySub": "ניתן להשתלט בכל עת",
+    "takeoverActingTitle": "הסוכן פועל",
+    "takeoverActingSub": "ניתן להשתלט בכל עת",
+    "takeoverSyncingTitle": "הסוכן מסתנכרן",
+    "takeoverSyncingSub": "קורא את מצב העמוד העדכני",
+    "takeoverHeldTitle": "הסוכן הושהה",
+    "takeoverHeldSub": "החזר שליטה כשתהיה מוכן",
+    "takeoverHumanTitle": "אתה בשליטה כעת",
+    "takeoverHumanSub": "הסוכן ימשיך כשתפסיק",
+    "takeoverEditingTitle": "אתה עורך",
+    "takeoverEditingSub": "החזר שליטה בסיום",
+    "takeoverYieldingTitle": "הסוכן עוצר",
+    "takeoverYieldingSub": "ממתין לפעולה הנוכחית",
+    "takeoverUnavailableTitle": "העמוד אינו ניתן לצפייה",
+    "takeoverUnavailableSub": "הסוכן עצר",
+    "takeoverBorrowed": "עובד על הלשונית השאולה",
+    "takeoverPause": "השהה סוכן",
+    "takeoverResume": "העבר לסוכן",
+    "takeoverStop": "עצור משימה",
+    "takeoverConfirmStop": "לחץ שוב לעצירה",
+    "takeoverStopConfirmSub": "לחץ שוב תוך 3 שניות; השתמש בהשהיה אם ברצונך רק להשהות.",
+    "takeoverStopping": "עוצר את המשימה…",
+    "takeoverMini": "הסוכן בשליטה",
+    "takeoverProject": "פרויקט",
+    "takeoverSession": "ישיבה",
+    "takeoverBadge": "שיתוף אדם וסוכן",
+    "takeoverControlling": "הסוכן בשליטה",
+    "takeoverReading": "קורא את מצב העמוד העדכני",
+    "recordLabel": "מקליט את הפעולות שלך",
+    "recordFinish": "סיום",
+    "manualLabel": "צילום עמוד ידני",
+    "manualFrame": "לכוד פריים",
+    "manualDone": "סיום",
+    "manualCancel": "ביטול",
+    "manualFrames": " פריימים",
+    "borrowInactiveTitle": "הסוכן מבקש שאילת לשונית",
+    "helpCompactStatus": "הסוכן עדיין ממתין שתשלים שלב זה"
   }
 };

@@ -1,0 +1,217 @@
+  function buildDeepVom(args) {
+    const started = performance.now();
+    resetRowFactsCache();
+    const all = [];
+    collectDeepElements(document.documentElement, all);
+    const stages = {
+      collected: all.length, skippedTag: 0, hidden: 0, stealth: 0, empty: 0, deduped: 0,
+      emitted: 0, tokens: 0, truncated: false,
+    };
+    const candidates = [];
+    const seen = new Map();
+    let order = 0;
+    for (const el of all) {
+      order += 1;
+      const tag = el.tagName;
+      if (SKIP_TAGS.has(tag)) { stages.skippedTag += 1; continue; }
+      if (!isVisible(el)) { stages.hidden += 1; continue; }
+      if (!deepInteractive(el) && deepHidden(el)) { stages.stealth += 1; continue; }
+      const role = roleOf(el) || '';
+      const name = normalizeText(accessibleName(el, role) || '');
+      const text = normalizeText(el.textContent || '');
+      const interactive = deepInteractive(el) || role === 'button' || role === 'link';
+      if (!interactive && !name && !text) { stages.empty += 1; continue; }
+      const rect = el.getBoundingClientRect();
+      const key = [role, name, tag, el.id || '', Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)].join('|');
+      if (seen.has(key)) { stages.deduped += 1; continue; }
+      seen.set(key, true);
+      candidates.push({
+        el, tag, role: role || null, name: name || null, interactive,
+        rect: {
+          x: Math.round((rect.left + (window.scrollX || 0)) * 10) / 10,
+          y: Math.round((rect.top + (window.scrollY || 0)) * 10) / 10,
+          width: Math.round(rect.width * 10) / 10,
+          height: Math.round(rect.height * 10) / 10,
+        },
+        order,
+      });
+    }
+    // 绘制序：先按视口外坐标（含滚动）从上到下、从左到右；同位置按 DOM 顺序。
+    candidates.sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x || a.order - b.order);
+    const budget = Number(args && args.deepMaxTokens) > 0
+      ? Math.min(Math.round(Number(args.deepMaxTokens)), 20000)
+      : 12000;
+    const nodes = [];
+    const lines = [];
+    let tokens = 0;
+    for (const item of candidates) {
+      const line = '- ' + (item.role || item.tag.toLowerCase())
+        + (item.name ? ' ' + quoteName(truncate(item.name, NAME_MAX)) : '')
+        + (item.interactive ? ' [interactive]' : '')
+        + (item.rect.width && item.rect.height ? ' @' + Math.round(item.rect.x) + ',' + Math.round(item.rect.y) : '');
+      const cost = estimateDeepTokens(line);
+      if (tokens + cost > budget && nodes.length) { stages.truncated = true; break; }
+      tokens += cost;
+      lines.push(line);
+      // 与树观察同一个 rowFactsOf：深观察节点也带虚拟列表行事实，供 W2 动作守卫消费。
+      const anchor = rowFactsOf(item.el);
+      nodes.push({
+        id: 'vom-deep:' + nodes.length,
+        ref: '@e' + refFor(item.el),
+        tag: item.tag,
+        role: item.role,
+        name: item.name,
+        interactive: item.interactive,
+        rect: item.rect,
+        ...(anchor ? { anchor } : {}),
+      });
+    }
+    stages.emitted = nodes.length;
+    stages.tokens = tokens;
+    return {
+      nodes,
+      lines,
+      stages: { ...stages, elapsedMs: Math.round(performance.now() - started), sorted: 'paint-order' },
+      revision: currentRevision(),
+    };
+  }
+
+  function observe(args) {
+    ensureMutationTracker();
+    resetRowFactsCache();
+    const mutations = takeMutations();
+    const url = location.href;
+    const previous = state.lastObservation;
+    const wantsFull = args.force === true || args.delta === true || args.baseline !== undefined || args.vomDeep === true;
+    const plain = !args.probeHover && args.maxDepth == null && !args.debugSurfaces && !args.vom && !args.markVom && !args.facts && !args.vomDeep;
+    // 无 mutation、无输入交互且参数与上次一致：直接返回 unchanged，不重建 VOM。
+    if (!wantsFull && plain && previous && previous.plain === true && previous.url === url
+      && shouldFastUnchanged(mutations)) {
+      return {
+        url,
+        title: document.title || '',
+        unchanged: true,
+        refs: previous.refs || 0,
+        nodes: [],
+        blocking: detectBlockingLayer(),
+        revision: currentRevision(),
+        mutations,
+      };
+    }
+    // mutation-log 快补丁：只有文本节点变化时，只重渲染最近祖先子树。
+    if (args.delta === true && args.force !== true && plain && previous && previous.plain === true
+      && previous.url === url && canIncremental(mutations, mutations.records)) {
+      const patched = incrementalObservation(previous, mutations.records);
+      if (patched != null) {
+        const refs = (patched.match(/\[@e\d+\]/g) || []).length;
+        const revision = currentRevision();
+        state.lastObservation = { url, text: patched, refs, revision, plain: true, lineMap: null };
+        return {
+          url,
+          title: document.title || '',
+          observation: patched,
+          refs,
+          nodes: [],
+          blocking: detectBlockingLayer(),
+          revision,
+          mutations,
+          incremental: true,
+        };
+      }
+    }
+    const started = performance.now();
+    const built = buildObservation({ withRefs: true, probeHover: !!args.probeHover, maxDepth: args.maxDepth, debugSurfaces: !!args.debugSurfaces, collectNodes: !!args.collectNodes || !!args.vom, collectGraph: !!args.vom, markVom: !!args.markVom });
+    const deep = args.vomDeep === true ? buildDeepVom(args) : null;
+    const text = built.lines.join('\n');
+    const unchanged = !wantsFull && previous && previous.url === url && previous.text === text;
+    state.lastObservation = { url, text, refs: built.refs, revision: currentRevision(), plain, lineMap: built.lineMap };
+    return {
+      url,
+      title: document.title || '',
+      ...(unchanged ? { unchanged: true } : { observation: text }),
+      refs: built.refs,
+      nodes: built.nodes || [],
+      ...(built.graph ? { graph: built.graph } : {}),
+      ...(built.stats ? { stages: { ...built.stats, elapsedMs: Math.round(performance.now() - started), serializeMs: Math.max(0, Math.round((performance.now() - started) - (Number(built.stats.ms && built.stats.ms.walk) || 0))) } } : {}),
+      ...(deep ? { deepVom: deep } : {}),
+      blocking: detectBlockingLayer(),
+      revision: currentRevision(),
+      mutations,
+    };
+  }
+
+  function snapshot() {
+    const built = buildObservation({ withRefs: true, probeHover: false });
+    return { text: built.lines.join('\n'), refs: built.refs };
+  }
+
+  function resetRefs() {
+    state.refs.clear();
+    state.elRefs = new WeakMap();
+    state.rowAnchors.clear();
+    resetRowFactsCache();
+    state.seq = 0;
+    return { ok: true };
+  }
+
+  // ---------- 元素解析 ----------
+
+  function findByText(text) {
+    const wanted = String(text == null ? '' : text).trim();
+    if (!wanted) pageError('E_BAD_ARG', 'text 不能为空');
+    const candidates = [...document.querySelectorAll('button,a,[role="button"],[role="link"],[role="menuitem"],[data-key],.desktop-item')];
+    const textOf = (el) => String(el.innerText || el.textContent || '').trim();
+    let matches = candidates.filter((el) => textOf(el) === wanted);
+    if (!matches.length) matches = candidates.filter((el) => textOf(el).includes(wanted));
+    if (!matches.length) {
+      const all = [...document.querySelectorAll('*')].filter((el) => textOf(el) === wanted && (el.offsetWidth || el.offsetHeight));
+      matches = all.length ? all : [...document.querySelectorAll('*')].filter((el) => textOf(el) === wanted);
+    }
+    if (!matches.length) pageError('E_NOT_FOUND', '找不到文本匹配的元素: ' + wanted);
+    // 优先取最内层匹配，避免点到只包一层的 wrapper；应用卡片本身仍有 data-key。
+    const leaves = matches.filter((el) => !matches.some((other) => other !== el && el.contains(other)));
+    return (leaves.length ? leaves : matches)[0];
+  }
+
+  function resolveElement(args) {
+    const hasRef = typeof args.ref === 'string' && args.ref.length > 0;
+    const hasSelector = typeof args.selector === 'string' && args.selector.length > 0;
+    const hasText = typeof args.text === 'string' && args.text.length > 0;
+    const count = [hasRef, hasSelector, hasText].filter(Boolean).length;
+    if (count !== 1) {
+      pageError('E_BAD_ARG', 'ref、selector、text 必须恰好给一个');
+    }
+    if (hasText) return findByText(args.text);
+    if (hasSelector) {
+      let el = null;
+      try {
+        el = document.querySelector(args.selector);
+      } catch {
+        pageError('E_BAD_ARG', `无效的 CSS 选择器: ${args.selector}`);
+      }
+      if (!el) pageError('E_NOT_FOUND', `找不到匹配选择器的元素: ${args.selector}`);
+      if (!el.isConnected) pageError('E_NOT_FOUND', `元素已脱离文档: ${args.selector}`);
+      return el;
+    }
+    const match = /^@e(\d+)$/.exec(args.ref);
+    if (!match) pageError('E_BAD_ARG', `ref 格式应为 @eN，收到: ${args.ref}`);
+    const refId = Number(match[1]);
+    const el = state.refs.get(refId);
+    if (!el) pageError('E_STALE_REF', `ref ${args.ref} 不在当前 ref 表里，请重新 observe`);
+    if (!el.isConnected) pageError('E_STALE_REF', `ref ${args.ref} 指向的元素已不在文档里，请重新 observe`);
+    return el;
+  }
+
+  function scrollIntoView(el) {
+    try {
+      el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+    } catch {
+      try {
+        el.scrollIntoView();
+      } catch {
+        // 忽略：元素可能不可滚动
+      }
+    }
+  }
+
+  // ===========================================================================

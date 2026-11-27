@@ -1,0 +1,61 @@
+  function nodeBrief(el) {
+    if (!el || el.nodeType !== 1) return null;
+    const role = roleOf(el) || '';
+    return {
+      tag: String(el.tagName || '').toLowerCase(),
+      role: role || null,
+      id: el.id || null,
+      name: truncate(accessibleName(el, role), 60) || null,
+    };
+  }
+
+  /**
+   * VOM 命中测试：取元素可见区域中心点做 elementFromPoint。
+   * 返回 self/descendant/ancestor 表示可命中；blocked 表示被其他元素挡住；
+   * pointer-events-none/offscreen/empty/none/unknown 表示不可命中原因。
+   */
+  function hitTestNode(el, rect, style) {
+    if (style.pointerEvents === 'none') return { state: 'pointer-events-none', by: null };
+    const doc = el.ownerDocument || document;
+    const win = doc.defaultView || window;
+    const vw = win.innerWidth || 0;
+    const vh = win.innerHeight || 0;
+    if (!vw || !vh) return { state: 'unknown', by: null };
+    if (!(rect.width > 0 && rect.height > 0)) return { state: 'empty', by: null };
+    if (rect.right <= 0 || rect.bottom <= 0 || rect.left >= vw || rect.top >= vh) return { state: 'offscreen', by: null };
+    const left = Math.max(rect.left, 0);
+    const right = Math.min(rect.right, vw);
+    const top = Math.max(rect.top, 0);
+    const bottom = Math.min(rect.bottom, vh);
+    if (right <= left || bottom <= top) return { state: 'offscreen', by: null };
+    const x = (left + right) / 2;
+    const y = (top + bottom) / 2;
+    let root = doc;
+    try {
+      if (el.getRootNode) {
+        const candidate = el.getRootNode();
+        if (candidate && typeof candidate.elementFromPoint === 'function') root = candidate;
+      }
+    } catch {
+      // shadow/iframe 边界异常时退回文档级命中
+    }
+    let hit = null;
+    try {
+      hit = root.elementFromPoint(x, y);
+    } catch {
+      hit = null;
+    }
+    if (!hit) return { state: 'none', by: null };
+    if (hit === el) return { state: 'self', by: null };
+    if (el.contains && el.contains(hit)) return { state: 'descendant', by: null };
+    // shadow DOM 会在文档级 elementFromPoint 上 retarget 到 host；host 是祖先不算遮挡
+    if (hit.contains && hit.contains(el)) return { state: 'ancestor', by: null };
+    if (hit.shadowRoot && hit.shadowRoot.contains && hit.shadowRoot.contains(el)) return { state: 'ancestor', by: null };
+    return { state: 'blocked', by: nodeBrief(hit), byOwnOverlay: isOwnOverlayNode(hit), byLayer: layerFactsOf(hit) };
+  }
+
+  /**
+   * 视觉候选扫描：把 canvas / 图片 / 自绘区域列成可引用的目标。
+   * 先有"区域"这个对象，再谈坐标；坐标永远相对某个候选，
+   * 命中校验也才有"是不是它"可判。只报告几何与类型，不判断内容是什么。
+   */

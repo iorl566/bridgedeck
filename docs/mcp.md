@@ -21,6 +21,40 @@ Agent 配置示例：
 }
 ```
 
+## 一键写入客户端配置
+
+```powershell
+node cli/bridge.mjs mcp-install --dry-run --json
+node cli/bridge.mjs mcp-install --client claude,opencode,vscode,copilot
+```
+
+支持 **30 个客户端**（或 `all`）：`claude`、`claude-desktop`、`cursor`、`opencode`、
+`vscode`、`vscode-insiders`、`windsurf`、`kilo`、`amp`、`copilot`、`kiro`、`qwen`、`codebuddy`、
+`cortex`、`pi`、`qoder`、`warp`、`junie`、`kimi`、`lm-studio`、`trae`、`trae-cn`、`cline`、
+`roo-cline`、`augment`、`codex`、`grok`、`goose`、`hermes`、`dsh`。
+JSON/JSONC 注释与格式保留；Codex/Grok 使用 TOML，Goose/Hermes 使用 YAML（已有顶层 key 时插入子项，不重写其他条目），DSH 写 `cordis.patch.yml` patch 行（已有 browser-bridge 行时更新 command/args）。
+
+| 客户端 | 文件 | keyPath |
+| --- | --- | --- |
+| Claude Code | `~/.claude.json` | `mcpServers` |
+| Claude Desktop | `.../Claude/claude_desktop_config.json` | `mcpServers` |
+| Cursor | `~/.cursor/mcp.json` | `mcpServers` |
+| OpenCode | `~/.config/opencode/opencode.json` | `mcp.servers`（local + command 数组） |
+| VS Code | `.../Code/User/mcp.json` | `servers` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` |
+| Kilo | `~/.config/kilo/kilo.json` | `mcp`（local + command 数组） |
+| Amp | `~/.config/amp/settings.json` | `amp.mcpServers` |
+| Copilot | `~/.copilot/mcp-config.json` | `mcpServers` |
+| Kiro | `~/.kiro/settings/mcp.json` | `mcpServers` |
+| Qwen | `~/.qwen/settings.json` | `mcpServers` |
+
+安全约定：
+
+- 已存在同名但配置不同的 server 时返回 `conflict`，不覆盖；
+- JSONC 注释/尾逗号支持，写入后会二次解析校验；
+- `--dry-run` 只输出将写入的文本，不落盘；
+- Codex 的 TOML 仍走 `install-skill --harness codex --mcp`。
+
 ## 工具
 
 | 工具 | 用途 |

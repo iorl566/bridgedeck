@@ -1,0 +1,33 @@
+Extract loaded tables/lists with column definitions and source metadata
+
+Usage: bsk.exe extract [OPTIONS] <ACTION>
+
+Arguments:
+  <ACTION>  Discover containers, extract a table, or extract list items [possible values: discover, table, list]
+
+Options:
+      --session <SESSION>
+      --context <CONTEXT>              Control context returned by cooperate sync. Required for shared-tab actions
+      --scope <SCOPE>
+      --depends-on <DEPENDS_ON>        Legacy strict-policy decision regions. Target policy uses --expect instead
+      --tab-id <TAB_ID>
+      --observation <OBSERVATION>      Explicit observation ID for visual or untargeted actions; never inferred from cached state
+      --selector <SELECTOR>            Unique CSS container selector in the top-level document
+      --expect <EXPECT>                JSON array of target facts to check before input: [{"target":"@e1","field":"text","equals":"Save"}]
+      --target <TARGET>                A session/document-bound target_id returned by extract discover
+      --json                           Emit machine-readable JSON output (when meaningful)
+      --ref <REF>                      Fresh DOM reference from observe/snapshot
+      --item-selector <ITEM_SELECTOR>  Item selector relative to the list container
+      --quiet                          Suppress informational output
+      --fields <FIELDS>                JSON file containing { "fields": [...] }; list extraction only
+  -v, --verbose...                     Increase log verbosity (`-v` debug, `-vv` trace)
+      --fields-json <FIELDS_JSON>      Inline { "fields": [...] }, useful for tool adapters
+      --max-rows <MAX_ROWS>
+      --max-columns <MAX_COLUMNS>
+      --max-bytes <MAX_BYTES>
+      --timeout-ms <TIMEOUT_MS>        Renderer collection budget in milliseconds (default 5000)
+      --format <OUTPUT_FORMAT>         [default: json] [possible values: json, csv]
+      --out <OUT>                      Save on the CLI host. CSV also saves <out>.meta.json
+      --overwrite                      Replace existing output files after successful extraction
+      --csv-safe                       Prefix formula-like CSV cells with an apostrophe; record originals in metadata
+  -h, --help                           Print help

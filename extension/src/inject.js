@@ -60,13 +60,17 @@ export function evalMainFunc(expression) {
 }
 
 /** 注入函数：读取主世界的 console 缓冲（console 命令）。 */
-export function consoleMainFunc(since, limit) {
+export function consoleMainFunc(since, limit, maxTextChars) {
   try {
     const entries = globalThis.__BB_MAIN_LOG__;
     if (!Array.isArray(entries)) {
       return { ok: true, result: { entries: [], total: 0, nextCursor: null } };
     }
-    let list = entries.slice();
+    const maxChars = Number.isFinite(Number(maxTextChars)) && Number(maxTextChars) > 0 ? Math.floor(Number(maxTextChars)) : 0;
+    let list = entries.slice().map((item) => {
+      if (!maxChars || !item || typeof item.text !== 'string' || item.text.length <= maxChars) return item;
+      return { ...item, text: item.text.slice(0, maxChars) + '…', truncated: true, textLength: item.text.length };
+    });
     if (Number.isFinite(since) && since > 0) {
       // since 约定：> 1e11 视为 epoch 毫秒；否则视为「跳过前 N 条」的下标
       list = since > 1e11 ? list.filter((item) => item.ts > since) : list.slice(Math.min(Math.floor(since), list.length));
@@ -225,24 +229,26 @@ export async function evalByCdp(tabId, expression) {
 }
 
 /** 读取主世界 console 缓冲；钩子按需注入（默认不 patch 页面原生函数）。 */
-export async function readConsole(tabId, since, limit) {
+export async function readConsole(tabId, since, limit, maxTextChars) {
   // 首次读取时才注入：注入后只能拿到注入之后的条目，页面加载早期的日志
   // 由 debug 采集的 CDP 管线（Runtime.consoleAPICalled）覆盖。
   const hooked = await ensureHooks(tabId);
-  const raw = await runInjection(tabId, 'MAIN', consoleMainFunc, [since, limit]);
+  const raw = await runInjection(tabId, 'MAIN', consoleMainFunc, [since, limit, maxTextChars]);
   if (!raw || typeof raw !== 'object') throw bridgeError('E_INTERNAL', '读取 console 无返回');
   if (raw.ok === false) throw bridgeError(raw.error.code, raw.error.message);
   return hooked ? raw.result : { ...raw.result, hooked: false };
 }
 
-/** 在所有 frame（含跨源 OOPIF）执行 page-lib 方法。 */
-export async function execPageAllFrames(tabId, name, args) {
+/** 在所有 frame（含跨源 OOPIF）执行 page-lib 方法。可传 { frameIds } 只扫指定 frame。 */
+export async function execPageAllFrames(tabId, name, args, options = {}) {
   await assertInspectableTab(tabId);
   const safeArgs = [name, args || {}, PAGE_LIB_VERSION].map((value) => (value === undefined ? null : value));
+  const frameIds = options && Array.isArray(options.frameIds) ? options.frameIds.filter((id) => Number.isInteger(id)) : [];
+  const target = frameIds.length ? { tabId, frameIds } : { tabId, allFrames: true };
   async function run() {
     try {
       return await chrome.scripting.executeScript({
-        target: { tabId, allFrames: true },
+        target,
         world: 'ISOLATED',
         func: pageCallFunc,
         args: safeArgs,
@@ -256,7 +262,7 @@ export async function execPageAllFrames(tabId, name, args) {
   if (missing) {
     try {
       await chrome.scripting.executeScript({
-        target: { tabId, allFrames: true },
+        target,
         world: 'ISOLATED',
         files: ['injected/page-lib.js'],
       });

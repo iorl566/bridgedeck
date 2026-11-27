@@ -1082,17 +1082,19 @@
     "existing": null
   },
   "复制录制指令": {
-    "en": "Copy recording command",
+    "en": "Copy recording instruction",
     "existing": {
-      "en": "Copy recording instructions",
-      "ja": "記録の指示をコピー",
+      "en": "Copy recording instruction",
+      "ja": "記録手順をコピー",
       "ko": "기록 지침 복사",
-      "de": "Aufzeichnungsanweisungen kopieren",
-      "es": "Copiar instrucciones de grabación",
-      "fr": "Copier les instructions d'enregistrement",
-      "it": "Copia le istruzioni di registrazione",
-      "pt": "Copiar instruções de gravação",
-      "zh-TW": "複製錄製指令"
+      "de": "Aufzeichnungsanweisung kopieren",
+      "es": "Copiar instrucción de grabación",
+      "fr": "Copier l'instruction d'enregistrement",
+      "it": "Copia l'istruzione di registrazione",
+      "pt": "Copiar instrução de gravação",
+      "zh-TW": "複製錄製指令",
+      "ar": "نسخ تعليمات التسجيل",
+      "he": "העתק הוראת הקלטה"
     }
   },
   "复制给 Agent 的指令": {
@@ -1200,17 +1202,19 @@
     "existing": null
   },
   "操作主题（可选）": {
-    "en": "Action theme (optional)",
+    "en": "Recording topic (optional)",
     "existing": {
-      "en": "Topic (optional)",
-      "ja": "トピック(任意)",
+      "en": "Recording topic (optional)",
+      "ja": "操作テーマ（任意）",
       "ko": "작업 주제(선택 사항)",
-      "de": "Thema (optional)",
-      "es": "Tema (opcional)",
-      "fr": "Sujet (facultatif)",
-      "it": "Argomento (facoltativo)",
-      "pt": "Tópico (opcional)",
-      "zh-TW": "操作主題（選填）"
+      "de": "Aufnahmethema (optional)",
+      "es": "Tema de la operación (opcional)",
+      "fr": "Sujet de l'opération (facultatif)",
+      "it": "Tema dell'operazione (facoltativo)",
+      "pt": "Tema da operação (opcional)",
+      "zh-TW": "操作主題（選填）",
+      "ar": "موضوع العملية (اختياري)",
+      "he": "נושא הפעולה (אופציונלי)"
     }
   },
   "整页 · 自动滚动": {
@@ -1657,6 +1661,148 @@
       "it": "Copia ID istanza",
       "pt": "Copiar ID da instância",
       "zh-TW": "複製執行個體 ID"
+    }
+  },
+  "起始网址（可选）": {
+    "en": "Start URL (optional)",
+    "existing": {
+      "en": "Start URL (optional)",
+      "ja": "開始 URL（任意）",
+      "ko": "시작 URL(선택 사항)",
+      "de": "Start-URL (optional)",
+      "es": "URL de inicio (opcional)",
+      "fr": "URL de départ (facultatif)",
+      "it": "URL di avvio (facoltativo)",
+      "pt": "URL inicial (opcional)",
+      "zh-TW": "起始網址（選填）",
+      "ar": "عنوان URL للبدء (اختياري)",
+      "he": "כתובת URL להתחלה (אופציונלי)"
+    }
+  },
+  "例如：发布一篇文章": {
+    "en": "e.g. publish an article",
+    "existing": {
+      "en": "e.g. publish an article",
+      "ja": "例：記事を公開する",
+      "ko": "예: 기사 게시",
+      "de": "z. B. einen Artikel veröffentlichen",
+      "es": "p. ej., publicar un artículo",
+      "fr": "ex. publier un article",
+      "it": "es. pubblicare un articolo",
+      "pt": "ex.: publicar um artigo",
+      "zh-TW": "例如：發布一篇文章",
+      "ar": "مثال: نشر مقال",
+      "he": "למשל: פרסום מאמר"
+    }
+  },
+  "协议": {
+    "en": "Protocol",
+    "existing": {
+      "en": "Protocol",
+      "ja": "プロトコル",
+      "ko": "프로토콜",
+      "de": "Protokoll",
+      "es": "Protocolo",
+      "fr": "Protocole",
+      "it": "Protocollo",
+      "pt": "Protocolo",
+      "zh-TW": "協定",
+      "ar": "البروتوكول",
+      "he": "פרוטוקול"
+    }
+  },
+  "生成一段给 Agent 的录制指令：Agent 启动录制后你正常操作，结束后 Agent 读取写出的 trace 目录包，就能自动完成同类任务。": {
+    "en": "Generate a recording instruction for your agent: after the agent starts recording, operate normally; when you finish, the agent reads the exported trace directory and can automate similar tasks.",
+    "existing": {
+      "en": "Generate a recording instruction for your agent: after the agent starts recording, operate normally; when you finish, the agent reads the exported trace directory and can automate similar tasks.",
+      "ja": "Agent 向けの記録手順を生成します。Agent が記録を開始したら通常どおり操作し、終了後に Agent が書き出された trace ディレクトリを読み取り、同種のタスクを自動化できます。",
+      "ko": "에이전트용 기록 지침을 생성합니다. 에이전트가 기록을 시작하면 평소처럼 작업하고, 완료 후 에이전트가 내보낸 trace 디렉터리를 읽어 유사한 작업을 자동화합니다.",
+      "de": "Erzeugt eine Aufzeichnungsanweisung für den Agent: Nach dem Start der Aufzeichnung arbeiten Sie normal; danach liest der Agent das exportierte Trace-Verzeichnis und automatisiert ähnliche Aufgaben.",
+      "es": "Genera una instrucción de grabación para el Agent: tras iniciar la grabación, opera con normalidad; al terminar, el Agent lee el directorio trace exportado y automatiza tareas similares.",
+      "fr": "Génère une instruction d'enregistrement pour l'Agent : après le démarrage, agissez normalement ; à la fin, l'Agent lit le dossier trace exporté et automatise des tâches similaires.",
+      "it": "Genera un'istruzione di registrazione per l'Agent: dopo l'avvio registra normalmente; al termine l'Agent legge la cartella trace esportata e automatizza attività simili.",
+      "pt": "Gera uma instrução de gravação para o Agent: após iniciar a gravação, opere normalmente; ao terminar, o Agent lê o diretório trace exportado e automatiza tarefas semelhantes.",
+      "zh-TW": "產生一段給 Agent 的錄製指令：Agent 啟動錄製後你正常操作，結束後 Agent 讀取寫出的 trace 目錄包，就能自動完成同類任務。",
+      "ar": "أنشئ تعليمات تسجيل للوكيل: بعد بدء التسجيل تابع عملك بشكل طبيعي، وعند الانتهاء يقرأ الوكيل مجلد trace المُصدَّر وأتمت مهامًا مشابهة.",
+      "he": "צור הוראת הקלטה עבור הסוכן: לאחר שהסוכן מתחיל להקליט, המשך לעבוד כרגיל; בסיום הסוכן קורא את תיקיית ה-trace המיוצאת ומבצע אוטומציה של משימות דומות."
+    }
+  },
+  "录制给 Agent": {
+    "en": "Record for the agent",
+    "existing": {
+      "en": "Record for the agent",
+      "ja": "Agent 用に記録",
+      "ko": "에이전트용 기록",
+      "de": "Für den Agent aufzeichnen",
+      "es": "Grabar para el Agent",
+      "fr": "Enregistrer pour l'Agent",
+      "it": "Registra per l'Agent",
+      "pt": "Gravar para o Agent",
+      "zh-TW": "錄製給 Agent",
+      "ar": "التسجيل للوكيل",
+      "he": "הקלטה עבור הסוכן"
+    }
+  },
+  "直接录制": {
+    "en": "Record directly",
+    "existing": {
+      "en": "Record directly",
+      "ja": "直接記録",
+      "ko": "직접 기록",
+      "de": "Direkt aufzeichnen",
+      "es": "Grabar directamente",
+      "fr": "Enregistrer directement",
+      "it": "Registra direttamente",
+      "pt": "Gravar diretamente",
+      "zh-TW": "直接錄製",
+      "ar": "التسجيل مباشرة",
+      "he": "הקלטה ישירה"
+    }
+  },
+  "录制指令预览": {
+    "en": "Recording instruction preview",
+    "existing": {
+      "en": "Recording instruction preview",
+      "ja": "記録手順のプレビュー",
+      "ko": "기록 지침 미리보기",
+      "de": "Vorschau der Aufzeichnungsanweisung",
+      "es": "Vista previa de la instrucción",
+      "fr": "Aperçu de l'instruction d'enregistrement",
+      "it": "Anteprima dell'istruzione di registrazione",
+      "pt": "Prévia da instrução de gravação",
+      "zh-TW": "錄製指令預覽",
+      "ar": "معاينة تعليمات التسجيل",
+      "he": "תצוגה מקדימה של הוראת ההקלטה"
+    }
+  },
+  "无障碍浮层（读屏可访问）": {
+    "en": "Accessible overlays (screen-reader friendly)",
+    "existing": {
+      "ar": "طبقات وصول (متوافقة مع قارئ الشاشة)",
+      "de": "Barrierefreie Overlays (Screenreader-freundlich)",
+      "es": "Superposiciones accesibles (compatibles con lectores de pantalla)",
+      "fr": "Superpositions accessibles (compatibles lecteurs d'écran)",
+      "he": "שכבות נגישות (תואמות קורא מסך)",
+      "it": "Overlay accessibili (compatibili con screen reader)",
+      "ja": "アクセシブルなオーバーレイ（スクリーンリーダー対応）",
+      "ko": "접근성 오버레이(스크린 리더 지원)",
+      "pt": "Sobreposições acessíveis (compatíveis com leitores de tela)",
+      "zh-TW": "無障礙浮層（讀屏可存取）"
+    }
+  },
+  "开启后浮层使用开放 shadow DOM，并标注 role/aria-live，方便读屏与自动化审查；默认关闭。": {
+    "en": "Uses open shadow DOM with role/aria-live labels for screen readers and audit tools. Off by default.",
+    "existing": {
+      "ar": "تستخدم shadow DOM مفتوحًا مع role/aria-live لقارئات الشاشة وأدوات التدقيق. معطّلة افتراضيًا.",
+      "de": "Verwendet offenes Shadow DOM mit role/aria-live für Screenreader und Prüfwerkzeuge. Standardmäßig aus.",
+      "es": "Usa shadow DOM abierto con role/aria-live para lectores de pantalla y herramientas de auditoría. Desactivado por defecto.",
+      "fr": "Utilise un shadow DOM ouvert avec role/aria-live pour les lecteurs d'écran et les outils d'audit. Désactivé par défaut.",
+      "he": "משתמש ב-shadow DOM פתוח עם role/aria-live לקוראי מסך ולכלי ביקורת. כבוי כברירת מחדל.",
+      "it": "Usa shadow DOM aperto con role/aria-live per screen reader e strumenti di audit. Disattivato per impostazione predefinita.",
+      "ja": "オープンな shadow DOM と role/aria-live を使用し、スクリーンリーダーや監査ツールから操作できます。既定はオフです。",
+      "ko": "열린 shadow DOM과 role/aria-live를 사용해 스크린 리더와 감사 도구가 접근할 수 있습니다. 기본값은 꺼짐입니다.",
+      "pt": "Usa shadow DOM aberto com role/aria-live para leitores de tela e ferramentas de auditoria. Desativado por padrão.",
+      "zh-TW": "開啟後浮層使用開放 shadow DOM，並標註 role/aria-live，方便讀屏與自動化審查；預設關閉。"
     }
   }
 }

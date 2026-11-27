@@ -1,0 +1,4 @@
+﻿<!doctype html><meta charset="utf-8"><title>嵌套 frame 夹具</title>
+<iframe id="outer" src="nested-outer.html" style="width:600px;height:300px"></iframe>
+<p id="nested-out">none</p>
+<script>addEventListener('message', (event) => { if (event.data === 'nested-click') document.getElementById('nested-out').textContent = 'nested-clicked'; });</script>

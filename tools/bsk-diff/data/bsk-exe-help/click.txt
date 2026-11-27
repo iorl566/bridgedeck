@@ -1,0 +1,28 @@
+Click a snapshot ref or CSS selector
+
+Usage: bsk.exe click [OPTIONS] [TARGET]
+
+Arguments:
+  [TARGET]  Snapshot ref (`@e3`, `e3`) or CSS selector. Optional when `--ref`/`--selector` is used
+
+Options:
+      --capture <CAPTURE_ID>       Bind a Canvas point click to the image returned by screenshot --ref
+      --context <CONTEXT>          Control context returned by cooperate sync. Required for shared-tab actions
+      --image-x <IMAGE_X>          X coordinate in the original screenshot PNG, not viewport CSS pixels
+      --depends-on <DEPENDS_ON>    Legacy strict-policy decision regions. Target policy uses --expect instead
+      --image-y <IMAGE_Y>          Y coordinate in the original screenshot PNG
+      --observation <OBSERVATION>  Explicit observation ID for visual or untargeted actions; never inferred from cached state
+      --ref <REF>                  Force-treat the value as a snapshot ref (overrides positional detection)
+      --expect <EXPECT>            JSON array of target facts to check before input: [{"target":"@e1","field":"text","equals":"Save"}]
+      --selector <SELECTOR>        Force-treat the value as a CSS selector
+      --json                       Emit machine-readable JSON output (when meaningful)
+      --session <SESSION>
+      --quiet                      Suppress informational output
+      --scope <SCOPE>
+      --tab-id <TAB_ID>
+  -v, --verbose...                 Increase log verbosity (`-v` debug, `-vv` trace)
+      --button <BUTTON>            [default: left] [possible values: left, middle, right]
+      --click-count <CLICK_COUNT>  Number of consecutive presses (double-click = 2) [default: 1]
+      --modifiers <MODIFIERS>      Comma-separated modifiers (`alt,ctrl,shift,meta`) [default: ""]
+      --timeout <TIMEOUT>          [default: 30s]
+  -h, --help                       Print help

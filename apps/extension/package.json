@@ -1,0 +1,28 @@
+{
+  "name": "bridge-deck-extension-ts",
+  "private": true,
+  "version": "0.3.1",
+  "type": "module",
+  "description": "BridgeDeck 扩展（架构路线：TypeScript + React + WXT）",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "build:chrome": "wxt build -b chrome",
+    "zip": "wxt zip",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts",
+    "prepare:types": "wxt prepare"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.9",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "@wxt-dev/module-react": "^1.2.2",
+    "typescript": "~5.9.3",
+    "wxt": "^0.21.5"
+  }
+}

@@ -1,0 +1,23 @@
+Synchronize the active tab's VOM snapshot and refresh its short context alias
+
+Usage: bsk.exe sync [OPTIONS]
+
+Options:
+      --session <SESSION>              Explicit session ID (omit to resolve via caller scope)
+      --context <CONTEXT>              Control context returned by cooperate sync. Required for shared-tab actions
+      --scope <SCOPE>                  Explicit caller scope name for multi-agent isolation
+      --depends-on <DEPENDS_ON>        Legacy strict-policy decision regions. Target policy uses --expect instead
+      --tab-id <TAB_ID>                Target tab ID (defaults to the session's active/default tab)
+      --observation <OBSERVATION>      Explicit observation ID for visual or untargeted actions; never inferred from cached state
+      --policy <POLICY>                Cooperation control policy (`auto`, `target`, or `strict`) [default: auto] [possible values: auto, strict, target]
+      --expect <EXPECT>                JSON array of target facts to check before input: [{"target":"@e1","field":"text","equals":"Save"}]
+      --wait-for <WAIT_FOR>            Wait until the rendered VOM contains this substring (bounded polling)
+      --json                           Emit machine-readable JSON output (when meaningful)
+      --wait-not <WAIT_NOT>            Wait until the rendered VOM no longer contains this substring (bounded polling)
+      --quiet                          Suppress informational output
+      --timeout-ms <TIMEOUT_MS>        Bounded wait timeout in milliseconds (default 5000ms for `--wait-for` / `--wait-not`)
+      --max-tokens <MAX_TOKENS>        Token budget for the VOM observation
+  -v, --verbose...                     Increase log verbosity (`-v` debug, `-vv` trace)
+      --match-text <MATCH_TEXT>        Fold stateless numbered fallback buttons outside literal-match windows (repeatable)
+      --context-lines <CONTEXT_LINES>  Keep numbered fallback buttons within this many lines around each `--match-text` [default: 12]
+  -h, --help                           Print help

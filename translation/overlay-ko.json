@@ -52,5 +52,7 @@
   "manualFrame": "프레임 캡처",
   "manualDone": "완료",
   "manualCancel": "취소",
-  "manualFrames": "프레임"
+  "manualFrames": "프레임",
+  "borrowInactiveTitle": "Agent가 탭 대여를 요청합니다",
+  "helpCompactStatus": "Agent가 아직 이 단계의 완료를 기다리고 있습니다"
 }

@@ -52,5 +52,7 @@
   "manualFrame": "Cattura fotogramma",
   "manualDone": "Fine",
   "manualCancel": "Annulla",
-  "manualFrames": " fotogrammi"
+  "manualFrames": " fotogrammi",
+  "borrowInactiveTitle": "L'Agent richiede il prestito della scheda",
+  "helpCompactStatus": "L'Agent sta ancora aspettando che tu completi questo passaggio"
 }

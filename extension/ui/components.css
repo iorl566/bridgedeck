@@ -1,0 +1,274 @@
+/* extension/ui/components.css —— 共享视觉层（2026-11-26 UI 增强第一刀）
+ *
+ * 目标：在不改 DOM/行为的前提下统一设计 token 与基础控件的视觉（按钮/卡片/输入/开关/焦点环/空态）。
+ * 引用方式：ui.css 与 popup.css 顶部 @import；workspace.css 由 ui.css 一并带上。
+ * 约束：只做视觉增强，不改变布局尺寸语义；颜色沿用各页已有的 --bb-* / 现有变量。
+ */
+:root {
+  --bd-space-1: 4px;
+  --bd-space-2: 8px;
+  --bd-space-3: 12px;
+  --bd-space-4: 16px;
+  --bd-space-5: 24px;
+  --bd-radius-sm: 8px;
+  --bd-radius-md: 12px;
+  --bd-radius-lg: 16px;
+  --bd-shadow-1: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .08);
+  --bd-shadow-2: 0 6px 16px rgba(15, 23, 42, .10);
+  --bd-focus: 0 0 0 2px #fff, 0 0 0 4px rgba(47, 111, 237, .45);
+  --bd-muted: #64748b;
+  --bd-border: #e2e8f0;
+  --bd-accent: #2f6fed;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--bd-focus);
+  border-radius: var(--bd-radius-sm);
+}
+
+/* 按钮：统一圆角/字重/过渡；primary 更“实” */
+.btn {
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .06s ease;
+}
+.btn:active { transform: translateY(1px); }
+.btn.primary {
+  box-shadow: var(--bd-shadow-1);
+  border-color: transparent;
+}
+.btn.primary:hover { box-shadow: var(--bd-shadow-2); }
+.btn.subtle { background: #fff; }
+.btn.subtle:hover { border-color: #cbd5e1; background: #f8fafc; }
+
+/* 卡片：统一圆角与轻微的层次；不改变 padding 语义 */
+.card {
+  border-radius: var(--bd-radius-lg);
+  border: 1px solid var(--bd-border);
+  box-shadow: var(--bd-shadow-1);
+}
+.card + .card { margin-top: var(--bd-space-3); }
+.card h2, .card h3 { letter-spacing: .01em; }
+
+/* 输入/下拉/文本域：统一高度感与焦点态 */
+input:not([type='checkbox']):not([type='radio']):not([type='range']),
+select,
+textarea {
+  border-radius: 10px;
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+input:not([type='checkbox']):not([type='radio']):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--bd-accent);
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, .18);
+}
+
+/* 开关：统一焦点环与手感 */
+.sw { transition: background-color .15s ease; }
+.sw:focus-visible { box-shadow: var(--bd-focus); }
+
+/* 空态（新增通用类；现有 empty-state helper 仍可继续用） */
+.bd-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--bd-space-2);
+  padding: 36px var(--bd-space-5);
+  border: 1.5px dashed var(--bd-border);
+  border-radius: var(--bd-radius-lg);
+  color: var(--bd-muted);
+  text-align: center;
+  background: #fcfdff;
+}
+.bd-empty .bd-empty-title { font-size: 15px; font-weight: 700; color: #0f172a; }
+.bd-empty .bd-empty-hint { font-size: 12.5px; line-height: 1.6; max-width: 520px; }
+.bd-empty .btn { margin-top: var(--bd-space-2); }
+
+/* 分段控件（连接设置 本机/远程 等；现有页面用 .segmented/.tabs 时自动受益） */
+.segmented, .tabs {
+  border-radius: 10px;
+  overflow: hidden;
+}
+.segmented > button, .tabs > button { font-weight: 600; }
+
+/* 细滚动条（列表页更清爽） */
+* { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* 减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .btn, .sw, input, select, textarea { transition: none; }
+}
+
+
+/* ================= 品牌层（BridgeDeck 蓝，2026-11-26） ================= */
+:root {
+  --bd-brand-blue: #2f6fed;
+  --bd-brand-blue-deep: #1f4fd0;
+  --bd-brand-blue-soft: #eaf1ff;
+  --bd-brand-gradient: linear-gradient(135deg, #2f6fed 0%, #1f4fd0 100%);
+}
+
+/* 品牌锁头：蓝渐变 logo 底 + 字标 + 副标题 */
+.brand {
+  align-items: center;
+  gap: 10px;
+}
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 4px 10px rgba(47, 111, 237, .28));
+}
+.brand .brand-logo img {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: block;
+  image-rendering: auto;
+}
+.brand-text { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
+.brand h1 {
+  font-size: 16px !important;
+  font-weight: 780 !important;
+  letter-spacing: -.01em;
+  color: var(--fg, #0b1220);
+}
+.brand-tagline {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--muted, #64748b);
+  letter-spacing: .02em;
+}
+
+/* 页面级品牌头：标题左侧蓝色竖条 + 副标题色阶 */
+.page-header { position: relative; }
+.page-header::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -10px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--bd-brand-gradient);
+  opacity: .9;
+}
+
+/* 空态/状态块：与兼容目标同类的“虚线大卡片”产品化空态 */
+.state-block {
+  border: 1.5px dashed var(--bd-border, #e2e8f0);
+  border-radius: 16px;
+  padding: 40px 24px;
+  text-align: center;
+  color: #64748b;
+  background: #fbfdff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.state-block.error { border-color: #fecaca; background: #fff7f7; color: #b91c1c; }
+
+/* 页面宽度统一：审计/调试等页面不再只有 560px */
+body .page { max-width: 1040px; }
+
+
+/* 分段控件 pill 化（连接设置 本机/远程） */
+.seg {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 11px;
+  background: #eef2f7;
+  border: 1px solid #e2e8f0;
+}
+.seg > button {
+  border: 0;
+  background: transparent;
+  color: #475569;
+  padding: 6px 14px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.seg > button.on {
+  background: #fff;
+  color: var(--bd-brand-blue, #2f6fed);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .10);
+}
+.seg > button:focus-visible { box-shadow: var(--bd-focus); }
+
+/* details/summary 折叠行：统一箭头与 hover */
+.settings > summary { cursor: pointer; user-select: none; }
+.settings > summary::marker { color: #94a3b8; }
+.settings[open] > summary { color: #0f172a; }
+
+
+/* ================= 品牌蓝状态扩展（选中行/tab/进度/链接） ================= */
+[aria-selected='true'], .ws-tabs [aria-selected='true'], .seg > button.on {
+  color: var(--bd-brand-blue, #2f6fed);
+}
+.list .row[aria-selected='true'], tr[aria-selected='true'], li[aria-selected='true'] {
+  background: var(--bd-brand-blue-soft, #eaf1ff);
+  box-shadow: inset 2px 0 0 var(--bd-brand-blue, #2f6fed);
+}
+progress { accent-color: var(--bd-brand-blue, #2f6fed); height: 6px; border-radius: 999px; }
+progress::-webkit-progress-value { background: var(--bd-brand-gradient); border-radius: 999px; }
+a { color: var(--bd-brand-blue, #2f6fed); }
+a:hover { color: var(--bd-brand-blue-deep, #1f4fd0); }
+::selection { background: rgba(47, 111, 237, .18); }
+
+
+/* 折叠面板（debug 首屏收敛） */
+.bd-fold > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bd-fold > summary::-webkit-details-marker { display: none; }
+.bd-fold > summary::after {
+  content: '⌄';
+  color: #94a3b8;
+  transition: transform .15s ease;
+}
+.bd-fold[open] > summary::after { transform: rotate(180deg); }
+
+/* bd-empty 在 section 内的间距兜底 */
+.bd-empty { margin-top: 10px; }
+
+/* ================= 暗色 token 预留（跟随系统） ================= */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220;
+    --fg: #e2e8f0;
+    --card: #111a2e;
+    --line: #22304a;
+    --muted: #94a3b8;
+    --bd-border: #22304a;
+    --bd-accent: #6ea0ff;
+    --bd-brand-blue: #6ea0ff;
+    --bd-brand-blue-soft: rgba(110, 160, 255, .14);
+    --bd-brand-gradient: linear-gradient(135deg, #6ea0ff 0%, #2f6fed 100%);
+    --bd-shadow-1: 0 1px 2px rgba(0, 0, 0, .5);
+    --bd-shadow-2: 0 8px 20px rgba(0, 0, 0, .55);
+    --bd-focus: 0 0 0 2px #0b1220, 0 0 0 4px rgba(110, 160, 255, .55);
+  }
+  body { background: var(--bg); color: var(--fg); }
+  .card, .panel, .bd-empty, .state-block { background: var(--card); border-color: var(--line); }
+  .bd-empty { background: #0e1729; }
+}

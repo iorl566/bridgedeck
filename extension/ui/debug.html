@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <title>网站调试 · BridgeDeck</title>
-  <link rel="stylesheet" href="ui.css" />
+  <script src="direction.js"></script>
+<link rel="stylesheet" href="ui.css" />
+  <link rel="stylesheet" href="page-brand.css" />
 <script type="module" src="i18n.js"></script>
 </head>
 <body>
@@ -27,7 +29,7 @@
       <summary>手动采集（高级）</summary>
 
       <div class="toolbar">
-        <select id="tabSelect" class="inline-input" style="min-width:220px"></select>
+        <select id="tabSelect" aria-label="目标标签页" class="inline-input" style="min-width:220px"></select>
         <button id="start" class="btn primary">开始采集</button>
         <button id="stop" class="btn danger" disabled>停止采集</button>
         <span id="status" class="muted">未开始</span>
@@ -43,8 +45,10 @@
         <span class="grow"></span>
         <button id="exportLive" class="btn">导出 JSON</button>
       </div>
+      <div id="liveTools" class="filters"></div>
       <div id="requests" class="list" style="margin-top:10px"></div>
       <div id="reqEmpty" class="muted" style="margin-top:8px">还没有请求</div>
+      <div id="requestsTimeline" hidden></div>
 
       <h2 style="margin:16px 0 8px">控制台 / 异常 <span class="muted" id="conCount"></span></h2>
       <div id="consoleList" class="list"></div>
@@ -52,6 +56,16 @@
 
       <h2 style="margin:16px 0 8px">页面上下文</h2>
       <div id="context" class="kv-inline"></div>
+    </section>
+
+    <section class="panel" id="comparePanel" hidden>
+      <div class="toolbar">
+        <h2 style="margin:0" id="compareHeading"></h2>
+        <span class="grow"></span>
+        <button id="closeCompare" class="btn" aria-label="Close compare"></button>
+      </div>
+      <div id="compareBody" aria-live="polite"></div>
+      <div id="compareNote" class="note"></div>
     </section>
 
     <section class="panel">
@@ -72,8 +86,8 @@
       </div>
       <p class="muted" style="margin:8px 0;line-height:1.6">给当前标签页加临时规则：fulfill / block / modify（URL 支持 *）。规则只在本浏览器本地生效，刷新后自动重注入。</p>
       <div class="toolbar">
-        <input id="rulePattern" class="inline-input" style="flex:1;min-width:180px" placeholder="URL pattern，例如 */api/*" />
-        <select id="ruleAction" class="inline-input">
+        <input id="rulePattern" aria-label="URL pattern，例如 */api/*" class="inline-input" style="flex:1;min-width:180px" placeholder="URL pattern，例如 */api/*" />
+        <select id="ruleAction" aria-label="请求规则" class="inline-input">
           <option value="fulfill">fulfill</option>
           <option value="block">block</option>
           <option value="modify">modify</option>
@@ -82,8 +96,8 @@
         <button id="clearRules" class="btn danger">清空</button>
       </div>
       <div id="ruleBody" class="toolbar" style="margin-top:8px">
-        <input id="ruleStatus" class="inline-input" style="width:90px" placeholder="status" value="200" />
-        <input id="ruleText" class="inline-input" style="flex:1;min-width:200px" placeholder="fulfill 的响应正文（block/modify 可留空）" />
+        <input id="ruleStatus" aria-label="HTTP status" class="inline-input" style="width:90px" placeholder="status" value="200" />
+        <input id="ruleText" aria-label="fulfill 的响应正文（block/modify 可留空）" class="inline-input" style="flex:1;min-width:200px" placeholder="fulfill 的响应正文（block/modify 可留空）" />
       </div>
       <div id="rules" class="list" style="margin-top:10px;max-height:220px;overflow:auto"></div>
       <div id="rulesEmpty" class="muted" style="margin-top:8px">当前标签页没有规则</div>
@@ -128,5 +142,6 @@
     </details>
   </main>
   <script type="module" src="debug.js"></script>
+  <script type="module" src="page-brand.js"></script>
 </body>
 </html>

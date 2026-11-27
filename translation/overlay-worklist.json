@@ -214,5 +214,13 @@
   "manualFrames": {
     "zh": " 帧",
     "en": " frames"
+  },
+  "borrowInactiveTitle": {
+    "zh": "Agent 请求借用标签页",
+    "en": "Agent requests tab borrowing"
+  },
+  "helpCompactStatus": {
+    "zh": "当前 Agent 仍在等待你完成此步骤",
+    "en": "The agent is still waiting for you to complete this step"
   }
 }

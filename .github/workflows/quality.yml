@@ -1,0 +1,76 @@
+name: quality
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Unit + architecture + performance + fault injection
+        run: node --test "tests/unit/*.test.mjs"
+      - name: 0.4 architecture tests
+        run: node 0.4/scripts/test-all.mjs
+      - name: 0.4 eval corpus
+        run: |
+          node 0.4/scripts/eval.mjs validate
+          node 0.4/scripts/eval.mjs run
+      - name: Page-lib parts sync
+        run: node tools/build-page-lib.mjs --check
+      - name: Source guard (syntax/placeholders)
+        run: node tools/source-guard.mjs
+      - name: Release brand scan
+        run: node tools/release-brand-scan.mjs
+      - name: Scale baseline guard
+        run: node tools/scale-report.mjs --check
+      - name: Path portability guard
+        run: node tools/path-portability.mjs --check
+      - name: Parameter schema audit
+        run: node tools/schema-audit.mjs --check
+      - name: VOM weight benchmark
+        run: node tools/vom-bench.mjs --check
+      - name: Protocol docs sync
+        run: node tools/protocol-sections.mjs --fail
+      - name: Dependency & vendor audit
+        run: node tools/deps-audit.mjs --check
+      - name: Vendor leak (source)
+        run: node tools/check-vendor-leak.mjs
+
+  static-matrix:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: MCP selftest
+        run: node tests/mcp/selftest.mjs
+      - name: Page-lib parts sync
+        run: node tools/build-page-lib.mjs --check
+      - name: Source guard
+        run: node tools/source-guard.mjs
+      - name: Path portability guard
+        run: node tools/path-portability.mjs --check
+      - name: Parameter schema audit
+        run: node tools/schema-audit.mjs --check
+      - name: VOM weight benchmark
+        run: node tools/vom-bench.mjs --check
+      - name: Protocol docs sync
+        run: node tools/protocol-sections.mjs --fail
+      - name: Dependency & vendor audit
+        run: node tools/deps-audit.mjs --check
+      - name: Vendor leak (source)
+        run: node tools/check-vendor-leak.mjs

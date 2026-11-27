@@ -2,10 +2,54 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { daemonRpc } from './daemon-rpc.mjs';
+import { canFallbackToCli } from './error-recovery.mjs';
+import { applyToolMetadata } from './tool-metadata.mjs';
 
 const SESSION = {
   type: 'string',
   description: 'BridgeDeck会话 id（bridge session start 返回）。只有一个会话时可省略。',
+};
+
+// 工具 → 协议方法映射（与 mcp/tool-methods.mjs 同口径：只列工具面真正触达的 canonical
+// 方法；[] 表示纯 CLI/本地能力，不涉及协议方法）。plugin-parity 单测用它做三方对照。
+export const TOOL_METHODS = {
+  browser_status: ['status'],
+  browser_session_start: ['session.start', 'session.start_tracked'],
+  browser_session_stop: ['session.stop'],
+  browser_navigate: ['navigate'],
+  browser_observe: ['observe'],
+  browser_act: ['click', 'hover', 'focus', 'blur', 'scroll-to', 'fill', 'select', 'press', 'drag', 'wheel'],
+  browser_click_backend: ['click-backend'],
+  browser_read: ['read', 'get-html', 'extract'],
+  browser_screenshot: ['screenshot'],
+  browser_eval: ['evaluate'],
+  browser_network: ['network.start', 'network.stop', 'network.list', 'network.detail'],
+  browser_dialog: ['dialog.arm', 'dialog.list', 'dialog.disarm'],
+  browser_tab_borrow: ['tab.borrow'],
+  browser_debug: ['debug.start', 'debug.stop', 'debug.current', 'debug.request', 'debug.performance', 'debug.rule_list', 'debug.rule_enable', 'debug.rule_disable', 'debug.rule_remove'],
+  browser_video: ['video.start', 'video.stop', 'video.fetch', 'video.list', 'video.prune', 'video.recover'],
+  browser_record: ['record.start', 'record.stop', 'record.list'],
+  browser_cooperate: ['cooperate.sync', 'cooperate.wait', 'cooperate.handback'],
+  browser_plan: ['plan'],
+  browser_recipe: [],
+  browser_ledger: ['ledger.status', 'ledger.resolve'],
+  browser_pair: ['pair.create', 'pair.list', 'pair.redeem', 'pair.revoke'],
+  browser_update: [],
+  browser_settings: ['settings.get', 'settings.set'],
+  browser_install_skill: [],
+  browser_brief: ['observe', 'dialog.status'],
+  browser_tab: ['tab.list', 'tab.new', 'tab.close', 'tab.select', 'tab.move'],
+  browser_audit: ['audit.list'],
+  browser_tab_new: ['tab.new'],
+  browser_tab_close: ['tab.close'],
+  browser_tab_select: ['tab.select'],
+  browser_network_list: ['network.list'],
+  browser_rule_list: ['debug.rule_list'],
+  browser_video_status: ['video.status'],
+  browser_video_list: ['video.list'],
+  browser_debug_evidence: [],
+  browser_debug_query: [],
+  browser_window: ['window.list', 'window.ensureAgent', 'window.focus'],
 };
 
 function withSession(argv, args) {
@@ -33,11 +77,8 @@ function directTarget(args) {
   return params;
 }
 
-// 只有“请求还没到 daemon”的错误才允许回退 CLI，避免动作被重复执行。
-function canFallbackToCli(error) {
-  const code = error && error.code;
-  return code === 'E_DAEMON' || code === 'E_DIRECT_RPC_DISABLED';
-}
+// 回退边界由 lib/error-recovery.mjs 单源判定（FALLBACK_CODES）：只有“请求还没到 daemon”
+// 的 E_DAEMON / E_DIRECT_RPC_DISABLED 允许回退 CLI，避免动作被重复执行。
 
 /**
  * 生成工具规格数组。
@@ -45,11 +86,13 @@ function canFallbackToCli(error) {
  */
 export function buildToolSpecs(run, options = {}) {
   const journal = options && options.journal ? options.journal : null;
+  // rpc 可注入：默认真连 daemon-rpc；单测可传 fake-adapter 的 call（同形接口）。
+  const rpc = options && typeof options.rpc === 'function' ? options.rpc : daemonRpc;
   const call = (argv, args, exec) => run(withSession(argv, args), exec);
   const rpcOrCli = async (method, params, argv, args, exec) => {
     if (!args || typeof args.sessionId !== 'string' || !args.sessionId) return call(argv, args, exec);
     try {
-      return await daemonRpc(method, { session: args.sessionId, ...params }, { timeoutMs: 60000 });
+      return await rpc(method, { session: args.sessionId, ...params }, { timeoutMs: 60000 });
     } catch (error) {
       if (!canFallbackToCli(error)) throw error;
       return call(argv, args, exec);
@@ -57,14 +100,14 @@ export function buildToolSpecs(run, options = {}) {
   };
   const rpcNoSessionOrCli = async (method, params, argv, args, exec) => {
     try {
-      return await daemonRpc(method, params, { timeoutMs: 60000 });
+      return await rpc(method, params, { timeoutMs: 60000 });
     } catch (error) {
       if (!canFallbackToCli(error)) throw error;
       return call(argv, args, exec);
     }
   };
 
-  return [
+  const specs = [
     {
       name: 'browser_status',
       description: '查看BridgeDeck 的状态：daemon 是否在跑、已连接的浏览器实例（含实例名）、活动会话。任务开始时先用它确认环境。',
@@ -72,7 +115,7 @@ export function buildToolSpecs(run, options = {}) {
       async execute(args, exec) {
         let status;
         try {
-          status = await daemonRpc('status', {}, { timeoutMs: 10000 });
+          status = await rpc('status', {}, { timeoutMs: 10000 });
         } catch {
           status = await run(['status'], exec);
         }
@@ -139,7 +182,7 @@ export function buildToolSpecs(run, options = {}) {
         }
         if (tracked && token) params.requestId = token;
         const direct = async () => {
-          const attempt = () => daemonRpc(tracked ? 'session.start_tracked' : 'session.start', params, { timeoutMs: 120000 });
+          const attempt = () => rpc(tracked ? 'session.start_tracked' : 'session.start', params, { timeoutMs: 120000 });
           try {
             return await attempt();
           } catch (error) {
@@ -216,16 +259,22 @@ export function buildToolSpecs(run, options = {}) {
         if (args && args.facts === true) argv.push('--facts');
         if (args && args.ax === true) argv.push('--ax');
         let result;
-        try {
-          if (!args || !args.sessionId) throw new Error('no session for direct rpc');
+        if (!args || !args.sessionId) {
+          // 没有会话上下文：只能走 CLI（与其它工具一致）。
+          result = await call(argv, args, exec);
+        } else {
           const params = { session: args.sessionId };
           if (args.probeHover === true) params.probeHover = true;
           if (args.vom === true) params.vom = true;
           if (args.facts === true) params.facts = true;
           if (args.ax === true) params.ax = true;
-          result = await daemonRpc('observe', params, { timeoutMs: 30000 });
-        } catch {
-          result = await call(argv, args, exec);
+          try {
+            result = await rpc('observe', params, { timeoutMs: 30000 });
+          } catch (error) {
+            // 只对“请求没到 daemon”的错误回退，避免业务错误被静默替换成 CLI 结果。
+            if (!canFallbackToCli(error)) throw error;
+            result = await call(argv, args, exec);
+          }
         }
         return {
           url: result.url,
@@ -397,7 +446,7 @@ export function buildToolSpecs(run, options = {}) {
         }
         if (args.sessionId) {
           try {
-            const result = await daemonRpc('screenshot', { session: args.sessionId, ...params }, { timeoutMs: 120000 });
+            const result = await rpc('screenshot', { session: args.sessionId, ...params }, { timeoutMs: 120000 });
             if (result && typeof result.dataUrl === 'string') {
               const comma = result.dataUrl.indexOf(',');
               const buffer = Buffer.from(result.dataUrl.slice(comma + 1), 'base64');
@@ -669,6 +718,18 @@ export function buildToolSpecs(run, options = {}) {
       },
     },
     {
+      name: 'browser_plan',
+      description: '一次执行多个已决定动作（plan），每步保留自身校验，首个失败即停并返回同步状态。steps 为 [{method,params}] 数组。',
+      parameters: {
+        steps: { type: 'array', required: true, description: '步骤数组：[{method:"click",params:{ref:"@e1"}}, ...]。' },
+        sessionId: SESSION,
+      },
+      async execute(args, exec) {
+        if (!Array.isArray(args.steps) || !args.steps.length) throw new Error('steps 需要非空数组');
+        return call(['plan', '--steps', JSON.stringify(args.steps)], args, exec);
+      },
+    },
+    {
       name: 'browser_recipe',
       description: '流程复用：action=list|show|save|approve|run|rm。save 生成草稿，approve 需要 confirmHuman=true。',
       parameters: {
@@ -708,6 +769,26 @@ export function buildToolSpecs(run, options = {}) {
           return call(argv, args, exec);
         }
         throw new Error('action 只能是 list|show|save|approve|run|rm');
+      },
+    },
+    {
+      name: 'browser_ledger',
+      description: '预写意图账本：action=status|resolve。resolve 需要 id，outcome=done|abandoned；用于确认页面状态后解除阻挡。',
+      parameters: {
+        action: { type: 'string', required: true, description: 'status | resolve' },
+        id: { type: 'string', description: 'resolve 的意图 id，如 lt_xxxxxxxx' },
+        outcome: { type: 'string', description: 'resolve 结果：done | abandoned' },
+      },
+      async execute(args, exec) {
+        const action = String(args.action || '');
+        if (action === 'status') return run(['ledger', 'status'], exec);
+        if (action === 'resolve') {
+          if (typeof args.id !== 'string' || !args.id) throw new Error('resolve 需要 id');
+          const argv = ['ledger', 'resolve', args.id];
+          if (typeof args.outcome === 'string' && args.outcome) argv.push('--outcome', args.outcome);
+          return run(argv, exec);
+        }
+        throw new Error('action 只能是 status|resolve');
       },
     },
     {
@@ -989,4 +1070,11 @@ export function buildToolSpecs(run, options = {}) {
       },
     },
   ];
+  // 工具→协议方法映射与行为元数据随 spec 暴露：parity 审计、TOOLS.md 生成器、模型工具描述
+  // 都直接消费同一份数据，避免文档与实现各写一套（见 lib/tool-metadata.mjs）。
+  for (const spec of specs) {
+    spec.methods = TOOL_METHODS[spec.name] || [];
+    applyToolMetadata(spec);
+  }
+  return specs;
 }

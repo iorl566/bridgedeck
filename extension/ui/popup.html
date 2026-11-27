@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>BridgeDeck</title>
+<script src="direction.js"></script>
 <link rel="stylesheet" href="popup.css" />
 <script type="module" src="i18n.js"></script>
 </head>
@@ -13,14 +14,14 @@
     <button type="button" id="backFromFeatures" class="icon-btn hidden" aria-label="返回" title="返回">
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2Z"/></svg>
     </button>
-    <img src="../icons/icon48.png" alt="" />
-    <h1>BridgeDeck</h1>
+    <span class="brand-logo"><img src="assets/brand-mark.svg" alt="" width="30" height="30" /></span>
+    <span class="brand-text"><h1>BridgeDeck</h1></span>
     <button type="button" id="openFeatures" class="icon-btn" aria-label="快捷功能" title="快捷功能">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v3.2L4.5 16h15L18 12.2V9a6 6 0 0 0-6-6Z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
     </button>
   </header>
 
-  <section id="featuresView" class="card hidden">
+  <section id="featuresView" class="hidden">
     <div class="features">
       <button type="button" class="feature" data-page="record.html" data-title="视频录制">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-6l2 3h-2l-2-3-2 3H8l2-3H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm8 3.5 4 2.5-4 2.5v-5Z"/></svg>
@@ -55,7 +56,7 @@
       <div class="settings-body" style="margin-top:0">
         <div class="row">
           <label for="auditToggle">启用操作审计</label>
-          <button type="button" id="auditToggle" class="sw" role="switch" aria-checked="false"></button>
+          <button type="button" id="auditToggle" class="sw" role="switch" aria-checked="false" aria-label="启用操作审计"></button>
         </div>
         <p id="auditStatus" class="hint" style="margin:0">读取中…</p>
         <div id="auditRuns" class="audit-runs"></div>
@@ -101,19 +102,28 @@
         </div>
       </div>
     </div>
-    <div id="opsPanel" class="hidden" style="padding:12px">
-      <div class="settings-body" style="margin-top:0">
-        <p class="hint" style="margin:0">记录当前标签页的操作步骤，供 Agent 参考。</p>
-        <p id="opsStatus" class="hint" style="margin:0">读取中…</p>
-        <div class="audit-runs" id="opsRuns"></div>
-        <div class="btn-row">
-          <button type="button" id="opsStart" class="btn primary sm">开始录制</button>
-          <button type="button" id="opsStop" class="btn subtle sm" disabled>停止</button>
-          <button type="button" id="opsOpen" class="btn subtle sm">打开完整页</button>
+    <div id="opsPanel" class="hidden ops-panel">
+        <div class="settings-body">
+          <p class="hint ops-intro">生成一段给 Agent 的录制指令：Agent 启动录制后你正常操作，结束后 Agent 读取写出的 trace 目录包，就能自动完成同类任务。</p>
+          <div class="section-title">录制给 Agent</div>
+          <label class="field ops-field"><span>操作主题（可选）</span><input id="opsTopic" class="ops-input" type="text" maxlength="80" placeholder="例如：发布一篇文章" /></label>
+          <label class="field ops-field"><span>起始网址（可选）</span><input id="opsStartUrl" class="ops-input" type="text" maxlength="2048" placeholder="https://…" /></label>
+          <label class="section-title ops-preview-label" for="opsPrompt">录制指令预览</label>
+          <textarea id="opsPrompt" class="ops-prompt" readonly rows="4"></textarea>
+          <button type="button" id="opsCopyPrompt" class="btn primary sm ops-copy">复制录制指令</button>
+          <hr class="ops-divider" />
+          <div class="section-title">直接录制</div>
+          
+          <p id="opsStatus" class="hint">读取中…</p>
+          <div class="audit-runs" id="opsRuns"></div>
+          <div class="btn-row">
+            <button type="button" id="opsStart" class="btn primary sm">开始录制</button>
+            <button type="button" id="opsStop" class="btn subtle sm" disabled>停止</button>
+            <button type="button" id="opsOpen" class="btn subtle sm">打开完整页</button>
+          </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
   <div id="mainView">
 
@@ -137,7 +147,7 @@
           <button type="button" id="rename" class="icon-btn" style="width:20px;height:20px" aria-label="修改浏览器名称" title="修改浏览器名称">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
           </button>
-          <input id="labelInput" class="rename hidden" maxlength="48" />
+          <input id="labelInput" aria-label="名称" class="rename hidden" maxlength="48" />
         </div>
       </div>
       <button type="button" id="copyCmd" class="btn subtle sm" title="复制后发给 Agent，指定当前浏览器">
@@ -146,8 +156,8 @@
       </button>
     </div>
 
-    <details class="settings" id="connSettings" open>
-      <summary>连接设置<span id="connMode" class="muted">· 本机</span><span id="connWarn" class="hidden" title="未配对：连接身份未验证，建议 bridge daemon pair" style="color:#c2410c;margin-left:6px">⚠</span></summary>
+    <details class="settings" id="connSettings">
+      <summary>连接设置<span id="connMode" class="muted">· 本机</span><span id="connWarn" class="hidden" title="未配对：连接身份未验证，建议 bridge daemon pair" style="color:#c2410c;margin-inline-start:6px">⚠</span></summary>
       <div class="settings-body">
         <p id="daemonInfo" class="hint" style="margin:0">本机 · 未连接</p>
         <div class="seg">
@@ -165,10 +175,10 @@
           </form>
         </div>
         <div id="pairDetails" class="hidden settings-body" style="margin-top:0">
-          <input id="pairLink" placeholder="粘贴配对链接（含端口与凭据）" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px" />
-          <input id="pairCode" inputmode="numeric" maxlength="6" placeholder="6 位配对码（bridge daemon pair 显示）" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;margin-top:6px" />
+          <input id="pairLink" aria-label="粘贴配对链接（含端口与凭据）" placeholder="粘贴配对链接（含端口与凭据）" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px" />
+          <input id="pairCode" aria-label="6 位配对码（bridge daemon pair 显示）" inputmode="numeric" maxlength="6" placeholder="6 位配对码（bridge daemon pair 显示）" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;margin-top:6px" />
           <p class="hint" style="margin:0">由 <code>bridge daemon pair</code> 生成；保存前核对命令输出的 6 位配对码。</p>
-          <ul id="pairGuide" class="hint" style="margin:6px 0 0;padding-left:18px"></ul>
+          <ul id="pairGuide" class="hint" style="margin:6px 0 0;padding-inline-start:18px"></ul>
           <p id="pairError" class="hint hidden" style="color:#c2410c;margin:0"></p>
           <div style="display:flex;gap:8px">
             <button type="button" id="pairSave" class="btn primary sm">保存配对</button>
@@ -176,8 +186,8 @@
           </div>
           <details style="margin-top:2px">
             <summary class="hint">高级：手动填写地址与 token</summary>
-            <input id="pairUrl" placeholder="wss://host:port/ws" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;margin-top:4px" />
-            <input id="pairToken" placeholder="配对 token" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px" />
+            <input id="pairUrl" aria-label="wss://host:port/ws" placeholder="wss://host:port/ws" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;margin-top:4px" />
+            <input id="pairToken" aria-label="配对 token" placeholder="配对 token" style="font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px" />
           </details>
         </div>
       </div>
@@ -206,7 +216,7 @@
               <span class="tip" id="tip-control" role="tooltip">Agent 控制页面时显示提示条和蓝色高亮。</span>
             </span>
           </div>
-          <button type="button" id="controlHint" class="sw on" role="switch" aria-checked="true"></button>
+          <button type="button" id="controlHint" class="sw on" role="switch" aria-checked="true" aria-label="控制提示"></button>
         </div>
       </div>
   </section>
@@ -224,7 +234,7 @@
               <span class="tip" id="tip-borrow" role="tooltip">开启时，借用你已打开的标签页前会请求允许；关闭时，直接借用。自动保存到当前浏览器配置，对到达插件的所有会话请求生效；命令行参数不能覆盖。</span>
             </span>
           </div>
-          <button type="button" id="borrowConfirm" class="sw on" role="switch" aria-checked="true"></button>
+          <button type="button" id="borrowConfirm" class="sw on" role="switch" aria-checked="true" aria-label="借用标签页前确认"></button>
         </div>
         <div class="row">
           <div class="setting-row" style="flex:1">
@@ -236,7 +246,7 @@
               <span class="tip" id="tip-help" role="tooltip">开启时，Agent 可以请求你协助。关闭时，Agent 会尽力自主完成操作，遇到无法处理的步骤再报告受阻。自动保存到当前浏览器配置，对到达插件的所有会话请求生效；命令行参数不能覆盖。</span>
             </span>
           </div>
-          <button type="button" id="allowHelp" class="sw on" role="switch" aria-checked="true"></button>
+          <button type="button" id="allowHelp" class="sw on" role="switch" aria-checked="true" aria-label="允许请求人工协助"></button>
         </div>
         <div class="row">
           <div class="setting-row" style="flex:1">
@@ -259,7 +269,7 @@
   </section>
 
   <section class="meta">
-    <div class="left">CLI <span id="cliVersion">—</span><span aria-hidden="true">/</span> Ext <span id="extVersion">0.1.3</span></div>
+    <div class="left">CLI <span id="cliVersion">—</span><span aria-hidden="true">/</span> Ext <span id="extVersion">0.1.3</span><span aria-hidden="true">/</span><span>协议 <span id="protocolVersion">—</span></span></div>
     <div class="right">实例 ID <code id="instanceId">—</code>
       <button type="button" id="copyInstance" class="icon-btn" style="width:20px;height:20px" aria-label="复制实例 ID" title="复制实例 ID">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 6V3h12v14h-3v4H5V6h2zm2 0h7v9h3V5H9v1zM7 8H6v11h8v-1H7V8z"/></svg>

@@ -87,3 +87,17 @@ EDGE_API_KEY=... EDGE_CLIENT_ID=... EDGE_PRODUCT_ID=... \
 - 内部：RefKey 注册表/Revision fence/Action Receipt 基础设施，为 0.2.0 准备。
 - 扩展 438,216 B，sha256 `60dfbf04b7030a5e71f9954402a3d3865d39a580a13942cea75575097913bd64`。
 - GitHub/Edge 发布状态以发布后 API/Partner Center 为准。
+
+## 0.2.0（2026-11-18）
+
+- 真正 OOPIF、嵌套 frame、RefKey/CDP 路由、VOM 视觉坐标、cooperation FrameState、record per-document Port、Action Receipt、12-case eval corpus。
+- GitHub：**v0.2.0 已公开并签名**，latest：<https://github.com/iorl566/bridgedeck/releases/tag/v0.2.0>
+- Edge：**0.2.0 已提交，状态“正在审阅”**；证据 [edge-store-0.2.0-review.png](assets/ui/edge-store-0.2.0-review.png)。
+- 扩展 441,717 B，sha256 `2b2919a5dc6d5174898206fc878343f76823ba5a6fa45fe103bb002b58ada389`。
+
+## 0.3.0（2026-11-18）
+
+- 完整 RefKey/CDP、OOPIF、VOM visualObjects/stableRef、Cooperation authority/stale generation、record per-document Port、capture manifest、method catalog、27-case eval。
+- GitHub：**v0.3.0 已公开并签名**，latest：<https://github.com/iorl566/bridgedeck/releases/tag/v0.3.0>
+- Edge：**0.3.0 已提交，状态“正在审阅”**；证据 [edge-store-0.3.0-review.png](assets/ui/edge-store-0.3.0-review.png)。
+- 扩展 443,292 B，sha256 `97a600ddd689502d6e975a6933e508068b48680c07a3a6f3660437701e9f47dd`。

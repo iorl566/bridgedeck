@@ -16,6 +16,20 @@ test('sessionPublicView includes connection and phase', () => {
   assert.equal(view.ageMs, 1000);
 });
 
+test('sessionPublicView 透出共享控制模式与控制快照', () => {
+  const plain = sessionPublicView({ ...session, controlMode: 'nope' });
+  assert.equal(plain.controlMode, 'open');
+  assert.equal(plain.control, null);
+  const exclusive = sessionPublicView({
+    ...session,
+    controlMode: 'exclusive',
+    control: { epoch: 2, holder: 'b', mode: 'exclusive', shared: true, sessionCount: 2 },
+  });
+  assert.equal(exclusive.controlMode, 'exclusive');
+  assert.equal(exclusive.control.holder, 'b');
+  assert.equal(exclusive.control.epoch, 2);
+});
+
 test('isSessionExpired only when disconnected past ttl', () => {
   assert.equal(isSessionExpired(session, { connected: true, now: 10_000_000 }), false);
   assert.equal(isSessionExpired({ ...session, disconnectedAt: 1000 }, { now: 2000, ttlMs: 5000 }), false);

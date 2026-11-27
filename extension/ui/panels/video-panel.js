@@ -1,5 +1,7 @@
 /** Inline video recording panel; the full page keeps the recording library. */
 
+import { errorText } from '../common.js';
+
 const $ = (id) => document.getElementById(id);
 
 function setStatus(text, error = false) {
@@ -31,7 +33,7 @@ async function sync() {
       setStatus('未开始');
     }
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : '读取失败', true);
+    setStatus(errorText(error instanceof Error ? error.message : '读取失败'), true);
   }
 }
 
@@ -45,7 +47,7 @@ export function mountVideoPanel() {
     }
     const result = await chrome.runtime.sendMessage({ type: 'bb.rec.start', tabId: tab.id });
     if (!result?.ok) {
-      setStatus(result?.error || '开始录制失败', true);
+      setStatus(errorText(result?.error || '开始录制失败'), true);
       return;
     }
     await sync();
@@ -53,7 +55,7 @@ export function mountVideoPanel() {
   $('videoStop').addEventListener('click', async () => {
     const result = await chrome.runtime.sendMessage({ type: 'bb.rec.stop' });
     if (!result?.ok) {
-      setStatus(result?.error || '停止录制失败', true);
+      setStatus(errorText(result?.error || '停止录制失败'), true);
       return;
     }
     setStatus('正在写入视频…');

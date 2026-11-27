@@ -3,17 +3,77 @@ import { log } from './log.js';
 import { readSettings } from './settings.js';
 import { closeOverlay, isCapturing, openOverlay } from './overlay-state.js';
 import { installTakeover } from './overlay-ui.js';
-import { overlayTexts } from './overlay-texts.js';
+import { overlayTexts, overlayA11yTexts } from './overlay-texts.js';
 import { OVERLAY_THEME } from './overlay-theme.js';
 import { setCooperationBlocked } from './cooperation.js';
-import { controlGeneration } from './control.js';
+import { bumpRevisions, controlGeneration } from './control-generation.js';
+import { controllerState, transitionBumps } from './lib/controller-state.js';
+import { sendDaemonEvent } from './lib/daemon-events.js';
 
 const takeoverStates = new Map();
 const takeoverVersions = new Map();
+/** 显式交还控制权的时间戳（per tab）：用于丢弃交还后尾随到达的 auto pause 事件。 */
+const explicitHandbacks = new Map();
+
+/** 近期是否有“人明确交还控制权”（帮助完成 / cooperate handback）。 */
+export function recentlyHandedBack(tabId, windowMs = 2000) {
+  const id = Number(tabId);
+  if (!Number.isInteger(id)) return false;
+  const at = explicitHandbacks.get(id) || 0;
+  return at > 0 && Date.now() - at <= (Number(windowMs) > 0 ? Number(windowMs) : 2000);
+}
+
+/**
+ * 应用 daemon 下发的 takeover.state（paused/pausedBy/borrowed/controller）。
+ * 交还窗口内丢弃尾随的 auto pause：人已经明确交还，不应被协助期间残留的 trusted
+ * 输入事件重新暂停。手动暂停（pausedBy=manual）永远尊重，不会被丢弃。
+ * @returns {{state: object, ignoredAutoPause: boolean}}
+ */
+export function applyDaemonTakeoverState(tabId, params = {}) {
+  const id = Number(tabId);
+  const pausedByAuto = String(params.pausedBy || '') === 'auto';
+  const ignoredAutoPause = pausedByAuto && params.paused === true && recentlyHandedBack(id);
+  const state = {
+    sessionId: params.sessionId || '',
+    paused: params.paused === true && !ignoredAutoPause,
+    borrowed: params.borrowed === true,
+    controller: params.controller || null,
+    project: params.project || (params.controller && params.controller.project) || null,
+  };
+  if (Number.isInteger(id)) setTakeoverState(id, state);
+  return { state, ignoredAutoPause };
+}
+
+/**
+ * 浮层上的暂停/恢复是“人工接管”的入口之一（另一个是 cooperate.hold）。
+ * 这里把 paused 变化对齐进 controller 状态机：held 期间 TAB_METHODS 被拒绝，
+ * 恢复时按迁移表回到 agent。迁移被拒只记日志，不硬翻状态。
+ */
+function syncControllerFromPause(tabId, paused) {
+  const id = Number(tabId);
+  if (!Number.isInteger(id)) return null;
+  const current = controllerState.get(id);
+  let moved;
+  if (paused) {
+    moved = controllerState.transition(id, 'hold.engage', { source: 'takeover', reason: 'overlay-pause' });
+  } else if (current === 'held') {
+    moved = controllerState.transition(id, 'hold.release', { source: 'takeover', reason: 'overlay-resume' });
+  } else {
+    return null;
+  }
+  if (moved && moved.ok) {
+    const delta = transitionBumps(moved);
+    if (Object.keys(delta).length) bumpRevisions(id, delta);
+  } else if (moved) {
+    log('takeover 暂停迁移被拒绝：tab=' + id + ' code=' + moved.code + ' state=' + current);
+  }
+  return moved;
+}
 
 export function setTakeoverState(tabId, patch) {
   const next = { ...(takeoverStates.get(tabId) || {}), ...(patch || {}) };
   takeoverStates.set(tabId, next);
+  if (patch && typeof patch.paused === 'boolean') syncControllerFromPause(tabId, patch.paused);
   return next;
 }
 
@@ -23,6 +83,61 @@ export function getTakeoverState(tabId) {
 
 export function clearTakeoverState(tabId) {
   takeoverStates.delete(tabId);
+  explicitHandbacks.delete(tabId);
+}
+
+/**
+ * 人明确交还控制权（协助完成 / cooperate handback / 接管浮层“交给 Agent”）：
+ * 清扩展内 paused 标记 + 把 controller 收回 agent-ready + 通知 daemon 解除会话暂停。
+ *
+ * 为什么需要它：会话暂停状态在 daemon（`session.paused`），扩展内只改 takeover 状态
+ * 解不开；旧路径只能等下一次 cooperate.sync 的“人工静默 2s + Agent 静默 3s”自动恢复。
+ * 期间帮助卡片上的人机交互可能产生 trusted 输入触发 daemon auto pause，于是
+ * “完成并交还控制权”之后的下一条动作仍被 E_SESSION_PAUSED 拒绝（E2E 24b~26 级联失败的
+ * 真实根因）。交还点显式 resume 才是旧实现的“人做完 → 自动 ready”语义。
+ *
+ * @param {number} tabId
+ * @param {{source?: string, force?: boolean}} [options] force=true 时无论本地是否 paused 都通知 daemon
+ */
+export async function resumeTakeover(tabId, options = {}) {
+  // null/''/非数字都不是合法 tabId（Number(null)===0 会把“没传”误判成 tab 0）。
+  const id = tabId == null || tabId === '' ? NaN : Number(tabId);
+  if (!Number.isInteger(id)) return { ok: false, code: 'E_BAD_ARG', error: 'resumeTakeover 需要整数 tabId', tabId: null };
+  const source = String(options.source || 'resume-takeover');
+  const current = takeoverStates.get(id) || {};
+  const wasPaused = current.paused === true;
+  const controllerBefore = controllerState.get(id);
+  // 记下“人明确交还”的时刻：帮助卡片/浮层交互可能在交还后还产生 trusted 输入，
+  // daemon 会因此再发一次 auto pause；bridge 收到后按这个窗口丢弃，避免刚 ready 又被暂停。
+  explicitHandbacks.set(id, Date.now());
+  // 本地先解锁：setTakeoverState 的 paused hook 会把 controller held → agent，并推进计数。
+  const next = setTakeoverState(id, { paused: false });
+  // controller 可能停在 human（人工刚操作过、尚未 sync）：交回控制权同样视为回到 agent。
+  let moved = null;
+  if (controllerState.get(id) === 'human') {
+    moved = controllerState.transition(id, 'human.return', { source });
+    if (moved && moved.ok) {
+      const delta = transitionBumps(moved);
+      if (Object.keys(delta).length) bumpRevisions(id, delta);
+    }
+  }
+  // 通知 daemon：会话从 paused 恢复（daemon 侧是动作闸门的真正决策点）。
+  let daemon = null;
+  if (wasPaused || options.force === true) {
+    daemon = sendDaemonEvent('takeover.pause', { tabId: id, paused: false });
+    if (!daemon.ok) log('resume 通知 daemon 失败 tab=' + id + '：' + (daemon.code || 'unknown'));
+  }
+  const evidence = {
+    tabId: id,
+    source,
+    previousPaused: wasPaused,
+    controllerBefore,
+    controllerAfter: controllerState.get(id),
+    daemonEvent: daemon,
+    at: Date.now(),
+  };
+  if (wasPaused) log('人工交回控制权 tab=' + id + '（source=' + source + '）→ 已解除暂停');
+  return { ok: true, resumed: wasPaused, tabId: id, takeover: next, controller: controllerState.snapshot(id), evidence };
 }
 
 
@@ -69,7 +184,7 @@ export async function showTakeover(tabId, info = {}) {
         controller: info.controller && typeof info.controller === 'object' ? info.controller : null,
         mode: info.mode || null,
         minimized: info.minimized === true,
-      }, lang, (takeoverVersions.get(tabId) || 0) + 1, OVERLAY_THEME, overlayTexts(lang)],
+      }, lang, (takeoverVersions.get(tabId) || 0) + 1, OVERLAY_THEME, overlayTexts(lang), { ...overlayA11yTexts(lang), mode: settings && settings.overlayA11y === true ? 'accessible' : 'closed' }],
     });
     // 可选输入锁：只在接管浮层可见且未暂停/未收起时锁页面；用户点暂停或
     // 收起后立即放开。设置默认关闭，避免无提示地改变现有交互。

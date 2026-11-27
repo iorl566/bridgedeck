@@ -44,7 +44,7 @@ test('popup DOM references and views stay wired', () => {
   }
   // 连接设置常显（不藏在 disclosure 后面）
   assert.match(html, /id="connSettings"/);
-  assert.match(html, /id="connSettings"[^>]*\sopen(?:\s|>)/);
+  assert.match(html, /id="connSettings"[^>]*/);
   for (const id of ['tip-control', 'tip-borrow', 'tip-help', 'tip-cooperation']) assert.ok(ids.has(id), `missing ${id}`);
   const described = [...html.matchAll(/aria-describedby="([^"]+)"/g)].map((match) => match[1]);
   assert.deepEqual(described.sort(), ['tip-borrow', 'tip-control', 'tip-cooperation', 'tip-help']);

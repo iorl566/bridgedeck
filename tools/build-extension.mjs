@@ -11,10 +11,12 @@ import {
   listExtensionFiles,
   readReferenceOnly,
 } from './lib/extension-runtime.mjs';
+import { assertReleaseWritable, parseBuildArgs } from './lib/release-guard.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXT = path.join(ROOT, 'extension');
-const DIST = path.join(ROOT, 'dist');
+const options = parseBuildArgs(process.argv.slice(2));
+const DIST = options.out ? path.resolve(ROOT, options.out) : path.join(ROOT, 'dist');
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 const name = `BridgeDeck-extension-${pkg.version}.zip`;
 const out = path.join(DIST, name);
@@ -28,6 +30,12 @@ if (problems.length) {
 }
 const referenceOnly = readReferenceOnly(EXT);
 
+assertReleaseWritable(DIST, { force: options.force });
+if (options.dryRun) {
+  console.log(JSON.stringify({ ok: true, dryRun: true, out, files: [...listExtensionFiles(EXT)].length, version: pkg.version }, null, 2));
+  process.exit(0);
+}
+
 fs.mkdirSync(DIST, { recursive: true });
 fs.rmSync(out, { force: true });
 const staging = path.join(DIST, '.extension-build');
@@ -37,6 +45,8 @@ const excluded = [];
 try {
   for (const file of listExtensionFiles(EXT)) {
     if (file === 'reference-only.json') continue;
+    // 发布包用前缀压缩的 o200k_base.bin，原始 tiktoken 只留在仓库供生成/校验。
+    if (file === 'vendor/o200k/o200k_base.tiktoken') { excluded.push(file); continue; }
     if (file.endsWith('.js') && !runtime.has(file)) {
       excluded.push(file);
       continue;

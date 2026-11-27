@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 // tests/extension/page-guard.mjs —— 页面守卫与 Agent 窗口的回归测试。
 //
 // 背景：session start 会新建一个独立的 Agent Window，但 chrome.tabs.onCreated
@@ -39,6 +39,7 @@ const chromeApi = {
   runtime: {
     getManifest: () => ({ version: '0.1.2' }),
     onMessage: makeListener('runtime.onMessage'),
+    onConnect: makeListener('runtime.onConnect'),
     onInstalled: makeListener('runtime.onInstalled'),
     onStartup: makeListener('runtime.onStartup'),
     sendMessage: async () => ({}),

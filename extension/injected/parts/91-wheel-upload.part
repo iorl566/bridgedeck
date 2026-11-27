@@ -1,0 +1,141 @@
+  function actionWheel(args) {
+    const deltaY = Number(args.deltaY);
+    const deltaX = Number(args.deltaX);
+    const dy = Number.isFinite(deltaY) ? deltaY : 0;
+    const dx = Number.isFinite(deltaX) ? deltaX : 0;
+    if (dy === 0 && dx === 0) pageError('E_BAD_ARG', 'wheel 需要非零 deltaY 或 deltaX');
+    let target = null;
+    let x = Number(args.x);
+    let y = Number(args.y);
+    if (args.ref || args.selector) {
+      target = resolveElement(args);
+      scrollIntoView(target);
+      const center = rectCenter(target);
+      x = center.x;
+      y = center.y;
+    }
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      x = Math.round(window.innerWidth / 2);
+      y = Math.round(window.innerHeight / 2);
+    }
+    const node = target || eventTargetAt(x, y, document.body);
+    const modBits = Number(args.modifiers) || 0;
+const beforeY = window.scrollY;
+    const beforeX = window.scrollX;
+    node.dispatchEvent(new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX: x,
+      clientY: y,
+      deltaX: dx,
+      deltaY: dy,
+      deltaMode: 0,
+      altKey: (modBits & 1) !== 0,
+      ctrlKey: (modBits & 2) !== 0,
+      metaKey: (modBits & 4) !== 0,
+      shiftKey: (modBits & 8) !== 0,
+    }));
+    const moved = Math.abs(window.scrollY - beforeY) > 1 || Math.abs(window.scrollX - beforeX) > 1;
+    let synthetic = false;
+    if (!moved && !target) {
+      // 合成 wheel 事件不会触发浏览器默认滚动；没有指定元素时退化为直接滚动页面
+      window.scrollBy({ top: dy, left: dx, behavior: 'instant' });
+      synthetic = true;
+    }
+    return { ok: true, scrollY: window.scrollY, scrollX: window.scrollX, synthetic: synthetic };
+  }
+
+  function actionBlur(args) {
+    if (args.ref || args.selector) {
+      const el = resolveElement(args);
+      if (typeof el.blur === 'function') el.blur();
+      return { ok: true };
+    }
+    const active = document.activeElement;
+    if (active && typeof active.blur === 'function') active.blur();
+    return { ok: true };
+  }
+
+  function uploadProbe(args) {
+    const el = resolveElement(args);
+    const tag = el.tagName.toLowerCase();
+    return {
+      tag,
+      isFileInput: el.tagName === 'INPUT' && String(el.type || '').toLowerCase() === 'file',
+    };
+  }
+
+  function base64ToBytes(input) {
+    const text = String(input == null ? '' : input);
+    const comma = text.indexOf(',');
+    const clean = comma >= 0 ? text.slice(comma + 1) : text;
+    const binary = atob(clean);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function actionUpload(args) {
+    const el = resolveElement(args);
+    const tag = el.tagName;
+    const type = tag === 'INPUT' ? String(el.type || '').toLowerCase() : '';
+    if (tag !== 'INPUT' || type !== 'file') pageError('E_BAD_ARG', 'upload 只支持 input[type=file]');
+    return setFilesOnInput(el, args);
+  }
+
+  function actionUploadFirst(args) {
+    const inputs = document.querySelectorAll('input[type="file"]');
+    if (!inputs.length) pageError('E_NOT_FOUND', '页面上没有 input[type=file]');
+    return setFilesOnInput(inputs[0], args);
+  }
+
+  function setFilesOnInput(el, args) {
+    if (!Array.isArray(args.files) || !args.files.length) pageError('E_BAD_ARG', 'upload 需要 files 数组');
+    let total = 0;
+    const transfer = new DataTransfer();
+    const names = [];
+    for (const file of args.files) {
+      const bytes = base64ToBytes(file && file.base64);
+      total += bytes.length;
+      if (total > 20 * 1024 * 1024) pageError('E_TOO_LARGE', '上传文件总大小超过 20MB');
+      const name = String((file && file.name) || 'upload.bin');
+      const mime = String((file && file.mime) || 'application/octet-stream');
+      transfer.items.add(new File([bytes], name, { type: mime, lastModified: Date.now() }));
+      names.push(name);
+    }
+    el.files = transfer.files;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return { ok: true, names: names };
+  }
+
+  /** 同源重放：在页面上下文发一次带 cookie 的请求（network.replay 用）。 */
+  async function actionFetchRun(args) {
+    const url = String(args.url || '');
+    if (!url) pageError('E_BAD_ARG', 'fetch-run 需要 url');
+    const method = String(args.method || 'GET').toUpperCase();
+    const init = { method: method, credentials: 'include', redirect: 'follow' };
+    if (args.headers && typeof args.headers === 'object') init.headers = args.headers;
+    if (typeof args.body === 'string' && method !== 'GET' && method !== 'HEAD') init.body = args.body;
+    const started = performance.now();
+    let response = null;
+    try {
+      response = await fetch(url, init);
+    } catch (error) {
+      pageError('E_JS_ERROR', 'fetch 失败：' + ((error && error.message) || error));
+    }
+    const text = await response.text();
+    const headers = {};
+    response.headers.forEach(function (value, key) { headers[key] = value; });
+    return {
+      status: response.status,
+      statusText: response.statusText,
+      headers: headers,
+      body: truncate(text, 200000),
+      durationMs: Math.round(performance.now() - started),
+      url: response.url,
+    };
+  }
+
+  // ===========================================================================

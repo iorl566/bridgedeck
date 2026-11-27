@@ -1,0 +1,19 @@
+Decide native JavaScript dialogs (alert, confirm, prompt, beforeunload)
+
+Usage: bsk.exe dialog [OPTIONS] <COMMAND>
+
+Commands:
+  status   Read pending native JS dialogs without querying the blocked renderer
+  accept   Confirm a dialog; --text supplies prompt input, including an empty string
+  dismiss  Cancel a dialog (beforeunload stays on the page)
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --context <CONTEXT>          Control context returned by cooperate sync. Required for shared-tab actions
+      --depends-on <DEPENDS_ON>    Legacy strict-policy decision regions. Target policy uses --expect instead
+      --observation <OBSERVATION>  Explicit observation ID for visual or untargeted actions; never inferred from cached state
+      --expect <EXPECT>            JSON array of target facts to check before input: [{"target":"@e1","field":"text","equals":"Save"}]
+      --json                       Emit machine-readable JSON output (when meaningful)
+      --quiet                      Suppress informational output
+  -v, --verbose...                 Increase log verbosity (`-v` debug, `-vv` trace)
+  -h, --help                       Print help

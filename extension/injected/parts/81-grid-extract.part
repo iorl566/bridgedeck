@@ -1,0 +1,74 @@
+  function gridExtract(node, maxRows, budget, offset) {
+    const start = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
+    const headerCells = Array.from(node.querySelectorAll('[role="columnheader"][col-id], .ag-header-cell[col-id]')).filter(function (cell) {
+      return isVisible(cell);
+    });
+    const colIds = headerCells.map(function (cell) { return cell.getAttribute('col-id'); });
+    const labels = headerCells.map(function (cell) { return normalizeText(cell.textContent || ''); });
+    const byRow = new Map();
+    const rows = Array.from(node.querySelectorAll('[role="row"], .ag-row'));
+    for (const row of rows) {
+      const index = row.getAttribute('row-index') || row.getAttribute('row-id') || '';
+      const cells = Array.from(row.querySelectorAll('[role="gridcell"], .ag-cell'));
+      if (!cells.length) continue;
+      let bucket = byRow.get(index);
+      if (!bucket) { bucket = {}; byRow.set(index, bucket); }
+      for (const cell of cells) {
+        const colId = cell.getAttribute('col-id') || ('idx' + cells.indexOf(cell));
+        bucket[colId] = truncate(normalizeText(cell.textContent || ''), 500);
+      }
+    }
+    const orderedCols = colIds.length ? colIds : Array.from(new Set(Array.from(byRow.values()).flatMap(function (row) { return Object.keys(row); })));
+    const columns = orderedCols.map(function (colId, i) {
+      const label = labels[i] || '';
+      return { key: 'c' + (i + 1), label: label || ('c' + (i + 1)), colId: colId };
+    });
+    const indices = Array.from(byRow.keys());
+    const sorted = indices.slice().sort(function (a, b) {
+      const na = Number(a); const nb = Number(b);
+      if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+      return String(a).localeCompare(String(b));
+    });
+    const outRows = [];
+    let truncated = false;
+    let stopReason = 'end';
+    const cellCap = budget ? Math.max(0, Math.floor(budget.maxCells / Math.max(orderedCols.length, 1))) : maxRows;
+    const effectiveMax = Math.min(maxRows, cellCap);
+    let seen = 0;
+    for (const index of sorted) {
+      if (outRows.length >= effectiveMax) {
+        truncated = true;
+        stopReason = effectiveMax < maxRows ? 'max-cells' : 'max-rows';
+        break;
+      }
+      if (seen < start) {
+        seen += 1;
+        continue;
+      }
+      const bucket = byRow.get(index);
+      const out = {};
+      orderedCols.forEach(function (colId, i) { out['c' + (i + 1)] = bucket[colId] === undefined ? '' : bucket[colId]; });
+      outRows.push(out);
+      seen += 1;
+    }
+    const hasMore = start + outRows.length < sorted.length;
+    return withCoverage({
+      kind: 'table',
+      columns: columns,
+      rows: outRows,
+      rowCount: outRows.length,
+      totalRows: sorted.length,
+      columnCount: orderedCols.length,
+      cells: outRows.length * orderedCols.length,
+      stopReason: truncated ? stopReason : 'end',
+      hasMore: hasMore,
+      complete: !truncated && !hasMore && headerCells.length > 0,
+      truncated: truncated,
+      warnings: headerCells.length ? [] : ['未找到列头，列名用 cN 代替'],
+    }, declaredRowCount(node, 'grid'), budget, start);
+  }
+
+  const DISCOVER_MAX_TARGETS = 32;
+  const DISCOVER_PREVIEW_COLUMNS = 8;
+  const DISCOVER_MAX_DEPTH = 4;
+

@@ -22,6 +22,51 @@ import http from 'node:http';
 import https from 'node:https';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createToolRuntime } from './tool-runtime.mjs';
+import { listToolSpecs, toolSpec, toolTierSummary, validateToolInput } from './tool-catalog.mjs';
+import {
+  SDK_CONTRACT,
+  TOOL_PAGINATION,
+  isProtocolUnsupportedCode,
+  methodProtocolGate,
+  protocolSupports,
+  toolProtocolGate,
+} from './contract.mjs';
+
+// W4-A：SDK 完整化面（92 工具目录 / 契约 / 分页 / 能力门禁）与运行时错误类型。
+export { SDK_CONTRACT, TOOL_PAGINATION, isProtocolUnsupportedCode, methodProtocolGate, protocolSupports, toolProtocolGate };
+export { TOOL_NAMES, listToolSpecs, toolSpec, toolTierSummary, validateToolInput } from './tool-catalog.mjs';
+export { ToolCallError, createToolRuntime } from './tool-runtime.mjs';
+// 第十批-B：MCP 客户端（spawn mcp/server.mjs，与 Python McpToolClient 对齐的能力面：
+// 全 92 工具 / 分页 / 审批 / 超时 / 重试 / 进度 / 取消 / resources 订阅 / completion）。
+export {
+  MCP_CLIENT_DEFAULTS,
+  MCP_PROTOCOL_VERSION,
+  MCP_SERVER_PATH,
+  McpClient,
+  McpRpcError,
+  McpTransport,
+  ProgressAggregator,
+  createMcpClient,
+  mcpClientSnapshot,
+  requiresApproval,
+  toolPayloadFromResult,
+  withMcpClient,
+} from './mcp-client.mjs';
+// 第十一批-C：传输重连策略（状态机 / 确定性退避 / 重连编排）。默认关闭，显式开启后
+// McpClient 才会在连接类错误上重建传输（非幂等工具默认不自动重放）。
+export {
+  RECONNECT_DEFAULTS,
+  RECONNECT_REASONS,
+  RECONNECT_STATES,
+  RECONNECTABLE_CODES,
+  ReconnectTracker,
+  backoffDelayMs,
+  isReconnectableError,
+  reconnectSnapshot,
+  resolveReconnectPolicy,
+  runReconnect,
+} from './reconnect.mjs';
 
 const SDK_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SDK_DIR, '..');
@@ -55,10 +100,58 @@ export const ERROR_CODES = Object.freeze({
   E_OBSERVATION_STALE: "观测结果已过期，需重新 observe",
   E_CURSOR_STALE: "分页游标已过期",
   E_CONTEXT_REQUIRED: "该动作要求先提供上下文",
-  E_CONTEXT_STALE: "上下文与当前页面不一致",
+  E_CONTEXT_STALE: "上下文与当前页面不一致（或已被重新 sync 吊销）",
+  E_COOPERATION_STALE: "协作输入层 authority 已失效且无法重新对齐",
+  E_CONTROL_CONTEXT_INVALID: "控制面 context_id 缺失/过期/与当前文档或帧不匹配",
+  E_UNSUPPORTED_FEATURE: "对端扩展不支持所要求的 feature（协商未回执或版本过旧）",
   E_DEPENDS_FAILED: "前置依赖步骤未成功",
   E_EXPECT_FAILED: "expect 断言不匹配",
   E_OBSERVATION_CHANGED: "页面在观测后已变化（观测代数不符）",
+  E_TARGET_DETACHED: "观测时的目标节点已从文档中移除（节点级校验）",
+  E_TOKEN_BAD_ARG: "passthrough 令牌参数非法（缺 token 或 grantee）",
+  E_TOKEN_UNKNOWN: "passthrough 令牌不存在或已被清理",
+  E_TOKEN_EXPIRED: "passthrough 令牌已过期",
+  E_TOKEN_USED: "passthrough 令牌已被消费（一次性）",
+  E_TOKEN_GRANTEE: "passthrough 令牌与调用方 grantee 不匹配",
+  E_TOKEN_CAPACITY: "passthrough 令牌存储已满且无法驱逐",
+  E_CAPTURE_BAD_TAB: "capture 抑制引用的 tabId 非法",
+  E_CAPTURE_LIMIT: "同一 tab 的 capture 抑制引用超过上限",
+  E_SESSION_STATE: "会话状态不允许该操作（状态机拒绝）",
+  E_SESSION_TRANSITION: "会话状态迁移非法",
+  E_LEDGER_IO: "意图账本读写失败",
+  E_LEDGER_WAL_IO: "意图账本 WAL 写入失败",
+  E_LEDGER_FSYNC: "意图账本持久化（fsync）失败",
+  E_LEDGER_RECOVER: "意图账本崩溃恢复失败",
+  E_LEDGER_CONFLICT: "账本结论冲突（重复 resolve 且结论不一致）",
+  E_LEDGER_RESOLVE_REQUIRED: "非幂等动作的 UNKNOWN 必须显式 resolve(confirmed|not-applied)",
+  E_TAB_LEASE_HELD: "tab 已被其它会话租用",
+  E_TAB_LEASE_NOT_HELD: "tab 租约不存在或已被释放",
+  E_SNAPSHOT_DISABLED: "MCP 快照持久化被关闭（BB_MCP_SNAPSHOT=off）",
+  E_SNAPSHOT_WRITE: "MCP 快照写盘失败",
+  E_SNAPSHOT_CORRUPT: "MCP 快照文件损坏或格式不符",
+  E_UNSUPPORTED: "不支持的请求（兼容别名；优先使用 E_UNSUPPORTED_CAPABILITY）",
+  E_ARG_MISSING: "CLI 参数缺失（必填项未提供）",
+  E_ARG_TYPE: "CLI 参数类型非法",
+  E_ARG_ENUM: "CLI 参数取值不在枚举内",
+  E_ARG_CONFLICT: "CLI 参数互斥组合冲突",
+  E_ARG_REQUIRES: "CLI 参数依赖缺失（如 --share 需要 --tab）",
+  E_ARG_RANGE: "CLI 参数数值超出范围",
+  E_ARG_UNEXPECTED: "CLI 参数不被该子命令接受",
+  E_ARG_USAGE: "CLI 用法错误",
+  E_UNKNOWN_FLAG: "未知命令行选项",
+  E_BAD_SUBCOMMAND: "未知子命令",
+  E_HUMAN_GATE: "需要人工确认后才能继续（human gate）",
+  E_EVAL_CORPUS: "eval 语料格式/元数据非法",
+  E_EVAL_RUNNER: "eval 离线运行器执行失败",
+  E_EVAL_DOM: "eval DOM 层失败",
+  E_EVAL_DOM_ARGS: "eval DOM 运行参数非法",
+  E_EVAL_DOM_BAD_FACTS: "eval DOM 事实读取结果非法",
+  E_EVAL_DOM_BAD_JSON: "eval DOM 事实 JSON 解析失败",
+  E_EVAL_DOM_FIXTURE: "eval DOM 夹具缺失或不可读",
+  E_EVAL_DOM_NO_BROWSER: "eval DOM 需要真实浏览器但未找到",
+  E_EVAL_DOM_NO_FACTS: "eval DOM 未产出事实",
+  E_EVAL_DOM_NO_MARKER: "eval DOM 页面缺少完成标记",
+  E_EVAL_DOM_SPAWN: "eval DOM 浏览器进程启动失败",
   E_OCCLUDED: "目标被遮挡（浮层/弹窗）",
   E_OBSCURED: "视觉坐标落点被铺满视口的元素遮住",
   E_TARGET_MISMATCH: "视觉坐标落点不属于预期的候选目标",
@@ -76,6 +169,7 @@ export const ERROR_CODES = Object.freeze({
   E_UNSUPPORTED_CAPABILITY: "当前版本不支持该能力",
   E_UNSUPPORTED_REMOTE: "远程连接不支持该能力",
   E_PROTOCOL_UNSUPPORTED: "协议版本不兼容",
+  E_PROTOCOL_AUDIT: "协议审计失败（proof obligations / 兼容矩阵 / 迁移计划自检不通过）",
   E_AUTH: "本机鉴权失败",
   E_AUTH_BUSY: "鉴权通道正被另一请求占用",
   E_AUTH_CHALLENGE: "鉴权挑战无效",
@@ -85,6 +179,7 @@ export const ERROR_CODES = Object.freeze({
   E_AUTH_STATE: "鉴权状态机不允许该操作",
   E_PAIR_INVALID: "配对码无效或已使用",
   E_PAIR_REQUIRED: "需要先完成本机配对",
+  E_PAIR_REJECTED: "配对 token 已绑定到其它浏览器，请重新配对",
   E_PAUSED_MANUAL: "会话因人工接管而暂停",
   E_LEDGER_PENDING: "有未确认的意图账本记录",
   E_DAEMON: "daemon 不可用（未启动或连接失败，客户端侧码）",
@@ -123,6 +218,9 @@ export const ERROR_CODES = Object.freeze({
   E_BORROW_CONFLICT: "同一标签页已被其他会话借用或正在确认中",
   E_BORROW_TIMEOUT: "借用标签页超时",
   E_HELP_DISABLED: "人工协助不可用",
+  E_CONTROL_NOT_HELD: "共享标签页的控制权不在本会话（exclusive 模式下写动作被拒绝）",
+  E_CONTROL_BUSY: "共享标签页的控制权被其他会话持有，无法认领",
+  E_CONTROL_STALE: "共享标签页的控制权已换代（epoch 不符，需重新读取）",
   E_NO_DOWNLOAD: "没有可用的下载",
   E_DOWNLOAD_FAILED: "下载失败",
   E_NO_FILE_CHOOSER: "没有可用的文件选择器",
@@ -133,8 +231,11 @@ export const ERROR_CODES = Object.freeze({
   E_RECIPE_NOT_APPROVED: "配方未获批",
   E_RECIPE_CHANGED: "配方内容已变更",
   E_RECIPE_EXPIRED: "配方已过期",
+  E_RECIPE_DRAFT_EMPTY: "运行日志里没有可回放的步骤（recipe 草稿为空）",
   E_RECIPE_LOCKED: "配方正在被另一个进程回放",
   E_FORBIDDEN: "当前策略禁止该操作",
+  E_READ_ONLY: "会话是只读 scope，不能执行变更动作",
+  E_EXEC_FAILED: "exec 脚本执行失败或超时",
   E_INTERNAL: "其它异常",
 });
 // error-codes:end
@@ -361,6 +462,22 @@ export class Page {
   async close({ keep = false } = {}) {
     return this.bridge.rpc('session.stop', { session: this.id, keep });
   }
+
+  /**
+   * 在会话上下文里调用 MCP 工具：自动补 session（工具 schema 声明了 session 时）。
+   * options 与 BrowserBridge.callTool 一致（approval/timeoutMs/onProgress/signal）。
+   * @param {string} name
+   * @param {object} [args]
+   * @param {{ approval?: boolean, timeoutMs?: number, onProgress?: Function, signal?: AbortSignal }} [options]
+   */
+  async callTool(name, args = {}, options = {}) {
+    const spec = toolSpec(name);
+    if (!spec) throw new BridgeRpcError('E_ARG_UNEXPECTED', '未知 MCP 工具：' + name);
+    const withSessionArgs = (args.session === undefined && spec.properties && spec.properties.session)
+      ? { ...args, session: this.id }
+      : args;
+    return this.bridge.callTool(name, withSessionArgs, options);
+  }
 }
 
 /**
@@ -375,6 +492,10 @@ export class BrowserBridge {
     this.info = { port: info.port, token: info.token, tls: info.tls === true };
     this.home = options.home || defaultHome();
     this.timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : DEFAULT_TIMEOUT_MS;
+    // daemon.json 若带协议版本就用它做能力门禁；没有则按当前协议乐观处理（真不兼容时
+    // daemon 仍会用 E_PROTOCOL_UNSUPPORTED 拒绝，SDK 不重复造门）。
+    this.protocol = info.protocol ? String(info.protocol) : null;
+    this._toolRuntime = null;
   }
 
   /** @param {{home?:string, timeoutMs?:number, autoStart?:boolean}} [options] */
@@ -441,6 +562,87 @@ export class BrowserBridge {
     } catch {
       // daemon 会在回包前退出，连接错误视为已停止
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // W4-A：MCP 92 工具语义（与 mcp/tools-*.mjs 同一份 run 实现）
+  // -------------------------------------------------------------------------
+
+  /** 惰性创建工具运行时（首次 callTool 时才建，避免只做 RPC 的调用方多付成本）。 */
+  get toolRuntime() {
+    if (!this._toolRuntime) this._toolRuntime = createToolRuntime({ bridge: this, home: this.home });
+    return this._toolRuntime;
+  }
+
+  /** 92 个 MCP 工具的 SDK 目录（名称/分档/入参/分页/特性门）。 */
+  listTools() {
+    return listToolSpecs();
+  }
+
+  /** 单工具目录；未知工具返回 null。 */
+  toolSpec(name) {
+    return toolSpec(name);
+  }
+
+  /** 入参运行时校验（E_ARG_* 分类，与 MCP server 一致）。 */
+  validateToolArgs(name, args) {
+    return validateToolInput(name, args);
+  }
+
+  /** 分档统计（read/mutate/destructive、审批清单、分页工具）。 */
+  toolTierSummary() {
+    return toolTierSummary();
+  }
+
+  /**
+   * 调用任意 MCP 工具，返回工具原始结果。destructive 工具需 options.approval=true。
+   * 支持进度与取消（W7-C）：
+   *   - options.onProgress(event)：{ phase: start|progress|done|error|cancelled, tool, tier, callId,
+   *     elapsedMs, progress?, message?, code? }，心跳按工具分档节流；
+   *   - options.signal：AbortSignal，触发时本地停止等待并抛 E_CANCELLED（同时 best-effort
+   *     向 daemon 转发取消）；
+   *   - options.timeoutMs 覆盖工具策略超时。
+   */
+  async callTool(name, args = {}, options = {}) {
+    return this.toolRuntime.callTool(name, args, options);
+  }
+
+  /** 调用并返回 { tool, tier, methods, elapsedMs, callId, result, progress, events }。 */
+  async callToolDetailed(name, args = {}, options = {}) {
+    return this.toolRuntime.callToolDetailed(name, args, options);
+  }
+
+  /**
+   * 取消在途工具调用：target 可传 callId（"browser_observe#3"）或工具名；省略则取消全部。
+   * 返回 { requested, cancelled, unknown, reason, reports, inflight }；找不到目标不报错。
+   */
+  async cancelTool(target, reason = '') {
+    return this.toolRuntime.cancelTool(target, reason);
+  }
+
+  /** 在途工具调用快照（诊断/测试；不含 Promise 引用）。 */
+  inflightTools() {
+    return this.toolRuntime.inflight();
+  }
+
+  /** 结束 SDK 工具运行时自己创建的会话（显式 session 不动）。 */
+  async closeTools() {
+    if (!this._toolRuntime) return { ok: true, stopped: false };
+    const result = await this._toolRuntime.close();
+    this._toolRuntime = null;
+    return result;
+  }
+
+  /**
+   * 工具级协议门禁：给定对端协议版本（默认 daemon 上报的版本），返回工具是否可用。
+   * @param {string} name
+   * @param {string} [peerVersion]
+   */
+  toolProtocolGate(name, peerVersion = this.protocol) {
+    const spec = toolSpec(name);
+    if (!spec) throw new BridgeRpcError('E_ARG_UNEXPECTED', '未知 MCP 工具：' + name);
+    if (!peerVersion) return { ok: true, features: [...spec.featureGates], missing: [], code: null };
+    return toolProtocolGate(name, { methods: spec.methods, featureGates: spec.featureGates, params: {} }, peerVersion);
   }
 }
 

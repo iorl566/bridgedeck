@@ -47,7 +47,7 @@ export function prepareBrowserProfile(profileDir) {
 /** 统一的确定性启动参数；windowSize 形如 "1280,900"。 */
 export function browserArgs({ profileDir, extensionDir, windowSize, newWindow = false }) {
   const features = [
-    'DisableLoadExtensionCommandLineSwitch',
+    ...(process.env.BB_E2E_ALLOW_LOAD_EXTENSION === '1' ? [] : ['DisableLoadExtensionCommandLineSwitch']),
     'FirstRunExperience',
     'msEdgeFirstRunExperience',
     'msEdgeSyncConsent',
@@ -63,6 +63,7 @@ export function browserArgs({ profileDir, extensionDir, windowSize, newWindow = 
     '--disable-component-update',
     '--no-service-autorun',
     `--disable-features=${features}`,
+    ...(process.env.BB_E2E_FORCE_A11Y === '1' ? ['--force-renderer-accessibility'] : []),
     `--load-extension=${extensionDir}`,
     ...(windowSize ? [`--window-size=${windowSize}`] : []),
     ...(newWindow ? ['--new-window'] : []),

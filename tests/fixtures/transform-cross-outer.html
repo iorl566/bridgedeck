@@ -1,0 +1,7 @@
+<!doctype html><meta charset="utf-8"><title>跨源变换外层</title>
+<iframe id="xform-inner" src="frame-transform.html" style="width:400px;height:200px;transform:rotate(-12deg) scale(0.9);transform-origin:0 0;border:1px solid #ddd"></iframe>
+<script>
+  addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'xform') parent.postMessage(event.data, '*');
+  });
+</script>

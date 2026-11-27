@@ -1,7 +1,25 @@
 # BSK 0.5.0 能力差距全量清单（BridgeDeck 0.1.9 对照）
 
-日期：2026-11-17。对照源：`ref/bsk-0.5.0-src/BrowserSkill-cli-v0.5.0`。
+日期：2026-11-18（BridgeDeck 0.1.11）。对照源：`ref/bsk-0.5.0-src/BrowserSkill-cli-v0.5.0`。
 说明：这是**能力差距**清单，不是“必须全部补齐”的待办。哪些补、哪些不补，取决于 BridgeDeck 的产品定位。
+
+## 0.1 0.1.10/0.1.11 之后的变化
+
+已补：
+
+- `observe.layers` + L1/L2 文本 + `tokenEstimate`；
+- `observe.refDetails`（@eN + backendNodeId + frameId + documentId + revision）；
+- frame alias 携带 URL/documentId；
+- 单层 iframe owner-quad 投影（trusted click），失败回退 frame 内 page-lib；
+- 控制呼吸框恢复 0.1.7 级清晰度；
+- 发布包 vendor-clean 与 preflight 门禁。
+
+仍然只是“部分”：
+
+- refDetails 是**元数据**，动作仍按页面内 @eN 解析，不是 backendNodeId/CDP 路由；
+- 投影只支持当前文档直接 iframe，没有嵌套 frame、滚动容器、transform/zoom 链；
+- layers 只覆盖 dialog/overlay，不是完整 VOM 分层；
+- 没有 stable refs 协商、opaque revision cursor、视觉对象模型。
 
 ## 0. 结论
 
@@ -58,12 +76,12 @@ BridgeDeck 0.1.9 已经有：
 | Target hit/reachability | `target-hit.ts`、OOPIF 投影 | hit-test + frame-local 回退 | 部分 |
 | Input readiness | 可见性→override→双 rAF→revision | 两帧 + 复采样 + focus 守卫 | 部分 |
 | Focus lease | attachment 维度 | tab 级 focus cache | 部分 |
-| Pointer transaction | pointer-transaction.ts | input lease + trusted click | 部分 |
+| Pointer transaction | pointer-transaction.ts | input lease + trusted click + 按下后 unknown/禁止双点击 | 部分（已补 unknown） |
 | File input/drop transaction | file-input/file-drop transaction | upload/download | 部分 |
 | 拖拽 move-click-move | 有 | drag | 部分 |
 | Replaced target | fail closed，不重放 | 0.1.9 fail closed（synthetic/selector） | 部分（trusted 仍待） |
 | Scroll-to/wait-for-element | 有 | 有 | 对齐 |
-| Frame 几何 | owner-quad 投影 | frame-local 回退，无投影 | 缺 |
+| Frame 几何 | owner-quad 投影 | owner-quad + affine/matrix3d/perspective homography，E2E 23p2–23p9 | 对齐 |
 | 软 detach/重连 | document/child signature | attachment version + read gate | 部分 |
 
 **影响**：跨源 iframe、复杂布局、缩放/滚动容器、文件拖放，BSK 更稳。

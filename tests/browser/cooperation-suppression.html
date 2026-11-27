@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>COOP_SUP_PENDING</title>
+<body>
+<script>
+  // 最小 chrome stub：content/cooperation.js 只需要 onMessage.addListener 与 sendMessage。
+  window.chrome = {
+    runtime: {
+      onMessage: {
+        addListener(fn) { window.__coopHandler = fn; },
+      },
+      sendMessage() { return Promise.resolve({ ok: true }); },
+    },
+  };
+</script>
+<script src="/extension/content/cooperation.js"></script>
+<script type="module" src="./cooperation-suppression.js"></script>
+</body>

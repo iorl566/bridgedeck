@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "nodes": 5,
+  "order": [
+    "input",
+    "button",
+    "text",
+    "offscreen",
+    "blocked"
+  ],
+  "scores": {
+    "input": 62,
+    "button": 55,
+    "text": 23,
+    "offscreen": -13,
+    "blocked": -19
+  }
+}

@@ -2,6 +2,48 @@
 import { back, fillTabSelect, preferredTabFromQuery, selectedTabId } from './tab-picker.js';
 
 import { $ } from './common.js';
+import { getLang } from './i18n.js';
+import { installPageTools } from './lib/page-tools.js';
+import { announce } from './a11y-dialog.js';
+import { labeler } from './lib/labels.js';
+import { createRpc } from './lib/rpc.js';
+import { mount, setHidden, setText } from './lib/dom.js';
+import { h, button, text } from './lib/render.js';
+import { createStateMachine, stateModel } from './lib/states.js';
+import { buildTableModel } from './lib/table.js';
+import { createRovingModel } from './lib/focus.js';
+import { resolveEvent } from './lib/keyboard.js';
+import { decodeViewState, encodeViewState, applyViewStateToHref, encodeSort, decodeSort } from './lib/view-state.js';
+import { formatDuration, formatTimestamp, formatHttpStatus, formatValue, truncateMiddle } from './lib/format.js';
+import { buildTimelineView } from './views/timeline-view.js';
+import { buildCaptureCompareView, buildComparePicker } from './views/compare-view.js';
+
+// ---- 首屏信息收敛：把“性能指标 / 请求规则”折叠进 <details>，空态用 bd-empty 卡片 ----
+function foldAdvancedPanels() {
+  const FOLD_TITLES = ['性能指标', '请求规则'];
+  for (const section of [...document.querySelectorAll('section.panel')]) {
+    const heading = section.querySelector('h2');
+    if (!heading) continue;
+    const title = (heading.textContent || '').trim().split(/\s/)[0];
+    if (!FOLD_TITLES.some((item) => title.startsWith(item))) continue;
+    const details = document.createElement('details');
+    details.className = 'panel bd-fold';
+    details.open = false;
+    const summary = document.createElement('summary');
+    summary.className = 'panel-head';
+    summary.appendChild(heading);
+    details.appendChild(summary);
+    while (section.firstChild) details.appendChild(section.firstChild);
+    section.replaceWith(details);
+  }
+  for (const id of ['perfEmpty', 'rulesEmpty', 'reqEmpty', 'conEmpty', 'historyEmpty', 'opsEmpty']) {
+    const node = document.getElementById(id);
+    if (node) node.classList.add('bd-empty');
+  }
+}
+foldAdvancedPanels();
+
+
 let activeTabId = null;
 let pollTimer = null;
 let lastLive = null;
@@ -128,8 +170,10 @@ function renderHistory(list) {
 }
 
 async function loadOperations() {
-  const reply = await send({ type: 'bb.call', method: 'operations.list', params: { limit: 30 } });
-  const list = (reply && reply.ok && reply.result && reply.result.entries) || [];
+  // 真实 RPC：operations.list 是 daemon 方法，必须经后台的 bb.daemon.call 转发；
+  // 之前的 'bb.call' 在后台没有处理分支（静默返回空），这里修正为真实链路。
+  const reply = await rpc.daemon('operations.list', { limit: 30 });
+  const list = (reply && reply.ok && Array.isArray(reply.result && reply.result.entries) ? reply.result.entries : []) || [];
   const node = $('operations');
   if (!node) return;
   node.textContent = '';
@@ -143,6 +187,8 @@ async function loadOperations() {
     ]);
     node.appendChild(line);
   }
+  operationsState.set(list.length ? 'ready' : 'empty');
+  operationsCache = list;
 }
 
 function currentRuleTab() {
@@ -225,6 +271,7 @@ async function loadPerf() {
 async function loadHistory() {
   const result = await send({ type: 'bb.debug.history' });
   const list = (result && (result.history || (result.result && result.result.history))) || [];
+  historyCache = list;
   renderHistory(list);
 }
 
@@ -431,3 +478,529 @@ if (new URLSearchParams(location.search).get('selftest') === 'rules') {
     }
   })();
 }
+
+// ---------------------------------------------------------------------------
+// 页面深度交互（第十批 E）：真实 RPC / 加载-错误-空态 / 键盘可达 / aria。
+// 说明：以下代码只增强，不改动上面的 SELFTEST 契约与既有渲染行为。
+// ---------------------------------------------------------------------------
+const t = labeler(getLang());
+const rpc = createRpc((message) => chrome.runtime.sendMessage(message));
+const historyState = createStateMachine();
+const detailState = createStateMachine();
+const operationsState = createStateMachine();
+const perfState = createStateMachine();
+const rulesState = createStateMachine();
+const historyRoving = createRovingModel({ total: 0, wrap: true });
+let historyCache = [];
+let operationsCache = [];
+let historyFilter = '';
+let historySort = { key: 'startedAt', direction: 'desc' };
+let detailFilter = 'all';
+let detailSpansCache = [];
+let compareBaseId = '';
+let compareOtherId = '';
+const initialView = decodeViewState('list', location.search);
+if (initialView.query) historyFilter = initialView.query;
+if (initialView.sort) historySort = decodeSort(encodeSort({ key: initialView.sort, direction: initialView.direction }));
+
+function persistViewState() {
+  try {
+    history.replaceState(null, '', applyViewStateToHref('list', location.href, {
+      query: historyFilter,
+      sort: encodeSort(historySort).split(':')[0] || '',
+      direction: historySort.direction,
+    }));
+  } catch { /* file:// 或受限上下文忽略 */ }
+}
+
+function ariaList(node, label) {
+  if (!node) return;
+  node.setAttribute('role', 'list');
+  node.setAttribute('aria-label', label);
+  node.setAttribute('aria-live', 'polite');
+}
+
+function statusPill(text, tone) {
+  return h('span', { class: 'status-pill ' + (tone || '') }, String(text));
+}
+
+function rowFromCells(cells) {
+  const line = h('div', { class: 'list-row', role: 'listitem' });
+  for (const cell of cells) line.children.push(h('span', { class: (cell.grow ? 'grow truncate ' : '') + (cell.mono ? 'mono ' : '') + (cell.cls || '') }, String(cell.text === undefined || cell.text === null ? '' : cell.text)));
+  return line;
+}
+
+function describeState(kind, error) {
+  const model = stateModel(kind, { lang: getLang(), error, detail: undefined });
+  return model;
+}
+
+function stateNode(kind, { error, retryLabel, onRetry, emptyText } = {}) {
+  const model = describeState(kind, error);
+  const message = kind === 'empty' && emptyText ? emptyText : model.text;
+  const node = h('div', { class: 'state-block ' + kind, role: 'status', 'aria-live': 'polite' }, message || '');
+  if (kind === 'error' && typeof onRetry === 'function') {
+    node.children.push(button({ label: retryLabel || model.retryText || t('state.retry'), on: { click: onRetry } }));
+  }
+  return node;
+}
+
+/* ---------- 历史记录：过滤 / 排序 / 键盘可达 / aria ---------- */
+function ensureHistoryTools() {
+  const panel = $('history') && $('history').closest('section');
+  if (!panel || $('historyTools')) return;
+  const tools = document.createElement('div');
+  tools.id = 'historyTools';
+  tools.className = 'filters';
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.id = 'historyFilter';
+  search.value = historyFilter;
+  search.setAttribute('aria-label', t('list.filterHint'));
+  search.placeholder = t('list.filterHint');
+  search.addEventListener('input', () => {
+    historyFilter = search.value;
+    persistViewState();
+    applyHistoryView();
+  });
+  search.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') { search.value = ''; historyFilter = ''; applyHistoryView(); }
+  });
+  const sortSelect = document.createElement('select');
+  sortSelect.id = 'historySort';
+  sortSelect.className = 'inline-input';
+  sortSelect.setAttribute('aria-label', t('list.sort'));
+  for (const [value, label] of [['startedAt', t('list.sortTime')], ['requests', t('list.sort') + ' · ' + t('list.rows', { count: '#' })], ['durationMs', t('list.sortDuration')]]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    sortSelect.appendChild(option);
+  }
+  sortSelect.value = historySort.key;
+  sortSelect.addEventListener('change', () => {
+    historySort = { key: sortSelect.value, direction: historySort.direction };
+    applyHistoryView();
+  });
+  tools.append(search, sortSelect);
+  panel.insertBefore(tools, panel.querySelector('#history'));
+}
+
+function historyRowLabel(record) {
+  return t('record.counts', { requests: record.requests || 0, console: record.console || 0 }) + ' · ' + formatTimestamp(record.startedAt);
+}
+
+function applyHistoryView() {
+  const node = $('history');
+  if (!node) return;
+  const records = historyCache.slice();
+  if (!records.length) {
+    node.textContent = '';
+    historyRoving.setTotal(0);
+    return;
+  }
+  const model = buildTableModel(records.map((record) => ({
+    ...record,
+    ts: Number(record.startedAt) || 0,
+    durationMs: Math.max(0, Number(record.endedAt || 0) - Number(record.startedAt || 0)),
+    requests: Number(record.requests) || 0,
+    label: String(record.title || record.url || '调试记录'),
+    detail: historyRowLabel(record),
+  })), {
+    columns: [
+      { key: 'ts', numeric: true, sortable: true, text: (row) => row.label },
+      { key: 'requests', numeric: true, sortable: true, text: (row) => row.label },
+      { key: 'durationMs', numeric: true, sortable: true, text: (row) => row.detail },
+    ],
+    query: historyFilter,
+    sort: { key: historySort.key === 'startedAt' ? 'ts' : historySort.key, direction: historySort.direction },
+    page: 1,
+    pageSize: Math.max(1, records.length),
+    predicate: (row, needle) => (String(row.label) + ' ' + String(row.url || '') + ' ' + String(row.detail)).toLowerCase().includes(needle),
+  });
+  node.textContent = '';
+  $('historyEmpty').hidden = true;
+  if (!model.matching) {
+    mount(node, stateNode('empty', { emptyText: t('list.filterNone') }));
+    historyRoving.setTotal(0);
+    return;
+  }
+  for (const record of model.rows) {
+    const line = document.createElement('div');
+    line.className = 'list-row';
+    line.setAttribute('role', 'listitem');
+    line.setAttribute('data-id', String(record.id));
+    line.setAttribute('aria-label', historyRowLabel(record));
+    const title = document.createElement('span');
+    title.className = 'grow truncate';
+    title.textContent = (record.title || record.url || '调试记录') + ' · ' + record.requests + ' 请求 / ' + record.console + ' 条输出';
+    const meta = document.createElement('span');
+    meta.className = 'muted';
+    meta.textContent = formatTime(record.startedAt) + ' · ' + formatDuration(Number(record.endedAt || 0) - Number(record.startedAt || 0));
+    const view = document.createElement('button');
+    view.className = 'btn';
+    view.textContent = '查看';
+    view.setAttribute('aria-label', '查看');
+    view.addEventListener('click', () => showDetail(record.id));
+    const del = document.createElement('button');
+    del.className = 'btn danger';
+    del.textContent = '删除';
+    del.setAttribute('aria-label', '删除');
+    del.addEventListener('click', async () => {
+      await rpc.send('bb.debug.delete', { id: record.id });
+      await loadHistory();
+    });
+    line.append(title, meta, view, del);
+    node.appendChild(line);
+  }
+  historyRoving.setTotal(model.rows.length);
+  historyRoving.moveTo(0);
+  syncHistoryTabindex();
+  if (!$('historySummary')) {
+    const badge = document.createElement('div');
+    badge.id = 'historySummary';
+    badge.className = 'kv-inline muted';
+    badge.setAttribute('role', 'status');
+    badge.setAttribute('aria-live', 'polite');
+    if (node.parentElement) node.parentElement.insertBefore(badge, node);
+  }
+  setText($('historySummary'), t('paging.total', { total: model.matching ? model.filtered : 0 }) + (historyFilter.trim() ? ' · ' + t('list.filter') + ' ' + model.filtered + '/' + model.total : ''));
+}
+
+function syncHistoryTabindex() {
+  const node = $('history');
+  if (!node) return;
+  [...node.children].forEach((child, index) => {
+    if (!child.classList || !child.classList.contains('list-row')) return;
+    child.tabIndex = historyRoving.tabIndexAt(index);
+  });
+}
+
+function focusHistoryRow(index) {
+  const node = $('history');
+  if (!node) return;
+  const rows = [...node.children].filter((child) => child.classList && child.classList.contains('list-row'));
+  const target = rows[Math.max(0, Math.min(rows.length - 1, index))];
+  if (target) target.focus({ preventScroll: false });
+}
+
+function bindHistoryKeyboard() {
+  const node = $('history');
+  if (!node) return;
+  node.addEventListener('keydown', (event) => {
+    const intent = resolveEvent(event, { target: event.target });
+    if (!intent.handled) return;
+    if (intent.intent === 'up' || intent.intent === 'down' || intent.intent === 'home' || intent.intent === 'end') {
+      event.preventDefault();
+      const next = intentToIndexFor(intent.intent, historyRoving.activeIndex, historyRoving.total);
+      historyRoving.moveTo(next);
+      syncHistoryTabindex();
+      focusHistoryRow(next);
+      return;
+    }
+    if (intent.intent === 'activate') {
+      event.preventDefault();
+      const active = historyRoving.activeIndex;
+      const record = historyCache[active];
+      if (record) showDetail(record.id);
+    }
+  });
+}
+
+function intentToIndexFor(intent, index, total) {
+  if (!total) return 0;
+  if (intent === 'home') return 0;
+  if (intent === 'end') return total - 1;
+  return Math.max(0, Math.min(total - 1, index + (intent === 'up' ? -1 : 1)));
+}
+
+function ensureHistoryListAria() {
+  ariaList($('history'), t('a11y.list', { count: historyCache.length }));
+  ariaList($('requests'), t('a11y.list', { count: lastLive ? (lastLive.requests || []).length : 0 }));
+  ariaList($('consoleList'), t('a11y.list', { count: lastLive ? (lastLive.console || []).length : 0 }));
+  ariaList($('operations'), t('a11y.list', { count: operationsCache.length }));
+  ariaList($('rules'), t('a11y.list', { count: 0 }));
+  if ($('note')) {
+    $('note').setAttribute('role', 'status');
+    $('note').setAttribute('aria-live', 'polite');
+  }
+}
+
+/* ---------- 详情：时间线 + 过滤 ---------- */
+function buildDetailTools() {
+  const metas = $('detailMeta');
+  if (!metas || $('detailTools')) return;
+  const tools = document.createElement('div');
+  tools.id = 'detailTools';
+  tools.className = 'filters';
+  for (const [value, label] of [['all', t('state.ready')], ['error', 'HTTP ≥ 400'], ['slow', '> 300ms']]) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'btn' + (value === 'all' ? ' primary' : '');
+    chip.textContent = label;
+    chip.setAttribute('data-detail-filter', value);
+    chip.addEventListener('click', () => {
+      detailFilter = value;
+      for (const sibling of tools.querySelectorAll('[data-detail-filter]')) sibling.classList.toggle('primary', sibling.getAttribute('data-detail-filter') === value);
+      renderDetailBody();
+    });
+    tools.appendChild(chip);
+  }
+  metas.parentElement.insertBefore(tools, metas.nextSibling);
+  const timeline = document.createElement('div');
+  timeline.id = 'detailTimeline';
+  $('detailBody').parentElement.insertBefore(timeline, $('detailBody'));
+}
+
+function spansFromRequests(requests) {
+  let cursor = 0;
+  const list = [];
+  for (let index = 0; index < requests.length; index += 1) {
+    const entry = requests[index] || {};
+    const duration = Math.max(0, Number(entry.durationMs) || 0);
+    const start = Number(entry.start ?? entry.ts);
+    const begin = Number.isFinite(start) ? start : cursor;
+    const end = begin + duration;
+    cursor = end;
+    list.push({
+      id: String(index),
+      label: (entry.method || '') + ' ' + truncateMiddle(entry.url || '', 80),
+      start: begin,
+      end,
+    });
+  }
+  return list;
+}
+
+function renderDetailTimeline() {
+  const node = $('detailTimeline');
+  if (!node || !detailRecord) return;
+  if (detailFilter === 'error') {
+    node.hidden = true;
+    return;
+  }
+  const spans = detailSpansCache;
+  const width = Math.max(220, Number(node.clientWidth) || Number($('detailBody') && $('detailBody').clientWidth) || 480);
+  const view = buildTimelineView({ spans, width, lang: getLang(), title: t('timeline.title') });
+  mount(node, view.tree);
+  node.hidden = view.empty;
+}
+
+function renderDetailBody() {
+  const body = $('detailBody');
+  if (!body || !detailRecord) return;
+  const requests = Array.isArray(detailRecord.requests) ? detailRecord.requests : [];
+  const consoleLines = Array.isArray(detailRecord.console) ? detailRecord.console : [];
+  const needle = detailFilter === 'error' ? 400 : detailFilter === 'slow' ? 300 : 0;
+  const visible = needle
+    ? requests.filter((entry) => detailFilter === 'error' ? Number(entry.status) >= needle || entry.error === true : Number(entry.durationMs) >= needle)
+    : requests;
+  const rows = visible.slice(0, 100).map((entry) => rowFromCells([
+    { text: formatHttpStatus(entry.status), mono: true, cls: Number(entry.status) >= 400 ? 'muted' : '' },
+    { text: entry.method || '', mono: true },
+    { text: entry.durationMs != null ? formatDuration(entry.durationMs) : '', cls: 'muted' },
+    { text: entry.url || '', grow: true, mono: true },
+  ]));
+  const consoleRows = consoleLines.slice(0, 100).map((entry) => rowFromCells([
+    { text: entry.level || 'log', cls: entry.level === 'error' ? 'mono' : 'muted' },
+    { text: String(entry.text || '').slice(0, 300), grow: true, mono: true },
+  ]));
+  body.textContent = '';
+  body.setAttribute('role', 'list');
+  body.setAttribute('aria-label', t('a11y.list', { count: rows.length }));
+  for (const rowNode of rows) body.appendChild(rowNode);
+  const hasRows = rows.length > 0;
+  $('detailTools') && $('detailTools').setAttribute('data-has-rows', hasRows ? '1' : '0');
+  renderDetailTimeline();
+}
+
+/* ---------- 对比：两份历史记录 ---------- */
+function ensureComparePicker() {
+  const head = $('compareHeading');
+  const body = $('compareBody');
+  if (!head || !body) return;
+  setText(head, t('compare.title'));
+  const close = $('closeCompare');
+  if (close && !close.dataset.wired) {
+    close.dataset.wired = '1';
+    close.textContent = t('close');
+    close.setAttribute('aria-label', t('close'));
+    close.addEventListener('click', () => setHidden($('comparePanel'), true));
+  }
+  const records = historyCache.map((record) => ({ id: String(record.id), label: truncateMiddle((record.title || record.url || '调试记录') + ' · ' + formatTime(record.startedAt), 64) }));
+  const signature = records.map((record) => record.id).join(',') + '|' + getLang();
+  const holder = $('comparePicker');
+  if (holder && holder.dataset.signature === signature) return;
+  if (holder) holder.remove();
+  if (compareBaseId && !records.some((record) => record.id === compareBaseId)) compareBaseId = '';
+  if (compareOtherId && !records.some((record) => record.id === compareOtherId)) compareOtherId = '';
+  if (!compareBaseId && records.length) compareBaseId = records[0].id;
+  if (!compareOtherId && records.length > 1) compareOtherId = records[1].id;
+  const picker = buildComparePicker({
+    records,
+    base: compareBaseId,
+    other: compareOtherId,
+    lang: getLang(),
+    disabled: records.length < 2,
+    onBase: (value) => { compareBaseId = value; },
+    onOther: (value) => { compareOtherId = value; },
+    onCompare: () => { void runCompare(); },
+  });
+  const wrapper = document.createElement('div');
+  wrapper.id = 'comparePicker';
+  wrapper.dataset.signature = signature;
+  mount(wrapper, picker);
+  if (body.parentElement) body.parentElement.insertBefore(wrapper, body);
+  else body.appendChild(wrapper);
+}
+
+async function runCompare() {
+  const body = $('compareBody');
+  const noteNode = $('compareNote');
+  if (!body) return;
+  if (!compareBaseId || !compareOtherId || compareBaseId === compareOtherId) {
+    mount(body, stateNode('empty', { emptyText: t('compare.needTwo') }));
+    return;
+  }
+  setText(noteNode, t('state.loading'));
+  const base = await rpc.send('bb.debug.history.detail', { id: compareBaseId });
+  const other = await rpc.send('bb.debug.history.detail', { id: compareOtherId });
+  if (!base.ok || !other.ok) {
+    mount(body, stateNode('error', { error: (base && base.error) || (other && other.error), onRetry: () => { void runCompare(); } }));
+    setText(noteNode, '');
+    return;
+  }
+  const baseRecord = base.result && (base.result.record || base.result);
+  const otherRecord = other.result && (other.result.record || other.result);
+  const view = buildCaptureCompareView({ base: baseRecord, other: otherRecord, lang: getLang() });
+  mount(body, view.tree);
+  setText(noteNode, t('compare.offline'));
+  announce(view.summary.identical ? t('compare.identical') : t('compare.summary', { added: view.summary.added, removed: view.summary.removed, changed: view.summary.changed }));
+}
+
+function openComparePanel() {
+  if (!$('comparePanel')) return;
+  setHidden($('comparePanel'), false);
+  ensureComparePicker();
+  $('comparePanel').scrollIntoView({ block: 'nearest' });
+}
+
+/* ---------- 操作时间线（daemon operations.list） ---------- */
+function ensureOperationsTools() {
+  const target = $('operations');
+  if (!target || $('opsTimeline')) return;
+  const timeline = document.createElement('div');
+  timeline.id = 'opsTimeline';
+  timeline.hidden = true;
+  target.parentElement.insertBefore(timeline, target.nextSibling);
+}
+
+function renderOperationsTimeline() {
+  const node = $('opsTimeline');
+  if (!node) return;
+  const spans = operationsCache.map((item, index) => ({
+    id: String(index),
+    label: (item.method || '') + ' ' + truncateMiddle(item.url || '', 60),
+    start: Number(item.ts) || index,
+    end: (Number(item.ts) || index) + Math.max(1, Number(item.durationMs) || 0),
+  }));
+  const view = buildTimelineView({ spans, width: Math.max(240, node.clientWidth || 480), lang: getLang() });
+  mount(node, view.tree);
+  node.hidden = view.empty;
+}
+
+/* ---------- 启动增强（不动既有 SELFTEST） ---------- */
+function bootEnhancements() {
+  ensureHistoryTools();
+  ensureHistoryListAria();
+  bindHistoryKeyboard();
+  ensureOperationsTools();
+  ensureComparePicker();
+  ensureOperationsTools();
+  const liveTools = $('liveTools');
+  if (liveTools && !liveTools.dataset.ready) {
+    liveTools.dataset.ready = '1';
+    const timelineToggle = document.createElement('button');
+    timelineToggle.type = 'button';
+    timelineToggle.className = 'btn';
+    timelineToggle.textContent = t('timeline.waterfall');
+    timelineToggle.addEventListener('click', () => {
+      const node = $('requestsTimeline');
+      if (!node) return;
+      if (!node.hidden) { node.hidden = true; return; }
+      const requests = lastLive && Array.isArray(lastLive.requests) ? lastLive.requests : [];
+      const view = buildTimelineView({ spans: spansFromRequests(requests), width: Math.max(240, node.clientWidth || 480), lang: getLang() });
+      mount(node, view.tree);
+      node.hidden = view.empty;
+    });
+    const compare = document.createElement('button');
+    compare.type = 'button';
+    compare.className = 'btn';
+    compare.textContent = t('compare.title');
+    compare.addEventListener('click', () => { openComparePanel(); });
+    liveTools.append(timelineToggle, compare);
+    const filter = document.createElement('input');
+    filter.type = 'search';
+    filter.setAttribute('aria-label', t('list.filterHint'));
+    filter.placeholder = t('list.filterHint');
+    filter.addEventListener('input', () => {
+      const needle = filter.value.trim().toLowerCase();
+      const rows = $('requests') ? [...$('requests').children] : [];
+      for (const node of rows) node.hidden = needle !== '' && !String(node.textContent || '').toLowerCase().includes(needle);
+    });
+    liveTools.insertBefore(filter, liveTools.firstChild);
+  }
+  if ($('requests')) setHidden($('requestsTimeline'), true);
+  document.addEventListener('keydown', (event) => {
+    const intent = resolveEvent(event, { target: event.target });
+    if (!intent.handled) return;
+    if (intent.intent === 'open-filter') {
+      event.preventDefault();
+      const input = $('historyFilter');
+      if (input) input.focus();
+    } else if (intent.intent === 'close') {
+      if ($('comparePanel') && !$('comparePanel').hidden) { event.preventDefault(); setHidden($('comparePanel'), true); }
+      else if ($('detailPanel') && !$('detailPanel').hidden) { event.preventDefault(); setHidden($('detailPanel'), true); }
+    }
+  });
+  const retryLoad = () => { void loadHistory(); void loadOperations(); };
+  ensureHistoryTools();
+  if ($('historyEmpty')) $('historyEmpty').addEventListener('click', retryLoad);
+}
+
+const originalLoadOperations = loadOperations;
+loadOperations = async function loadOperationsEnhanced() {
+  await originalLoadOperations();
+  ensureOperationsTools();
+  renderOperationsTimeline();
+};
+
+const originalLoadHistory = loadHistory;
+loadHistory = async function loadHistoryEnhanced() {
+  try {
+    historyState.loading();
+    await originalLoadHistory();
+    historyState.set(historyCache.length ? 'ready' : 'empty');
+  } catch (error) {
+    historyState.fail(error);
+    if ($('historyEmpty')) {
+      $('historyEmpty').hidden = false;
+      $('historyEmpty').textContent = t('state.error');
+    }
+  }
+  applyHistoryView();
+  ensureComparePicker();
+};
+
+fillTabSelect($('tabSelect'), preferredTabFromQuery()).then(() => {
+  bootEnhancements();
+  void loadOperations();
+});
+
+// 第十一批 F：页面导出 / 导入校验工具（只增强；不改上面的 SELFTEST 契约与列表渲染）。
+installPageTools({
+  surface: 'debug',
+  toolsId: 'liveTools',
+  listId: 'requests',
+  lang: () => getLang(),
+  rows: () => (lastLive && Array.isArray(lastLive.requests) ? lastLive.requests : []),
+});

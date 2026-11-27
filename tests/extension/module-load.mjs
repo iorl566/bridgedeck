@@ -19,6 +19,7 @@ const stub = {
   runtime: {
     getManifest: () => ({ version: '0.1.2' }),
     onMessage: listener(),
+    onConnect: listener(),
     onInstalled: listener(),
     onStartup: listener(),
     sendMessage: async () => ({}),

@@ -1,0 +1,20 @@
+{
+  "schema": "bdeval-gate-fail-cases/1",
+  "description": "门禁负向夹具：期望 passed 但实际断言失败，用于证明 tools/eval-report.mjs 在低于阈值时退出码非 0。",
+  "cases": [
+    {
+      "id": "gate-fail-value-mismatch",
+      "title": "门禁负向：期望端口 1 实际 52900（不可通过的断言，只用于门禁演示）",
+      "capability": "plugin.negative-selfcheck",
+      "oracleLevel": "offline-fake",
+      "expectedStatus": "passed",
+      "mode": "tool",
+      "tool": "browser_status",
+      "args": {},
+      "script": { "handlers": { "status": { "result": { "port": 52900, "version": "0.3.0", "browsers": [], "sessions": [] } } } },
+      "expect": "passed",
+      "assert": { "port": 1 },
+      "evidenceRule": "演示用：该 case 必然 failed，报告器不得把它算 pass"
+    }
+  ]
+}

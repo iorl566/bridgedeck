@@ -1,0 +1,355 @@
+{
+  "version": 1,
+  "url": "https://example.test/frames.html",
+  "title": "跨 frame 夹具",
+  "frameId": 0,
+  "nodes": [
+    {
+      "id": "frames-root",
+      "ref": null,
+      "domId": "frames-root",
+      "tag": "main",
+      "role": "main",
+      "name": "跨 frame 主体",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 1200,
+        "height": 700
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 2,
+      "backendNodeId": 3,
+      "ancestorIds": [],
+      "ancestors": [],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    },
+    {
+      "id": "frame-x",
+      "ref": null,
+      "domId": "frame-x",
+      "tag": "iframe",
+      "role": "iframe",
+      "name": "跨源子帧",
+      "bounds": {
+        "x": 20,
+        "y": 60,
+        "width": 500,
+        "height": 400
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 3,
+      "backendNodeId": 4,
+      "ancestorIds": [
+        "frames-root"
+      ],
+      "ancestors": [
+        {
+          "id": "frames-root",
+          "domId": "frames-root",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "跨 frame 主体"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": "跨源子帧"
+    },
+    {
+      "id": "frame-nested",
+      "ref": null,
+      "domId": "frame-nested",
+      "tag": "iframe",
+      "role": "iframe",
+      "name": "嵌套子帧",
+      "bounds": {
+        "x": 540,
+        "y": 60,
+        "width": 500,
+        "height": 400
+      },
+      "visible": true,
+      "interactive": false,
+      "clickable": false,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 4,
+      "backendNodeId": 5,
+      "ancestorIds": [
+        "frames-root"
+      ],
+      "ancestors": [
+        {
+          "id": "frames-root",
+          "domId": "frames-root",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "跨 frame 主体"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": null,
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": "嵌套子帧"
+    },
+    {
+      "id": "frames-submit",
+      "ref": "@e1",
+      "domId": "frames-submit",
+      "tag": "button",
+      "role": "button",
+      "name": "主帧按钮",
+      "bounds": {
+        "x": 20,
+        "y": 500,
+        "width": 120,
+        "height": 32
+      },
+      "visible": true,
+      "interactive": true,
+      "clickable": true,
+      "inForm": false,
+      "disabled": false,
+      "invalid": false,
+      "inputState": null,
+      "paintOrder": 5,
+      "backendNodeId": 6,
+      "ancestorIds": [
+        "frames-root"
+      ],
+      "ancestors": [
+        {
+          "id": "frames-root",
+          "domId": "frames-root",
+          "ref": null,
+          "role": "main",
+          "tag": "main",
+          "name": "跨 frame 主体"
+        }
+      ],
+      "relations": {
+        "controls": [],
+        "labelledBy": [],
+        "describedBy": [],
+        "owns": [],
+        "labelIds": [],
+        "form": [],
+        "errorMessage": []
+      },
+      "table": null,
+      "inputType": "button",
+      "contentEditable": false,
+      "draggable": false,
+      "dragHint": null,
+      "overflowY": null,
+      "scrollable": false,
+      "ariaHasPopup": null,
+      "hoverable": false,
+      "href": null,
+      "cursor": null,
+      "tabIndex": null,
+      "ariaPressed": null,
+      "expanded": null,
+      "alt": null,
+      "title": null
+    }
+  ],
+  "frames": [
+    {
+      "frameId": 0,
+      "url": "https://example.test/frames.html",
+      "parentFrameId": null,
+      "ownerNodeId": null,
+      "graph": null
+    },
+    {
+      "frameId": 5,
+      "url": "https://example.test/frame-x.html",
+      "parentFrameId": 0,
+      "ownerNodeId": "frame-x",
+      "graph": {
+        "available": true,
+        "nodes": [
+          {
+            "id": "frame:5",
+            "role": "frame",
+            "tag": "iframe",
+            "name": "frame-x",
+            "domId": null,
+            "parentId": "frame-x"
+          },
+          {
+            "id": "f5:root",
+            "role": "region",
+            "tag": "main",
+            "name": "子帧内容",
+            "domId": "f5-root",
+            "parentId": "frame:5"
+          },
+          {
+            "id": "f5:btn",
+            "role": "button",
+            "tag": "button",
+            "name": "子帧按钮",
+            "domId": "f5-btn",
+            "parentId": "f5:root"
+          }
+        ],
+        "edges": [
+          {
+            "type": "frame",
+            "from": "frame:5",
+            "to": "f5:root"
+          },
+          {
+            "type": "child",
+            "from": "f5:root",
+            "to": "f5:btn"
+          }
+        ],
+        "roots": [
+          "f5:root"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "frameId": 9,
+      "url": "https://example.test/nested-frame.html",
+      "parentFrameId": 5,
+      "ownerNodeId": "f5:nested",
+      "graph": {
+        "available": true,
+        "nodes": [
+          {
+            "id": "frame:9",
+            "role": "frame",
+            "tag": "iframe",
+            "name": "nested",
+            "domId": null,
+            "parentId": "f5:nested"
+          },
+          {
+            "id": "f9:text",
+            "role": "textbox",
+            "tag": "input",
+            "name": "嵌套输入",
+            "domId": "f9-text",
+            "parentId": "frame:9"
+          }
+        ],
+        "edges": [
+          {
+            "type": "frame",
+            "from": "frame:9",
+            "to": "f9:text"
+          }
+        ],
+        "roots": [
+          "f9:text"
+        ],
+        "truncated": false
+      }
+    }
+  ],
+  "limits": {
+    "nodes": 900,
+    "ancestors": 32,
+    "edges": 1500,
+    "frames": 16,
+    "relations": 600,
+    "groups": 200,
+    "contexts": 200,
+    "chainDepth": 3
+  },
+  "truncated": false,
+  "limitations": [
+    "facts 来自 DOM/ARIA/computed style（无 CDP）：backendNodeId 是 DOM 顺序号，不是 CDP backendNodeId",
+    "aria-* 关系保留 DOM id 原值；投影时解析不到节点 id 的端点会被丢弃",
+    "只包含本帧事实：跨 frame 汇总由调用方提供 frames 子图（TS background 尚未聚合）"
+  ]
+}

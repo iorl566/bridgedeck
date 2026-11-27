@@ -258,10 +258,10 @@ const ctx = {
   },
 };
 
-await check('apply() 注册 35 个工具且结构与 defineTool 一致', async () => {
+await check('apply() 注册 37 个工具且结构与 defineTool 一致', async () => {
   const entry = await import('file:///' + path.join(entryDir, 'lib', 'index.mjs').replace(/\\/g, '/'));
   entry.apply(ctx, { bridgeCli: fakeCli, timeoutMs: 10000 });
-  assert.equal(registered.length, 35, '注册工具数不对：' + registered.length);
+  assert.equal(registered.length, 37, '注册工具数不对：' + registered.length);
   for (const tool of registered) {
     assert.match(tool.name, /^browser_/, '工具名：' + tool.name);
     assert.equal(typeof tool.execute, 'function', tool.name + ' 缺 execute');
@@ -270,8 +270,8 @@ await check('apply() 注册 35 个工具且结构与 defineTool 一致', async (
   const names = registered.map((tool) => tool.name).sort();
   assert.deepEqual(names, [
     'browser_act', 'browser_audit', 'browser_brief', 'browser_click_backend', 'browser_cooperate', 'browser_debug', 'browser_debug_evidence',
-    'browser_debug_query', 'browser_dialog', 'browser_eval', 'browser_install_skill', 'browser_navigate', 'browser_network',
-    'browser_network_list', 'browser_observe', 'browser_pair', 'browser_read', 'browser_recipe', 'browser_record',
+    'browser_debug_query', 'browser_dialog', 'browser_eval', 'browser_install_skill', 'browser_ledger', 'browser_navigate', 'browser_network',
+    'browser_network_list', 'browser_observe', 'browser_pair', 'browser_plan', 'browser_read', 'browser_recipe', 'browser_record',
     'browser_rule_list', 'browser_screenshot', 'browser_session_start', 'browser_session_stop', 'browser_settings',
     'browser_status', 'browser_tab', 'browser_tab_borrow', 'browser_tab_close', 'browser_tab_new', 'browser_tab_select',
     'browser_update', 'browser_video', 'browser_video_list', 'browser_video_status', 'browser_window',

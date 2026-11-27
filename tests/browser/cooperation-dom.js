@@ -134,6 +134,24 @@ test('block=false 移除覆盖层并停止监听', async () => {
   assert(snapshot.blocked === false && snapshot.hasBlocker === false && snapshot.listening === false, '解除后 snapshot 不对');
 });
 
+test('authority generation：旧代拒绝、同代/新代接受', async () => {
+  await send({ type: 'bb.cooperation.block', blocked: true, generation: 7 });
+  const read = await send({ type: 'bb.cooperation.read' });
+  assert(read.state.authority.generation === 7, 'authority 未推进到 7：' + read.state.authority.generation);
+  const staleBlock = await send({ type: 'bb.cooperation.block', blocked: false, generation: 6 });
+  assert(staleBlock.ok === false && staleBlock.stale === true && staleBlock.generation === 7, '旧代 block 未拒绝：' + JSON.stringify(staleBlock));
+  const state = await send({ type: 'bb.cooperation.state' });
+  assert(state.state.blocked === true, '旧代不应解除锁');
+  const same = await send({ type: 'bb.cooperation.passthrough', token: 'gen-7', active: true, generation: 7 });
+  assert(same.ok === true, '同代 passthrough 应接受');
+  const stalePass = await send({ type: 'bb.cooperation.passthrough', token: 'gen-6', active: true, generation: 6 });
+  assert(stalePass.ok === false && stalePass.stale === true, '旧代 passthrough 未拒绝：' + JSON.stringify(stalePass));
+  const latest = await send({ type: 'bb.cooperation.block', blocked: false, generation: 9 });
+  assert(latest.ok === true && latest.generation === 9, '新代应接受：' + JSON.stringify(latest));
+  const late = await send({ type: 'bb.cooperation.block', blocked: true, generation: 8 });
+  assert(late.ok === false && late.stale === true && late.generation === 9, '低于权威代应拒绝：' + JSON.stringify(late));
+});
+
 (async () => {
   while (typeof window.__coopHandler !== 'function') await sleep(10);
   let passed = 0;

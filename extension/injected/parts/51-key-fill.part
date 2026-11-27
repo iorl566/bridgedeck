@@ -1,0 +1,167 @@
+  function parseKey(rawKey) {
+    const parts = String(rawKey || '').split('+').map((part) => part.trim()).filter(Boolean);
+    const main = parts.pop() || '';
+    const modifiers = { ctrlKey: false, altKey: false, shiftKey: false, metaKey: false };
+    for (const part of parts) {
+      const lower = part.toLowerCase();
+      if (lower === 'ctrl' || lower === 'control') modifiers.ctrlKey = true;
+      else if (lower === 'alt' || lower === 'option') modifiers.altKey = true;
+      else if (lower === 'shift') modifiers.shiftKey = true;
+      else if (lower === 'meta' || lower === 'win' || lower === 'cmd' || lower === 'super') modifiers.metaKey = true;
+    }
+    const aliases = {
+      space: ' ',
+      spacebar: ' ',
+      esc: 'Escape',
+      escape: 'Escape',
+      enter: 'Enter',
+      return: 'Enter',
+      tab: 'Tab',
+      backspace: 'Backspace',
+      del: 'Delete',
+      delete: 'Delete',
+      insert: 'Insert',
+      up: 'ArrowUp',
+      down: 'ArrowDown',
+      left: 'ArrowLeft',
+      right: 'ArrowRight',
+      arrowup: 'ArrowUp',
+      arrowdown: 'ArrowDown',
+      arrowleft: 'ArrowLeft',
+      arrowright: 'ArrowRight',
+      home: 'Home',
+      end: 'End',
+      pageup: 'PageUp',
+      pagedown: 'PageDown',
+    };
+    const lower = main.toLowerCase();
+    const key = aliases[lower] || main;
+    // US 布局标点的物理 code：快捷键常检查 event.code，不能把 '/' 直接当 code。
+    const punctuation = {
+      '`': 'Backquote', '~': 'Backquote',
+      '-': 'Minus', '_': 'Minus',
+      '=': 'Equal', '+': 'Equal',
+      '[': 'BracketLeft', '{': 'BracketLeft',
+      ']': 'BracketRight', '}': 'BracketRight',
+      '\\': 'Backslash', '|': 'Backslash',
+      ';': 'Semicolon', ':': 'Semicolon',
+      "'": 'Quote', '"': 'Quote',
+      ',': 'Comma', '<': 'Comma',
+      '.': 'Period', '>': 'Period',
+      '/': 'Slash', '?': 'Slash',
+    };
+    const shiftedPunctuation = '~_+{}|:"<>?';
+    let code = '';
+    if (/^[a-z]$/i.test(key)) code = `Key${key.toUpperCase()}`;
+    else if (/^\d$/.test(key)) code = `Digit${key}`;
+    else if (key === ' ') code = 'Space';
+    else if (/^F([1-9]|1[0-2])$/i.test(key)) code = key.toUpperCase();
+    else if (punctuation[key]) {
+      code = punctuation[key];
+      if (shiftedPunctuation.includes(key)) modifiers.shiftKey = true;
+    } else code = key;
+    return { key, code, modifiers };
+  }
+
+  async function actionPress(args) {
+    if (typeof args.key !== 'string' || !args.key) pageError('E_BAD_ARG', 'press 需要 key');
+    const hasTarget = Boolean(args.ref || args.selector);
+    const target = hasTarget ? resolveElement(args) : document.activeElement || document.body;
+    if (hasTarget) {
+      scrollIntoView(target);
+      await ensureActionable(target, args, 'press');
+      try {
+        if (typeof target.focus === 'function') target.focus({ preventScroll: true });
+      } catch {
+        // 忽略
+      }
+      if (!target.isConnected) pageError('E_NOT_ACTIONABLE', '目标在聚焦时被替换（detached）');
+    }
+    if (!target) pageError('E_NOT_FOUND', '页面没有可聚焦元素');
+    const { key, code, modifiers } = parseKey(args.key);
+    const init = { key, code, bubbles: true, cancelable: true, composed: true, ...modifiers };
+    const down = new KeyboardEvent('keydown', init);
+    const keypressable = key.length === 1 || key === 'Enter';
+    const pressAllowed = keypressable && !modifiers.ctrlKey && !modifiers.metaKey && !modifiers.altKey;
+    const press = pressAllowed ? new KeyboardEvent('keypress', init) : null;
+    const up = new KeyboardEvent('keyup', init);
+    target.dispatchEvent(down);
+    if (press) target.dispatchEvent(press);
+    target.dispatchEvent(up);
+    return { ok: true };
+  }
+
+  /** 与 src/tools/focus-state.js 同语义：document.activeElement 只看 shadow host，必须逐层查 shadow root。 */
+  function isElementFocused(node) {
+    let current = node;
+    while (current) {
+      const root = typeof current.getRootNode === 'function' ? current.getRootNode() : null;
+      if (root && root.activeElement === current) return true;
+      current = root && root.host ? root.host : null;
+    }
+    return false;
+  }
+
+  function fillFastTarget(args) {
+    const el = resolveElement(args);
+    if (!el) pageError('E_NOT_FOUND', '页面没有可填写元素');
+    const tag = el.tagName.toLowerCase();
+    const type = String(el.type || '').toLowerCase();
+    const isCe = el.isContentEditable === true;
+    if (tag !== 'input' && tag !== 'textarea' && !isCe) pageError('E_TARGET_NOT_FILLABLE', '目标不可填写');
+    if (el.disabled === true || el.readOnly === true) pageError('E_TARGET_NOT_FILLABLE', '目标已禁用或只读');
+    const textLike = isCe || tag === 'textarea' || (tag === 'input' && ['', 'text', 'search', 'url', 'tel', 'email', 'password', 'number'].includes(type));
+    if (!textLike) return { ok: true, textLike: false, reason: 'programmatic-only', inputType: type };
+    const box = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    const ownOverlay = !!(hit && hit.closest && hit.closest('[id^="__bb_"]'));
+    const related = !!(hit && (hit === el || el.contains(hit) || hit.contains(el)));
+    let occluding = false;
+    if (!related && !ownOverlay && hit && hit !== document.body && hit !== document.documentElement) {
+      const hb = hit.getBoundingClientRect();
+      const ix = Math.max(0, Math.min(box.right, hb.right) - Math.max(box.left, hb.left));
+      const iy = Math.max(0, Math.min(box.bottom, hb.bottom) - Math.max(box.top, hb.top));
+      occluding = (ix * iy) / Math.max(1, box.width * box.height) > 0.9;
+    }
+    if (occluding) {
+      try { el.focus({ preventScroll: false }); } catch { /* 忽略 */ }
+      try { if (args.noClear !== true && typeof el.select === 'function') el.select(); } catch { /* 忽略 */ }
+      return { ok: true, textLike: true, occluded: true, reason: 'occluded', focused: isElementFocused(el) };
+    }
+    markAgentInput();
+    try { el.focus({ preventScroll: false }); } catch { /* 忽略 */ }
+    try { if (args.noClear !== true && typeof el.select === 'function') el.select(); } catch { /* 忽略 */ }
+    return { ok: true, textLike: true, tag: tag, type: type, focused: isElementFocused(el), hadValue: String(el.value == null ? '' : el.value).length > 0 };
+  }
+
+  function normalizeFillExpected(el, expected) {
+    let value = String(expected);
+    if (el && el.tagName === 'TEXTAREA') value = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (el && el.type === 'number' && value.trim() !== '' && Number.isFinite(Number(value))) value = String(Number(value));
+    return value;
+  }
+
+  function fillVerify(args) {
+    const el = resolveElement(args);
+    const expected = normalizeFillExpected(el, typeof args.expected === 'string' ? args.expected : '');
+    const sensitive = el ? sensitiveField(el) : false;
+    const actual = el ? String(el.value != null ? el.value : normalizeText(el.textContent || '')) : '';
+    return { ok: true, sensitive: sensitive, value: sensitive ? null : actual, expected_value: sensitive ? null : expected, formatted: actual !== expected, matches: actual === expected };
+  }
+
+  function assertRowAnchor(el, args) {
+    if (!args || typeof args.ref !== 'string') return;
+    const match = /^@?e(\d+)$/.exec(args.ref);
+    if (!match) return;
+    const anchor = state.rowAnchors.get(Number(match[1]));
+    if (!anchor) return;
+    const current = rowAnchorFor(el);
+    if (!current || current.text !== anchor.text) {
+      pageError('E_TARGET_MISMATCH', '目标所在行已被重新渲染（虚拟列表行回收），ref 不再指向原来那一行；请重新 observe', {
+        reason: 'virtual_row_recycled',
+        expected: anchor.text.slice(0, 120),
+        actual: current ? current.text.slice(0, 120) : null,
+      });
+    }
+  }
+

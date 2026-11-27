@@ -19,6 +19,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Release brand scan
+        run: node tools/release-brand-scan.mjs
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}

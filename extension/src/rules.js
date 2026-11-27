@@ -2,6 +2,8 @@
 import { bridgeError } from './errors.js';
 import { acquire, onEvent, release, send as cdpSend } from './debugger.js';
 import { log } from './log.js';
+import { recordDebugEvent } from './debug-events.js';
+import { conditionFromRule, preflightRules } from './lib/network-rule-eval.js';
 
 const store = new Map(); // tabId -> rules[]
 let nextRuleId = 0;
@@ -76,8 +78,18 @@ function normalize(raw) {
   if (!['fulfill', 'block', 'modify'].includes(action)) {
     throw bridgeError('E_BAD_ARG', 'rule.action 只能是 fulfill/block/modify');
   }
-  const urlPattern = String(raw.urlPattern || raw.url || '*');
+  const urlPattern = String(raw.urlPattern || raw.url || raw.urlFilter || '*');
   nextRuleId += 1;
+  const priorityRaw = Number(raw.priority);
+  const resourceTypes = Array.isArray(raw.resourceTypes)
+    ? raw.resourceTypes.map((type) => String(type).toLowerCase())
+    : [];
+  const excludedResourceTypes = Array.isArray(raw.excludedResourceTypes)
+    ? raw.excludedResourceTypes.map((type) => String(type).toLowerCase())
+    : [];
+  const requestMethods = Array.isArray(raw.requestMethods)
+    ? raw.requestMethods.map((method) => String(method).toLowerCase())
+    : [];
   return {
     id: nextRuleId,
     enabled: true,
@@ -90,6 +102,54 @@ function normalize(raw) {
     url: raw.url ? String(raw.url) : null,
     method: raw.method ? String(raw.method).toUpperCase() : null,
     hits: 0,
+    priority: Number.isInteger(priorityRaw) && priorityRaw > 0 ? priorityRaw : 1,
+    resourceTypes,
+    excludedResourceTypes,
+    requestMethods,
+  };
+}
+
+/** 内部规则 → DNR 规则（离线预检和真正下发共用同一份条件构造）。 */
+function dnrRuleOf(rule, tabId) {
+  let action = null;
+  let redirect = null;
+  if (rule.action === 'block') action = 'block';
+  else if (rule.action === 'modify' && rule.url && /^https?:\/\//i.test(rule.url)) {
+    action = 'redirect';
+    redirect = { url: rule.url };
+  }
+  if (!action) return null;
+  return {
+    id: rule.id,
+    priority: Number(rule.priority) || 1,
+    action,
+    ...(redirect ? { redirect } : {}),
+    condition: conditionFromRule({
+      ...rule,
+      urlPattern: rule.urlPattern,
+      tabId,
+    }, { tabId }),
+  };
+}
+
+/** 当前 tab 的规则离线预检：DNR 语义校验 + 冲突/遮蔽；不改变规则本身。 */
+function preflightForTab(tabId) {
+  const rules = (store.get(tabId) || []).filter((item) => item.enabled !== false);
+  const dnrRules = [];
+  const warnings = [];
+  const unsupported = [];
+  for (const rule of rules) {
+    const mapped = dnrRuleOf(rule, tabId);
+    if (mapped) dnrRules.push(mapped);
+    else if (rule.action === 'fulfill' || (rule.action === 'modify' && !rule.url)) {
+      unsupported.push({ id: rule.id, action: rule.action, reason: 'fetch-hook-only' });
+    }
+  }
+  const preflight = preflightRules(dnrRules, { tabId });
+  return {
+    ...preflight,
+    dnr: { rules: dnrRules.length, unsupported },
+    warnings: [...preflight.warnings, ...warnings],
   };
 }
 
@@ -101,6 +161,10 @@ function publicRules(tabId) {
     action: item.action,
     status: item.status,
     hits: item.hits,
+    priority: item.priority || 1,
+    ...(item.resourceTypes && item.resourceTypes.length ? { resourceTypes: [...item.resourceTypes] } : {}),
+    ...(item.excludedResourceTypes && item.excludedResourceTypes.length ? { excludedResourceTypes: [...item.excludedResourceTypes] } : {}),
+    ...(item.requestMethods && item.requestMethods.length ? { requestMethods: [...item.requestMethods] } : {}),
   }));
 }
 
@@ -181,23 +245,17 @@ async function syncDnrRules(tabId) {
   const addRules = [];
   const ids = [];
   for (const rule of rules) {
-    let action = null;
-    if (rule.action === 'block') action = { type: 'block' };
-    else if (rule.action === 'modify' && rule.url && /^https?:\/\//i.test(rule.url)) {
-      action = { type: 'redirect', redirect: { url: rule.url } };
-    }
-    if (!action) continue;
+    const mapped = dnrRuleOf(rule, tabId);
+    if (!mapped) continue;
     nextDnrId += 1;
     ids.push(nextDnrId);
     addRules.push({
       id: nextDnrId,
-      priority: 1,
-      action,
-      condition: {
-        urlFilter: rule.urlPattern,
-        isUrlFilterCaseSensitive: false,
-        tabIds: [tabId],
-      },
+      priority: mapped.priority,
+      action: mapped.action === 'redirect'
+        ? { type: 'redirect', redirect: { ...mapped.redirect } }
+        : { type: mapped.action },
+      condition: mapped.condition,
     });
   }
   try {
@@ -319,9 +377,11 @@ export async function ruleAdd(params = {}) {
   await inject(tabId);
   await syncDnrRules(tabId);
   await syncFetchRules(tabId);
+  recordDebugEvent(tabId, 'rule', { action: 'add', id: rule.id, pattern: String(rule.urlPattern || rule.url || ''), enabled: rule.enabled !== false });
   return {
     ok: true,
     rules: publicRules(tabId),
+    preflight: preflightForTab(tabId),
     dnr: { count: (dnrIds.get(tabId) || []).length, error: dnrError.get(tabId) || null },
     fetch: { enabled: fetchStates.has(tabId), paused: fetchPaused.get(tabId) || 0, error: fetchError.get(tabId) || null, urls: fetchUrls.get(tabId) || [] },
   };
@@ -347,6 +407,7 @@ export async function ruleSetEnabled(params = {}) {
   rule.enabled = params.enabled !== false;
   persistRules(tabId);
   await applyRules(tabId);
+  recordDebugEvent(tabId, 'rule', { action: rule.enabled ? 'enable' : 'disable', id: rule.id, pattern: String(rule.urlPattern || rule.url || '') });
   return { ok: true, rules: publicRules(tabId) };
 }
 
@@ -361,6 +422,7 @@ export async function ruleRemove(params = {}) {
   list.splice(index, 1);
   persistRules(tabId);
   await applyRules(tabId);
+  recordDebugEvent(tabId, 'rule', { action: 'remove', id });
   return { ok: true, removed: id, rules: publicRules(tabId) };
 }
 
@@ -386,6 +448,7 @@ export async function ruleClear(params = {}) {
   await inject(tabId).catch(() => {});
   await syncDnrRules(tabId);
   await syncFetchRules(tabId);
+  recordDebugEvent(tabId, 'rule', { action: 'clear', count: cleared });
   return { ok: true, cleared };
 }
 
@@ -414,7 +477,8 @@ export async function ruleImport(params = {}) {
   store.set(tabId, list);
   persistRules(tabId);
   await applyRules(tabId);
-  return { ok: true, imported: list.length, rules: publicRules(tabId) };
+  recordDebugEvent(tabId, 'rule', { action: 'import', count: list.length });
+  return { ok: true, imported: list.length, rules: publicRules(tabId), preflight: preflightForTab(tabId) };
 }
 
 /** 页面导航完成后重新注入（fetch/XHR 包裹会随文档丢失）。 */

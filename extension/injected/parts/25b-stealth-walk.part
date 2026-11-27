@@ -1,0 +1,312 @@
+  function stealthInteractive(el) {
+    if (STEALTH_INTERACTIVE.has(el.tagName)) return true;
+    const role = (el.getAttribute('role') || '').toLowerCase();
+    if (['button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem', 'option', 'textbox', 'combobox'].includes(role)) return true;
+    if (el.hasAttribute('tabindex') && Number(el.getAttribute('tabindex')) >= 0) return true;
+    if (el.getAttribute('contenteditable') === 'true' || el.isContentEditable === true) return true;
+    if (el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]')) return true;
+    if (el.getAttribute('aria-labelledby') || el.getAttribute('aria-describedby')) return true;
+    return false;
+  }
+  // sr-only / visually-hidden 是给读屏和 aria 用的，不能当注入剥掉。
+  function isSrOnly(el) {
+    const cls = String(el.className || '');
+    return /(^|\s)(sr-only|visually-hidden|screen-reader-text|a11y-hidden|sr_only)(\s|$)/i.test(cls);
+  }
+  function hasDirectText(el) {
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3 && node.textContent && node.textContent.trim()) return true;
+    }
+    return false;
+  }
+  function gradientClipText(style) {
+    const clip = String(style.webkitBackgroundClip || style.backgroundClip || '').toLowerCase();
+    return clip === 'text' && /gradient|url\(/i.test(String(style.backgroundImage || ''));
+  }
+  function hasInnerScroll(node) {
+    let el = node;
+    let depth = 0;
+    while (el && el.nodeType === 1 && depth < 8) {
+      const style = getComputedStyle(el);
+      const overflow = style.overflowX + style.overflowY;
+      if (/(auto|scroll)/.test(overflow)
+        && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)) return true;
+      el = el.parentElement;
+      depth += 1;
+    }
+    return false;
+  }
+  function stealthHidden(el) {
+    const style = getComputedStyle(el);
+    const opacity = Number(style.opacity);
+    if (Number.isFinite(opacity) && opacity < 0.05) return true;
+    const fontSize = Number.parseFloat(style.fontSize || '0');
+    if (Number.isFinite(fontSize) && fontSize > 0 && fontSize <= 1.5) return true;
+    const rect = el.getBoundingClientRect();
+    // sr-only 常见做法是 1px 裁切；这类节点保留，否则会丢掉 accessible name 的文本来源。
+    if (rect.width < 2 && rect.height < 2 && !isSrOnly(el)) return true;
+    const margin = 5000;
+    if (rect.right < -margin || rect.bottom < -margin) return true;
+    if (rect.left > (window.innerWidth || 0) + margin || rect.top > (window.innerHeight || 0) + margin) return true;
+    // text-indent 把字挪出可视区：有内层滚动容器的真实长行不算。
+    const textIndent = Number.parseFloat(String(style.textIndent || '0'));
+    if (Number.isFinite(textIndent) && textIndent <= -1000 && !hasInnerScroll(el.parentElement)) return true;
+    // 零对比度 / 完全透明文字：只对直接含文本、非 sr-only、非渐变裁剪标题的节点做，
+    // 避免把每个容器都拉去做取色。取色复用 AX 探针的 canvas 归一化，天然覆盖 oklch/color-mix。
+    if (hasDirectText(el) && !isSrOnly(el) && !gradientClipText(style)) {
+      let foreground = null;
+      try { foreground = parseCssColor(style.color); } catch { foreground = null; }
+      if (foreground && foreground.a < 0.05) return true;
+      if (foreground) {
+        try {
+          const background = effectiveBackgroundColor(el);
+          const solid = compositeColor(foreground, background);
+          if (contrastRatio(solid, background) <= 1.05) return true;
+        } catch { /* 取色失败时保留，宁可多留 */ }
+      }
+    }
+    return false;
+  }
+  function walk(el, depth) {
+      if (!el || el.nodeType !== 1) return;
+      ctx.funnel.visited += 1;
+      if (ctx.maxDepth && depth > ctx.maxDepth) { ctx.truncated = true; ctx.funnel.truncated = true; return; }
+      if (el.tagName === 'IFRAME') ctx.surfaces.iframes += 1;
+      const tag = el.tagName;
+      if (SKIP_TAGS.has(tag)) { ctx.funnel.skippedTag += 1; return; }
+      const visibleAt = performance.now();
+      const visible = isVisible(el);
+      ctx.funnel.ms.visibility += performance.now() - visibleAt;
+      if (!visible) { ctx.funnel.hidden += 1; return; }
+      const stealthAt = performance.now();
+      const stealth = !stealthInteractive(el) && stealthHidden(el);
+      ctx.funnel.ms.stealth += performance.now() - stealthAt;
+      if (stealth) { ctx.funnel.stealth += 1; return; }
+      if (isGridNode(el)) {
+        const cols = gridHeaderCells(el).map(function (cell) { return normalizeText(cell.textContent || ''); }).filter(Boolean);
+        const gridLine = '  '.repeat(depth) + '- grid' + (cols.length ? ' ' + quoteName(truncate(cols.join(' | '), NAME_MAX)) : '');
+        lines.push(gridLine);
+        mark(el, depth);
+        const entries = gridRowEntries(el).slice(0, 200);
+        const small = entries.length <= 8 && cols.length <= 8;
+        if (small) {
+          for (const entry of entries) {
+            for (const cell of entry.cells) {
+              const text = normalizeText(cell.textContent || '');
+              if (!text) continue;
+              let line = '  '.repeat(depth + 1) + '- cell ' + quoteName(truncate(text, NAME_MAX));
+              if (ctx.withRefs) {
+                const refId = refFor(cell);
+                ctx.refs += 1;
+                line += ' [@e' + refId + ']';
+              }
+              lines.push(line);
+              mark(cell, depth + 1);
+            }
+          }
+        }
+        // 只读大表折叠：超过 40 行且行内没有可交互元素时，只保留前 40 行并标注剩余数量。
+        const readOnlyRows = entries.length > 40 && !entries.some((entry) => entry.row.querySelector && entry.row.querySelector('a,button,input,select,textarea,[role="button"],[role="link"],[tabindex]'));
+        const rowInteractive = (row) => !!(row && row.querySelector && row.querySelector('a,button,input,select,textarea,[role="button"],[role="link"],[tabindex],[contenteditable="true"]'));
+        const rowText = (entry) => entry.cells.map(function (cell) { return normalizeText(cell.textContent || ''); }).filter(Boolean).join(' | ');
+        let emittedRows = 0;
+        if (entries.length > 12) {
+          // 连续 ≥3 条纯只读行压成一行管道分隔文本；可交互行保持逐行 + ref。
+          let index = 0;
+          while (index < entries.length) {
+            const text = rowText(entries[index]);
+            if (!text) { index += 1; continue; }
+            if (rowInteractive(entries[index].row)) {
+              let line = '  '.repeat(depth + 1) + '- row ' + quoteName(truncate(text, NAME_MAX));
+              if (ctx.withRefs) {
+                const refId = refFor(entries[index].row);
+                ctx.refs += 1;
+                line += ' [@e' + refId + ']';
+              }
+              lines.push(line);
+              mark(entries[index].row, depth + 1);
+              emittedRows += 1;
+              index += 1;
+              continue;
+            }
+            let end = index;
+            while (end < entries.length && rowText(entries[end]) && !rowInteractive(entries[end].row)) end += 1;
+            const run = end - index;
+            if (run >= 3) {
+              const compact = entries.slice(index, end).map(rowText).filter(Boolean).join(' | ');
+              lines.push('  '.repeat(depth + 1) + '- rows ' + (index + 1) + '–' + end + '（只读）: ' + quoteName(truncate(compact, NAME_MAX * 2)));
+              mark(el, depth + 1);
+              emittedRows += run;
+              index = end;
+              continue;
+            }
+            // 短 run 仍逐行输出，保留行 ref。
+            for (let cursor = index; cursor < end; cursor += 1) {
+              const singleText = rowText(entries[cursor]);
+              if (!singleText) continue;
+              let line = '  '.repeat(depth + 1) + '- row ' + quoteName(truncate(singleText, NAME_MAX));
+              if (ctx.withRefs) {
+                const refId = refFor(entries[cursor].row);
+                ctx.refs += 1;
+                line += ' [@e' + refId + ']';
+              }
+              lines.push(line);
+              mark(entries[cursor].row, depth + 1);
+              emittedRows += 1;
+            }
+            index = end;
+          }
+        } else {
+          for (const entry of entries) {
+            const text = rowText(entry);
+            if (!text) continue;
+            if (readOnlyRows && emittedRows >= 40) break;
+            emittedRows += 1;
+            let line = '  '.repeat(depth + 1) + '- row ' + quoteName(truncate(text, NAME_MAX));
+            if (ctx.withRefs) {
+              const refId = refFor(entry.row);
+              ctx.refs += 1;
+              line += ' [@e' + refId + ']';
+            }
+            lines.push(line);
+            mark(entry.row, depth + 1);
+          }
+        }
+        if (readOnlyRows && emittedRows < entries.length) {
+          lines.push('  '.repeat(depth + 1) + '- …（只读表格，其余 ' + (entries.length - emittedRows) + ' 行已折叠）');
+        }
+        return;
+      }
+      if (tag === 'TD' || tag === 'TH') {
+        const table = el.closest ? el.closest('table') : null;
+        const tableClass = table && typeof table.className === 'string' ? table.className : '';
+        const tableLabel = table ? normalizeText(table.getAttribute('aria-label') || '') : '';
+        if (/calendar/i.test(tableClass) || /calendar|日历/i.test(tableLabel)) {
+          const cellText = normalizeText(el.textContent || '');
+          if (cellText) {
+            let line = '  '.repeat(depth) + '- cell ' + quoteName(truncate(cellText, NAME_MAX));
+            if (ctx.withRefs) {
+              const refId = refFor(el);
+              ctx.refs += 1;
+              line += ' [@e' + refId + ']';
+            }
+            lines.push(line);
+            mark(el, depth);
+          }
+          return;
+        }
+      }
+      const role = roleOf(el);
+      let emitted = false;
+      if (role && SEMANTIC_ROLES.has(role)) {
+        lines.push(formatNode(el, role, depth, ctx));
+        mark(el, depth);
+        emitted = true;
+        if (tag === 'IFRAME') {
+        // 同源 iframe：继续遍历内部文档；跨源时只能保留占位。
+        let frameDoc = null;
+        try {
+          frameDoc = el.contentDocument;
+        } catch {
+          frameDoc = null;
+        }
+        if (frameDoc && frameDoc.body) {
+          for (const child of frameDoc.body.children) walk(child, depth + 1);
+        }
+        return;
+      }
+      }
+      if (role === 'table' && tag === 'TABLE' && ctx.withRefs) {
+        // table row refs：数据表按行暴露 ref，配合单元格内的链接 ref 一起使用
+        const bodyRows = el.tBodies && el.tBodies.length
+          ? Array.from(el.tBodies).flatMap(function (body) { return Array.from(body.rows); })
+          : Array.from(el.rows || []).slice(1);
+        for (const row of bodyRows.slice(0, 60)) {
+          const text = normalizeText(row.textContent || '');
+          if (!text) continue;
+          let line = '  '.repeat(depth + 1) + '- row ' + quoteName(truncate(text, NAME_MAX));
+          const refId = refFor(row);
+          ctx.refs += 1;
+          line += ' [@e' + refId + ']';
+          lines.push(line);
+          mark(row, depth + 1);
+        }
+      }
+      const childDepth = emitted ? depth + 1 : depth;
+      const children = el.children;
+      for (let i = 0; i < children.length; i += 1) walk(children[i], childDepth);
+      // shadow DOM：open 模式的影子树也要出现在观察与 ref 表里
+      if (el.shadowRoot) {
+        ctx.surfaces.shadows += 1;
+        const shadowChildren = el.shadowRoot.children;
+        for (let i = 0; i < shadowChildren.length; i += 1) walk(shadowChildren[i], childDepth);
+      }
+    }
+
+    if (options.only) {
+      walk(options.only.node, options.only.depth);
+      ctx.funnel.walkMs = performance.now() - walkStartedAt;
+      return { lines, refs: ctx.refs, nodes: ctx.nodes || [], lineMap, graph: snapshotGraph(ctx.graph), stats: finishFunnel(ctx, lines) };
+    }
+    if (document.body) {
+      for (const child of document.body.children) walk(child, 1);
+    }
+    if (ctx.truncated) lines.push('- …（已按 --max-depth ' + ctx.maxDepth + ' 截断更深层）');
+    if (options.debugSurfaces) lines.push('- surfaces iframes=' + ctx.surfaces.iframes + ' open-shadow=' + ctx.surfaces.shadows);
+    ctx.funnel.walkMs = performance.now() - walkStartedAt;
+    return { lines, refs: ctx.refs, nodes: ctx.nodes || [], lineMap, graph: snapshotGraph(ctx.graph), stats: finishFunnel(ctx, lines) };
+  }
+
+  function estimateLineTokens(text) {
+    const value = String(text == null ? '' : text);
+    let tokens = 0;
+    let latinRun = 0;
+    const flushLatin = () => {
+      if (latinRun > 0) { tokens += latinRun <= 3 ? 1 : Math.ceil(latinRun / 3.6); latinRun = 0; }
+    };
+    for (const ch of value) {
+      if (/[A-Za-z0-9_]/.test(ch)) { latinRun += 1; continue; }
+      flushLatin();
+      if (/\s/.test(ch)) tokens += 0.25;
+      else if (/[\u3400-\u9fff\uf900-\ufaff]/.test(ch)) tokens += 0.76;
+      else if (/[\u3040-\u30ff\uac00-\ud7af]/.test(ch)) tokens += 0.6;
+      else tokens += 0.5;
+    }
+    flushLatin();
+    return Math.max(1, Math.round(tokens));
+  }
+
+  function finishFunnel(ctx, lines) {
+    const funnel = ctx.funnel || {};
+    let tokens = 0;
+    let maxLineTokens = 0;
+    for (const line of lines) {
+      const cost = estimateLineTokens(line);
+      tokens += cost;
+      if (cost > maxLineTokens) maxLineTokens = cost;
+    }
+    const walkMs = Number(funnel.walkMs) || 0;
+    const visibilityMs = Number(funnel.ms && funnel.ms.visibility) || 0;
+    const stealthMs = Number(funnel.ms && funnel.ms.stealth) || 0;
+    return {
+      visited: Number(funnel.visited) || 0,
+      hidden: Number(funnel.hidden) || 0,
+      stealth: Number(funnel.stealth) || 0,
+      skippedTag: Number(funnel.skippedTag) || 0,
+      emitted: lines.length,
+      refs: Number(ctx.refs) || 0,
+      truncated: funnel.truncated === true || ctx.truncated === true,
+      iframes: Number(ctx.surfaces && ctx.surfaces.iframes) || 0,
+      tokens: tokens,
+      lineTokens: tokens,
+      maxLineTokens,
+      ms: {
+        walk: Math.round(walkMs * 10) / 10,
+        visibility: Math.round(visibilityMs * 10) / 10,
+        stealth: Math.round(stealthMs * 10) / 10,
+        semantics: Math.max(0, Math.round((walkMs - visibilityMs - stealthMs) * 10) / 10),
+      },
+    };
+  }
+
+  /** VOM：被遮挡时可读的遮挡者摘要（只用于诊断，不参与动作）。 */

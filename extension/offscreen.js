@@ -1,19 +1,33 @@
 // offscreen.js —— 用 tabCapture 的 streamId 录 MP4（离屏文档里跑 MediaRecorder）
 import { pickVideoMime, normalizeVideoOptions } from './src/video-encoder.js';
-const DB_NAME = 'bb-videos';
-const DB_VERSION = 2;
-const STORE = 'videos';
-const CHUNK_STORE = 'chunks';
+import { fragmentJournalFromBlob, completeFragmentPackage } from './src/lib/mp4-fragments.js';
+import { analyzeRecording } from './src/lib/video-analysis.js';
+import { CanvasSource, Output, Mp4OutputFormat, StreamTarget } from './vendor/mediabunny/mediabunny.min.mjs';
+import { openDb, saveVideo, clearChunks, readChunks, CHUNK_STORE } from './src/lib/offscreen-store.js';
+import { sha256Hex, base64OfBytes, journalSummary, chunksHavePosition } from './src/lib/video-meta.js';
+import { createOffscreenRecovery } from './src/lib/offscreen-recovery.js';
+import { readEncodedChunks, assembleEncodedBlob } from './src/lib/encoded-blob.js';
+import { createEncodedWriter } from './src/lib/encoded-writer.js';
 
+const encodedWriter = createEncodedWriter({ openDb, CHUNK_STORE, writeEncodedPart, getEncodedMeta: () => encodedMeta });
+
+const recovery = createOffscreenRecovery({
+  readChunks, saveVideo, clearChunks, analyzeRecording, sha256Hex, journalSummary, assembleEncodedParts, assembleEncodedBlob, listEncodedManifests, clearEncodedParts, getStorageState: () => storageState,
+});
+import { writeEncodedPart, listEncodedParts, clearEncodedParts, writeEncodedManifest, listEncodedManifests, assembleEncodedParts, verifyEncodedParts, sealEncodedManifest } from './src/lib/opfs-encoded-store.js';
 let recorder = null;
 let stream = null;
 let chunks = [];
+let chunkWrites = Promise.resolve();
+let encoderSession = null;
+let encodedBlob = null;
+let fragmentLog = [];
+const fragmentHashes = new Map();
 let meta = null;
 let mode = null;
 let canvas = null;
 let context2d = null;
 let stopTimer = null;
-let chunkIndex = 0;
 
 async function trace(stage, extra) {
   try {
@@ -30,86 +44,29 @@ function pickMime(preferred) {
   return pickVideoMime((mime) => MediaRecorder.isTypeSupported(mime), { preferred });
 }
 
-function openDb() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' });
-      if (!db.objectStoreNames.contains(CHUNK_STORE)) db.createObjectStore(CHUNK_STORE, { keyPath: 'key' });
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error('打开 IndexedDB 失败'));
-  });
-}
 
-async function saveVideo(record) {
-  const db = await openDb();
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).put(record);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error || new Error('保存视频失败'));
-  });
-  db.close();
-}
 
-async function storeChunk(blob, recordMeta) {
-  const id = String((recordMeta && recordMeta.recordingId) || '');
-  if (!id || !blob || !blob.size) return;
-  const db = await openDb();
-  try {
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(CHUNK_STORE, 'readwrite');
-      tx.objectStore(CHUNK_STORE).put({
-        key: id + ':' + String(chunkIndex).padStart(6, '0'),
-        recordingId: id,
-        index: chunkIndex,
-        at: Date.now(),
-        meta: recordMeta,
-        blob,
-      });
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error('保存录制分片失败'));
-    });
-    chunkIndex += 1;
-  } finally {
-    db.close();
-  }
-}
 
-async function clearChunks() {
-  const db = await openDb();
-  try {
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(CHUNK_STORE, 'readwrite');
-      tx.objectStore(CHUNK_STORE).clear();
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error('清理录制分片失败'));
-    });
-  } finally {
-    db.close();
-  }
-}
 
-async function readChunks() {
-  const db = await openDb();
-  try {
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(CHUNK_STORE, 'readonly');
-      const request = tx.objectStore(CHUNK_STORE).getAll();
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error || new Error('读取录制分片失败'));
-    });
-  } finally {
-    db.close();
-  }
-}
+
+
+
+
+/** 扫描分片日记（并可让 worker 做完整分片重封装）：优先 worker，失败则主线程兜底。 */
+
+
+
+
+
 
 function onData(data) {
   if (!data || !data.size) return;
-  chunks.push(data);
-  storeChunk(data, meta).catch(() => {});
+  const entry = { index: encodedWriter.currentChunkIndex(), at: Date.now(), bytes: data.size, sha256: '' };
+  fragmentLog.push(entry);
+  const hashPromise = sha256Hex(data).then((hash) => { entry.sha256 = hash; }).catch(() => {});
+  fragmentHashes.set(entry.index, hashPromise);
+  // 分片直接进 IndexedDB；只有落盘失败时才留在内存兜底，避免长时间录制内存线性增长。
+  chunkWrites = chunkWrites.then(() => encodedWriter.storeChunk(data, meta)).catch(() => { chunks.push({ index: entry.index, blob: data }); });
 }
 
 function scheduleAutoStop(durationMs) {
@@ -117,6 +74,11 @@ function scheduleAutoStop(durationMs) {
   if (!limit) return;
   stopTimer = setTimeout(() => {
     stopTimer = null;
+    if (meta && !meta.stopReason) meta.stopReason = 'duration';
+    if (encoderSession) {
+      stopRecording().catch(() => {});
+      return;
+    }
     try {
       if (recorder && recorder.state === 'recording') recorder.stop();
     } catch {
@@ -125,40 +87,30 @@ function scheduleAutoStop(durationMs) {
   }, limit);
 }
 
-async function recoverChunks() {
-  const items = await readChunks();
-  if (!items.length) return { ok: false, error: '没有可恢复的录制分片' };
-  const groups = new Map();
-  for (const item of items) {
-    const id = String(item.recordingId || '');
-    if (!groups.has(id)) groups.set(id, []);
-    groups.get(id).push(item);
+
+
+
+
+let storageState = null;
+let encodedMeta = null;
+async function probeStorage() {
+  storageState = { persisted: false, quota: null, usage: null };
+  try {
+    const persisted = await navigator.storage.persist().catch(() => false);
+    const estimate = await navigator.storage.estimate().catch(() => null);
+    storageState = {
+      persisted: persisted === true,
+      quota: estimate && Number.isFinite(Number(estimate.quota)) ? Number(estimate.quota) : null,
+      usage: estimate && Number.isFinite(Number(estimate.usage)) ? Number(estimate.usage) : null,
+    };
+  } catch {
+    // 存储能力探测失败不阻断录制
   }
-  const [id, list] = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)[0];
-  list.sort((a, b) => Number(a.index || 0) - Number(b.index || 0));
-  const first = list[0];
-  const recordMeta = first.meta || { recordingId: id, tabId: 0, url: '', title: '', startedAt: first.at || Date.now(), mime: 'video/mp4' };
-  const mime = recordMeta.mime || 'video/mp4';
-  const blob = new Blob(list.map((item) => item.blob), { type: mime });
-  const record = {
-    id,
-    tabId: recordMeta.tabId,
-    url: recordMeta.url || '',
-    title: recordMeta.title || '',
-    startedAt: recordMeta.startedAt || Date.now(),
-    endedAt: Date.now(),
-    mime,
-    bytes: blob.size,
-    blob,
-    recovered: true,
-  };
-  await saveVideo(record);
-  await clearChunks();
-  return { ok: true, record: { id, tabId: record.tabId, startedAt: record.startedAt, endedAt: record.endedAt, mime, bytes: blob.size } };
+  return storageState;
 }
 
 async function startFrames(message) {
-  if (recorder && recorder.state === 'recording') return { ok: false, error: '已经在录制中' };
+  if ((recorder && recorder.state === 'recording') || encoderSession) return { ok: false, error: '已经在录制中' };
   const mime = pickMime(message.mimeType);
   if (!mime) return { ok: false, error: '浏览器不支持可用的录制格式' };
   const options = normalizeVideoOptions({ width: message.width, height: message.height, fps: message.fps, bitrate: message.bitrate });
@@ -172,11 +124,51 @@ async function startFrames(message) {
   context2d = canvas.getContext('2d');
   context2d.fillStyle = '#000000';
   context2d.fillRect(0, 0, width, height);
-  stream = canvas.captureStream(fps);
   chunks = [];
-  chunkIndex = 0;
+  chunkWrites = Promise.resolve();
+  encodedWriter.reset();
+  fragmentLog = [];
+  fragmentHashes.clear();
   await clearChunks().catch(() => {});
+  await clearEncodedParts(message.recordingId).catch(() => {});
+  await probeStorage();
+  encodedMeta = { recordingId: message.recordingId, tabId: message.tabId, url: message.url || '', title: message.title || '', startedAt: Date.now(), mime: 'video/mp4' };
+  await writeEncodedManifest(message.recordingId, { ...encodedMeta, mode: 'frames' }).catch(() => {});
   mode = 'frames';
+  if (message.encoder === 'avc') {
+    try {
+      
+      const target = new StreamTarget(new WritableStream({
+        write: (chunk) => encodedWriter.storeEncodedChunk(message.recordingId, chunk.position, chunk.data),
+      }), { chunkSize: 1024 * 1024 });
+      const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
+      const source = new CanvasSource(canvas, { codec: 'avc', bitrate: options.bitrate });
+      output.addVideoTrack(source);
+      await output.start();
+      encoderSession = {
+        output, source, target,
+        recordingId: message.recordingId || '',
+        fps: Math.max(1, Number(fps) || 10),
+        frames: 0,
+        queue: Promise.resolve(),
+      };
+      meta = {
+        recordingId: message.recordingId || '',
+        tabId: message.tabId,
+        url: message.url || '',
+        title: message.title || '',
+        startedAt: Date.now(),
+        mime: 'video/mp4',
+      };
+      scheduleAutoStop(message.durationMs);
+      trace('started-encoder', { tabId: message.tabId, durationMs: message.durationMs });
+      return { ok: true, mime: 'video/mp4', startedAt: meta.startedAt, mode: 'frames', encoder: 'avc' };
+    } catch (error) {
+      encoderSession = null;
+      return { ok: false, error: 'VideoEncoder 不可用：' + String((error && error.message) || error) };
+    }
+  }
+  stream = canvas.captureStream(fps);
   meta = {
     recordingId: message.recordingId || '',
     tabId: message.tabId,
@@ -201,20 +193,81 @@ async function drawFrame(dataUrl) {
     const bitmap = await createImageBitmap(blob);
     context2d.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close();
+    if (encoderSession) {
+      const session = encoderSession;
+      const timestamp = session.frames / session.fps;
+      session.frames += 1;
+      session.queue = session.queue
+        .then(() => session.source.add(timestamp, 1 / session.fps))
+        .catch(() => {});
+    }
   } catch {
     // 坏帧直接丢弃
   }
 }
 
 async function finishRecording(recordMeta, mime) {
-  trace('onstop', { bytesPending: chunks.reduce((sum, chunk) => sum + chunk.size, 0) });
+  trace('onstop', { bytesPending: fragmentLog.reduce((sum, item) => sum + Number(item.bytes || 0), 0) });
   if (stopTimer) {
     clearTimeout(stopTimer);
     stopTimer = null;
   }
   try {
-    const blob = new Blob(chunks, { type: mime });
+    if (encodedBlob) {
+      const blob = encodedBlob;
+      encodedBlob = null;
+      const sha256 = await sha256Hex(blob);
+      const durability = await verifyEncodedParts(recordMeta.recordingId).catch(() => ({ ok: false, reason: 'verify_failed' }));
+      const id = recordMeta.recordingId || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+      const record = {
+        id,
+        tabId: recordMeta.tabId,
+        url: recordMeta.url,
+        title: recordMeta.title,
+        startedAt: recordMeta.startedAt,
+        endedAt: Date.now(),
+        mime: 'video/mp4',
+        bytes: blob.size,
+        completeness: durability.ok ? 'complete' : 'partial',
+        stop_reason: recordMeta.stopReason || 'user',
+        chunk_count: 1,
+        fragments: [{ index: 0, bytes: blob.size, sha256 }],
+        finish_via: 'encoder',
+        durability: durability.ok ? 'verified' : 'unverified',
+        durability_parts: durability.parts || 0,
+        ...(durability.ok ? {} : { durability_reason: durability.reason || 'unknown' }),
+        durability_policy: 'browser-readback',
+        fsync_supported: false,
+        storage_persisted: storageState ? storageState.persisted : false,
+        storage_quota: storageState ? storageState.quota : null,
+        complete_frames: true,
+        faststart: true,
+        blob,
+      };
+      await saveVideo(record);
+      await sealEncodedManifest(id, { endedAt: record.endedAt, bytes: record.bytes }).catch(() => {});
+      await clearEncodedParts(id).catch(() => {});
+      trace('saved-encoder', { id, bytes: blob.size });
+      chrome.runtime.sendMessage({ type: 'bb.rec.done', id, bytes: blob.size, mime: 'video/mp4', tabId: recordMeta.tabId }).catch(() => {});
+      return;
+    }
+    await Promise.allSettled([...fragmentHashes.values()]);
+    await chunkWrites.catch(() => {});
+    const stored = await readChunks().catch(() => []);
+    const records = [
+      ...(Array.isArray(stored) ? stored : []).map((item) => ({ index: Number(item.index), blob: item.blob })),
+      ...chunks,
+    ].filter((item) => item && item.blob && item.blob.size).sort((a, b) => a.index - b.index);
+    const parts = records.map((item) => item.blob);
+    const rawBlob = new Blob(parts, { type: mime });
+    const analyzed = await analyzeRecording(rawBlob, fragmentLog.slice(), true).catch(() => ({ journal: null, packaged: null }));
+    const journal = analyzed.journal;
+    // 完帧重封装：worker 算出 completeBytes 并裁好；不可用时主线程兜底。
+    const packaged = analyzed.packaged || completeFragmentPackage(rawBlob, journal, fragmentLog.slice());
+    const blob = packaged.blob;
     const id = recordMeta.recordingId || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+    const chunkCount = packaged.chunkCount;
+    const completeness = chunkCount > 0 && blob.size > 0 ? 'complete' : 'partial';
     const record = {
       id,
       tabId: recordMeta.tabId,
@@ -224,6 +277,25 @@ async function finishRecording(recordMeta, mime) {
       endedAt: Date.now(),
       mime,
       bytes: blob.size,
+      ...(packaged.trimmedBytes > 0 ? { raw_bytes: rawBlob.size, trimmed_bytes: packaged.trimmedBytes } : {}),
+      completeness,
+      stop_reason: recordMeta.stopReason || 'user',
+      chunk_count: chunkCount,
+      fragments: packaged.fragments,
+      ...(journal ? { complete_frames: journal.completeFrames === true, journal: journalSummary(journal) } : {}),
+      ...(analyzed.via ? { finish_via: analyzed.via } : {}),
+      ...(analyzed.sidx ? {
+        sidx_bytes: analyzed.sidx.sidx.byteLength,
+        sidx_insert_at: analyzed.sidx.insertAt,
+        sidx_base64: base64OfBytes(analyzed.sidx.sidx),
+        indexed: true,
+      } : {}),
+      ...(analyzed.faststart ? {
+        faststart: true,
+        faststart_blob: analyzed.faststart.blob,
+        faststart_bytes: analyzed.faststart.bytes,
+        faststart_packets: analyzed.faststart.packets,
+      } : {}),
       blob,
     };
     await saveVideo(record);
@@ -234,8 +306,12 @@ async function finishRecording(recordMeta, mime) {
     chrome.runtime.sendMessage({ type: 'bb.rec.error', error: String((error && error.message) || error) }).catch(() => {});
   } finally {
     await clearChunks().catch(() => {});
-    chunkIndex = 0;
+    await clearEncodedParts(recordMeta.recordingId).catch(() => {});
+    encodedWriter.reset();
+    chunkWrites = Promise.resolve();
     chunks = [];
+    fragmentLog = [];
+    fragmentHashes.clear();
     meta = null;
     mode = null;
     canvas = null;
@@ -264,8 +340,77 @@ async function startRecording(message) {
     },
   });
   chunks = [];
-  chunkIndex = 0;
+  chunkWrites = Promise.resolve();
+  encodedWriter.reset();
+  fragmentLog = [];
+  fragmentHashes.clear();
   await clearChunks().catch(() => {});
+  await clearEncodedParts(message.recordingId).catch(() => {});
+  await probeStorage();
+  encodedMeta = { recordingId: message.recordingId, tabId: message.tabId, url: message.url || '', title: message.title || '', startedAt: Date.now(), mime: 'video/mp4' };
+  await writeEncodedManifest(message.recordingId, { ...encodedMeta, mode: 'stream' }).catch(() => {});
+  if (message.encoder === 'avc' && typeof MediaStreamTrackProcessor === 'function') {
+    try {
+      const track = stream.getVideoTracks()[0];
+      const settings = track && typeof track.getSettings === 'function' ? track.getSettings() : {};
+      const width = Math.max(2, Number(settings.width) || 1280);
+      const height = Math.max(2, Number(settings.height) || 800);
+      canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      context2d = canvas.getContext('2d');
+      
+      const target = new StreamTarget(new WritableStream({
+        write: (chunk) => encodedWriter.storeEncodedChunk(message.recordingId, chunk.position, chunk.data),
+      }), { chunkSize: 1024 * 1024 });
+      const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
+      const source = new CanvasSource(canvas, { codec: 'avc', bitrate: 4000000 });
+      output.addVideoTrack(source);
+      await output.start();
+      const processor = new MediaStreamTrackProcessor({ track });
+      const reader = processor.readable.getReader();
+      const session = {
+        output, source, target, reader,
+        recordingId: message.recordingId || '',
+        fps: 30,
+        frames: 0,
+        queue: Promise.resolve(),
+        running: true,
+      };
+      encoderSession = session;
+      meta = {
+        recordingId: message.recordingId || '',
+        tabId: message.tabId,
+        url: message.url || '',
+        title: message.title || '',
+        startedAt: Date.now(),
+        mime: 'video/mp4',
+      };
+      mode = 'stream';
+      (async () => {
+        while (session.running) {
+          const { value: frame, done } = await reader.read();
+          if (done) break;
+          try {
+            context2d.drawImage(frame, 0, 0, width, height);
+          } finally {
+            frame.close();
+          }
+          const timestamp = session.frames / session.fps;
+          session.frames += 1;
+          await session.source.add(timestamp, 1 / session.fps).catch(() => {});
+        }
+      })().catch(() => {});
+      scheduleAutoStop(message.durationMs);
+      trace('started-stream-encoder', { tabId: message.tabId, width, height });
+      return { ok: true, mime: 'video/mp4', startedAt: meta.startedAt, mode: 'stream', encoder: 'avc' };
+    } catch {
+      // TrackProcessor/VideoEncoder 不可用：回退 MediaRecorder。
+      encoderSession = null;
+      canvas = null;
+      context2d = null;
+    }
+  }
   meta = {
     recordingId: message.recordingId || '',
     tabId: message.tabId,
@@ -286,9 +431,27 @@ async function startRecording(message) {
 }
 
 async function stopRecording() {
-  if (!recorder) return { ok: false, error: '当前没有录制' };
+  if (!recorder && !encoderSession) return { ok: false, error: '当前没有录制' };
+  if (meta && !meta.stopReason) meta.stopReason = 'user';
+  if (encoderSession) {
+    await finalizeEncoder();
+    await finishRecording(meta, 'video/mp4');
+    return { ok: true };
+  }
   if (recorder.state === 'recording') recorder.stop();
   return { ok: true };
+}
+
+async function finalizeEncoder() {
+  const session = encoderSession;
+  if (!session) return;
+  encoderSession = null;
+  session.running = false;
+  if (session.reader) await session.reader.cancel().catch(() => {});
+  await session.queue.catch(() => {});
+  await session.output.finalize();
+  encodedBlob = await assembleEncodedBlob(session.recordingId).catch(() => null);
+  if (!encodedBlob) encodedBlob = new Blob([], { type: 'video/mp4' });
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -310,7 +473,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'bb.rec.recover') {
-    recoverChunks()
+    recovery.recoverChunks()
       .then((result) => sendResponse(result))
       .catch((error) => sendResponse({ ok: false, error: String((error && error.message) || error) }));
     return true;
@@ -318,8 +481,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'bb.rec.status') {
     sendResponse({
       ok: true,
-      active: Boolean(recorder && recorder.state === 'recording'),
-      state: recorder ? recorder.state : 'idle',
+      active: Boolean((recorder && recorder.state === 'recording') || encoderSession),
+      state: encoderSession ? 'recording' : (recorder ? recorder.state : 'idle'),
       meta: meta || null,
     });
     return false;

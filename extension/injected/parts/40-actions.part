@@ -1,0 +1,130 @@
+  // §D 目标解析：探测阻塞层、增量观察、observe/snapshot、ref→element
+  // ===========================================================================
+  function testAttr(el, name) {
+    return normalizeText(el.getAttribute(name) || '');
+  }
+
+  function detectBlockingLayer() {
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    if (!vw || !vh) return null;
+    const hit = document.elementFromPoint(vw / 2, vh / 2);
+    if (!hit || hit === document.body || hit === document.documentElement) return null;
+    let node = hit;
+    while (node && node.nodeType === 1 && node !== document.body) {
+      const role = String(node.getAttribute('role') || '').toLowerCase();
+      const tag = node.tagName.toLowerCase();
+      const ariaModal = node.getAttribute('aria-modal') === 'true';
+      const cls = String(node.className || '').toLowerCase();
+      const label = normalizeText(node.getAttribute('aria-label') || '');
+      if (role === 'dialog' || role === 'alertdialog' || ariaModal || tag === 'dialog') {
+        return { tag: tag, role: role || tag, label: truncate(label || node.textContent || '', NAME_MAX) };
+      }
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      const covers = rect.width >= vw * 0.6 && rect.height >= vh * 0.6;
+      const looksModal = /modal|overlay|backdrop|mask|dialog/.test(cls);
+      if (covers && looksModal && style.pointerEvents !== 'none') {
+        return { tag: tag, role: role || 'overlay', label: truncate(label || node.textContent || '', NAME_MAX) };
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  /** 用 mutation log 只重渲染被改文本的最近祖先子树；失败返回 null（调用方回退整页重建）。 */
+  function incrementalObservation(previous, records) {
+    if (!previous || !previous.text || !Array.isArray(previous.lineMap) || !previous.lineMap.length) return null;
+    const lines = previous.text.split('\n');
+    const entryByNode = new Map();
+    for (const entry of previous.lineMap) {
+      if (entry && entry.node && !entryByNode.has(entry.node)) entryByNode.set(entry.node, entry);
+    }
+    const jobs = new Map();
+    for (const record of records) {
+      if (!record || record.type !== 'characterData') return null;
+      let node = record.target && record.target.nodeType === 3 ? record.target.parentElement : record.target;
+      let hit = null;
+      while (node) {
+        if (entryByNode.has(node)) { hit = node; break; }
+        node = node.parentElement;
+      }
+      if (!hit) return null;
+      jobs.set(hit, entryByNode.get(hit));
+    }
+    if (!jobs.size) return null;
+    const entries = [...jobs.entries()].map(([node, entry]) => ({ node, ...entry }));
+    // 同一子树里的多个改动只重渲染最外层祖先。
+    const top = entries.filter((job) => !entries.some((other) => other !== job && other.node.contains(job.node)));
+    const sortedMap = previous.lineMap.slice().sort((a, b) => a.index - b.index);
+    for (const job of top.sort((a, b) => b.index - a.index)) {
+      let end = lines.length;
+      for (const entry of sortedMap) {
+        if (entry.index > job.index && entry.depth <= job.depth) { end = entry.index; break; }
+      }
+      if (end <= job.index) return null;
+      const sub = buildObservation({ withRefs: true, only: { node: job.node, depth: job.depth } });
+      if (!sub.lines.length) return null;
+      lines.splice(job.index, end - job.index, ...sub.lines);
+    }
+    return lines.join('\n');
+  }
+
+  function collectDeepElements(root, out) {
+    if (!root || !root.children) return;
+    for (const el of root.children) {
+      out.push(el);
+      if (el.shadowRoot) collectDeepElements(el.shadowRoot, out);
+      if (el.tagName === 'IFRAME') {
+        try {
+          const doc = el.contentDocument;
+          if (doc && doc.documentElement) collectDeepElements(doc.documentElement, out);
+        } catch { /* 跨源文档跳过 */ }
+      }
+      collectDeepElements(el, out);
+    }
+  }
+
+  function estimateDeepTokens(text) {
+    const value = String(text == null ? '' : text);
+    let tokens = 0;
+    let run = 0;
+    const flush = () => { if (run) { tokens += run <= 3 ? 1 : Math.ceil(run / 3.6); run = 0; } };
+    for (const ch of value) {
+      if (/[A-Za-z0-9_]/.test(ch)) { run += 1; continue; }
+      flush();
+      if (/\s/.test(ch)) tokens += 0.25;
+      else if (/[\u3400-\u9fff\uf900-\ufaff]/.test(ch)) tokens += 0.76;
+      else if (/[\u3040-\u30ff\uac00-\ud7af]/.test(ch)) tokens += 0.6;
+      else tokens += 0.5;
+    }
+    flush();
+    return Math.max(1, Math.round(tokens));
+  }
+
+  function deepInteractive(el) {
+    const tag = el.tagName;
+    if (['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'SUMMARY', 'LABEL'].includes(tag)) return true;
+    const role = (el.getAttribute('role') || '').toLowerCase();
+    if (['button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem', 'option', 'textbox', 'combobox'].includes(role)) return true;
+    if (el.hasAttribute('tabindex') && Number(el.getAttribute('tabindex')) >= 0) return true;
+    if (el.getAttribute('contenteditable') === 'true' || el.isContentEditable === true) return true;
+    if (el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]')) return true;
+    return Boolean(el.getAttribute('aria-labelledby') || el.getAttribute('aria-describedby'));
+  }
+
+  function deepHidden(el) {
+    const style = getComputedStyle(el);
+    const opacity = Number(style.opacity);
+    if (Number.isFinite(opacity) && opacity < 0.05) return true;
+    const fontSize = Number.parseFloat(style.fontSize || '0');
+    if (Number.isFinite(fontSize) && fontSize > 0 && fontSize <= 1.5) return true;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 2 && rect.height < 2) return true;
+    const margin = 5000;
+    if (rect.right < -margin || rect.bottom < -margin) return true;
+    if (rect.left > (window.innerWidth || 0) + margin || rect.top > (window.innerHeight || 0) + margin) return true;
+    return false;
+  }
+
+  /** 六阶段深观察：收集 → 可见 → 注入过滤 → 语义 → 去重/绘制序 → token 预算与 ref。 */

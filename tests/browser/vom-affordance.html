@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>VOM_AFF_PENDING</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 12px; }
+  .box { display: block; margin: 6px 0; }
+  #scr-scroll { width: 240px; height: 52px; overflow: auto; border: 1px solid #888; }
+  #lyr-z1, #lyr-z50, #lyr-z500 {
+    position: fixed; left: 420px; top: 10px; width: 90px; height: 26px;
+  }
+  #lyr-z1 { z-index: 1; background: rgba(255, 0, 0, .25); }
+  #lyr-z50 { z-index: 50; background: rgba(0, 128, 0, .25); }
+  #lyr-z500 { z-index: 500; background: rgba(0, 0, 255, .25); }
+</style>
+<body>
+  <h1>VOM affordance 夹具</h1>
+  <button id="btn-activate" class="box">激活按钮</button>
+  <input id="txt-type" type="text" aria-label="关键词输入" class="box">
+  <input id="chk-toggle" type="checkbox" aria-label="开关复选" class="box">
+  <details id="det-toggle" class="box"><summary id="sum-toggle">详情摘要</summary><p>详情内容</p></details>
+  <select id="sel-select" aria-label="下拉选择" class="box"><option>甲</option><option>乙</option></select>
+  <div id="cbx-select" role="combobox" aria-haspopup="listbox" aria-expanded="false" tabindex="0" class="box">自绘下拉</div>
+  <div id="sld-drag" role="slider" aria-valuenow="5" aria-valuemin="0" aria-valuemax="10" tabindex="0" class="box">滑块</div>
+  <div id="drg-drag" role="button" draggable="true" tabindex="0" class="box">可拖拽卡片</div>
+  <div id="scr-scroll">可滚动区域：这里有很多内容需要滚动才能看全。可滚动区域：这里有很多内容需要滚动才能看全。可滚动区域：这里有很多内容需要滚动才能看全。可滚动区域：这里有很多内容需要滚动才能看全。</div>
+  <input id="file-upload" type="file" aria-label="上传文件" class="box">
+  <div id="mnu-hover" role="menu">
+    <div id="mnu-item" role="menuitem" aria-haspopup="menu" aria-expanded="false" tabindex="0">更多操作</div>
+  </div>
+  <div id="dismiss-wrap" role="dialog" aria-label="登录弹窗">
+    <button id="btn-dismiss">关闭</button>
+  </div>
+  <div id="lyr-z1">z1</div>
+  <div id="lyr-z50">z50</div>
+  <div id="lyr-z500">z500</div>
+  <dialog id="dlg-top">模态对话框内容<button id="btn-dlg-close">关闭对话框</button></dialog>
+  <div id="pop-top" popover>弹出层内容</div>
+  <script src="/extension/injected/page-lib.js"></script>
+  <script type="module" src="./vom-affordance.js"></script>
+</body>

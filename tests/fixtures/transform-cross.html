@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>跨源变换 iframe 夹具</title>
+<iframe id="xform" src="http://127.0.0.1:__XFRAME_PORT__/transform-cross-outer.html" style="width:520px;height:320px;transform:translate(24px,36px) rotate(8deg);transform-origin:0 0;border:1px solid #ccc"></iframe>
+<div id="xform-out">none</div>
+<div id="xform-out2">none</div>
+<script>
+  addEventListener('message', (event) => {
+    if (!event.data || event.data.type !== 'xform') return;
+    document.getElementById('xform-out').textContent = 'matrix-clicked';
+    document.getElementById('xform-out2').textContent = String(event.data.text || '');
+  });
+</script>

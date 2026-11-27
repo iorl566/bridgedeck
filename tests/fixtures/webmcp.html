@@ -1,0 +1,32 @@
+<!doctype html><meta charset="utf-8"><title>WebMCP fixture</title>
+<body>
+  <h1>WebMCP fixture</h1>
+  <div id="out"></div>
+  <script>
+    const tools = [
+      {
+        name: 'echo',
+        description: 'Echo the provided text',
+        inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+        annotations: { readOnlyHint: true },
+        execute: async (input) => ({ echo: input.text || '' }),
+      },
+      {
+        name: 'set_out',
+        description: 'Write text into #out',
+        inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
+        execute: async (input) => {
+          document.getElementById('out').textContent = String(input.text || '');
+          return { written: true };
+        },
+      },
+    ];
+    Object.defineProperty(document, 'modelContext', {
+      configurable: true,
+      value: {
+        getTools: async () => tools,
+        executeTool: async (tool, input) => tool.execute(input),
+      },
+    });
+  </script>
+</body>

@@ -11,4 +11,4 @@ license = { text = "MIT" }
 dependencies = []
 
 [tool.setuptools]
-py-modules = ["browser_bridge"]
+py-modules = ["browser_bridge", "browser_bridge_async"]

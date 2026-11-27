@@ -1,0 +1,21 @@
+[package]
+name = "bridge-cli"
+version = "0.1.0"
+edition = "2021"
+description = "BridgeDeck CLI / daemon（架构路线：Rust 重写的起点，当前含协议编解码 + 真实 daemon 客户端）"
+license = "MIT"
+
+[lib]
+name = "bridge_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bridge-rs"
+path = "src/main.rs"
+
+[dependencies]
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

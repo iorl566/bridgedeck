@@ -1,7 +1,14 @@
 import { LOCALE_TEXT, SUPPORTED_LANGS } from './locales.js';
 // ui/i18n.js —— 运行时中英切换（默认跟随浏览器语言）
 const LANG_KEY = 'bb.uiLang';
+const RTL_LANG = /^(ar|he|fa|ur|yi|dv|ps|sd|ug|ckb)\b/i;
 const DICT = {
+  "无障碍浮层（读屏可访问）": "Accessible overlays (screen-reader friendly)",
+  "开启后浮层使用开放 shadow DOM，并标注 role/aria-live，方便读屏与自动化审查；默认关闭。": "Uses open shadow DOM with role/aria-live labels for screen readers and audit tools. Off by default.",
+  "生成一段给 Agent 的录制指令：Agent 启动录制后你正常操作，结束后 Agent 读取写出的 trace 目录包，就能自动完成同类任务。": "Generate a recording instruction for your agent: after the agent starts recording, operate normally; when you finish, the agent reads the exported trace directory and can automate similar tasks.",
+  "录制给 Agent": "Record for the agent",
+  "直接录制": "Record directly",
+  "录制指令预览": "Recording instruction preview",
   "未连接": "Disconnected",
   "已连接": "Connected",
   "连接中": "Connecting",
@@ -35,6 +42,12 @@ const DICT = {
   "将任务标签页录制为 MP4 视频": "Record a task tab as MP4 video",
   "网站调试": "Website debugging",
   "记录请求、异常与页面上下文，随时回看": "Capture requests, errors and page context for later review",
+  "本地分片": "Local chunks",
+  "扫描": "Scan",
+  "恢复最新": "Restore latest",
+  "尚未扫描": "Not scanned yet",
+  "没有本地分片": "No local chunks",
+  "没有可恢复的本地分片": "No recoverable local chunks",
   "长截图": "Full-page screenshot",
   "从网页顶部截到底部，预览并保存长图": "Capture the page from top to bottom, preview and save",
   "操作录制": "Action recording",
@@ -152,7 +165,7 @@ const DICT = {
   "录制完成": "Recording complete",
   "手动录制正在运行的任务": "Record a running task manually",
   "打开录制页": "Open recording page",
-  "操作主题（可选）": "Action theme (optional)",
+  "操作主题（可选）": "Recording topic (optional)",
   "整页 · 自动滚动": "Full page · Auto scroll",
   "时长上限（1–600 秒）": "Max duration (1–600 s)",
   "标准 1280/15": "Standard 1280/15",
@@ -253,6 +266,17 @@ const DICT = {
   "你的控制": "Your controls",
   "你可以在弹窗或设置页关闭连接、控制提示、自动化设置；可以随时清空调试历史、录制和视频。\n        本扩展只连接": "You can turn off the connection, control hints and automation settings in the popup or options page, and clear debug history, recordings and videos at any time.\n        This extension only connects to",
   "上的本地 daemon；远程连接必须由你主动配置并授权。": "the local daemon; remote connections must be configured and authorized by you.",
+  "已保存": "Saved",
+  "已恢复默认": "Defaults restored",
+  "已复制：": "Copied: ",
+  "复制失败，请手动复制：": "Copy failed, copy manually: ",
+  "配对码需为 6 位数字": "Pairing code must be 6 digits",
+  "地址格式不正确": "Invalid address format",
+  "已清空本机任务审计记录": "Local task audit records cleared",
+  "目标标签页": "Target tab",
+  "起始网址（可选）": "Start URL (optional)",
+  "例如：发布一篇文章": "e.g. publish an article",
+  "协议": "Protocol",
 };
 const PATTERNS = [
   [/^(\d+) 秒$/,'$1 s'],
@@ -294,6 +318,8 @@ function browserLang() {
   const raw = String(navigator.language || '').toLowerCase();
   if (raw.startsWith('zh-tw') || raw.startsWith('zh-hk')) return 'zh-TW';
   if (raw.startsWith('zh')) return 'zh';
+  if (raw.startsWith('ar')) return 'ar';
+  if (raw.startsWith('he') || raw.startsWith('iw')) return 'he';
   for (const code of ['ja','ko','de','es','fr','it','pt']) if (raw.startsWith(code)) return code;
   return 'en';
 }
@@ -366,8 +392,14 @@ export function whenReady() {
 
 export async function initI18n() {
   const lang = await loadLang();
-  const HTML_LANG = { zh: 'zh-CN', en: 'en', ja: 'ja', ko: 'ko', de: 'de', es: 'es', fr: 'fr', it: 'it', pt: 'pt', 'zh-TW': 'zh-TW' };
+  const HTML_LANG = { zh: 'zh-CN', en: 'en', ja: 'ja', ko: 'ko', de: 'de', es: 'es', fr: 'fr', it: 'it', pt: 'pt', 'zh-TW': 'zh-TW', ar: 'ar', he: 'he' };
   document.documentElement.lang = HTML_LANG[lang] || lang;
+  const forcedDir = new URLSearchParams(location.search).get('dir');
+  const dir = forcedDir === 'rtl' || forcedDir === 'ltr'
+    ? forcedDir
+    : (RTL_LANG.test(lang) ? 'rtl' : 'ltr');
+  document.documentElement.dir = dir;
+  document.documentElement.setAttribute('data-bb-dir', dir);
   if (lang === 'zh') return lang;
   const apply = () => {
     if (document.title) {

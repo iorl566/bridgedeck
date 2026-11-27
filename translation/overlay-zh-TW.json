@@ -52,5 +52,7 @@
   "manualFrame": "擷取一格",
   "manualDone": "完成",
   "manualCancel": "取消",
-  "manualFrames": " 格"
+  "manualFrames": " 格",
+  "borrowInactiveTitle": "Agent 請求借用分頁",
+  "helpCompactStatus": "目前 Agent 仍在等待你完成此步驟"
 }

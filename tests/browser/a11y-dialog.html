@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A11Y_DIALOG_PENDING</title>
+<style>
+  body { font: 13px/1.5 system-ui, sans-serif; margin: 0; padding: 24px; }
+  #app { display: grid; gap: 8px; max-width: 420px; }
+  .spacer { height: 8px; }
+</style>
+</head>
+<body>
+<main id="app">
+  <button type="button" id="opener">打开确认框</button>
+  <button type="button" id="other">背景按钮</button>
+  <button type="button" id="disabled" disabled>禁用按钮</button>
+  <div id="hidden" style="display:none">隐藏内容</div>
+  <p id="status" role="status" aria-live="polite"></p>
+</main>
+<script type="module" src="./a11y-dialog.js"></script>
+</body>
+</html>

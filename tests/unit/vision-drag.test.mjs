@@ -26,17 +26,19 @@ test('生成物已同步（否则协议校验会挡）', () => {
 test('换算集中在 resolveCapturePoint，拖拽强制 trusted', () => {
   const screenshot = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'screenshot.js'), 'utf8');
   assert.match(screenshot, /export function resolveCapturePoint/);
-  const interaction = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'tools', 'interaction.js'), 'utf8');
-  assert.match(interaction, /withImageDrag/);
-  assert.match(interaction, /trusted: true/, '视觉坐标拖拽必须强制走原生输入');
-  assert.match(interaction, /fromPoint/, '拖拽需要支持预换算好的起点');
+  const pointer = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'tools', 'pointer-actions.js'), 'utf8');
+  assert.match(pointer, /withImageDrag/);
+  const drag = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'tools', 'visual-drag.js'), 'utf8');
+  assert.match(drag, /trusted: true/, '视觉坐标拖拽必须强制走原生输入');
+  assert.match(drag, /fromPoint/, '拖拽需要支持预换算好的起点');
 });
 
 test('CLI 接受视觉坐标拖拽参数', () => {
-  const cli = fs.readFileSync(path.join(ROOT, 'cli', 'bridge.mjs'), 'utf8');
-  assert.match(cli, /'image-dx', 'image-dy'/);
-  assert.match(cli, /params\.imageDx = Number/);
-  assert.match(cli, /params\.imageDy = Number/);
+  const flagsCli = fs.readFileSync(path.join(ROOT, 'cli', 'bridge.mjs'), 'utf8');
+  assert.match(flagsCli, /'image-dx', 'image-dy'/);
+  const pageCli = fs.readFileSync(path.join(ROOT, 'cli', 'commands', 'page.mjs'), 'utf8');
+  assert.match(pageCli, /params\.imageDx = Number/);
+  assert.match(pageCli, /params\.imageDy = Number/);
 });
 
 test('截图网格与剖面参数已接入', () => {  const schemas = fs.readFileSync(path.join(ROOT, 'lib', 'schemas.mjs'), 'utf8');
@@ -51,8 +53,9 @@ test('截图网格与剖面参数已接入', () => {  const schemas = fs.readFil
   assert.match(cli, /'annotate', 'grid'/);
   assert.match(cli, /'grid-step', 'profile'/);
   const ext = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'screenshot.js'), 'utf8');
-  assert.match(ext, /async function gridShot/);
-  assert.match(ext, /async function profileShot/);
+  const visual = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'screenshot-visual.js'), 'utf8');
+  assert.match(visual, /async function gridShot/);
+  assert.match(visual, /async function profileShot/);
   assert.match(ext, /clip: \{ x, y, width, height, scale: zoom \}/, '区域截图需要支持放大倍率');
 });
 
@@ -70,7 +73,7 @@ test('视觉候选发现：scan → screenshot --visual → 坐标归一化', ()
   const dispatch = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'dispatch.js'), 'utf8');
   assert.match(dispatch, /visualOnly === true/, 'observe 要能切到视觉扫描');
 
-  const cli = fs.readFileSync(path.join(ROOT, 'cli', 'bridge.mjs'), 'utf8');
+  const cli = fs.readFileSync(path.join(ROOT, 'cli', 'commands', 'page.mjs'), 'utf8');
   assert.match(cli, /case 'visuals'/, '要能列出视觉候选');
   assert.match(cli, /params\.visualIndex = index/, '--visual 要传到协议');
   const schemas = fs.readFileSync(path.join(ROOT, 'lib', 'schemas.mjs'), 'utf8');
@@ -78,7 +81,7 @@ test('视觉候选发现：scan → screenshot --visual → 坐标归一化', ()
 });
 
 test('一步式视觉动作：visuals / visual-drag / visual-click', () => {
-  const cli = fs.readFileSync(path.join(ROOT, 'cli', 'bridge.mjs'), 'utf8');
+  const cli = fs.readFileSync(path.join(ROOT, 'cli', 'commands', 'page.mjs'), 'utf8');
   for (const name of ['visuals', 'visual-drag', 'visual-click']) {
     assert.match(cli, new RegExp("case '" + name + "'", 'm'), '缺少命令 ' + name);
     assert.match(cli, new RegExp("'" + name + "'"), '缺少命令注册 ' + name);
@@ -98,7 +101,7 @@ test('extract 覆盖度：声明行数 + 停止原因 + 完整性', () => {
   assert.match(lib, /stopReason = 'max-bytes'/, '字节上限要标停止原因');
   const calls = (lib.match(/withCoverage\(/g) || []).length;
   assert.ok(calls >= 4, '表格/列表/网格抽取都要补覆盖度，当前调用点 ' + calls);
-  const cli = fs.readFileSync(path.join(ROOT, 'cli', 'bridge.mjs'), 'utf8');
+  const cli = fs.readFileSync(path.join(ROOT, 'cli', 'commands', 'extract.mjs'), 'utf8');
   assert.match(cli, /function formatCoverage\(/, 'CLI 要能打印覆盖度');
 });
 
@@ -118,7 +121,7 @@ test('观测代数守卫：observe 返回 revision，动作可要求同一代数
 });
 
 test('多段手势：visual-gesture 支持点击序列 / 长按拖拽 / 等待', () => {
-  const cli = fs.readFileSync(path.join(ROOT, 'cli', 'bridge.mjs'), 'utf8');
+  const cli = fs.readFileSync(path.join(ROOT, 'cli', 'commands', 'page.mjs'), 'utf8');
   assert.match(cli, /case 'visual-gesture':/, '要有 visual-gesture 命令');
   assert.match(cli, /'visual-gesture',/, '命令要注册到 PAGE_COMMANDS');
   assert.match(cli, /flags\.points !== undefined/, '支持 --points 简写');
@@ -126,8 +129,8 @@ test('多段手势：visual-gesture 支持点击序列 / 长按拖拽 / 等待',
   assert.match(cli, /type === 'wait'/, '支持等待步');
   assert.match(cli, /const hold = parseDurationMs\(step\.hold, 0\)/, '拖拽步支持长按');
   assert.match(cli, /step\.dx/, '拖拽步支持位移');
-  const flags = cli.slice(cli.indexOf('const VALUE_FLAGS'), cli.indexOf('const BOOLEAN_FLAGS'));
-  assert.ok(flags.includes("'points'") && flags.includes("'plan'"), '--points/--plan 要进值旗标表');
+  const flagsCli = fs.readFileSync(path.join(ROOT, 'cli', 'bridge.mjs'), 'utf8');
+  assert.ok(flagsCli.includes("'points'") && flagsCli.includes("'plan'"), '--points/--plan 要进值旗标表');
 });
 
 test('视觉候选必须真的能被点到', () => {
@@ -142,9 +145,14 @@ test('读取类结果也标代数，读与写可绑定在同一代 DOM', () => {
   assert.match(lib, /function withRevision\(/, '读取类结果要能标注代数');
   assert.match(lib, /case 'read':\s+return ok\(withRevision\(actionRead/, 'read 结果带代数');
   assert.match(lib, /case 'extract':\s+return ok\(withRevision\(capExtractBytes/, 'extract 结果带代数');
-  const cli = fs.readFileSync(path.join(ROOT, 'cli', 'bridge.mjs'), 'utf8');
-  assert.match(cli, /async function cmdRead[\s\S]{0,900}expectRevision/, 'read 要能带 expectRevision');
-  assert.match(cli, /async function cmdExtract[\s\S]{0,900}expectRevision/, 'extract 要能带 expectRevision');
+  const cli = fs.readFileSync(path.join(ROOT, 'cli', 'commands', 'read-drag.mjs'), 'utf8');
+  assert.match(cli, /async function cmdRead[\s\S]{0,3000}expectRevision/, 'read 要能带 expectRevision');
+  const extractCli = fs.readFileSync(path.join(ROOT, 'cli', 'commands', 'extract.mjs'), 'utf8');
+  // extract 在 W2-D 重构为 buildBase + plan 结构，expectRevision 的装配点在 buildBase 里；
+  // 断言口径从"写死在 cmdExtract 内"改成"参数被解析并进入 RPC params"，不依赖函数体形状。
+  assert.match(extractCli, /flags\['expect-revision'\]/, 'extract 要解析 --expect-revision');
+  assert.match(extractCli, /base\.expectRevision = revision/, 'extract 要把 expectRevision 放进请求基座');
+  assert.match(extractCli, /\.\.\.base/, 'extract 的 RPC 请求必须展开 buildBase 结果');
 });
 
 test('capture 单次消费 + 截图后几何复测', () => {
@@ -152,8 +160,8 @@ test('capture 单次消费 + 截图后几何复测', () => {
   assert.match(ext, /export function consumeCapture/, '需要单次消费入口');
   assert.match(ext, /options\.consume === true \? consumeCapture/, '换算处必须支持消费语义');
   assert.match(ext, /capture_skipped: 'geometry-changed'/, '截图后几何变化必须作废 capture');
-  const interaction = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'tools', 'interaction.js'), 'utf8');
-  assert.match(interaction, /\{ consume: true \}/, '视觉拖拽要消费 capture');
+  const drag = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'tools', 'visual-drag.js'), 'utf8');
+  assert.match(drag, /\{ consume: true \}/, '视觉拖拽要消费 capture');
 });
 
 test('派发前做命中校验', () => {
@@ -166,8 +174,8 @@ test('派发前做命中校验', () => {
   assert.match(lib, /INERT|inert/, 'hitAt 要检查 inert');
   assert.match(lib, /hitAt,\s+visualScan,\s+resetRefs,/, 'hitAt / visualScan 要挂到能力库导出上');
   assert.match(lib, /case 'hit-at':/, 'handle 分发要认识 hit-at');
-  const interaction = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'tools', 'interaction.js'), 'utf8');
-  assert.match(interaction, /verifyVisualHit\(resolved\.capture\.tabId/, '拖拽也要命中校验');
+  const drag = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'tools', 'visual-drag.js'), 'utf8');
+  assert.match(drag, /verifyVisualHit\(resolved\.capture\.tabId/, '拖拽也要命中校验');
   const inject = fs.readFileSync(path.join(ROOT, 'extension', 'src', 'inject.js'), 'utf8');
   const libVersion = Number((lib.match(/const LIB_VERSION = (\d+);/) || [])[1]);
   const expectVersion = Number((inject.match(/const PAGE_LIB_VERSION = (\d+);/) || [])[1]);

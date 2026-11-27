@@ -1,0 +1,13 @@
+{
+  "name": "@bridge-deck/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "BridgeDeck 协议 TypeScript 单源包：165 canonical 方法 / feature floor / 五维状态 / 兼容闸门（生成物来自 lib/method-catalog.mjs）",
+  "scripts": {
+    "gen": "node scripts/gen.mjs",
+    "check:gen": "node scripts/gen.mjs --check",
+    "typecheck": "node ../../apps/extension/node_modules/typescript/bin/tsc --noEmit -p .",
+    "test": "node --test test/*.test.ts"
+  }
+}

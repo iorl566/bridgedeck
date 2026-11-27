@@ -1,18 +1,19 @@
 // src/tabs.js —— tab / window / agent 窗口相关操作
 import { bridgeError, mapChromeError } from './errors.js';
-import { readSettings } from './settings.js';
+import { setTabPolicy, getTabPolicy, clearTabPolicy } from './tab-policy.js';
+import { clearTabAlias, listTabAliases, resolveTabAlias, setTabAlias } from './tab-alias.js';
+import { planIdleClose } from './lib/tab-idle.js';
 import { withTimeout } from './timeout.js';
 import { log } from './log.js';
-import { execPage } from './inject.js';
 import { armTab } from './debugger.js';
-import { showTakeover, hideTakeover } from './takeover.js';
+import { showTakeover } from './takeover.js';
 import { restrictedUrlReason } from './lib/page-policy.js';
-import { closeOverlay, openOverlay } from './overlay-state.js';
 import { expectedTabMoves } from './session-manager/tab-moves.js';
-import { clearActionNotification, notifyActionRequest } from './action-notifications.js';
-import { borrowBanner, borrowToast, helpOverlayFunc } from './overlay-ui.js';
-import { overlayTexts } from './overlay-texts.js';
-import { OVERLAY_THEME } from './overlay-theme.js';
+import { isControlledTab, markControlledTab, readControlledTabs } from './controlled-tabs.js';
+import { consumeSelfCreated, isSelfCreatedWindow, markSelfCreated, markSelfCreatedWindow } from './tab-attribution.js';
+import { focusRequested } from './lib/focus-policy.js';
+export { consumeSelfCreated, isSelfCreatedWindow, markSelfCreated, markSelfCreatedWindow };
+export { isControlledTab, markControlledTab, readControlledTabs };
 
 const AGENT_WINDOW_KEY = 'bb.agentWindowId';
 const DEFAULT_SESSION_AREA = chrome.storage.session;
@@ -209,9 +210,9 @@ export function waitForNavigation(tabId, timeoutMs = 30000) {
   });
 }
 
-/** 窗口.ensureAgent：复用或新建 agent 窗口，返回其 tab。 */
+/** 窗口.ensureAgent：复用或新建 agent 窗口，返回其 tab。默认不抢焦点（--focus 才置前）。 */
 export async function ensureAgent(params = {}) {
-  const noFocus = params.noFocus === true;
+  const noFocus = !focusRequested(params);
 
   if (params.incognito === true) {
     let allowed = true;
@@ -251,13 +252,6 @@ export async function ensureAgent(params = {}) {
       incognito: true,
     };
   }
-  let previousFocused = null;
-  try {
-    previousFocused = await chrome.windows.getLastFocused();
-  } catch {
-    previousFocused = null;
-  }
-
   let windowId = await readAgentWindowId();
   let win = null;
   if (windowId) {
@@ -288,13 +282,6 @@ export async function ensureAgent(params = {}) {
     tabs = await chrome.tabs.query({ windowId });
     if (!createdTab) markSelfCreated(tabs[0] && tabs[0].id);
     log(`新建 agent 窗口 windowId=${windowId} tabId=${tabs[0] && tabs[0].id}`);
-    if (noFocus && previousFocused && previousFocused.id !== windowId) {
-      try {
-        await withTimeout(chrome.windows.update(previousFocused.id, { focused: true }), 3000, 'windows.update');
-      } catch {
-        // 原窗口可能已关闭，忽略
-      }
-    }
   }
 
   // 一个 session 一个自己的标签页：session.start 传 newTab，避免两个会话共用同一 tab
@@ -349,13 +336,9 @@ export async function groupAgentWindowTabs(windowId) {
   }
 }
 
-/** 新建一个专属 Agent 窗口（每个 session 一个），返回它的 tab。 */
+/** 新建一个专属 Agent 窗口（每个 session 一个），返回它的 tab。默认不抢焦点。 */
 export async function newAgentWindow(params = {}) {
-  const noFocus = params.noFocus === true;
-  let previousFocused = null;
-  if (noFocus) {
-    try { previousFocused = await chrome.windows.getLastFocused(); } catch { previousFocused = null; }
-  }
+  const noFocus = !focusRequested(params);
   const incognito = params.incognito === true;
   if (incognito) {
     let allowed = true;
@@ -395,10 +378,6 @@ export async function newAgentWindow(params = {}) {
   armTab(tab.id).catch((error) => log('会话 CDP 预挂载失败：' + ((error && error.message) || error)));
   // 浮层是可见性提示，不阻塞会话返回；注入失败不影响后续动作。
   showTakeover(tab.id, { name: 'BridgeDeck' }).catch(() => {});
-  if (noFocus && previousFocused && previousFocused.id !== windowId) {
-    // 后台建窗不需要等焦点回到原窗口：失败/延迟不影响会话。
-    withTimeout(chrome.windows.update(previousFocused.id, { focused: true }), 3000, 'windows.update').catch(() => {});
-  }
   groupAgentWindowTabs(windowId).catch(() => {});
   return { tabId: tab.id, windowId, incognito: created.incognito === true };
 }
@@ -440,6 +419,17 @@ export async function tabList(params = {}) {
     if (scope === 'all') return true;
     return scope === 'agent' ? isAgent : !isAgent;
   });
+  const groupTitles = new Map();
+  if (chrome.tabGroups && typeof chrome.tabGroups.get === 'function') {
+    const ids = new Set(filtered.map((tab) => tab.groupId).filter((id) => Number.isInteger(id) && id >= 0));
+    for (const id of ids) {
+      try { const group = await chrome.tabGroups.get(id); groupTitles.set(id, group && group.title ? group.title : ''); } catch { /* 组已关闭 */ }
+    }
+  }
+  const keepOpenMap = new Map();
+  for (const tab of filtered) {
+    try { keepOpenMap.set(tab.id, (await getTabPolicy(tab.id)).keepOpen === true); } catch { keepOpenMap.set(tab.id, false); }
+  }
   return {
     tabs: filtered.map((tab) => ({
       tabId: tab.id,
@@ -449,8 +439,53 @@ export async function tabList(params = {}) {
       active: tab.active === true,
       owned: agentWindows.has(tab.windowId) ? 'agent' : 'user',
       controlled: controlled.includes(tab.id),
+      keepOpen: keepOpenMap.get(tab.id) === true,
+      groupId: Number.isInteger(tab.groupId) && tab.groupId >= 0 ? tab.groupId : null,
+      group: tab.groupId != null && tab.groupId >= 0 ? (groupTitles.get(tab.groupId) || '') : '',
     })),
   };
+}
+
+/** tab.new 可选策略：只读 / 允许来源（逗号分隔或数组）/ keepOpen。 */
+async function applyTabPolicy(tabId, params = {}) {
+  const raw = params.allowedOrigins;
+  const origins = Array.isArray(raw)
+    ? raw
+    : (typeof raw === 'string' && raw.trim() ? raw.split(',').map((item) => item.trim()).filter(Boolean) : []);
+  if (params.readOnly !== true && !origins.length && params.keepOpen !== true) return;
+  await setTabPolicy(tabId, { readOnly: params.readOnly === true, allowedOrigins: origins, keepOpen: params.keepOpen === true });
+}
+
+/** 把新建 tab 放进命名标签组；同名组复用，否则创建。 */
+async function applyTabGroup(tab, params = {}) {
+  const title = typeof params.group === 'string' ? params.group.trim().slice(0, 40) : '';
+  if (!title || !chrome.tabGroups || !chrome.tabs) return null;
+  try {
+    let groupId = null;
+    if (chrome.tabGroups.query) {
+      const existing = await chrome.tabGroups.query({ windowId: tab.windowId, title });
+      if (Array.isArray(existing) && existing.length) groupId = existing[0].id;
+    }
+    const colors = ['blue', 'green', 'yellow', 'purple', 'cyan', 'orange', 'red', 'pink'];
+    let hash = 0;
+    for (let index = 0; index < title.length; index += 1) hash = (hash * 31 + title.charCodeAt(index)) >>> 0;
+    const color = colors[hash % colors.length];
+    if (groupId == null) {
+      // tab 可能已被默认的 BridgeDeck 组分走；先移出再建命名组。
+      if (Number.isInteger(tab.groupId) && tab.groupId >= 0 && chrome.tabs.ungroup) {
+        await chrome.tabs.ungroup(tab.id).catch(() => {});
+      }
+      groupId = await chrome.tabs.group({ tabIds: [tab.id] });
+    } else {
+      await chrome.tabs.group({ tabIds: [tab.id], groupId });
+    }
+    if (groupId != null && chrome.tabGroups.update) {
+      await chrome.tabGroups.update(groupId, { title, color, collapsed: false }).catch(() => {});
+    }
+    return groupId;
+  } catch {
+    return null;
+  }
 }
 
 /** tab.new：优先在 agent 窗口里开新 tab。 */
@@ -458,7 +493,7 @@ export async function tabNew(params = {}) {
   const url = typeof params.url === 'string' && params.url ? params.url : 'about:blank';
   const blocked = restrictedUrlReason(url);
   if (blocked) throw bridgeError('E_FORBIDDEN', '新建标签页目标受限（' + blocked + '）：BridgeDeck 不打开浏览器内部或扩展页面');
-  const noFocus = params.noFocus === true;
+  const noFocus = !focusRequested(params);
   if (params.newWindow === true) {
     let win;
     try {
@@ -470,7 +505,10 @@ export async function tabNew(params = {}) {
     if (!tab) throw bridgeError('E_BROWSER', '新建窗口后没有标签页');
     markSelfCreatedWindow(win.id);
     markSelfCreated(tab.id);
-    return { tabId: tab.id, windowId: win.id, newWindow: true };
+    await applyTabPolicy(tab.id, params);
+    const groupId = await applyTabGroup(tab, params);
+    if (params.alias) await setTabAlias(tab.id, params.alias).catch(() => {});
+    return { tabId: tab.id, windowId: win.id, newWindow: true, ...(groupId != null ? { groupId } : {}) };
   }
   const agentWindows = await readAgentWindows();
   const targetWindowId = Number.isInteger(params.windowId) && agentWindows.includes(params.windowId)
@@ -493,8 +531,73 @@ export async function tabNew(params = {}) {
     throw mapChromeError(error, '新建 tab 失败');
   }
   markSelfCreated(tab.id);
-  if (Number.isInteger(tab.windowId)) groupAgentWindowTabs(tab.windowId).catch(() => {});
-  return { tabId: tab.id, windowId: tab.windowId };
+  if (Number.isInteger(tab.windowId)) await groupAgentWindowTabs(tab.windowId).catch(() => {});
+  await applyTabPolicy(tab.id, params);
+  const groupId = await applyTabGroup(tab, params);
+  if (params.alias) await setTabAlias(tab.id, params.alias).catch(() => {});
+  return { tabId: tab.id, windowId: tab.windowId, ...(groupId != null ? { groupId } : {}) };
+}
+
+/** tab.policy：设置/读取/清除单个 tab 的只读与允许来源策略。 */
+export async function tabPolicy(params = {}) {
+  const tabId = Number(params.tabId);
+  if (!Number.isInteger(tabId) || tabId <= 0) throw bridgeError('E_BAD_ARG', 'tab.policy 需要 tabId');
+  if (params.clear === true) {
+    clearTabPolicy(tabId);
+    return { tabId, policy: { readOnly: false, allowedOrigins: [], keepOpen: false } };
+  }
+  const raw = params.allowedOrigins;
+  const origins = Array.isArray(raw)
+    ? raw
+    : (typeof raw === 'string' && raw.trim() ? raw.split(',').map((item) => item.trim()).filter(Boolean) : []);
+  const result = await setTabPolicy(tabId, {
+    readOnly: params.readOnly === true,
+    allowedOrigins: origins,
+    keepOpen: params.keepOpen === true,
+  });
+  return { tabId, policy: await getTabPolicy(tabId) };
+}
+
+/** tab.cleanup：按空闲时间清理 Agent tab；dry-run 只返回计划。 */
+export async function tabCleanup(params = {}) {
+  const agentWindows = new Set(await readAgentWindows());
+  const tabs = await chrome.tabs.query({});
+  const keepOpen = new Set();
+  for (const tab of tabs) {
+    try { if ((await getTabPolicy(tab.id)).keepOpen === true) keepOpen.add(tab.id); } catch { /* 忽略 */ }
+  }
+  const plan = planIdleClose(tabs.map((tab) => ({
+    tabId: tab.id,
+    windowId: tab.windowId,
+    owned: agentWindows.has(tab.windowId) ? 'agent' : 'user',
+    active: tab.active === true,
+    lastAccessed: tab.lastAccessed,
+    keepOpen: keepOpen.has(tab.id),
+  })), { idleMs: params.idleMs, now: Date.now() });
+  if (params.dryRun === true) return { ok: true, dryRun: true, ...plan };
+  const closed = [];
+  for (const tabId of plan.close) {
+    try { await chrome.tabs.remove(tabId); closed.push(tabId); } catch { /* 已关闭 */ }
+  }
+  return { ok: true, closed, kept: plan.keep };
+}
+
+/** tab.alias / tab.resolve / tab.aliases：命名 tab。 */
+export async function tabAlias(params = {}) {
+  const action = String(params.action || 'set');
+  if (action === 'list') return { ok: true, aliases: await listTabAliases() };
+  if (action === 'resolve') {
+    const tabId = await resolveTabAlias(params.alias);
+    if (!tabId) throw bridgeError('E_NOT_FOUND', '找不到 tab alias：' + String(params.alias || ''));
+    return { ok: true, alias: params.alias, tabId };
+  }
+  if (action === 'clear') {
+    const removed = await clearTabAlias(params.alias);
+    return { ok: true, alias: params.alias, cleared: removed };
+  }
+  const result = await setTabAlias(Number(params.tabId), params.alias);
+  if (!result.ok) throw bridgeError(result.code || 'E_BAD_ARG', result.message || '设置 alias 失败');
+  return result;
 }
 
 /** tab.close */
@@ -592,490 +695,4 @@ export async function windowResize(params = {}) {
     throw mapChromeError(error, '调整窗口大小失败');
   }
   return { ok: true };
-}
-// ---------------------------------------------------------------------------
-// v0.2：受控标签页登记 / 借用 / 归还 / 人工协助
-// ---------------------------------------------------------------------------
-
-const CONTROLLED_KEY = 'bb.controlledTabs';
-const BORROW_TIMEOUT_MS = 60000;
-
-/** 扩展自己创建的标签页（tab.new / agent 窗口），页面守卫不能把它当外部标签页移走。 */
-const selfCreated = new Map();
-
-export function markSelfCreated(tabId) {
-  if (!Number.isInteger(tabId)) return;
-  const now = Date.now();
-  selfCreated.set(tabId, now);
-  for (const entry of selfCreated) {
-    if (now - entry[1] > 15000) selfCreated.delete(entry[0]);
-  }
-}
-
-export function consumeSelfCreated(tabId) {
-  const ts = selfCreated.get(tabId);
-  if (ts == null) return false;
-  selfCreated.delete(tabId);
-  return Date.now() - ts < 15000;
-}
-
-/**
- * 扩展自己新建的窗口（Agent Window）：页面守卫必须放行。
- *
- * 只靠 tabId 标记会输给 onCreated 的时序：窗口刚建好、tab 还没标上时，
- * 页面守卫可能已经按「外部标签页」把它移回用户窗口，结果 Agent 反而跑在用户页面里。
- * 窗口维度在建窗返回时同步登记，覆盖这个竞态。
- */
-const selfCreatedWindows = new Map();
-
-export function markSelfCreatedWindow(windowId) {
-  if (!Number.isInteger(windowId)) return;
-  const now = Date.now();
-  selfCreatedWindows.set(windowId, now);
-  for (const entry of selfCreatedWindows) {
-    if (now - entry[1] > 15000) selfCreatedWindows.delete(entry[0]);
-  }
-}
-
-export function isSelfCreatedWindow(windowId) {
-  if (!Number.isInteger(windowId)) return false;
-  const ts = selfCreatedWindows.get(windowId);
-  if (ts == null) return false;
-  if (Date.now() - ts > 15000) { selfCreatedWindows.delete(windowId); return false; }
-  return true;
-}
-
-/** 借用确认与人工协助的等待者：requestId -> { resolve, timer } */
-const humanWaiters = new Map();
-
-/** 内容脚本回传用户决定（borrow 允许/拒绝、help 完成/跳过）。 */
-export function resolveHumanDecision(message) {
-  const requestId = message && message.requestId;
-  if (!requestId) return false;
-  const waiter = humanWaiters.get(requestId);
-  if (!waiter) return false;
-  humanWaiters.delete(requestId);
-  clearTimeout(waiter.timer);
-  waiter.resolve(message);
-  return true;
-}
-
-export async function readControlledTabs() {
-  try {
-    const stored = await withTimeout(chrome.storage.session.get(CONTROLLED_KEY), 3000, 'session tabs read');
-    const list = stored ? stored[CONTROLLED_KEY] : null;
-    return Array.isArray(list) ? list.filter((id) => Number.isInteger(id)) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeControlledTabs(list) {
-  const unique = [...new Set(list.filter((id) => Number.isInteger(id)))];
-  try {
-    await withTimeout(chrome.storage.session.set({ [CONTROLLED_KEY]: unique }), 3000, 'session tabs write');
-  } catch (error) {
-    log('保存受控标签页失败', error && error.message);
-  }
-  return unique;
-}
-
-export async function isControlledTab(tabId) {
-  const list = await readControlledTabs();
-  return list.includes(tabId);
-}
-
-/** 将 Agent 自己打开的新标签页登记为受控，避免自动跟随时再次弹借用确认。 */
-export async function markControlledTab(tabId) {
-  if (!Number.isInteger(tabId)) return;
-  const list = await readControlledTabs();
-  if (!list.includes(tabId)) await writeControlledTabs([...list, tabId]);
-}
-
-async function clearBorrowToast(tabId, requestId) {
-  if (!tabId) return;
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      func: (rid) => {
-        const host = document.getElementById('__bb_borrow_toast_host');
-        if (!host) return;
-        for (const el of Array.from(host.querySelectorAll('[data-request]'))) {
-          if (el.dataset.request === rid) el.remove();
-        }
-        if (!host.children.length) host.remove();
-      },
-      args: [requestId],
-    });
-  } catch {
-    // 标签页可能已关闭。
-  }
-}
-
-async function readUiLang() {
-  try {
-    const stored = await chrome.storage.local.get('bb.uiLang');
-    const value = stored && stored['bb.uiLang']; return value || 'zh';
-  } catch {
-    return 'zh';
-  }
-}
-
-
-async function injectBanner(tabId, func, args) {
-  try {
-    await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, world: 'ISOLATED', func, args });
-    return true;
-  } catch (error) {
-    throw mapChromeError(error, '注入确认条失败（受限页面无法借用）');
-  }
-}
-
-function waitHumanDecision(requestId, timeoutMs, onTimeout) {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      if (humanWaiters.delete(requestId)) resolve(onTimeout());
-    }, timeoutMs);
-    humanWaiters.set(requestId, { resolve, timer });
-  });
-}
-
-/** tab.borrow：标记接管用户标签页；borrowConfirm 打开时必须由用户点「允许」。 */
-const borrowInFlight = new Set();
-
-async function tabBorrowInner(params, stage) {
-  const tabId = Number(params && params.tabId);
-  if (!Number.isInteger(tabId)) return tabBorrowInnerUnlocked(params, stage);
-  if (borrowInFlight.has(tabId)) {
-    throw bridgeError('E_BORROW_CONFLICT', '该标签页已有借用确认进行中，请等待当前请求结束');
-  }
-  borrowInFlight.add(tabId);
-  try {
-    return await tabBorrowInnerUnlocked(params, stage);
-  } finally {
-    borrowInFlight.delete(tabId);
-  }
-}
-
-
-// ── 借用确认的全局请求列表 ──────────────────────────────────────
-// 每个请求记住自己的目标窗口和当前展示面（模态/Toast）。标签切换时，
-// 由 rehomeBorrowUi 按当前活动标签重新分配，避免 Toast 留在已经切走的标签里。
-const borrowUiRequests = new Map();
-let borrowRehomeChain = Promise.resolve();
-
-async function injectBorrowModal(req, { focus = false } = {}) {
-  if (req.surface === 'modal' && req.surfaceTabId === req.targetTabId) return;
-  await clearBorrowUiSurface(req);
-  if (focus) {
-    try { await withTimeout(chrome.windows.update(req.windowId, { focused: true }), 3000, 'windows.update'); } catch { /* 忽略 */ }
-  }
-  openOverlay(req.targetTabId, 'borrow', { priority: 100, exclusive: true });
-  await injectBanner(req.targetTabId, borrowBanner, [req.requestId, req.title, req.timeoutMs, req.lang, OVERLAY_THEME, overlayTexts(req.lang)]);
-  req.surface = 'modal';
-  req.surfaceTabId = req.targetTabId;
-}
-
-async function injectBorrowToast(req, toastTabId) {
-  if (req.surface === 'toast' && req.surfaceTabId === toastTabId) return;
-  await clearBorrowUiSurface(req);
-  await injectBanner(toastTabId, borrowToast, [req.requestId, req.title, req.timeoutMs, req.lang, OVERLAY_THEME]);
-  openOverlay(toastTabId, 'borrow-toast', { priority: 100 });
-  req.surface = 'toast';
-  req.surfaceTabId = toastTabId;
-}
-
-async function clearBorrowUiSurface(req) {
-  if (!req || !req.surface) return;
-  const surface = req.surface;
-  const surfaceTabId = req.surfaceTabId;
-  req.surface = null;
-  req.surfaceTabId = null;
-  if (surface === 'modal') {
-    await clearBorrowBanner(req.targetTabId).catch(() => {});
-    closeOverlay(req.targetTabId, 'borrow');
-  } else if (surface === 'toast') {
-    await clearBorrowToast(surfaceTabId, req.requestId).catch(() => {});
-    closeOverlay(surfaceTabId, 'borrow-toast');
-  }
-}
-
-async function releaseBorrowUi(requestId) {
-  const req = borrowUiRequests.get(requestId);
-  if (!req) return;
-  await clearBorrowUiSurface(req);
-  borrowUiRequests.delete(requestId);
-}
-
-async function rehomeBorrowUiNow(windowId) {
-  const reqs = [...borrowUiRequests.values()].filter((req) => req.windowId === Number(windowId));
-  if (!reqs.length) return;
-  let activeTab = null;
-  try {
-    const activeTabs = await chrome.tabs.query({ active: true, windowId: Number(windowId) });
-    activeTab = (activeTabs || [])[0] || null;
-  } catch { /* 窗口已关闭 */ }
-  if (!activeTab || !Number.isInteger(Number(activeTab.id))) return;
-  const activeId = Number(activeTab.id);
-  for (const req of reqs) {
-    try {
-      if (req.targetTabId === activeId) {
-        await injectBorrowModal(req, { focus: false });
-      } else if (req.surface === 'modal' || (req.surface === 'toast' && req.surfaceTabId !== activeId)) {
-        await injectBorrowToast(req, activeId);
-      }
-    } catch (error) {
-      log('借用确认重新分配失败 tab=' + req.targetTabId + '：' + ((error && error.message) || error));
-    }
-  }
-}
-
-export function rehomeBorrowUi(windowId) {
-  borrowRehomeChain = borrowRehomeChain
-    .then(() => rehomeBorrowUiNow(windowId))
-    .catch((error) => log('借用确认重新分配异常：' + ((error && error.message) || error)));
-  return borrowRehomeChain;
-}
-
-async function tabBorrowInnerUnlocked(params, stage) {
-  const tabId = params.tabId;
-  if (!Number.isInteger(tabId)) throw bridgeError('E_BAD_ARG', 'tab.borrow 需要一个 tabId');
-  stage.value = 'getTab';
-  const tab = await getTab(tabId);
-  stage.value = 'settings';
-  const settings = await readSettings();
-  // 安全策略：借用前确认只听浏览器里保存的设置；命令行/助手传入的 borrowConfirm 不能降级。
-  const confirm = settings.borrowConfirm !== false;
-  const controlled = await readControlledTabs();
-  if (!controlled.includes(tabId)) {
-    const isExtPage = /^(chrome|edge)-extension:\/\//i.test(tab.url || '');
-    if (await isAgentWindow(tab.windowId)) {
-      throw bridgeError('E_FORBIDDEN', '不能借用 Agent 窗口内的标签页，请先把标签页移到普通浏览器窗口');
-    }
-    if (confirm && !isExtPage) {
-      stage.value = 'banner';
-      const requestId = crypto.randomUUID();
-      const req = {
-        requestId,
-        targetTabId: tabId,
-        windowId: tab.windowId,
-        title: tab.title || '',
-        lang: await readUiLang(),
-        timeoutMs: BORROW_TIMEOUT_MS,
-        surface: null,
-        surfaceTabId: null,
-      };
-      borrowUiRequests.set(requestId, req);
-      const pending = waitHumanDecision(requestId, BORROW_TIMEOUT_MS, () => ({ decision: 'timeout' }));
-      try {
-        let activeTab = null;
-        try {
-          const activeTabs = await chrome.tabs.query({ active: true, windowId: tab.windowId });
-          activeTab = (activeTabs || [])[0] || null;
-        } catch { /* 查询失败按目标标签处理 */ }
-        const targetIsActive = activeTab && Number(activeTab.id) === tabId;
-        if (targetIsActive) {
-          await injectBorrowModal(req, { focus: true });
-        } else if (activeTab && Number.isInteger(Number(activeTab.id))) {
-          try {
-            await injectBorrowToast(req, Number(activeTab.id));
-          } catch {
-            // 活动标签不可注入（chrome:// 等）时退回目标标签模态，不能没有可见确认。
-            try { await withTimeout(chrome.tabs.update(tabId, { active: true }), 3000, 'tabs.update'); } catch { /* 忽略 */ }
-            await injectBorrowModal(req, { focus: true });
-          }
-        } else {
-          await injectBorrowModal(req, { focus: true });
-        }
-        // Toast 已经显示在当前标签页右下角；再发系统通知会在同一位置盖住它
-        // （本机 Edge 实测）。只有模态确认才额外发系统通知，保证两处不互相遮挡。
-        if (req.surface === 'modal') {
-          try {
-            await notifyActionRequest('borrow', { requestId, tabId, title: tab.title || '', lang: req.lang });
-          } catch { /* 通知失败不影响页面确认 */ }
-        }
-        const answer = await pending;
-        clearActionNotification('borrow', requestId);
-        if (answer.decision === 'timeout') {
-          throw bridgeError('E_BORROW_TIMEOUT', '借用确认 ' + BORROW_TIMEOUT_MS + 'ms 内没有响应');
-        }
-        if (answer.allow !== true) throw bridgeError('E_BORROW_DENIED', '用户拒绝了借用请求');
-      } finally {
-        clearActionNotification('borrow', requestId);
-        await releaseBorrowUi(requestId);
-      }
-    }
-    stage.value = 'takeover';
-    controlled.push(tabId);
-    // 浮层只是提示，不能阻塞借用本身；脚本注入异常/挂起时按无浮层继续。
-    await withTimeout(showTakeover(tabId, { name: settings.instanceLabel || 'BridgeDeck', subtitle: 'Agent 已接管该标签页；你随时可以收回控制。' }), 5000, 'borrow takeover').catch((error) => log('借用浮层注入失败：' + ((error && error.message) || error)));
-    await writeControlledTabs(controlled);
-  }
-  stage.value = 'done';
-  log('借用标签页 tab=' + tabId + ' window=' + tab.windowId);
-  return {
-    tabId: tabId,
-    windowId: tab.windowId,
-    originalWindowId: tab.windowId,
-    originalIndex: tab.index,
-    url: tab.url || '',
-    title: tab.title || '',
-  };
-}
-
-async function clearBorrowBanner(tabId) {
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId, frameIds: [0] },
-      world: 'ISOLATED',
-      func: () => {
-        for (const id of ['__bb_borrow_modal', '__bb_human_banner']) {
-          const node = document.getElementById(id);
-          if (node) node.remove();
-        }
-      },
-    });
-  } catch { /* 页面可能已关闭 */ }
-}
-
-export async function tabBorrow(params = {}) {
-  const stage = { value: 'start' };
-  try {
-    return await withTimeout(tabBorrowInner(params, stage), 75000, 'tabBorrow');
-  } catch (error) {
-    if (error && !String(error.message || '').includes('[stage=')) error.message = String(error.message || error) + ' [stage=' + stage.value + ']';
-    throw error;
-  }
-}
-
-/** tab.return：只清标记，不移动也不关闭标签页。 */
-export async function tabReturn(params = {}) {
-  const tabId = params.tabId;
-  if (!Number.isInteger(tabId)) throw bridgeError('E_BAD_ARG', 'tab.return 需要 tabId');
-  const controlled = await readControlledTabs();
-  const next = controlled.filter((id) => id !== tabId);
-  await writeControlledTabs(next);
-  await hideTakeover(tabId);
-  let windowId = null;
-  try {
-    const tab = await chrome.tabs.get(tabId);
-    windowId = tab.windowId;
-  } catch {
-    windowId = null;
-  }
-  log('归还标签页 tab=' + tabId + (windowId != null ? ' window=' + windowId : '（已关闭）'));
-  return { ok: true, windowId: windowId };
-}
-
-/** request-help：在页面上放一条协助条，等用户点按钮。 */
-export async function requestHelp(params = {}) {
-  const tabId = params.tabId;
-  if (!Number.isInteger(tabId)) throw bridgeError('E_BAD_ARG', 'request-help 需要 tabId');
-  const reason = String(params.reason || '').trim();
-  if (!reason) throw bridgeError('E_BAD_ARG', 'request-help 需要 reason');
-  const settings = await readSettings();
-  if (!settings.allowHelp) throw bridgeError('E_HELP_DISABLED', '设置里关闭了人工协助');
-  const tab = await getTab(tabId);
-  const rawTimeout = Number(params.timeoutMs);
-  const timeoutMs = Math.min(Math.max(Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : 180000, 5000), 600000);
-  const requestId = crypto.randomUUID();
-  const pending = waitHumanDecision(requestId, timeoutMs, () => ({ action: 'timeout' }));
-  // 完成条件：人工完成页面操作后自动交还，不必再点卡片按钮。
-  const criteria = (Array.isArray(params.criteria) ? params.criteria : [])
-    .filter((item) => item && typeof item === 'object')
-    .slice(0, 10)
-    .map((item) => {
-      const kind = String(item.kind || item.type || '');
-      if (kind === 'selector_exists' || kind === 'selector_visible') return { kind, selector: String(item.selector || '') };
-      if (kind === 'text_exists') return { kind, text: String(item.text || '') };
-      if (kind === 'url_contains') return { kind, text: String(item.text || '') };
-      return { kind, unsupported: true };
-    })
-    .filter((item) => !item.unsupported && (item.selector || item.text));
-  let stopCriteriaPolling = false;
-  let criteriaPoller = null;
-  let criteriaLast = null;
-  if (criteria.length) {
-    criteriaPoller = (async () => {
-      while (!stopCriteriaPolling) {
-        await sleep(400);
-        if (stopCriteriaPolling) return null;
-        let currentUrl = '';
-        try {
-          const current = await chrome.tabs.get(tabId);
-          currentUrl = current && current.url ? String(current.url) : '';
-        } catch {
-          // 标签页可能已关闭：交给 pending 的超时/关闭逻辑
-        }
-        const urlOk = criteria
-          .filter((item) => item.kind === 'url_contains')
-          .every((item) => currentUrl.includes(String(item.text || '')));
-        if (!urlOk) continue;
-        const pageCriteria = criteria.filter((item) => item.kind !== 'url_contains');
-        if (!pageCriteria.length) return { action: 'done', note: 'completion criteria satisfied' };
-        try {
-          const checked = await execPage(tabId, 'help-criteria-check', { criteria: pageCriteria });
-          criteriaLast = checked;
-          if (checked && checked.ok === true) return { action: 'done', note: 'completion criteria satisfied' };
-        } catch (error) {
-          criteriaLast = { error: String((error && error.message) || error), code: error && error.code };
-          // 页面暂时不可执行：下一轮再试
-        }
-      }
-      return null;
-    })();
-  }
-  let highlightTarget = params.target ? String(params.target) : '';
-  let highlightRect = null;
-  if (highlightTarget.startsWith('@')) {
-    const frameMatch = /^@f(\d+)e(\d+)$/.exec(highlightTarget);
-    const frameId = frameMatch ? Number(frameMatch[1]) : 0;
-    const localRef = frameMatch ? '@e' + frameMatch[2] : highlightTarget;
-    try { highlightRect = await execPage(tabId, 'rect', { ref: localRef }, frameId); } catch { highlightRect = null; }
-    highlightTarget = '';
-  }
-  await hideTakeover(tabId, { preserveState: true }).catch(() => {});
-  openOverlay(tabId, 'help', { priority: 50 });
-  try {
-    const overlayLang = await readUiLang();
-    await injectBanner(tabId, helpOverlayFunc, [requestId, reason, highlightTarget, highlightRect, String(params.title || ''), overlayLang, OVERLAY_THEME, overlayTexts(overlayLang)]);
-    try {
-      await notifyActionRequest('help', { requestId, tabId, title: params.title || '', lang: overlayLang });
-    } catch { /* 通知失败不影响页面协助 */ }
-    try {
-      await withTimeout(chrome.windows.update(tab.windowId, { focused: true }), 3000, 'windows.update');
-      await withTimeout(chrome.tabs.update(tabId, { active: true }), 3000, 'tabs.update');
-    } catch {
-      // 忽略置前失败
-    }
-    log('请求人工协助 tab=' + tabId + ' timeout=' + timeoutMs + (criteria.length ? ' criteria=' + criteria.length : ''));
-    let answer;
-    try {
-      answer = criteriaPoller ? await Promise.race([pending, criteriaPoller]) : await pending;
-    } finally {
-      stopCriteriaPolling = true;
-    }
-    clearActionNotification('help', requestId);
-    try { await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: () => { const n = document.getElementById('__bb_help_host'); if (n) n.remove(); const h = document.getElementById('__bb_help_highlight'); if (h) h.remove(); } }); } catch { /* 页面可能已关闭 */ }
-    await showTakeover(tabId, {}).catch(() => {});
-    return { action: answer.action === 'done' ? 'done' : answer.action === 'skip' ? 'skip' : 'timeout', note: typeof answer.note === 'string' ? answer.note : '' };
-  } finally {
-    closeOverlay(tabId, 'help');
-  }
-}
-
-/** control-hint：旧的深色胶囊提示已由 takeover.js 的浮层取代，这里只清理历史残留。 */
-export async function controlHint(params = {}) {
-  const tabId = Number(params.tabId);
-  if (!Number.isInteger(tabId)) throw bridgeError('E_BAD_ARG', 'control-hint 需要 tabId');
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId, frameIds: [0] },
-      world: 'ISOLATED',
-      func: () => { document.getElementById('__bb_control_hint')?.remove(); },
-    });
-  } catch {
-    // 页面不可注入时忽略
-  }
-  return { ok: true, enabled: false };
 }

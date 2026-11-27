@@ -20,7 +20,10 @@ test('protocol comparison is numeric, not lexical', () => {
 });
 
 test('token chunk handles empty, end and oversized offsets', () => {
-  assert.deepEqual(takeTokenChunk('', 0, 100), { text: '', next: null });
+  const empty = takeTokenChunk('', 0, 100);
+  assert.equal(empty.text, '');
+  assert.equal(empty.next, null);
+  assert.equal(empty.omittedChars, 0);
   const text = 'abc\ndef';
   const end = takeTokenChunk(text, text.length, 100);
   assert.equal(end.text, '');

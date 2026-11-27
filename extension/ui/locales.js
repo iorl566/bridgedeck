@@ -1,5 +1,83 @@
-// ui/locales.js —— 由 translation/*.json 合并的 10 语言词条。
+// src/ui/locales.js —— 界面语言包（由 translation/*.json 汇总）。
 export const LOCALE_TEXT = {
+  "无障碍浮层（读屏可访问）": {
+    "en": "Accessible overlays (screen-reader friendly)",
+    "ar": "طبقات وصول (متوافقة مع قارئ الشاشة)",
+    "de": "Barrierefreie Overlays (Screenreader-freundlich)",
+    "es": "Superposiciones accesibles (compatibles con lectores de pantalla)",
+    "fr": "Superpositions accessibles (compatibles lecteurs d'écran)",
+    "he": "שכבות נגישות (תואמות קורא מסך)",
+    "it": "Overlay accessibili (compatibili con screen reader)",
+    "ja": "アクセシブルなオーバーレイ（スクリーンリーダー対応）",
+    "ko": "접근성 오버레이(스크린 리더 지원)",
+    "pt": "Sobreposições acessíveis (compatíveis com leitores de tela)",
+    "zh-TW": "無障礙浮層（讀屏可存取）",
+  },
+  "开启后浮层使用开放 shadow DOM，并标注 role/aria-live，方便读屏与自动化审查；默认关闭。": {
+    "en": "Uses open shadow DOM with role/aria-live labels for screen readers and audit tools. Off by default.",
+    "ar": "تستخدم shadow DOM مفتوحًا مع role/aria-live لقارئات الشاشة وأدوات التدقيق. معطّلة افتراضيًا.",
+    "de": "Verwendet offenes Shadow DOM mit role/aria-live für Screenreader und Prüfwerkzeuge. Standardmäßig aus.",
+    "es": "Usa shadow DOM abierto con role/aria-live para lectores de pantalla y herramientas de auditoría. Desactivado por defecto.",
+    "fr": "Utilise un shadow DOM ouvert avec role/aria-live pour les lecteurs d'écran et les outils d'audit. Désactivé par défaut.",
+    "he": "משתמש ב-shadow DOM פתוח עם role/aria-live לקוראי מסך ולכלי ביקורת. כבוי כברירת מחדל.",
+    "it": "Usa shadow DOM aperto con role/aria-live per screen reader e strumenti di audit. Disattivato per impostazione predefinita.",
+    "ja": "オープンな shadow DOM と role/aria-live を使用し、スクリーンリーダーや監査ツールから操作できます。既定はオフです。",
+    "ko": "열린 shadow DOM과 role/aria-live를 사용해 스크린 리더와 감사 도구가 접근할 수 있습니다. 기본값은 꺼짐입니다.",
+    "pt": "Usa shadow DOM aberto com role/aria-live para leitores de tela e ferramentas de auditoria. Desativado por padrão.",
+    "zh-TW": "開啟後浮層使用開放 shadow DOM，並標註 role/aria-live，方便讀屏與自動化審查；預設關閉。",
+  },
+  "生成一段给 Agent 的录制指令：Agent 启动录制后你正常操作，结束后 Agent 读取写出的 trace 目录包，就能自动完成同类任务。": {
+    "en": "Generate a recording instruction for your agent: after the agent starts recording, operate normally; when you finish, the agent reads the exported trace directory and can automate similar tasks.",
+    "ja": "Agent 向けの記録手順を生成します。Agent が記録を開始したら通常どおり操作し、終了後に Agent が書き出された trace ディレクトリを読み取り、同種のタスクを自動化できます。",
+    "ko": "에이전트용 기록 지침을 생성합니다. 에이전트가 기록을 시작하면 평소처럼 작업하고, 완료 후 에이전트가 내보낸 trace 디렉터리를 읽어 유사한 작업을 자동화합니다.",
+    "de": "Erzeugt eine Aufzeichnungsanweisung für den Agent: Nach dem Start der Aufzeichnung arbeiten Sie normal; danach liest der Agent das exportierte Trace-Verzeichnis und automatisiert ähnliche Aufgaben.",
+    "es": "Genera una instrucción de grabación para el Agent: tras iniciar la grabación, opera con normalidad; al terminar, el Agent lee el directorio trace exportado y automatiza tareas similares.",
+    "fr": "Génère une instruction d'enregistrement pour l'Agent : après le démarrage, agissez normalement ; à la fin, l'Agent lit le dossier trace exporté et automatise des tâches similaires.",
+    "it": "Genera un'istruzione di registrazione per l'Agent: dopo l'avvio registra normalmente; al termine l'Agent legge la cartella trace esportata e automatizza attività simili.",
+    "pt": "Gera uma instrução de gravação para o Agent: após iniciar a gravação, opere normalmente; ao terminar, o Agent lê o diretório trace exportado e automatiza tarefas semelhantes.",
+    "zh-TW": "產生一段給 Agent 的錄製指令：Agent 啟動錄製後你正常操作，結束後 Agent 讀取寫出的 trace 目錄包，就能自動完成同類任務。",
+    "ar": "أنشئ تعليمات تسجيل للوكيل: بعد بدء التسجيل تابع عملك بشكل طبيعي، وعند الانتهاء يقرأ الوكيل مجلد trace المُصدَّر وأتمت مهامًا مشابهة.",
+    "he": "צור הוראת הקלטה עבור הסוכן: לאחר שהסוכן מתחיל להקליט, המשך לעבוד כרגיל; בסיום הסוכן קורא את תיקיית ה-trace המיוצאת ומבצע אוטומציה של משימות דומות."
+  },
+  "录制给 Agent": {
+    "en": "Record for the agent",
+    "ja": "Agent 用に記録",
+    "ko": "에이전트용 기록",
+    "de": "Für den Agent aufzeichnen",
+    "es": "Grabar para el Agent",
+    "fr": "Enregistrer pour l'Agent",
+    "it": "Registra per l'Agent",
+    "pt": "Gravar para o Agent",
+    "zh-TW": "錄製給 Agent",
+    "ar": "التسجيل للوكيل",
+    "he": "הקלטה עבור הסוכן"
+  },
+  "直接录制": {
+    "en": "Record directly",
+    "ja": "直接記録",
+    "ko": "직접 기록",
+    "de": "Direkt aufzeichnen",
+    "es": "Grabar directamente",
+    "fr": "Enregistrer directement",
+    "it": "Registra direttamente",
+    "pt": "Gravar diretamente",
+    "zh-TW": "直接錄製",
+    "ar": "التسجيل مباشرة",
+    "he": "הקלטה ישירה"
+  },
+  "录制指令预览": {
+    "en": "Recording instruction preview",
+    "ja": "記録手順のプレビュー",
+    "ko": "기록 지침 미리보기",
+    "de": "Vorschau der Aufzeichnungsanweisung",
+    "es": "Vista previa de la instrucción",
+    "fr": "Aperçu de l'instruction d'enregistrement",
+    "it": "Anteprima dell'istruzione di registrazione",
+    "pt": "Prévia da instrução de gravação",
+    "zh-TW": "錄製指令預覽",
+    "ar": "معاينة تعليمات التسجيل",
+    "he": "תצוגה מקדימה של הוראת ההקלטה"
+  },
   "未连接": {
     "en": "Disconnected",
     "ja": "未接続",
@@ -9,7 +87,9 @@ export const LOCALE_TEXT = {
     "fr": "Déconnecté",
     "it": "Disconnesso",
     "pt": "Desconectado",
-    "zh-TW": "未連線"
+    "zh-TW": "未連線",
+    "ar": "غير متصل",
+    "he": "מנותק"
   },
   "已连接": {
     "en": "Connected",
@@ -20,7 +100,9 @@ export const LOCALE_TEXT = {
     "fr": "Connecté",
     "it": "Connesso",
     "pt": "Conectado",
-    "zh-TW": "已連線"
+    "zh-TW": "已連線",
+    "ar": "متصل",
+    "he": "מחובר"
   },
   "连接中": {
     "en": "Connecting",
@@ -31,7 +113,9 @@ export const LOCALE_TEXT = {
     "fr": "Connexion en cours",
     "it": "Connessione in corso",
     "pt": "Conectando",
-    "zh-TW": "連線中"
+    "zh-TW": "連線中",
+    "ar": "جارٍ الاتصال",
+    "he": "מתחבר"
   },
   "协议偏差": {
     "en": "Protocol mismatch",
@@ -42,7 +126,9 @@ export const LOCALE_TEXT = {
     "fr": "Incompatibilité de protocole",
     "it": "Protocollo non corrispondente",
     "pt": "Divergência de protocolo",
-    "zh-TW": "通訊協定不符"
+    "zh-TW": "通訊協定不符",
+    "ar": "تعارض البروتوكول",
+    "he": "אי-התאמת פרוטוקול"
   },
   "已关闭": {
     "en": "Off",
@@ -53,7 +139,9 @@ export const LOCALE_TEXT = {
     "fr": "Désactivé",
     "it": "Disattivato",
     "pt": "Desativado",
-    "zh-TW": "已關閉"
+    "zh-TW": "已關閉",
+    "ar": "متوقف",
+    "he": "כבוי"
   },
   "连接中…": {
     "en": "Connecting…",
@@ -64,7 +152,9 @@ export const LOCALE_TEXT = {
     "fr": "Connexion…",
     "it": "Connessione…",
     "pt": "Conectando…",
-    "zh-TW": "連線中…"
+    "zh-TW": "連線中…",
+    "ar": "جارٍ الاتصال…",
+    "he": "מתחבר…"
   },
   "未命名浏览器": {
     "en": "Unnamed browser",
@@ -75,7 +165,9 @@ export const LOCALE_TEXT = {
     "fr": "Navigateur sans nom",
     "it": "Browser senza nome",
     "pt": "Navegador sem nome",
-    "zh-TW": "未命名瀏覽器"
+    "zh-TW": "未命名瀏覽器",
+    "ar": "متصفح غير مسمى",
+    "he": "דפדפן ללא שם"
   },
   "当前浏览器": {
     "en": "Current browser",
@@ -86,7 +178,9 @@ export const LOCALE_TEXT = {
     "fr": "Navigateur actuel",
     "it": "Browser attuale",
     "pt": "Navegador atual",
-    "zh-TW": "目前瀏覽器"
+    "zh-TW": "目前瀏覽器",
+    "ar": "المتصفح الحالي",
+    "he": "הדפדפן הנוכחי"
   },
   "复制指令": {
     "en": "Copy command",
@@ -97,7 +191,9 @@ export const LOCALE_TEXT = {
     "fr": "Copier la commande",
     "it": "Copia istruzioni",
     "pt": "Copiar instruções",
-    "zh-TW": "複製指令"
+    "zh-TW": "複製指令",
+    "ar": "نسخ الأمر",
+    "he": "העתק פקודה"
   },
   "连接设置": {
     "en": "Connection settings",
@@ -108,7 +204,9 @@ export const LOCALE_TEXT = {
     "fr": "Paramètres de connexion",
     "it": "Impostazioni di connessione",
     "pt": "Configurações de conexão",
-    "zh-TW": "連線設定"
+    "zh-TW": "連線設定",
+    "ar": "إعدادات الاتصال",
+    "he": "הגדרות חיבור"
   },
   "· 本机": {
     "en": "· Local",
@@ -119,7 +217,9 @@ export const LOCALE_TEXT = {
     "fr": "· Local",
     "it": "· Locale",
     "pt": "· Local",
-    "zh-TW": "· 本機"
+    "zh-TW": "· 本機",
+    "ar": "· محلي",
+    "he": "· מקומי"
   },
   "本机 · 未连接": {
     "en": "Local · Disconnected",
@@ -130,7 +230,9 @@ export const LOCALE_TEXT = {
     "fr": "Local · Déconnecté",
     "it": "Locale · Disconnesso",
     "pt": "Local · Desconectado",
-    "zh-TW": "本機 · 未連線"
+    "zh-TW": "本機 · 未連線",
+    "ar": "محلي · غير متصل",
+    "he": "מקומי · מנותק"
   },
   "本机": {
     "en": "Local",
@@ -141,7 +243,9 @@ export const LOCALE_TEXT = {
     "fr": "Local",
     "it": "Locale",
     "pt": "Local",
-    "zh-TW": "本機"
+    "zh-TW": "本機",
+    "ar": "محلي",
+    "he": "מקומי"
   },
   "远程配对": {
     "en": "Remote pairing",
@@ -152,7 +256,9 @@ export const LOCALE_TEXT = {
     "fr": "Couplage distant",
     "it": "Associazione remota",
     "pt": "Pareamento remoto",
-    "zh-TW": "遠端配對"
+    "zh-TW": "遠端配對",
+    "ar": "الاقتران عن بُعد",
+    "he": "צימוד מרחוק"
   },
   "本机端口": {
     "en": "Local port",
@@ -163,7 +269,9 @@ export const LOCALE_TEXT = {
     "fr": "Port local",
     "it": "Porta locale",
     "pt": "Porta local",
-    "zh-TW": "本機連接埠"
+    "zh-TW": "本機連接埠",
+    "ar": "المنفذ المحلي",
+    "he": "פורט מקומי"
   },
   "留空恢复默认端口。": {
     "en": "Leave empty to restore the default port.",
@@ -174,7 +282,9 @@ export const LOCALE_TEXT = {
     "fr": "Laissez vide pour restaurer le port par défaut.",
     "it": "Lascia vuoto per ripristinare la porta predefinita.",
     "pt": "Deixe em branco para restaurar a porta padrão.",
-    "zh-TW": "留空以還原預設連接埠。"
+    "zh-TW": "留空以還原預設連接埠。",
+    "ar": "اتركه فارغًا لاستعادة المنفذ الافتراضي.",
+    "he": "השאר ריק כדי לשחזר את הפורט המוגדר כברירת מחדל."
   },
   "保存端口": {
     "en": "Save port",
@@ -185,7 +295,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrer le port",
     "it": "Salva porta",
     "pt": "Salvar porta",
-    "zh-TW": "儲存連接埠"
+    "zh-TW": "儲存連接埠",
+    "ar": "حفظ المنفذ",
+    "he": "שמור פורט"
   },
   "保存并连接": {
     "en": "Save and connect",
@@ -196,7 +308,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrer et se connecter",
     "it": "Salva e connetti",
     "pt": "Salvar e conectar",
-    "zh-TW": "儲存並連線"
+    "zh-TW": "儲存並連線",
+    "ar": "حفظ واتصال",
+    "he": "שמור והתחבר"
   },
   "恢复本机": {
     "en": "Back to local",
@@ -207,7 +321,9 @@ export const LOCALE_TEXT = {
     "fr": "Revenir en local",
     "it": "Torna a locale",
     "pt": "Voltar ao local",
-    "zh-TW": "返回本機"
+    "zh-TW": "返回本機",
+    "ar": "العودة إلى المحلي",
+    "he": "חזרה למקומי"
   },
   "控制提示": {
     "en": "Control hint",
@@ -218,7 +334,9 @@ export const LOCALE_TEXT = {
     "fr": "Indices de contrôle",
     "it": "Indicatori di controllo",
     "pt": "Indicadores de controle",
-    "zh-TW": "控制提示"
+    "zh-TW": "控制提示",
+    "ar": "تلميح التحكم",
+    "he": "רמז שליטה"
   },
   "Agent 控制页面时显示提示条和蓝色高亮。": {
     "en": "Show a hint bar and blue highlight while the agent controls the page.",
@@ -229,7 +347,9 @@ export const LOCALE_TEXT = {
     "fr": "Affiche une barre d'indice et un halo bleu pendant que l'Agent contrôle la page.",
     "it": "Mostra una barra informativa e un'evidenziazione blu mentre l'Agent controlla la pagina.",
     "pt": "Mostra uma barra de dica e um destaque azul enquanto o Agent controla a página.",
-    "zh-TW": "Agent 控制頁面時顯示提示條和藍色醒目標示。"
+    "zh-TW": "Agent 控制頁面時顯示提示條和藍色醒目標示。",
+    "ar": "إظهار شريط تلميح وإبراز أزرق أثناء تحكم الوكيل في الصفحة.",
+    "he": "הצג פס רמז והדגשה כחולה בזמן שהסוכן שולט בעמוד."
   },
   "自动化设置": {
     "en": "Automation",
@@ -240,7 +360,9 @@ export const LOCALE_TEXT = {
     "fr": "Paramètres d'automatisation",
     "it": "Impostazioni di automazione",
     "pt": "Configurações de automação",
-    "zh-TW": "自動化設定"
+    "zh-TW": "自動化設定",
+    "ar": "إعدادات الأتمتة",
+    "he": "הגדרות אוטומציה"
   },
   "借用标签页前确认": {
     "en": "Confirm before borrowing tabs",
@@ -251,7 +373,9 @@ export const LOCALE_TEXT = {
     "fr": "Confirmer avant d'emprunter des onglets",
     "it": "Conferma prima di prendere in prestito le schede",
     "pt": "Confirmar antes de tomar guias emprestadas",
-    "zh-TW": "借用分頁前確認"
+    "zh-TW": "借用分頁前確認",
+    "ar": "التأكيد قبل استعارة علامات التبويب",
+    "he": "אישור לפני שאילת לשוניות"
   },
   "开启时，借用你已打开的标签页前会请求允许；关闭时，直接借用。自动保存到当前浏览器配置，对到达插件的所有会话请求生效；命令行参数不能覆盖。": {
     "en": "When on, the agent asks before taking over one of your tabs. Saved in this browser profile and applies to every session; command-line flags cannot override it.",
@@ -262,7 +386,9 @@ export const LOCALE_TEXT = {
     "fr": "Si activé, une confirmation est demandée avant d'emprunter un de vos onglets ouverts ; sinon, l'emprunt est direct. Enregistré automatiquement dans ce profil de navigateur et appliqué à toutes les demandes de session atteignant l'extension ; les options de ligne de commande ne peuvent pas le remplacer.",
     "it": "Se attivo, l'Agent chiede il permesso prima di prendere in prestito una tua scheda; se disattivo, la prende direttamente. L'impostazione viene salvata in questo profilo del browser e si applica a tutte le sessioni; le opzioni della riga di comando non possono sovrascriverla.",
     "pt": "Quando ativado, pede permissão antes de emprestar uma guia que você já tem aberta; quando desativado, empresta diretamente. Salva automaticamente neste perfil do navegador e vale para todas as solicitações de sessão que chegam à extensão; opções de linha de comando não podem substituir essa configuração.",
-    "zh-TW": "開啟時，借用你已開啟的分頁前會請求允許；關閉時，直接借用。自動儲存至目前瀏覽器設定檔，對送達擴充功能的所有工作階段請求生效；命令列參數無法覆寫。"
+    "zh-TW": "開啟時，借用你已開啟的分頁前會請求允許；關閉時，直接借用。自動儲存至目前瀏覽器設定檔，對送達擴充功能的所有工作階段請求生效；命令列參數無法覆寫。",
+    "ar": "عند التفعيل، يطلب الوكيل الإذن قبل استعارة إحدى علامات تبويبك. يُحفظ في ملف تعريف هذا المتصفح ويُطبق على كل الجلسات؛ لا يمكن لمعلمات سطر الأوامر تجاوزه.",
+    "he": "כאשר מופעל, הסוכן מבקש אישור לפני השתלטות על אחת מהלשוניות שלך. נשמר בפרופיל הדפדפן הזה וחל על כל הישיבות; אין אפשרות לעקוף זאת בדגלי שורת הפקודה."
   },
   "允许请求人工协助": {
     "en": "Allow human help requests",
@@ -273,7 +399,9 @@ export const LOCALE_TEXT = {
     "fr": "Autoriser les demandes d'aide humaine",
     "it": "Consenti richieste di aiuto umano",
     "pt": "Permitir solicitações de ajuda humana",
-    "zh-TW": "允許請求人工協助"
+    "zh-TW": "允許請求人工協助",
+    "ar": "السماح بطلبات المساعدة البشرية",
+    "he": "אפשר בקשות עזרה אנושית"
   },
   "开启时，Agent 可以请求你协助。关闭时，Agent 会尽力自主完成操作，遇到无法处理的步骤再报告受阻。自动保存到当前浏览器配置，对到达插件的所有会话请求生效；命令行参数不能覆盖。": {
     "en": "When on, the agent may ask you for help. When off, it tries to finish alone and reports a blocker instead. Saved in this browser profile for all sessions; command-line flags cannot override it.",
@@ -284,7 +412,9 @@ export const LOCALE_TEXT = {
     "fr": "Si activé, l'Agent peut demander votre aide. Sinon, il tente de terminer seul et signale les étapes qu'il ne peut pas résoudre. Enregistré automatiquement dans ce profil de navigateur et appliqué à toutes les demandes de session atteignant l'extension ; les options de ligne de commande ne peuvent pas le remplacer.",
     "it": "Se attivo, l'Agent può chiederti aiuto. Se disattivo, cerca di completare l'attività in autonomia e segnala i passaggi bloccati. L'impostazione viene salvata in questo profilo del browser per tutte le sessioni; le opzioni della riga di comando non possono sovrascriverla.",
     "pt": "Quando ativado, o Agent pode pedir sua ajuda. Quando desativado, ele tenta concluir sozinho e relata as etapas que não consegue resolver. Salva automaticamente neste perfil do navegador e vale para todas as solicitações de sessão que chegam à extensão; opções de linha de comando não podem substituir essa configuração.",
-    "zh-TW": "開啟時，Agent 可以請求你協助。關閉時，Agent 會盡力自行完成操作，遇到無法處理的步驟再回報受阻。自動儲存至目前瀏覽器設定檔，對送達擴充功能的所有工作階段請求生效；命令列參數無法覆寫。"
+    "zh-TW": "開啟時，Agent 可以請求你協助。關閉時，Agent 會盡力自行完成操作，遇到無法處理的步驟再回報受阻。自動儲存至目前瀏覽器設定檔，對送達擴充功能的所有工作階段請求生效；命令列參數無法覆寫。",
+    "ar": "عند التفعيل، يجوز للوكيل طلب مساعدتك. عند الإيقاف، يحاول الإكمال بمفرده ويبلّغ عن عائق بدلًا من ذلك. يُحفظ في ملف تعريف هذا المتصفح لكل الجلسات؛ لا يمكن لمعلمات سطر الأوامر تجاوزه.",
+    "he": "כאשר מופעל, הסוכן רשאי לבקש את עזרתך. כאשר כבוי, הוא מנסה להשלים לבד ומדווח על חסם במקום. נשמר בפרופיל הדפדפן הזה לכל הישיבות; אין אפשרות לעקוף זאת בדגלי שורת הפקודה."
   },
   "当前任务": {
     "en": "Current tasks",
@@ -295,7 +425,9 @@ export const LOCALE_TEXT = {
     "fr": "Tâches en cours",
     "it": "Attività correnti",
     "pt": "Tarefas atuais",
-    "zh-TW": "目前工作"
+    "zh-TW": "目前工作",
+    "ar": "المهام الحالية",
+    "he": "משימות נוכחיות"
   },
   "实例 ID": {
     "en": "Instance ID",
@@ -306,7 +438,9 @@ export const LOCALE_TEXT = {
     "fr": "ID d'instance",
     "it": "ID istanza",
     "pt": "ID da instância",
-    "zh-TW": "執行個體 ID"
+    "zh-TW": "執行個體 ID",
+    "ar": "معرّف النسخة",
+    "he": "מזהה מופע"
   },
   "快捷功能": {
     "en": "Quick actions",
@@ -317,7 +451,9 @@ export const LOCALE_TEXT = {
     "fr": "Actions rapides",
     "it": "Azioni rapide",
     "pt": "Ações rápidas",
-    "zh-TW": "快速功能"
+    "zh-TW": "快速功能",
+    "ar": "إجراءات سريعة",
+    "he": "פעולות מהירות"
   },
   "视频录制": {
     "en": "Video recording",
@@ -328,7 +464,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrement vidéo",
     "it": "Registrazione video",
     "pt": "Gravação de vídeo",
-    "zh-TW": "影片錄製"
+    "zh-TW": "影片錄製",
+    "ar": "تسجيل الفيديو",
+    "he": "הקלטת וידאו"
   },
   "将任务标签页录制为 MP4 视频": {
     "en": "Record a task tab as MP4 video",
@@ -339,7 +477,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrer un onglet de tâche en vidéo MP4",
     "it": "Registra una scheda dell'attività come video MP4",
     "pt": "Grave a guia da tarefa como vídeo MP4",
-    "zh-TW": "將工作分頁錄製為 MP4 影片"
+    "zh-TW": "將工作分頁錄製為 MP4 影片",
+    "ar": "تسجيل علامة تبويب المهمة بصيغة MP4",
+    "he": "הקלט את לשונית המשימה כווידאו MP4"
   },
   "网站调试": {
     "en": "Website debugging",
@@ -350,7 +490,9 @@ export const LOCALE_TEXT = {
     "fr": "Débogage de sites web",
     "it": "Debug dei siti web",
     "pt": "Depuração de sites",
-    "zh-TW": "網站偵錯"
+    "zh-TW": "網站偵錯",
+    "ar": "تصحيح مواقع الويب",
+    "he": "ניפוי אתרי אינטרנט"
   },
   "记录请求、异常与页面上下文，随时回看": {
     "en": "Capture requests, errors and page context for later review",
@@ -361,7 +503,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrer les requêtes, les erreurs et le contexte de page pour les revoir à tout moment",
     "it": "Registra richieste, errori e contesto della pagina per consultarli in seguito",
     "pt": "Capture requisições, erros e contexto da página para consultar depois",
-    "zh-TW": "記錄請求、錯誤與頁面情境，方便隨時檢視"
+    "zh-TW": "記錄請求、錯誤與頁面情境，方便隨時檢視",
+    "ar": "التقاط الطلبات والأخطاء وسياق الصفحة للمراجعة لاحقًا",
+    "he": "לכוד בקשות, שגיאות והקשר עמוד לבדיקה מאוחרת"
   },
   "长截图": {
     "en": "Full-page screenshot",
@@ -372,7 +516,9 @@ export const LOCALE_TEXT = {
     "fr": "Capture d'écran de page complète",
     "it": "Screenshot dell'intera pagina",
     "pt": "Captura de tela da página inteira",
-    "zh-TW": "整頁截圖"
+    "zh-TW": "整頁截圖",
+    "ar": "لقطة شاشة للصفحة كاملة",
+    "he": "צילום מסך של העמוד כולו"
   },
   "从网页顶部截到底部，预览并保存长图": {
     "en": "Capture the page from top to bottom, preview and save",
@@ -383,7 +529,9 @@ export const LOCALE_TEXT = {
     "fr": "Capturer la page du haut vers le bas, prévisualiser et enregistrer",
     "it": "Cattura un'intera pagina, visualizzane l'anteprima e salvala",
     "pt": "Capture a página do topo até o fim, visualize e salve a imagem longa",
-    "zh-TW": "從網頁頂部截到底部，預覽並儲存長圖"
+    "zh-TW": "從網頁頂部截到底部，預覽並儲存長圖",
+    "ar": "التقاط الصفحة من الأعلى إلى الأسفل ومعاينتها وحفظها",
+    "he": "לכוד את העמוד מלמעלה למטה, תצוגה מקדימה ושמירה"
   },
   "操作录制": {
     "en": "Action recording",
@@ -394,7 +542,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrement d'actions",
     "it": "Registrazione azioni",
     "pt": "Gravação de ações",
-    "zh-TW": "操作錄製"
+    "zh-TW": "操作錄製",
+    "ar": "تسجيل الإجراءات",
+    "he": "הקלטת פעולות"
   },
   "录制你的操作，供 Agent 参考": {
     "en": "Record your actions as a reference for the agent",
@@ -405,7 +555,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrez vos actions pour référence de l'Agent",
     "it": "Registra le tue azioni come riferimento per l'Agent",
     "pt": "Grave suas ações como referência para o Agent",
-    "zh-TW": "錄製你的操作，供 Agent 參考"
+    "zh-TW": "錄製你的操作，供 Agent 參考",
+    "ar": "سجّل إجراءاتك كمرجع للوكيل",
+    "he": "הקלט את הפעולות שלך כהפניה לסוכן"
   },
   "操作审计": {
     "en": "Task audit",
@@ -416,7 +568,9 @@ export const LOCALE_TEXT = {
     "fr": "Audit des opérations",
     "it": "Controllo delle operazioni",
     "pt": "Auditoria de operações",
-    "zh-TW": "操作稽核"
+    "zh-TW": "操作稽核",
+    "ar": "تدقيق المهام",
+    "he": "ביקורת משימות"
   },
   "操作审计介绍": {
     "en": "Task audit",
@@ -427,7 +581,9 @@ export const LOCALE_TEXT = {
     "fr": "À propos de l'audit des opérations",
     "it": "Informazioni sul controllo delle operazioni",
     "pt": "Sobre a auditoria de operações",
-    "zh-TW": "操作稽核介紹"
+    "zh-TW": "操作稽核介紹",
+    "ar": "تدقيق المهام",
+    "he": "ביקורת משימות"
   },
   "在完整页面打开": {
     "en": "Open full page",
@@ -438,7 +594,9 @@ export const LOCALE_TEXT = {
     "fr": "Ouvrir en pleine page",
     "it": "Apri a pagina intera",
     "pt": "Abrir em página inteira",
-    "zh-TW": "在完整頁面開啟"
+    "zh-TW": "在完整頁面開啟",
+    "ar": "فتح في صفحة كاملة",
+    "he": "פתח בעמוד מלא"
   },
   "面板": {
     "en": "Panel",
@@ -449,7 +607,9 @@ export const LOCALE_TEXT = {
     "fr": "Panneau",
     "it": "Pannello",
     "pt": "Painel",
-    "zh-TW": "面板"
+    "zh-TW": "面板",
+    "ar": "لوحة",
+    "he": "פאנל"
   },
   "BridgeDeck · 设置": {
     "en": "BridgeDeck · Settings",
@@ -460,7 +620,9 @@ export const LOCALE_TEXT = {
     "fr": "BridgeDeck · Paramètres",
     "it": "BridgeDeck · Impostazioni",
     "pt": "BridgeDeck · Configurações",
-    "zh-TW": "BridgeDeck · 設定"
+    "zh-TW": "BridgeDeck · 設定",
+    "ar": "BridgeDeck · الإعدادات",
+    "he": "BridgeDeck · הגדרות"
   },
   "这些设置立刻对已打开和新建的任务生效，保存在当前浏览器配置里。": {
     "en": "These settings apply immediately to open and new tasks and are saved in this browser profile.",
@@ -471,7 +633,9 @@ export const LOCALE_TEXT = {
     "fr": "Ces paramètres s'appliquent immédiatement aux tâches en cours et aux nouvelles tâches, et sont enregistrés dans ce profil de navigateur.",
     "it": "Queste impostazioni si applicano subito alle attività già aperte e a quelle nuove e vengono salvate in questo profilo del browser.",
     "pt": "Estas configurações valem de imediato para tarefas abertas e novas e são salvas neste perfil do navegador.",
-    "zh-TW": "這些設定會立刻對已開啟與新建的工作生效，並儲存在目前瀏覽器設定檔中。"
+    "zh-TW": "這些設定會立刻對已開啟與新建的工作生效，並儲存在目前瀏覽器設定檔中。",
+    "ar": "تُطبق هذه الإعدادات فورًا على المهام المفتوحة والجديدة وتُحفظ في ملف تعريف هذا المتصفح.",
+    "he": "הגדרות אלו חלות מיד על משימות פתוחות וחדשות ונשמרות בפרופיל הדפדפן הזה."
   },
   "浏览器实例": {
     "en": "Browser instance",
@@ -482,7 +646,9 @@ export const LOCALE_TEXT = {
     "fr": "Instance de navigateur",
     "it": "Istanza del browser",
     "pt": "Instância do navegador",
-    "zh-TW": "瀏覽器執行個體"
+    "zh-TW": "瀏覽器執行個體",
+    "ar": "نسخة المتصفح",
+    "he": "מופע דפדפן"
   },
   "名称": {
     "en": "Name",
@@ -493,7 +659,9 @@ export const LOCALE_TEXT = {
     "fr": "Nom",
     "it": "Nome",
     "pt": "Nome",
-    "zh-TW": "名稱"
+    "zh-TW": "名稱",
+    "ar": "الاسم",
+    "he": "שם"
   },
   "给这个浏览器起个名字，Agent 可用": {
     "en": "Name this browser so the agent can select it with",
@@ -504,7 +672,9 @@ export const LOCALE_TEXT = {
     "fr": "Nommez ce navigateur pour que l'Agent puisse le sélectionner avec",
     "it": "Dai un nome a questo browser così l'Agent può usare",
     "pt": "Dê um nome a este navegador; o Agent pode usá-lo com",
-    "zh-TW": "為這個瀏覽器命名，Agent 即可用"
+    "zh-TW": "為這個瀏覽器命名，Agent 即可用",
+    "ar": "سمِّ هذا المتصفح حتى يستطيع الوكيل اختياره بـ",
+    "he": "תן שם לדפדפן הזה כדי שהסוכן יוכל לבחור בו עם"
   },
   "精确选中它。": {
     "en": "to target it precisely.",
@@ -515,7 +685,9 @@ export const LOCALE_TEXT = {
     "fr": "et le cibler précisément.",
     "it": "per selezionarlo con precisione.",
     "pt": "para selecioná-lo com precisão.",
-    "zh-TW": "精確指定它。"
+    "zh-TW": "精確指定它。",
+    "ar": "لتحديده بدقة.",
+    "he": "כדי למקד אותו במדויק."
   },
   "复制该实例的启动命令": {
     "en": "Copy this instance's start command",
@@ -526,7 +698,9 @@ export const LOCALE_TEXT = {
     "fr": "Copier la commande de démarrage de cette instance",
     "it": "Copia il comando di avvio di questa istanza",
     "pt": "Copiar o comando de inicialização desta instância",
-    "zh-TW": "複製此執行個體的啟動指令"
+    "zh-TW": "複製此執行個體的啟動指令",
+    "ar": "نسخ أمر تشغيل هذه النسخة",
+    "he": "העתק את פקודת ההפעלה של מופע זה"
   },
   "自动化": {
     "en": "Automation",
@@ -537,7 +711,9 @@ export const LOCALE_TEXT = {
     "fr": "Automatisation",
     "it": "Automazione",
     "pt": "Automação",
-    "zh-TW": "自動化"
+    "zh-TW": "自動化",
+    "ar": "الأتمتة",
+    "he": "אוטומציה"
   },
   "Agent 接管你已有的标签页前，先在页面顶部弹出确认条。": {
     "en": "Show a confirmation before the agent takes over one of your tabs.",
@@ -548,7 +724,9 @@ export const LOCALE_TEXT = {
     "fr": "Affiche une barre de confirmation en haut de la page avant que l'Agent prenne le contrôle d'un de vos onglets.",
     "it": "Prima che l'Agent prenda in carico una tua scheda, viene mostrata una barra di conferma in cima alla pagina.",
     "pt": "Antes de o Agent assumir uma de suas guias, mostre uma barra de confirmação no topo da página.",
-    "zh-TW": "Agent 接管你既有的分頁前，先在頁面頂部顯示確認條。"
+    "zh-TW": "Agent 接管你既有的分頁前，先在頁面頂部顯示確認條。",
+    "ar": "إظهار شريط تأكيد قبل أن يتولى الوكيل إحدى علامات تبويبك.",
+    "he": "הצג אישור לפני שהסוכן משתלט על אחת מהלשוניות שלך."
   },
   "允许 Agent 请你处理登录、验证码等必须本人参与的步骤。": {
     "en": "Allow the agent to ask you for login, CAPTCHA or other steps only you can complete.",
@@ -559,7 +737,9 @@ export const LOCALE_TEXT = {
     "fr": "Autorisez l'Agent à vous demander les étapes que vous seul pouvez accomplir, comme la connexion ou la validation d'un CAPTCHA.",
     "it": "Consenti all'Agent di chiederti di gestire accessi, CAPTCHA e altri passaggi che richiedono la tua presenza.",
     "pt": "Permita que o Agent peça sua ajuda em etapas que só você pode concluir, como login e CAPTCHA.",
-    "zh-TW": "允許 Agent 請你處理登入、驗證碼等必須由本人完成的步驟。"
+    "zh-TW": "允許 Agent 請你處理登入、驗證碼等必須由本人完成的步驟。",
+    "ar": "السماح للوكيل بطلب مساعدتك في تسجيل الدخول أو CAPTCHA أو خطوات أخرى تتطلب حضورك.",
+    "he": "אפשר לסוכן לבקש ממך לבצע התחברות, CAPTCHA או שלבים אחרים שרק אתה יכול להשלים."
   },
   "页面守卫": {
     "en": "Page guard",
@@ -570,7 +750,9 @@ export const LOCALE_TEXT = {
     "fr": "Garde-fou des pages",
     "it": "Protezione pagina",
     "pt": "Proteção de páginas",
-    "zh-TW": "頁面守衛"
+    "zh-TW": "頁面守衛",
+    "ar": "حارس الصفحة",
+    "he": "שומר עמוד"
   },
   "外部链接或手动新建的标签页落进 Agent 窗口时，自动移回普通窗口。": {
     "en": "Move external or manually opened tabs back to a normal window when they land in the agent window.",
@@ -581,7 +763,9 @@ export const LOCALE_TEXT = {
     "fr": "Lorsqu'un onglet ouvert par un lien externe ou manuellement arrive dans la fenêtre de l'Agent, il est ramené automatiquement dans une fenêtre normale.",
     "it": "Quando una scheda aperta da un link esterno o manualmente finisce nella finestra dell'Agent, viene spostata automaticamente in una finestra normale.",
     "pt": "Quando links externos ou guias abertas manualmente caem na janela do Agent, mova-as de volta para uma janela normal.",
-    "zh-TW": "外部連結或手動新增的分頁落入 Agent 視窗時，自動移回一般視窗。"
+    "zh-TW": "外部連結或手動新增的分頁落入 Agent 視窗時，自動移回一般視窗。",
+    "ar": "إعادة علامات التبويب الخارجية أو المفتوحة يدويًا إلى نافذة عادية عندما تدخل نافذة الوكيل.",
+    "he": "העבר לשוניות חיצוניות או שנפתחו ידנית בחזרה לחלון רגיל כשהן מגיעות לחלון הסוכן."
   },
   "默认长截图模式": {
     "en": "Default full-page mode",
@@ -592,7 +776,9 @@ export const LOCALE_TEXT = {
     "fr": "Mode de capture de page complète par défaut",
     "it": "Modalità predefinita per lo screenshot dell'intera pagina",
     "pt": "Modo padrão de captura da página inteira",
-    "zh-TW": "預設整頁截圖模式"
+    "zh-TW": "預設整頁截圖模式",
+    "ar": "وضع لقطة الصفحة الكاملة الافتراضي",
+    "he": "מצב צילום עמוד מלא כברירת מחדל"
   },
   "自动滚动": {
     "en": "Auto scroll",
@@ -603,7 +789,9 @@ export const LOCALE_TEXT = {
     "fr": "Défilement automatique",
     "it": "Scorrimento automatico",
     "pt": "Rolagem automática",
-    "zh-TW": "自動捲動"
+    "zh-TW": "自動捲動",
+    "ar": "تمرير تلقائي",
+    "he": "גלילה אוטומטית"
   },
   "手动拼接": {
     "en": "Manual stitch",
@@ -614,7 +802,9 @@ export const LOCALE_TEXT = {
     "fr": "Assemblage manuel",
     "it": "Unione manuale",
     "pt": "Montagem manual",
-    "zh-TW": "手動拼接"
+    "zh-TW": "手動拼接",
+    "ar": "تجميع يدوي",
+    "he": "הלחמה ידנית"
   },
   "保存设置": {
     "en": "Save settings",
@@ -625,7 +815,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrer les paramètres",
     "it": "Salva impostazioni",
     "pt": "Salvar configurações",
-    "zh-TW": "儲存設定"
+    "zh-TW": "儲存設定",
+    "ar": "حفظ الإعدادات",
+    "he": "שמור הגדרות"
   },
   "恢复默认": {
     "en": "Restore defaults",
@@ -636,7 +828,9 @@ export const LOCALE_TEXT = {
     "fr": "Rétablir les paramètres par défaut",
     "it": "Ripristina predefiniti",
     "pt": "Restaurar padrões",
-    "zh-TW": "還原預設值"
+    "zh-TW": "還原預設值",
+    "ar": "استعادة الافتراضي",
+    "he": "שחזר ברירת מחדל"
   },
   "数据默认只在本机流转；详见": {
     "en": "Data stays on this machine by default. See",
@@ -647,7 +841,9 @@ export const LOCALE_TEXT = {
     "fr": "Par défaut, les données restent sur cet ordinateur ; consultez la",
     "it": "I dati restano su questo computer per impostazione predefinita; vedi",
     "pt": "Os dados ficam neste computador por padrão; consulte",
-    "zh-TW": "資料預設只在本機流通；詳見"
+    "zh-TW": "資料預設只在本機流通；詳見",
+    "ar": "تبقى البيانات على هذا الجهاز افتراضيًا؛ راجع",
+    "he": "הנתונים נשארים במחשב הזה כברירת מחדל; ראו"
   },
   "隐私说明": {
     "en": "Privacy notice",
@@ -658,7 +854,9 @@ export const LOCALE_TEXT = {
     "fr": "Notice de confidentialité",
     "it": "Informativa sulla privacy",
     "pt": "Aviso de privacidade",
-    "zh-TW": "隱私說明"
+    "zh-TW": "隱私說明",
+    "ar": "إشعار الخصوصية",
+    "he": "הודעת פרטיות"
   },
   "快捷功能 · BridgeDeck": {
     "en": "Quick actions · BridgeDeck",
@@ -669,7 +867,9 @@ export const LOCALE_TEXT = {
     "fr": "Actions rapides · BridgeDeck",
     "it": "Azioni rapide · BridgeDeck",
     "pt": "Ações rápidas · BridgeDeck",
-    "zh-TW": "快速功能 · BridgeDeck"
+    "zh-TW": "快速功能 · BridgeDeck",
+    "ar": "إجراءات سريعة · BridgeDeck",
+    "he": "פעולות מהירות · BridgeDeck"
   },
   "操作审计 · BridgeDeck": {
     "en": "Task audit · BridgeDeck",
@@ -680,7 +880,9 @@ export const LOCALE_TEXT = {
     "fr": "Audit des opérations · BridgeDeck",
     "it": "Controllo delle operazioni · BridgeDeck",
     "pt": "Auditoria de operações · BridgeDeck",
-    "zh-TW": "操作稽核 · BridgeDeck"
+    "zh-TW": "操作稽核 · BridgeDeck",
+    "ar": "تدقيق المهام · BridgeDeck",
+    "he": "ביקורת משימות · BridgeDeck"
   },
   "浏览器本地记录": {
     "en": "Stored locally in this browser",
@@ -691,7 +893,9 @@ export const LOCALE_TEXT = {
     "fr": "Conservé localement dans ce navigateur",
     "it": "Record locali del browser",
     "pt": "Registros locais do navegador",
-    "zh-TW": "此瀏覽器內的紀錄"
+    "zh-TW": "此瀏覽器內的紀錄",
+    "ar": "مخزّنة محليًا في هذا المتصفح",
+    "he": "נשמר מקומית בדפדפן הזה"
   },
   "记录仅保存在本机，已结束的任务保留 30 天。只保存方法名、耗时、结果码、会话、标签页与 URL； 输入值、页面正文与截图不会保存。可用": {
     "en": "Records stay on this machine for 30 days. Only method, duration, result code, session, tab and URL are saved; input values, page text and screenshots are not. Use",
@@ -702,7 +906,9 @@ export const LOCALE_TEXT = {
     "fr": "Les enregistrements restent sur cet ordinateur ; ils sont conservés 30 jours pour les tâches terminées. Seuls la méthode, la durée, le code de résultat, la session, l'onglet et l'URL sont enregistrés ; les valeurs saisies, le texte des pages et les captures d'écran ne le sont pas. Utilisez",
     "it": "I record restano solo su questo computer; le attività concluse vengono conservate per 30 giorni. Vengono salvati solo il nome del metodo, la durata, il codice di esito, la sessione, la scheda e l'URL; i valori immessi, il testo della pagina e gli screenshot non vengono salvati. Usa",
     "pt": "Os registros ficam apenas neste computador; tarefas encerradas são mantidas por 30 dias. Apenas o método, a duração, o código de resultado, a sessão, a guia e a URL são salvos; valores de entrada, texto da página e capturas de tela não são salvos. Use",
-    "zh-TW": "紀錄僅儲存在本機，已結束的工作保留 30 天。只儲存方法名稱、耗時、結果碼、工作階段、分頁與 URL； 輸入值、頁面內文與截圖不會儲存。可用"
+    "zh-TW": "紀錄僅儲存在本機，已結束的工作保留 30 天。只儲存方法名稱、耗時、結果碼、工作階段、分頁與 URL； 輸入值、頁面內文與截圖不會儲存。可用",
+    "ar": "تبقى السجلات على هذا الجهاز لمدة 30 يومًا. يُحفظ فقط اسم الطريقة والمدة ورمز النتيجة والجلسة وعلامة التبويب و URL؛ لا تُحفظ قيم الإدخال ونص الصفحة ولقطات الشاشة. استخدم",
+    "he": "הרשומות נשמרות במחשב הזה למשך 30 יום. נשמרים רק שם השיטה, משך, קוד תוצאה, ישיבה, לשונית ו-URL; ערכי קלט, טקסט עמוד וצילומי מסך אינם נשמרים. השתמש ב-"
   },
   "读取，": {
     "en": "to read;",
@@ -713,7 +919,9 @@ export const LOCALE_TEXT = {
     "fr": "pour les consulter ;",
     "it": "per leggerli;",
     "pt": "para consultar;",
-    "zh-TW": "讀取，"
+    "zh-TW": "讀取，",
+    "ar": "للقراءة؛",
+    "he": "כדי לקרוא;"
   },
   "可关闭。": {
     "en": "",
@@ -724,7 +932,9 @@ export const LOCALE_TEXT = {
     "fr": "l'audit peut être désactivé dans le popup.",
     "it": "puoi disattivarlo dal popup.",
     "pt": "Pode ser desativado.",
-    "zh-TW": "可關閉。"
+    "zh-TW": "可關閉。",
+    "ar": "يمكن الإيقاف.",
+    "he": "ניתן לכבות."
   },
   "全部任务": {
     "en": "All tasks",
@@ -735,7 +945,9 @@ export const LOCALE_TEXT = {
     "fr": "Toutes les tâches",
     "it": "Tutte le attività",
     "pt": "Todas as tarefas",
-    "zh-TW": "全部工作"
+    "zh-TW": "全部工作",
+    "ar": "كل المهام",
+    "he": "כל המשימות"
   },
   "最近 1 小时": {
     "en": "Last hour",
@@ -746,7 +958,9 @@ export const LOCALE_TEXT = {
     "fr": "Dernière heure",
     "it": "Ultima ora",
     "pt": "Última hora",
-    "zh-TW": "最近 1 小時"
+    "zh-TW": "最近 1 小時",
+    "ar": "آخر ساعة",
+    "he": "השעה האחרונה"
   },
   "最近 24 小时": {
     "en": "Last 24 hours",
@@ -757,7 +971,9 @@ export const LOCALE_TEXT = {
     "fr": "Dernières 24 heures",
     "it": "Ultime 24 ore",
     "pt": "Últimas 24 horas",
-    "zh-TW": "最近 24 小時"
+    "zh-TW": "最近 24 小時",
+    "ar": "آخر 24 ساعة",
+    "he": "24 השעות האחרונות"
   },
   "最近 7 天": {
     "en": "Last 7 days",
@@ -768,7 +984,9 @@ export const LOCALE_TEXT = {
     "fr": "7 derniers jours",
     "it": "Ultimi 7 giorni",
     "pt": "Últimos 7 dias",
-    "zh-TW": "最近 7 天"
+    "zh-TW": "最近 7 天",
+    "ar": "آخر 7 أيام",
+    "he": "7 הימים האחרונים"
   },
   "清空记录": {
     "en": "Clear records",
@@ -779,7 +997,9 @@ export const LOCALE_TEXT = {
     "fr": "Effacer les enregistrements",
     "it": "Cancella record",
     "pt": "Limpar registros",
-    "zh-TW": "清除紀錄"
+    "zh-TW": "清除紀錄",
+    "ar": "مسح السجلات",
+    "he": "נקה רשומות"
   },
   "刷新": {
     "en": "Refresh",
@@ -790,7 +1010,9 @@ export const LOCALE_TEXT = {
     "fr": "Actualiser",
     "it": "Aggiorna",
     "pt": "Atualizar",
-    "zh-TW": "重新整理"
+    "zh-TW": "重新整理",
+    "ar": "تحديث",
+    "he": "רענן"
   },
   "还没有任务记录。后续通过 BridgeDeck 执行的操作会显示在这里。": {
     "en": "No task records yet. Operations run through BridgeDeck will appear here.",
@@ -801,7 +1023,9 @@ export const LOCALE_TEXT = {
     "fr": "Aucune tâche enregistrée pour l'instant. Les futures opérations BridgeDeck apparaîtront ici.",
     "it": "Nessuna attività registrata finora. Le operazioni eseguite tramite BridgeDeck appariranno qui.",
     "pt": "Nenhuma tarefa registrada ainda. As operações executadas pelo BridgeDeck aparecerão aqui.",
-    "zh-TW": "尚無工作紀錄。之後透過 BridgeDeck 執行的操作會顯示在這裡。"
+    "zh-TW": "尚無工作紀錄。之後透過 BridgeDeck 執行的操作會顯示在這裡。",
+    "ar": "لا توجد سجلات مهام بعد. ستظهر هنا العمليات المنفذة عبر BridgeDeck.",
+    "he": "אין עדיין רשומות משימות. פעולות שיבוצעו דרך BridgeDeck יופיעו כאן."
   },
   "视频录制 · BridgeDeck": {
     "en": "Video recording · BridgeDeck",
@@ -812,7 +1036,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrement vidéo · BridgeDeck",
     "it": "Registrazione video · BridgeDeck",
     "pt": "Gravação de vídeo · BridgeDeck",
-    "zh-TW": "影片錄製 · BridgeDeck"
+    "zh-TW": "影片錄製 · BridgeDeck",
+    "ar": "تسجيل الفيديو · BridgeDeck",
+    "he": "הקלטת וידאו · BridgeDeck"
   },
   "录制": {
     "en": "Record",
@@ -823,7 +1049,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrement",
     "it": "Registrazione",
     "pt": "Gravar",
-    "zh-TW": "錄製"
+    "zh-TW": "錄製",
+    "ar": "تسجيل",
+    "he": "הקלט"
   },
   "开始录制": {
     "en": "Start recording",
@@ -834,7 +1062,9 @@ export const LOCALE_TEXT = {
     "fr": "Démarrer l'enregistrement",
     "it": "Avvia registrazione",
     "pt": "Iniciar gravação",
-    "zh-TW": "開始錄製"
+    "zh-TW": "開始錄製",
+    "ar": "بدء التسجيل",
+    "he": "התחל הקלטה"
   },
   "停止录制": {
     "en": "Stop recording",
@@ -845,7 +1075,9 @@ export const LOCALE_TEXT = {
     "fr": "Arrêter l'enregistrement",
     "it": "Interrompi registrazione",
     "pt": "Parar gravação",
-    "zh-TW": "停止錄製"
+    "zh-TW": "停止錄製",
+    "ar": "إيقاف التسجيل",
+    "he": "עצור הקלטה"
   },
   "未开始": {
     "en": "Not started",
@@ -856,7 +1088,9 @@ export const LOCALE_TEXT = {
     "fr": "Non démarré",
     "it": "Non avviata",
     "pt": "Não iniciada",
-    "zh-TW": "未開始"
+    "zh-TW": "未開始",
+    "ar": "لم يبدأ",
+    "he": "לא התחיל"
   },
   "录制的是标签页画面（无声）。浏览器会在标签页上显示「正在共享」提示。 优先用 MP4（H.264），浏览器不支持时自动退回 WebM。": {
     "en": "Records the tab (silent). The browser shows a sharing indicator. MP4 (H.264) is preferred and falls back to WebM.",
@@ -867,7 +1101,9 @@ export const LOCALE_TEXT = {
     "fr": "L'enregistrement capture le contenu de l'onglet (sans son). Le navigateur affiche une mention « Partage en cours » sur l'onglet. Le format MP4 (H.264) est privilégié, avec repli automatique sur WebM si le navigateur ne le prend pas en charge.",
     "it": "Registra il contenuto della scheda (senza audio). Il browser mostra sulla scheda l'avviso «Condivisione in corso». Viene preferito MP4 (H.264); se il browser non lo supporta, si passa automaticamente a WebM.",
     "pt": "Grava a imagem da guia (sem áudio). O navegador mostra o aviso “Compartilhando” na guia. Prefira MP4 (H.264); se não houver suporte, o navegador usa WebM automaticamente.",
-    "zh-TW": "錄製的是分頁畫面（無聲）。瀏覽器會在分頁上顯示「正在分享」提示。 優先使用 MP4（H.264），瀏覽器不支援時自動退回 WebM。"
+    "zh-TW": "錄製的是分頁畫面（無聲）。瀏覽器會在分頁上顯示「正在分享」提示。 優先使用 MP4（H.264），瀏覽器不支援時自動退回 WebM。",
+    "ar": "يُسجَّل محتوى علامة التبويب (بدون صوت). يعرض المتصفح مؤشر المشاركة. يُفضَّل MP4 (H.264) ويعود إلى WebM عند عدم الدعم.",
+    "he": "מקליט את תוכן הלשונית (ללא קול). הדפדפן מציג חיווי שיתוף. מועדף MP4 (H.264) עם נפילה ל-WebM אם אינו נתמך."
   },
   "录制文件": {
     "en": "Recordings",
@@ -878,7 +1114,9 @@ export const LOCALE_TEXT = {
     "fr": "Fichiers d'enregistrement",
     "it": "Registrazioni",
     "pt": "Gravações",
-    "zh-TW": "錄製檔案"
+    "zh-TW": "錄製檔案",
+    "ar": "ملفات التسجيل",
+    "he": "קבצי הקלטה"
   },
   "还没有录制文件": {
     "en": "No recordings yet",
@@ -889,7 +1127,9 @@ export const LOCALE_TEXT = {
     "fr": "Aucun fichier d'enregistrement",
     "it": "Ancora nessuna registrazione",
     "pt": "Ainda não há gravações",
-    "zh-TW": "尚無錄製檔案"
+    "zh-TW": "尚無錄製檔案",
+    "ar": "لا توجد ملفات تسجيل بعد",
+    "he": "אין עדיין קבצי הקלטה"
   },
   "关闭预览": {
     "en": "Close preview",
@@ -900,7 +1140,9 @@ export const LOCALE_TEXT = {
     "fr": "Fermer l'aperçu",
     "it": "Chiudi anteprima",
     "pt": "Fechar visualização",
-    "zh-TW": "關閉預覽"
+    "zh-TW": "關閉預覽",
+    "ar": "إغلاق المعاينة",
+    "he": "סגור תצוגה מקדימה"
   },
   "操作录制历史": {
     "en": "Action recording history",
@@ -911,7 +1153,9 @@ export const LOCALE_TEXT = {
     "fr": "Historique d'enregistrement d'actions",
     "it": "Cronologia azioni registrate",
     "pt": "Histórico de gravação de ações",
-    "zh-TW": "操作錄製歷史"
+    "zh-TW": "操作錄製歷史",
+    "ar": "سجل تسجيل الإجراءات",
+    "he": "היסטוריית הקלטת פעולות"
   },
   "录制文件在当前浏览器保留 24 小时，请及时保存重要视频。": {
     "en": "Recordings are kept for 24 hours in this browser. Save important videos promptly.",
@@ -922,7 +1166,9 @@ export const LOCALE_TEXT = {
     "fr": "Les enregistrements sont conservés 24 heures dans ce navigateur. Enregistrez les vidéos importantes sans attendre.",
     "it": "Le registrazioni restano in questo browser per 24 ore. Salva i video importanti prima che scadano.",
     "pt": "As gravações ficam neste navegador por 24 horas. Salve os vídeos importantes antes que expirem.",
-    "zh-TW": "錄製檔案會在此瀏覽器保留 24 小時，請及時儲存重要影片。"
+    "zh-TW": "錄製檔案會在此瀏覽器保留 24 小時，請及時儲存重要影片。",
+    "ar": "تُحفظ التسجيلات 24 ساعة في هذا المتصفح. احفظ الفيديوهات المهمة promptly.",
+    "he": "ההקלטות נשמרות 24 שעות בדפדפן הזה. שמור סרטונים חשובים promptly."
   },
   "最近录制": {
     "en": "Recent recordings",
@@ -933,7 +1179,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrements récents",
     "it": "Registrazioni recenti",
     "pt": "Gravações recentes",
-    "zh-TW": "最近錄製"
+    "zh-TW": "最近錄製",
+    "ar": "أحدث التسجيلات",
+    "he": "הקלטות אחרונות"
   },
   "还没有录制视频。": {
     "en": "No videos yet.",
@@ -944,7 +1192,9 @@ export const LOCALE_TEXT = {
     "fr": "Aucune vidéo enregistrée pour le moment.",
     "it": "Ancora nessun video.",
     "pt": "Ainda não há vídeos gravados.",
-    "zh-TW": "尚無錄製影片。"
+    "zh-TW": "尚無錄製影片。",
+    "ar": "لا توجد فيديوهات بعد.",
+    "he": "אין עדיין סרטונים."
   },
   "完整录制页": {
     "en": "Open recording page",
@@ -955,7 +1205,9 @@ export const LOCALE_TEXT = {
     "fr": "Ouvrir la page d'enregistrement complète",
     "it": "Pagina di registrazione completa",
     "pt": "Abrir página de gravação",
-    "zh-TW": "完整錄製頁"
+    "zh-TW": "完整錄製頁",
+    "ar": "فتح صفحة التسجيل",
+    "he": "פתח עמוד הקלטה"
   },
   "长截图 · BridgeDeck": {
     "en": "Full-page screenshot · BridgeDeck",
@@ -966,7 +1218,9 @@ export const LOCALE_TEXT = {
     "fr": "Capture d'écran de page complète · BridgeDeck",
     "it": "Screenshot dell'intera pagina · BridgeDeck",
     "pt": "Captura de tela da página inteira · BridgeDeck",
-    "zh-TW": "整頁截圖 · BridgeDeck"
+    "zh-TW": "整頁截圖 · BridgeDeck",
+    "ar": "لقطة صفحة كاملة · BridgeDeck",
+    "he": "צילום עמוד מלא · BridgeDeck"
   },
   "自动滚动整页，或手动滚动采集，将内容拼成清晰长图。": {
     "en": "Auto-scroll the page or capture it manually, then stitch a long image.",
@@ -977,7 +1231,9 @@ export const LOCALE_TEXT = {
     "fr": "Capturez automatiquement une page entière, ou faites défiler manuellement pour créer une longue image nette.",
     "it": "Cattura automaticamente un'intera pagina, oppure scorri manualmente per creare un'immagine lunga e nitida.",
     "pt": "Capture uma página inteira automaticamente ou role manualmente para criar uma imagem longa e nítida.",
-    "zh-TW": "自動捲動整頁，或手動捲動擷取，將內容拼成清晰長圖。"
+    "zh-TW": "自動捲動整頁，或手動捲動擷取，將內容拼成清晰長圖。",
+    "ar": "مرّر الصفحة تلقائيًا أو التقطها يدويًا ثم اجمع المحتوى في صورة طويلة واضحة.",
+    "he": "גלול את העמוד אוטומטית או לכוד אותו ידנית, ואז הלחם תמונה ארוכה וברורה."
   },
   "预览": {
     "en": "Preview",
@@ -988,7 +1244,9 @@ export const LOCALE_TEXT = {
     "fr": "Aperçu",
     "it": "Anteprima",
     "pt": "Visualização",
-    "zh-TW": "預覽"
+    "zh-TW": "預覽",
+    "ar": "معاينة",
+    "he": "תצוגה מקדימה"
   },
   "打开预览": {
     "en": "Open preview",
@@ -999,7 +1257,9 @@ export const LOCALE_TEXT = {
     "fr": "Ouvrir l'aperçu",
     "it": "Apri anteprima",
     "pt": "Abrir visualização",
-    "zh-TW": "開啟預覽"
+    "zh-TW": "開啟預覽",
+    "ar": "فتح المعاينة",
+    "he": "פתח תצוגה מקדימה"
   },
   "截图暂不可用": {
     "en": "Screenshot unavailable",
@@ -1010,7 +1270,9 @@ export const LOCALE_TEXT = {
     "fr": "Capture indisponible",
     "it": "Screenshot non disponibile",
     "pt": "Captura de tela indisponível",
-    "zh-TW": "截圖暫不可用"
+    "zh-TW": "截圖暫不可用",
+    "ar": "لقطة الشاشة غير متاحة",
+    "he": "צילום המסך אינו זמין"
   },
   "预览可能已过期或被清理。请回到网页，通过快捷功能重新截图。": {
     "en": "The preview may have expired or been cleared. Go back to the page and capture again.",
@@ -1021,7 +1283,9 @@ export const LOCALE_TEXT = {
     "fr": "Cet aperçu a peut-être expiré ou été supprimé. Retournez sur la page web et recapturez-la depuis les actions rapides.",
     "it": "Questa anteprima potrebbe essere scaduta o essere stata rimossa. Torna alla pagina web e catturala di nuovo dalle azioni rapide.",
     "pt": "Esta visualização pode ter expirado ou sido removida. Volte à página web e capture novamente nas Ações rápidas.",
-    "zh-TW": "預覽可能已過期或已被清除。請回到網頁，透過快速功能重新截圖。"
+    "zh-TW": "預覽可能已過期或已被清除。請回到網頁，透過快速功能重新截圖。",
+    "ar": "قد تكون المعاينة منتهية أو محذوفة. عد إلى الصفحة والتقط لقطة جديدة.",
+    "he": "ייתכן שהתצוגה פגה או נמחקה. חזור לעמוד ולכוד שוב."
   },
   "重新截图（高级）": {
     "en": "Capture again (advanced)",
@@ -1032,7 +1296,9 @@ export const LOCALE_TEXT = {
     "fr": "Recapturer (avancé)",
     "it": "Nuova cattura (avanzato)",
     "pt": "Capturar novamente (avançado)",
-    "zh-TW": "重新截圖（進階）"
+    "zh-TW": "重新截圖（進階）",
+    "ar": "إعادة الالتقاط (متقدم)",
+    "he": "לכוד שוב (מתקדם)"
   },
   "目标与模式": {
     "en": "Target and mode",
@@ -1043,7 +1309,9 @@ export const LOCALE_TEXT = {
     "fr": "Cible et mode",
     "it": "Destinazione e modalità",
     "pt": "Alvo e modo",
-    "zh-TW": "目標與模式"
+    "zh-TW": "目標與模式",
+    "ar": "الهدف والوضع",
+    "he": "יעד ומצב"
   },
   "截取整页": {
     "en": "Capture full page",
@@ -1054,7 +1322,9 @@ export const LOCALE_TEXT = {
     "fr": "Capturer la page entière",
     "it": "Cattura pagina intera",
     "pt": "Capturar página inteira",
-    "zh-TW": "擷取整頁"
+    "zh-TW": "擷取整頁",
+    "ar": "التقاط الصفحة كاملة",
+    "he": "לכוד עמוד מלא"
   },
   "自动滚动并拼接，最多 8 屏": {
     "en": "Auto-scroll and stitch, up to 8 screens",
@@ -1065,7 +1335,9 @@ export const LOCALE_TEXT = {
     "fr": "Défilement automatique et assemblage, jusqu'à 8 écrans",
     "it": "Scorrimento automatico e unione, fino a 8 schermate",
     "pt": "Rolagem automática e montagem, até 8 telas",
-    "zh-TW": "自動捲動並拼接，最多 8 個畫面"
+    "zh-TW": "自動捲動並拼接，最多 8 個畫面",
+    "ar": "تمرير تلقائي وتجميع، حتى 8 شاشات",
+    "he": "גלילה אוטומטית והלחמה, עד 8 מסכים"
   },
   "开始拼接": {
     "en": "Start stitching",
@@ -1076,7 +1348,9 @@ export const LOCALE_TEXT = {
     "fr": "Démarrer l'assemblage",
     "it": "Avvia unione",
     "pt": "Iniciar montagem",
-    "zh-TW": "開始拼接"
+    "zh-TW": "開始拼接",
+    "ar": "بدء التجميع",
+    "he": "התחל הלחמה"
   },
   "拍一帧": {
     "en": "Capture frame",
@@ -1087,7 +1361,9 @@ export const LOCALE_TEXT = {
     "fr": "Capturer une image",
     "it": "Cattura fotogramma",
     "pt": "Capturar quadro",
-    "zh-TW": "擷取一格"
+    "zh-TW": "擷取一格",
+    "ar": "التقاط إطار",
+    "he": "לכוד פריים"
   },
   "拼接": {
     "en": "Stitch",
@@ -1098,7 +1374,9 @@ export const LOCALE_TEXT = {
     "fr": "Assembler",
     "it": "Unisci",
     "pt": "Montar",
-    "zh-TW": "拼接"
+    "zh-TW": "拼接",
+    "ar": "تجميع",
+    "he": "הלחמה"
   },
   "0 帧": {
     "en": "0 frames",
@@ -1109,7 +1387,9 @@ export const LOCALE_TEXT = {
     "fr": "0 image",
     "it": "0 fotogrammi",
     "pt": "0 quadros",
-    "zh-TW": "0 格"
+    "zh-TW": "0 格",
+    "ar": "0 إطار",
+    "he": "0 פריימים"
   },
   "保存到下载目录": {
     "en": "Save to Downloads",
@@ -1120,7 +1400,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrer dans Téléchargements",
     "it": "Salva nella cartella Download",
     "pt": "Salvar em Downloads",
-    "zh-TW": "儲存到下載資料夾"
+    "zh-TW": "儲存到下載資料夾",
+    "ar": "حفظ في التنزيلات",
+    "he": "שמור בתיקיית ההורדות"
   },
   "丢弃": {
     "en": "Discard",
@@ -1131,7 +1413,9 @@ export const LOCALE_TEXT = {
     "fr": "Abandonner",
     "it": "Scarta",
     "pt": "Descartar",
-    "zh-TW": "捨棄"
+    "zh-TW": "捨棄",
+    "ar": "تجاهل",
+    "he": "השלך"
   },
   "网站调试 · BridgeDeck": {
     "en": "Website debugging · BridgeDeck",
@@ -1142,7 +1426,9 @@ export const LOCALE_TEXT = {
     "fr": "Débogage de sites web · BridgeDeck",
     "it": "Debug dei siti web · BridgeDeck",
     "pt": "Depuração de sites · BridgeDeck",
-    "zh-TW": "網站偵錯 · BridgeDeck"
+    "zh-TW": "網站偵錯 · BridgeDeck",
+    "ar": "تصحيح مواقع الويب · BridgeDeck",
+    "he": "ניפוי אתרים · BridgeDeck"
   },
   "每一次调查，都有迹可循。": {
     "en": "Every investigation leaves a trail.",
@@ -1153,7 +1439,9 @@ export const LOCALE_TEXT = {
     "fr": "Chaque investigation laisse une trace.",
     "it": "Ogni indagine lascia una traccia.",
     "pt": "Toda investigação deixa um rastro.",
-    "zh-TW": "每一次調查，都有跡可循。"
+    "zh-TW": "每一次調查，都有跡可循。",
+    "ar": "كل تحقيق يترك أثرًا.",
+    "he": "לכל חקירה יש עקבות."
   },
   "查看网页上下文、请求和异常，或导出记录交给 Agent 分析。": {
     "en": "Inspect page context, requests and errors, or export records for the agent.",
@@ -1164,7 +1452,9 @@ export const LOCALE_TEXT = {
     "fr": "Examinez le contexte de page, les requêtes et les erreurs, ou exportez les enregistrements pour que l'Agent les analyse.",
     "it": "Esamina il contesto della pagina, le richieste e gli errori, oppure esporta i record per farli analizzare all'Agent.",
     "pt": "Consulte o contexto da página, requisições e erros, ou exporte registros para o Agent analisar.",
-    "zh-TW": "檢視頁面情境、請求與錯誤，或匯出紀錄交給 Agent 分析。"
+    "zh-TW": "檢視頁面情境、請求與錯誤，或匯出紀錄交給 Agent 分析。",
+    "ar": "افحص سياق الصفحة والطلبات والأخطاء، أو صدّر السجلات ليحللها الوكيل.",
+    "he": "בדוק הקשר עמוד, בקשות ושגיאות, או ייצא רשומות לניתוח הסוכן."
   },
   "手动采集（高级）": {
     "en": "Manual capture (advanced)",
@@ -1175,7 +1465,9 @@ export const LOCALE_TEXT = {
     "fr": "Capture manuelle (avancé)",
     "it": "Acquisizione manuale (avanzato)",
     "pt": "Captura manual (avançado)",
-    "zh-TW": "手動擷取（進階）"
+    "zh-TW": "手動擷取（進階）",
+    "ar": "التقاط يدوي (متقدم)",
+    "he": "לכידה ידנית (מתקדם)"
   },
   "开始采集": {
     "en": "Start capture",
@@ -1186,7 +1478,9 @@ export const LOCALE_TEXT = {
     "fr": "Démarrer la capture",
     "it": "Avvia acquisizione",
     "pt": "Iniciar captura",
-    "zh-TW": "開始擷取"
+    "zh-TW": "開始擷取",
+    "ar": "بدء الالتقاط",
+    "he": "התחל לכידה"
   },
   "停止采集": {
     "en": "Stop capture",
@@ -1197,7 +1491,9 @@ export const LOCALE_TEXT = {
     "fr": "Arrêter la capture",
     "it": "Arresta acquisizione",
     "pt": "Encerrar captura",
-    "zh-TW": "停止擷取"
+    "zh-TW": "停止擷取",
+    "ar": "إيقاف الالتقاط",
+    "he": "עצור לכידה"
   },
   "采集当前标签页的请求元数据（方法/状态/耗时）与控制台输出/未捕获异常；停止后保存为历史，最多保留 10 条。": {
     "en": "Capture request metadata (method/status/duration), console output and uncaught errors from this tab; keep up to 10 runs.",
@@ -1208,7 +1504,9 @@ export const LOCALE_TEXT = {
     "fr": "Capture les métadonnées des requêtes de cet onglet (méthode/statut/durée), la sortie de la console et les exceptions non interceptées ; à l'arrêt, le résultat est ajouté à l'historique, qui conserve au plus 10 entrées.",
     "it": "Acquisisce i metadati delle richieste (metodo/stato/durata), l'output della console e le eccezioni non gestite di questa scheda; al termine vengono salvati nella cronologia, fino a 10 voci.",
     "pt": "Capture metadados de requisição (método/status/duração), saída do console e erros não tratados desta guia; ao encerrar, salve no histórico, mantendo até 10 execuções.",
-    "zh-TW": "擷取目前分頁的請求中繼資料（方法/狀態/耗時）與主控台輸出/未攔截的例外；停止後儲存為歷史，最多保留 10 筆。"
+    "zh-TW": "擷取目前分頁的請求中繼資料（方法/狀態/耗時）與主控台輸出/未攔截的例外；停止後儲存為歷史，最多保留 10 筆。",
+    "ar": "التقاط بيانات الطلبات (الطريقة/الحالة/المدة) ومخرجات الطرفية والأخطاء غير المعالجة من علامة التبويب هذه؛ الاحتفاظ بما يصل إلى 10 عمليات.",
+    "he": "לכוד מטא-נתוני בקשות (שיטה/סטטוס/משך), פלט קונסולה ושגיאות לא מטופלות מהלשונית; שמור עד 10 ריצות."
   },
   "请求": {
     "en": "Requests",
@@ -1219,7 +1517,9 @@ export const LOCALE_TEXT = {
     "fr": "Requêtes",
     "it": "Richieste",
     "pt": "Requisições",
-    "zh-TW": "請求"
+    "zh-TW": "請求",
+    "ar": "الطلبات",
+    "he": "בקשות"
   },
   "导出 JSON": {
     "en": "Export JSON",
@@ -1230,7 +1530,9 @@ export const LOCALE_TEXT = {
     "fr": "Exporter en JSON",
     "it": "Esporta JSON",
     "pt": "Exportar JSON",
-    "zh-TW": "匯出 JSON"
+    "zh-TW": "匯出 JSON",
+    "ar": "تصدير JSON",
+    "he": "ייצא JSON"
   },
   "还没有请求": {
     "en": "No requests yet",
@@ -1241,7 +1543,9 @@ export const LOCALE_TEXT = {
     "fr": "Aucune requête pour le moment",
     "it": "Ancora nessuna richiesta",
     "pt": "Ainda não há requisições",
-    "zh-TW": "尚無請求"
+    "zh-TW": "尚無請求",
+    "ar": "لا توجد طلبات بعد",
+    "he": "אין עדיין בקשות"
   },
   "控制台 / 异常": {
     "en": "Console / errors",
@@ -1252,7 +1556,9 @@ export const LOCALE_TEXT = {
     "fr": "Console / erreurs",
     "it": "Console / errori",
     "pt": "Console / erros",
-    "zh-TW": "主控台 / 錯誤"
+    "zh-TW": "主控台 / 錯誤",
+    "ar": "الطرفية / الأخطاء",
+    "he": "קונסולה / שגיאות"
   },
   "没有控制台输出": {
     "en": "No console output",
@@ -1263,7 +1569,9 @@ export const LOCALE_TEXT = {
     "fr": "Aucune sortie de console",
     "it": "Nessun output della console",
     "pt": "Nenhuma saída do console",
-    "zh-TW": "沒有主控台輸出"
+    "zh-TW": "沒有主控台輸出",
+    "ar": "لا يوجد إخراج في الطرفية",
+    "he": "אין פלט קונסולה"
   },
   "页面上下文": {
     "en": "Page context",
@@ -1274,7 +1582,9 @@ export const LOCALE_TEXT = {
     "fr": "Contexte de page",
     "it": "Contesto della pagina",
     "pt": "Contexto da página",
-    "zh-TW": "頁面情境"
+    "zh-TW": "頁面情境",
+    "ar": "سياق الصفحة",
+    "he": "הקשר עמוד"
   },
   "历史记录": {
     "en": "History",
@@ -1285,7 +1595,9 @@ export const LOCALE_TEXT = {
     "fr": "Historique",
     "it": "Cronologia",
     "pt": "Histórico",
-    "zh-TW": "歷史紀錄"
+    "zh-TW": "歷史紀錄",
+    "ar": "السجل",
+    "he": "היסטוריה"
   },
   "还没有调试记录": {
     "en": "No debug records yet",
@@ -1296,7 +1608,9 @@ export const LOCALE_TEXT = {
     "fr": "Aucune capture de débogage pour le moment",
     "it": "Ancora nessun record di debug",
     "pt": "Ainda não há registros de depuração",
-    "zh-TW": "尚無偵錯紀錄"
+    "zh-TW": "尚無偵錯紀錄",
+    "ar": "لا توجد سجلات تصحيح بعد",
+    "he": "אין עדיין רשומות ניפוי"
   },
   "把网站地址和遇到的问题告诉 Agent，它会建立任务并开启采集。": {
     "en": "Tell the agent the URL and the problem; it will start a capture.",
@@ -1307,7 +1621,9 @@ export const LOCALE_TEXT = {
     "fr": "Indiquez à l'Agent l'URL du site et le problème rencontré ; il créera une tâche et démarrera la capture.",
     "it": "Indica all'Agent l'indirizzo del sito e il problema: creerà un'attività e avvierà l'acquisizione.",
     "pt": "Informe ao Agent o endereço do site e o problema; ele cria uma tarefa e inicia a captura.",
-    "zh-TW": "把網站網址與遇到的問題告訴 Agent，它就會建立工作並開始擷取。"
+    "zh-TW": "把網站網址與遇到的問題告訴 Agent，它就會建立工作並開始擷取。",
+    "ar": "أخبر الوكيل بعنوان الموقع والمشكلة؛ سيبدأ مهمة ويفتح الالتقاط.",
+    "he": "ספר לסוכן את כתובת האתר ואת הבעיה; הוא יתחיל משימה ויפתח לכידה."
   },
   "历史详情": {
     "en": "History details",
@@ -1318,7 +1634,9 @@ export const LOCALE_TEXT = {
     "fr": "Détails de l'historique",
     "it": "Dettagli cronologia",
     "pt": "Detalhes do histórico",
-    "zh-TW": "歷史詳情"
+    "zh-TW": "歷史詳情",
+    "ar": "تفاصيل السجل",
+    "he": "פרטי היסטוריה"
   },
   "关闭": {
     "en": "Close",
@@ -1329,7 +1647,9 @@ export const LOCALE_TEXT = {
     "fr": "Fermer",
     "it": "Chiudi",
     "pt": "Fechar",
-    "zh-TW": "關閉"
+    "zh-TW": "關閉",
+    "ar": "إغلاق",
+    "he": "סגור"
   },
   "调试记录保存在当前浏览器本地，任务结束后仍可查看和导出。保留最近 30 天、最多 50 份、总计 50 MiB；常见凭据脱敏，正文有上限。": {
     "en": "Debug records stay in this browser after the task ends. Kept for 30 days, up to 50 runs and 50 MiB; credentials are redacted and bodies are capped.",
@@ -1340,7 +1660,9 @@ export const LOCALE_TEXT = {
     "fr": "Les captures restent dans ce navigateur après la fin des tâches et peuvent être exportées. Conservation : 30 jours, jusqu'à 50 captures et 50 MiB au total. Les identifiants d'authentification courants sont masqués ; la taille des corps conservés est limitée.",
     "it": "I record di debug restano in questo browser al termine delle attività e possono essere consultati ed esportati. Si conservano per 30 giorni, fino a 50 record e 50 MiB complessivi; le credenziali più comuni vengono oscurate e i corpi hanno un limite di dimensione.",
     "pt": "Os registros de depuração ficam neste navegador após o término das tarefas e podem ser consultados e exportados. São mantidos por 30 dias, com limite de 50 registros e 50 MiB no total; credenciais comuns são ocultadas e o conteúdo dos corpos tem limites de captura.",
-    "zh-TW": "偵錯紀錄會保存在目前瀏覽器本機，工作結束後仍可檢視與匯出。保留最近 30 天、最多 50 份、總計 50 MiB；常見認證資訊會遮蔽，內文保留量設有上限。"
+    "zh-TW": "偵錯紀錄會保存在目前瀏覽器本機，工作結束後仍可檢視與匯出。保留最近 30 天、最多 50 份、總計 50 MiB；常見認證資訊會遮蔽，內文保留量設有上限。",
+    "ar": "تبقى سجلات التصحيح في هذا المتصفح بعد انتهاء المهمة. تُحفظ 30 يومًا، وبحد أقصى 50 عملية و50 MiB؛ تُخفى بيانات الاعتماد الشائعة وتُحدّ النصوص.",
+    "he": "רשומות הניפוי נשמרות בדפדפן הזה לאחר סיום המשימה. נשמרות 30 יום, עד 50 ריצות ו-50 MiB; פרטי גישה נפוצים מוסתרים והגופים מוגבלים."
   },
   "采集范围与限制": {
     "en": "Scope and limits",
@@ -1351,7 +1673,9 @@ export const LOCALE_TEXT = {
     "fr": "Périmètre et limites",
     "it": "Copertura dell'acquisizione",
     "pt": "Cobertura da captura",
-    "zh-TW": "擷取範圍與限制"
+    "zh-TW": "擷取範圍與限制",
+    "ar": "النطاق والحدود",
+    "he": "היקף ומגבלות"
   },
   "记录请求元数据（方法/状态/耗时）、控制台输出与未捕获异常、页面基础上下文；不记录请求正文与截图。单次采集在本地保留 10 条历史。": {
     "en": "Records request metadata, console output, uncaught errors and basic page context; request bodies and screenshots are not recorded. Each capture keeps 10 local runs.",
@@ -1362,7 +1686,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistre les métadonnées des requêtes (méthode/statut/durée), la sortie de la console, les exceptions non interceptées et le contexte de base de la page ; les corps de requête et les captures d'écran ne sont pas enregistrés. Chaque capture conserve 10 entrées d'historique en local.",
     "it": "Registra i metadati delle richieste (metodo/stato/durata), l'output della console, le eccezioni non gestite e il contesto di base della pagina; i corpi delle richieste e gli screenshot non vengono registrati. Ogni acquisizione conserva localmente 10 voci di cronologia.",
     "pt": "Registra metadados de requisição (método/status/duração), saída do console, erros não tratados e o contexto básico da página; corpos de requisição e capturas de tela não são registrados. Cada captura mantém 10 execuções locais.",
-    "zh-TW": "記錄請求中繼資料（方法/狀態/耗時）、主控台輸出與未攔截的例外、頁面基本情境；不記錄請求內文與截圖。單次擷取會在本機保留 10 筆歷史。"
+    "zh-TW": "記錄請求中繼資料（方法/狀態/耗時）、主控台輸出與未攔截的例外、頁面基本情境；不記錄請求內文與截圖。單次擷取會在本機保留 10 筆歷史。",
+    "ar": "تسجيل بيانات الطلبات (الطريقة/الحالة/المدة) ومخرجات الطرفية والأخطاء غير المعالجة وسياق الصفحة الأساسي؛ لا تُسجَّل أجسام الطلبات ولقطات الشاشة. كل عملية التقاط تحتفظ بـ 10 عمليات محلية.",
+    "he": "לכוד מטא-נתוני בקשות, פלט קונסולה, שגיאות לא מטופלות והקשר עמוד בסיסי; גופי בקשות וצילומי מסך אינם נרשמים. כל לכידה שומרת 10 ריצות מקומיות."
   },
   "操作录制 · BridgeDeck": {
     "en": "Action recording · BridgeDeck",
@@ -1373,7 +1699,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrement d'actions · BridgeDeck",
     "it": "Registrazione azioni · BridgeDeck",
     "pt": "Gravação de ações · BridgeDeck",
-    "zh-TW": "操作錄製 · BridgeDeck"
+    "zh-TW": "操作錄製 · BridgeDeck",
+    "ar": "تسجيل الإجراءات · BridgeDeck",
+    "he": "הקלטת פעולות · BridgeDeck"
   },
   "录制你的点击/输入/选择/导航，导出 JSON 给 Agent 参考": {
     "en": "Record clicks, input, selections and navigation as JSON for the agent",
@@ -1384,7 +1712,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrez vos clics, saisies, sélections et navigations, puis exportez le JSON pour l'Agent",
     "it": "Registra clic, input, selezioni e navigazione ed esporta un JSON come riferimento per l'Agent",
     "pt": "Grave cliques, digitação, seleções e navegação e exporte JSON para o Agent consultar",
-    "zh-TW": "錄製你的點擊/輸入/選取/導覽，匯出 JSON 供 Agent 參考"
+    "zh-TW": "錄製你的點擊/輸入/選取/導覽，匯出 JSON 供 Agent 參考",
+    "ar": "سجّل نقراتك/إدخالك/اختياراتك/تنقلك وصدّر JSON كمرجع للوكيل",
+    "he": "הקלט לחיצות/קלט/בחירות/ניווט וייצא JSON כהפניה לסוכן"
   },
   "录制只发生在你选中的这个标签页；密码框的值会被记成": {
     "en": "Recording stays in the selected tab; password values are stored as",
@@ -1395,7 +1725,9 @@ export const LOCALE_TEXT = {
     "fr": "L'enregistrement se limite à l'onglet sélectionné ; les valeurs des champs de mot de passe sont consignées sous la forme",
     "it": "La registrazione avviene solo nella scheda selezionata; i valori dei campi password vengono memorizzati come",
     "pt": "A gravação ocorre apenas na guia selecionada; valores de campos de senha são registrados como",
-    "zh-TW": "錄製只會發生在你選取的這個分頁；密碼欄位的值會記錄為"
+    "zh-TW": "錄製只會發生在你選取的這個分頁；密碼欄位的值會記錄為",
+    "ar": "يتم التسجيل في علامة التبويب المحددة فقط؛ تُسجَّل قيمة حقل كلمة المرور كـ",
+    "he": "ההקלטה מתבצעת רק בלשונית שנבחרה; ערך שדה סיסמה נרשם כ-"
   },
   "。 停止后可导出 JSON，配合": {
     "en": ". Stop, then export JSON and use it with",
@@ -1406,7 +1738,9 @@ export const LOCALE_TEXT = {
     "fr": ". Après l'arrêt, exportez le JSON et utilisez-le avec",
     "it": ". Dopo l'arresto puoi esportare il JSON e usarlo con",
     "pt": ". Após parar, você pode exportar o JSON e usá-lo com",
-    "zh-TW": "。 停止後可匯出 JSON，搭配"
+    "zh-TW": "。 停止後可匯出 JSON，搭配",
+    "ar": ". بعد الإيقاف صدّر JSON واستخدمه مع",
+    "he": ". לאחר העצירה ייצא JSON והשתמש בו עם"
   },
   "或": {
     "en": "or",
@@ -1417,7 +1751,9 @@ export const LOCALE_TEXT = {
     "fr": "ou",
     "it": "oppure",
     "pt": "ou",
-    "zh-TW": "或"
+    "zh-TW": "或",
+    "ar": "أو",
+    "he": "או"
   },
   "复制": {
     "en": "Copy",
@@ -1428,7 +1764,9 @@ export const LOCALE_TEXT = {
     "fr": "Copier",
     "it": "Copia",
     "pt": "Copiar",
-    "zh-TW": "複製"
+    "zh-TW": "複製",
+    "ar": "نسخ",
+    "he": "העתק"
   },
   "未配对": {
     "en": "Unpaired",
@@ -1439,7 +1777,9 @@ export const LOCALE_TEXT = {
     "fr": "Non associé",
     "it": "Non associato",
     "pt": "Não pareado",
-    "zh-TW": "未配對"
+    "zh-TW": "未配對",
+    "ar": "غير مقترن",
+    "he": "לא מצומד"
   },
   "已验证": {
     "en": "Verified",
@@ -1450,7 +1790,9 @@ export const LOCALE_TEXT = {
     "fr": "Vérifié",
     "it": "Verificato",
     "pt": "Verificado",
-    "zh-TW": "已驗證"
+    "zh-TW": "已驗證",
+    "ar": "تم التحقق",
+    "he": "מאומת"
   },
   "已连接 · 未配对": {
     "en": "Connected · Unpaired",
@@ -1461,7 +1803,9 @@ export const LOCALE_TEXT = {
     "fr": "Connecté · Non associé",
     "it": "Connesso · Non associato",
     "pt": "Conectado · Não pareado",
-    "zh-TW": "已連線 · 未配對"
+    "zh-TW": "已連線 · 未配對",
+    "ar": "متصل · غير مقترن",
+    "he": "מחובר · לא מצומד"
   },
   "已连接 · 已验证": {
     "en": "Connected · Verified",
@@ -1472,7 +1816,9 @@ export const LOCALE_TEXT = {
     "fr": "Connecté · Vérifié",
     "it": "Connesso · Verificato",
     "pt": "Conectado · Verificado",
-    "zh-TW": "已連線 · 已驗證"
+    "zh-TW": "已連線 · 已驗證",
+    "ar": "متصل · تم التحقق",
+    "he": "מחובר · מאומת"
   },
   "远程": {
     "en": "Remote",
@@ -1483,7 +1829,9 @@ export const LOCALE_TEXT = {
     "fr": "Distant",
     "it": "Remoto",
     "pt": "Remoto",
-    "zh-TW": "遠端"
+    "zh-TW": "遠端",
+    "ar": "بعيد",
+    "he": "מרוחק"
   },
   "界面语言 / Language": {
     "en": "Language",
@@ -1494,7 +1842,9 @@ export const LOCALE_TEXT = {
     "fr": "Langue de l'interface",
     "it": "Lingua dell'interfaccia / Language",
     "pt": "Idioma da interface / Language",
-    "zh-TW": "介面語言 / Language"
+    "zh-TW": "介面語言 / Language",
+    "ar": "لغة الواجهة / Language",
+    "he": "שפת ממשק / Language"
   },
   "保存图片": {
     "en": "Save image",
@@ -1505,7 +1855,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrer l'image",
     "it": "Salva immagine",
     "pt": "Salvar imagem",
-    "zh-TW": "儲存圖片"
+    "zh-TW": "儲存圖片",
+    "ar": "حفظ الصورة",
+    "he": "שמור תמונה"
   },
   "停止并保存": {
     "en": "Stop and save",
@@ -1516,7 +1868,9 @@ export const LOCALE_TEXT = {
     "fr": "Arrêter et enregistrer",
     "it": "Interrompi e salva",
     "pt": "Parar e salvar",
-    "zh-TW": "停止並儲存"
+    "zh-TW": "停止並儲存",
+    "ar": "إيقاف وحفظ",
+    "he": "עצור ושמור"
   },
   "复制录制指令": {
     "en": "Copy recording command",
@@ -1527,7 +1881,9 @@ export const LOCALE_TEXT = {
     "fr": "Copier les instructions d'enregistrement",
     "it": "Copia le istruzioni di registrazione",
     "pt": "Copiar instruções de gravação",
-    "zh-TW": "複製錄製指令"
+    "zh-TW": "複製錄製指令",
+    "ar": "نسخ أمر التسجيل",
+    "he": "העתק פקודת הקלטה"
   },
   "复制给 Agent 的指令": {
     "en": "Copy agent command",
@@ -1538,7 +1894,9 @@ export const LOCALE_TEXT = {
     "fr": "Copier la commande pour l'Agent",
     "it": "Copia istruzioni per l'Agent",
     "pt": "Copiar instruções para o Agent",
-    "zh-TW": "複製給 Agent 的指令"
+    "zh-TW": "複製給 Agent 的指令",
+    "ar": "نسخ أمر الوكيل",
+    "he": "העתק פקודת סוכן"
   },
   "复制给 Agent 的提示词": {
     "en": "Copy agent prompt",
@@ -1549,7 +1907,9 @@ export const LOCALE_TEXT = {
     "fr": "Copier les instructions pour l'Agent",
     "it": "Copia il prompt per l'Agent",
     "pt": "Copiar prompt para o Agent",
-    "zh-TW": "複製給 Agent 的提示詞"
+    "zh-TW": "複製給 Agent 的提示詞",
+    "ar": "نسخ موجه الوكيل",
+    "he": "העתק הנחיית סוכן"
   },
   "已打开手动长截图页": {
     "en": "Opened manual full-page page",
@@ -1560,7 +1920,9 @@ export const LOCALE_TEXT = {
     "fr": "Page de capture manuelle ouverte",
     "it": "Aperta la pagina di cattura manuale",
     "pt": "Página de captura manual aberta",
-    "zh-TW": "已開啟手動整頁截圖頁面"
+    "zh-TW": "已開啟手動整頁截圖頁面",
+    "ar": "تم فتح صفحة اللقطة اليدوية",
+    "he": "עמוד צילום ידני נפתח"
   },
   "开关读写异常": {
     "en": "Failed to read or write switch",
@@ -1571,7 +1933,9 @@ export const LOCALE_TEXT = {
     "fr": "Échec de lecture ou d'écriture de l'interrupteur",
     "it": "Impossibile leggere o scrivere l'interruttore",
     "pt": "Falha ao ler ou gravar o interruptor",
-    "zh-TW": "開關讀寫異常"
+    "zh-TW": "開關讀寫異常",
+    "ar": "فشل قراءة أو كتابة المفتاح",
+    "he": "קריאה או כתיבה של מתג נכשלו"
   },
   "开启操作审计": {
     "en": "Enable task audit",
@@ -1582,7 +1946,9 @@ export const LOCALE_TEXT = {
     "fr": "Activer l'audit des opérations",
     "it": "Registra cronologia delle operazioni",
     "pt": "Ativar auditoria de operações",
-    "zh-TW": "開啟操作稽核"
+    "zh-TW": "開啟操作稽核",
+    "ar": "تفعيل تدقيق المهام",
+    "he": "הפעל ביקורת משימות"
   },
   "开始截图": {
     "en": "Start capture",
@@ -1593,7 +1959,9 @@ export const LOCALE_TEXT = {
     "fr": "Démarrer la capture",
     "it": "Avvia cattura",
     "pt": "Iniciar captura",
-    "zh-TW": "開始截圖"
+    "zh-TW": "開始截圖",
+    "ar": "بدء الالتقاط",
+    "he": "התחל לכידה"
   },
   "当前可视区域": {
     "en": "Visible area",
@@ -1604,7 +1972,9 @@ export const LOCALE_TEXT = {
     "fr": "Zone visible",
     "it": "Area visibile",
     "pt": "Área visível",
-    "zh-TW": "目前可視範圍"
+    "zh-TW": "目前可視範圍",
+    "ar": "المنطقة المرئية",
+    "he": "אזור נראה"
   },
   "当前页面": {
     "en": "Current page",
@@ -1615,7 +1985,9 @@ export const LOCALE_TEXT = {
     "fr": "Page actuelle",
     "it": "Pagina attuale",
     "pt": "Página atual",
-    "zh-TW": "目前頁面"
+    "zh-TW": "目前頁面",
+    "ar": "الصفحة الحالية",
+    "he": "העמוד הנוכחי"
   },
   "录制完成": {
     "en": "Recording complete",
@@ -1626,7 +1998,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrement terminé",
     "it": "Registrazione completata",
     "pt": "Gravação concluída",
-    "zh-TW": "錄製完成"
+    "zh-TW": "錄製完成",
+    "ar": "اكتمل التسجيل",
+    "he": "ההקלטה הושלמה"
   },
   "手动录制正在运行的任务": {
     "en": "Record a running task manually",
@@ -1637,7 +2011,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrer manuellement une tâche en cours",
     "it": "Registra manualmente un'attività in corso",
     "pt": "Gravar manualmente uma tarefa em execução",
-    "zh-TW": "手動錄製執行中的工作"
+    "zh-TW": "手動錄製執行中的工作",
+    "ar": "تسجيل مهمة قيد التشغيل يدويًا",
+    "he": "הקלט משימה פעילה ידנית"
   },
   "打开录制页": {
     "en": "Open recording page",
@@ -1648,18 +2024,22 @@ export const LOCALE_TEXT = {
     "fr": "Ouvrir la page d'enregistrement",
     "it": "Apri pagina di registrazione",
     "pt": "Abrir página de gravação",
-    "zh-TW": "開啟錄製頁"
+    "zh-TW": "開啟錄製頁",
+    "ar": "فتح صفحة التسجيل",
+    "he": "פתח עמוד הקלטה"
   },
   "操作主题（可选）": {
-    "en": "Action theme (optional)",
-    "ja": "トピック（任意）",
+    "en": "Recording topic (optional)",
+    "ja": "操作テーマ（任意）",
     "ko": "작업 주제(선택 사항)",
-    "de": "Thema (optional)",
-    "es": "Tema (opcional)",
-    "fr": "Sujet de l'action (facultatif)",
-    "it": "Argomento (facoltativo)",
-    "pt": "Tema da ação (opcional)",
-    "zh-TW": "操作主題（選填）"
+    "de": "Aufnahmethema (optional)",
+    "es": "Tema de la operación (opcional)",
+    "fr": "Sujet de l'opération (facultatif)",
+    "it": "Tema dell'operazione (facoltativo)",
+    "pt": "Tema da operação (opcional)",
+    "zh-TW": "操作主題（選填）",
+    "ar": "موضوع العملية (اختياري)",
+    "he": "נושא הפעולה (אופציונלי)"
   },
   "整页 · 自动滚动": {
     "en": "Full page · Auto scroll",
@@ -1670,7 +2050,9 @@ export const LOCALE_TEXT = {
     "fr": "Page complète · Défilement automatique",
     "it": "Pagina intera · Automatica",
     "pt": "Página inteira · Rolagem automática",
-    "zh-TW": "整頁 · 自動捲動"
+    "zh-TW": "整頁 · 自動捲動",
+    "ar": "صفحة كاملة · تمرير تلقائي",
+    "he": "עמוד מלא · גלילה אוטומטית"
   },
   "时长上限（1–600 秒）": {
     "en": "Max duration (1–600 s)",
@@ -1681,7 +2063,9 @@ export const LOCALE_TEXT = {
     "fr": "Durée maximale (1–600 s)",
     "it": "Durata massima (1–600 secondi)",
     "pt": "Limite (1–600 segundos)",
-    "zh-TW": "時長上限（1–600 秒）"
+    "zh-TW": "時長上限（1–600 秒）",
+    "ar": "الحد الأقصى للمدة (1–600 ثانية)",
+    "he": "משך מקסימלי (1–600 שניות)"
   },
   "标准 1280/15": {
     "en": "Standard 1280/15",
@@ -1692,7 +2076,9 @@ export const LOCALE_TEXT = {
     "fr": "Standard 1280/15",
     "it": "Standard 1280/15",
     "pt": "Padrão 1280/15",
-    "zh-TW": "標準 1280/15"
+    "zh-TW": "標準 1280/15",
+    "ar": "قياسي 1280/15",
+    "he": "רגיל 1280/15"
   },
   "标准 · 1280 / 15 帧": {
     "en": "Standard · 1280/15 fps",
@@ -1703,7 +2089,9 @@ export const LOCALE_TEXT = {
     "fr": "Standard · 1280 / 15 fps",
     "it": "Standard · 1280 / 15 fps",
     "pt": "Padrão · 1280 / 15 fps",
-    "zh-TW": "標準 · 1280 / 15 fps"
+    "zh-TW": "標準 · 1280 / 15 fps",
+    "ar": "قياسي · 1280 / 15 إطارًا",
+    "he": "רגיל · 1280 / 15 פריימים"
   },
   "正在停止…": {
     "en": "Stopping…",
@@ -1714,7 +2102,9 @@ export const LOCALE_TEXT = {
     "fr": "Arrêt en cours…",
     "it": "Arresto in corso…",
     "pt": "Parando…",
-    "zh-TW": "正在停止…"
+    "zh-TW": "正在停止…",
+    "ar": "جارٍ الإيقاف…",
+    "he": "עוצר…"
   },
   "正在开始录制…": {
     "en": "Starting recording…",
@@ -1725,7 +2115,9 @@ export const LOCALE_TEXT = {
     "fr": "Démarrage de l'enregistrement…",
     "it": "Avvio registrazione…",
     "pt": "Iniciando a gravação…",
-    "zh-TW": "正在開始錄製…"
+    "zh-TW": "正在開始錄製…",
+    "ar": "جارٍ بدء التسجيل…",
+    "he": "מתחיל הקלטה…"
   },
   "正在截取…": {
     "en": "Capturing…",
@@ -1736,7 +2128,9 @@ export const LOCALE_TEXT = {
     "fr": "Capture en cours…",
     "it": "Cattura in corso…",
     "pt": "Capturando…",
-    "zh-TW": "正在擷取…"
+    "zh-TW": "正在擷取…",
+    "ar": "جارٍ الالتقاط…",
+    "he": "לוכד…"
   },
   "清晰 1920/30": {
     "en": "Clear 1920/30",
@@ -1747,7 +2141,9 @@ export const LOCALE_TEXT = {
     "fr": "Haute qualité 1920/30",
     "it": "Nitido 1920/30",
     "pt": "Nítido 1920/30",
-    "zh-TW": "清晰 1920/30"
+    "zh-TW": "清晰 1920/30",
+    "ar": "واضح 1920/30",
+    "he": "ברור 1920/30"
   },
   "清晰 · 1920 / 30 帧": {
     "en": "Clear · 1920/30 fps",
@@ -1758,7 +2154,9 @@ export const LOCALE_TEXT = {
     "fr": "Haute qualité · 1920 / 30 fps",
     "it": "Nitido · 1920 / 30 fps",
     "pt": "Nítido · 1920 / 30 fps",
-    "zh-TW": "清晰 · 1920 / 30 fps"
+    "zh-TW": "清晰 · 1920 / 30 fps",
+    "ar": "واضح · 1920 / 30 إطارًا",
+    "he": "ברור · 1920 / 30 פריימים"
   },
   "长图 · 我来滚动": {
     "en": "Full page · I will scroll",
@@ -1769,7 +2167,9 @@ export const LOCALE_TEXT = {
     "fr": "Longue image · Je fais défiler",
     "it": "Immagine lunga · Scorro io",
     "pt": "Imagem longa · Eu rolo",
-    "zh-TW": "長圖 · 我來捲動"
+    "zh-TW": "長圖 · 我來捲動",
+    "ar": "صورة طويلة · سأمرر أنا",
+    "he": "תמונה ארוכה · אני אגלול"
   },
   "需要 ws:// 或 wss:// 地址": {
     "en": "A ws:// or wss:// address is required",
@@ -1780,7 +2180,9 @@ export const LOCALE_TEXT = {
     "fr": "Une adresse ws:// ou wss:// est requise",
     "it": "È richiesto un indirizzo ws:// o wss://",
     "pt": "É necessário um endereço ws:// ou wss://",
-    "zh-TW": "需要 ws:// 或 wss:// 位址"
+    "zh-TW": "需要 ws:// 或 wss:// 位址",
+    "ar": "يلزم عنوان ws:// أو wss://",
+    "he": "נדרשת כתובת ws:// או wss://"
   },
   "非本机连接必须使用 wss://": {
     "en": "Non-local connections must use wss://",
@@ -1791,7 +2193,9 @@ export const LOCALE_TEXT = {
     "fr": "Les connexions non locales doivent utiliser wss://",
     "it": "Le connessioni non locali devono usare wss://",
     "pt": "Conexões não locais precisam usar wss://",
-    "zh-TW": "非本機連線必須使用 wss://"
+    "zh-TW": "非本機連線必須使用 wss://",
+    "ar": "يجب استخدام wss:// للاتصالات غير المحلية",
+    "he": "חיבורים לא מקומיים חייבים להשתמש ב- wss://"
   },
   "配对保存失败": {
     "en": "Pairing save failed",
@@ -1802,7 +2206,9 @@ export const LOCALE_TEXT = {
     "fr": "Échec de l'enregistrement de l'association",
     "it": "Salvataggio dell'associazione non riuscito",
     "pt": "Falha ao salvar o pareamento",
-    "zh-TW": "配對儲存失敗"
+    "zh-TW": "配對儲存失敗",
+    "ar": "فشل حفظ الاقتران",
+    "he": "שמירת צימוד נכשלה"
   },
   "配对恢复失败": {
     "en": "Pairing restore failed",
@@ -1813,7 +2219,9 @@ export const LOCALE_TEXT = {
     "fr": "Échec de la restauration de l'association",
     "it": "Ripristino dell'associazione non riuscito",
     "pt": "Falha ao restaurar o pareamento",
-    "zh-TW": "配對還原失敗"
+    "zh-TW": "配對還原失敗",
+    "ar": "فشل استعادة الاقتران",
+    "he": "שחזור צימוד נכשל"
   },
   "配对链接解析失败": {
     "en": "Pairing link parse failed",
@@ -1824,7 +2232,9 @@ export const LOCALE_TEXT = {
     "fr": "Échec de l'analyse du lien d'association",
     "it": "Impossibile analizzare il link di associazione",
     "pt": "Falha ao interpretar o link de pareamento",
-    "zh-TW": "配對連結解析失敗"
+    "zh-TW": "配對連結解析失敗",
+    "ar": "فشل تحليل رابط الاقتران",
+    "he": "פענוח קישור צימוד נכשל"
   },
   "本机 · ws://127.0.0.1:": {
     "en": "Local · ws://127.0.0.1:",
@@ -1835,7 +2245,9 @@ export const LOCALE_TEXT = {
     "fr": "Local · ws://127.0.0.1:",
     "it": "Locale · ws://127.0.0.1:",
     "pt": "Local · ws://127.0.0.1:",
-    "zh-TW": "本機 · ws://127.0.0.1:"
+    "zh-TW": "本機 · ws://127.0.0.1:",
+    "ar": "محلي · ws://127.0.0.1:",
+    "he": "מקומי · ws://127.0.0.1:"
   },
   "最近录制（": {
     "en": "Recent recordings (",
@@ -1846,7 +2258,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrements récents (",
     "it": "Registrazioni recenti (",
     "pt": "Gravações recentes (",
-    "zh-TW": "最近錄製（"
+    "zh-TW": "最近錄製（",
+    "ar": "أحدث التسجيلات (",
+    "he": "הקלטות אחרונות ("
   },
   "录制中…": {
     "en": "Recording…",
@@ -1857,7 +2271,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrement…",
     "it": "Registrazione…",
     "pt": "Gravando…",
-    "zh-TW": "錄製中…"
+    "zh-TW": "錄製中…",
+    "ar": "جارٍ التسجيل…",
+    "he": "מקליט…"
   },
   "录制中 ·": {
     "en": "Recording ·",
@@ -1868,7 +2284,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrement ·",
     "it": "Registrazione ·",
     "pt": "Gravando · ",
-    "zh-TW": "錄製中 ·"
+    "zh-TW": "錄製中 ·",
+    "ar": "جارٍ التسجيل ·",
+    "he": "מקליט ·"
   },
   "开始失败：": {
     "en": "Failed to start: ",
@@ -1879,7 +2297,9 @@ export const LOCALE_TEXT = {
     "fr": "Échec du démarrage : ",
     "it": "Avvio non riuscito: ",
     "pt": "Falha ao iniciar: ",
-    "zh-TW": "開始失敗："
+    "zh-TW": "開始失敗：",
+    "ar": "فشل البدء: ",
+    "he": "ההתחלה נכשלה: "
   },
   "停止失败：": {
     "en": "Failed to stop: ",
@@ -1890,7 +2310,9 @@ export const LOCALE_TEXT = {
     "fr": "Échec de l'arrêt : ",
     "it": "Arresto non riuscito: ",
     "pt": "Falha ao parar: ",
-    "zh-TW": "停止失敗："
+    "zh-TW": "停止失敗：",
+    "ar": "فشل الإيقاف: ",
+    "he": "העצירה נכשלה: "
   },
   "保存失败：": {
     "en": "Save failed: ",
@@ -1901,7 +2323,9 @@ export const LOCALE_TEXT = {
     "fr": "Échec de l'enregistrement : ",
     "it": "Salvataggio non riuscito: ",
     "pt": "Falha ao salvar: ",
-    "zh-TW": "儲存失敗："
+    "zh-TW": "儲存失敗：",
+    "ar": "فشل الحفظ: ",
+    "he": "השמירה נכשלה: "
   },
   "截图失败：": {
     "en": "Screenshot failed: ",
@@ -1912,7 +2336,9 @@ export const LOCALE_TEXT = {
     "fr": "Échec de la capture : ",
     "it": "Cattura non riuscita: ",
     "pt": "Falha na captura de tela: ",
-    "zh-TW": "截圖失敗："
+    "zh-TW": "截圖失敗：",
+    "ar": "فشل الالتقاط: ",
+    "he": "הלכידה נכשלה: "
   },
   "已保存：": {
     "en": "Saved: ",
@@ -1923,7 +2349,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistré : ",
     "it": "Salvato: ",
     "pt": "Salvo: ",
-    "zh-TW": "已儲存："
+    "zh-TW": "已儲存：",
+    "ar": "تم الحفظ: ",
+    "he": "נשמר: "
   },
   "例如：工作账号": {
     "en": "e.g. Work account",
@@ -1934,7 +2362,9 @@ export const LOCALE_TEXT = {
     "fr": "ex. : Compte professionnel",
     "it": "es. Account di lavoro",
     "pt": "ex.: Conta de trabalho",
-    "zh-TW": "例如：工作帳號"
+    "zh-TW": "例如：工作帳號",
+    "ar": "مثال: حساب العمل",
+    "he": "לדוגמה: חשבון עבודה"
   },
   "名字": {
     "en": "name",
@@ -1945,7 +2375,9 @@ export const LOCALE_TEXT = {
     "fr": "nom",
     "it": "nome",
     "pt": "nome",
-    "zh-TW": "名稱"
+    "zh-TW": "名稱",
+    "ar": "الاسم",
+    "he": "שם"
   },
   "读取，可在弹窗关闭。": {
     "en": "to read it; turn it off in the popup.",
@@ -1956,7 +2388,9 @@ export const LOCALE_TEXT = {
     "fr": "pour les consulter ; l'audit peut être désactivé dans le popup.",
     "it": "per leggerli; puoi disattivarlo dal popup.",
     "pt": "para consultar; você pode desativar no popup.",
-    "zh-TW": "讀取，可在彈出視窗關閉。"
+    "zh-TW": "讀取，可在彈出視窗關閉。",
+    "ar": "للقراءة؛ يمكن إيقافه من النافذة المنبثقة.",
+    "he": "כדי לקרוא; ניתן לכבות בחלון הקופץ."
   },
   "可在弹窗关闭。": {
     "en": "it can be turned off in the popup.",
@@ -1967,7 +2401,9 @@ export const LOCALE_TEXT = {
     "fr": "l'audit peut être désactivé dans le popup.",
     "it": "puoi disattivarlo dal popup.",
     "pt": "pode ser desativado no popup.",
-    "zh-TW": "可在彈出視窗關閉。"
+    "zh-TW": "可在彈出視窗關閉。",
+    "ar": "يمكن إيقافه من النافذة المنبثقة.",
+    "he": "ניתן לכבות בחלון הקופץ."
   },
   "记录请求、异常与页面上下文": {
     "en": "Capture requests, errors and page context",
@@ -1978,7 +2414,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrer les requêtes, les erreurs et le contexte de page",
     "it": "Registra richieste, errori e contesto della pagina",
     "pt": "Registre requisições, erros e contexto da página",
-    "zh-TW": "記錄請求、錯誤與頁面情境"
+    "zh-TW": "記錄請求、錯誤與頁面情境",
+    "ar": "تسجيل الطلبات والأخطاء وسياق الصفحة",
+    "he": "לכוד בקשות, שגיאות והקשר עמוד"
   },
   "从网页顶部截到底部，预览并保存": {
     "en": "Capture from top to bottom, preview and save",
@@ -1989,7 +2427,9 @@ export const LOCALE_TEXT = {
     "fr": "Capturer la page du haut vers le bas, prévisualiser et enregistrer",
     "it": "Cattura dall'alto in basso, visualizza in anteprima e salva",
     "pt": "Capture a página do topo até o fim, visualize e salve",
-    "zh-TW": "從網頁頂部截到底部，預覽並儲存"
+    "zh-TW": "從網頁頂部截到底部，預覽並儲存",
+    "ar": "الالتقاط من الأعلى إلى الأسفل والمعاينة والحفظ",
+    "he": "לכוד מלמעלה למטה, תצוגה מקדימה ושמירה"
   },
   "查看任务操作审计": {
     "en": "View task audit",
@@ -2000,7 +2440,9 @@ export const LOCALE_TEXT = {
     "fr": "Consulter l'audit des opérations",
     "it": "Visualizza il controllo delle operazioni",
     "pt": "Ver auditoria de operações da tarefa",
-    "zh-TW": "檢視工作的操作稽核"
+    "zh-TW": "檢視工作的操作稽核",
+    "ar": "عرض تدقيق المهام",
+    "he": "הצג ביקורת משימות"
   },
   "启用操作审计": {
     "en": "Enable task audit",
@@ -2011,7 +2453,9 @@ export const LOCALE_TEXT = {
     "fr": "Activer l'audit des opérations",
     "it": "Abilita il controllo delle operazioni",
     "pt": "Ativar auditoria de operações",
-    "zh-TW": "啟用操作稽核"
+    "zh-TW": "啟用操作稽核",
+    "ar": "تفعيل تدقيق المهام",
+    "he": "הפעל ביקורת משימות"
   },
   "读取中…": {
     "en": "Reading…",
@@ -2022,7 +2466,9 @@ export const LOCALE_TEXT = {
     "fr": "Lecture…",
     "it": "Lettura…",
     "pt": "Lendo…",
-    "zh-TW": "讀取中…"
+    "zh-TW": "讀取中…",
+    "ar": "جارٍ القراءة…",
+    "he": "קורא…"
   },
   "打开完整审计": {
     "en": "Open full audit",
@@ -2033,7 +2479,9 @@ export const LOCALE_TEXT = {
     "fr": "Ouvrir l'audit complet",
     "it": "Apri il controllo completo",
     "pt": "Abrir auditoria completa",
-    "zh-TW": "開啟完整稽核"
+    "zh-TW": "開啟完整稽核",
+    "ar": "فتح التدقيق الكامل",
+    "he": "פתח ביקורת מלאה"
   },
   "自动滚动并拼接当前标签页，完成后可在完整页预览保存。": {
     "en": "Auto-scroll and stitch this tab, then preview and save on the full page.",
@@ -2044,7 +2492,9 @@ export const LOCALE_TEXT = {
     "fr": "Faites défiler et assemblez cet onglet automatiquement, puis prévisualisez et enregistrez depuis la page complète.",
     "it": "Scorri e unisci automaticamente questa scheda; al termine puoi visualizzare l'anteprima e salvare dalla pagina completa.",
     "pt": "Role e monte automaticamente a guia atual; ao concluir, visualize e salve na página completa.",
-    "zh-TW": "自動捲動並拼接目前分頁，完成後可在完整頁面預覽與儲存。"
+    "zh-TW": "自動捲動並拼接目前分頁，完成後可在完整頁面預覽與儲存。",
+    "ar": "مرّر واجمع علامة التبويب هذه تلقائيًا، ثم عاين واحفظ من الصفحة الكاملة.",
+    "he": "גלול והלחם את הלשונית אוטומטית, ואז תצוגה מקדימה ושמירה בעמוד המלא."
   },
   "模式": {
     "en": "Mode",
@@ -2055,7 +2505,9 @@ export const LOCALE_TEXT = {
     "fr": "Mode",
     "it": "Modalità",
     "pt": "Modo",
-    "zh-TW": "模式"
+    "zh-TW": "模式",
+    "ar": "الوضع",
+    "he": "מצב"
   },
   "自动整页": {
     "en": "Auto full page",
@@ -2066,7 +2518,9 @@ export const LOCALE_TEXT = {
     "fr": "Page complète automatique",
     "it": "Pagina intera automatica",
     "pt": "Página inteira automática",
-    "zh-TW": "自動整頁"
+    "zh-TW": "自動整頁",
+    "ar": "صفحة كاملة تلقائية",
+    "he": "עמוד מלא אוטומטי"
   },
   "仅可见区域": {
     "en": "Visible area only",
@@ -2077,7 +2531,9 @@ export const LOCALE_TEXT = {
     "fr": "Zone visible uniquement",
     "it": "Solo area visibile",
     "pt": "Somente área visível",
-    "zh-TW": "僅可視範圍"
+    "zh-TW": "僅可視範圍",
+    "ar": "المنطقة المرئية فقط",
+    "he": "אזור נראה בלבד"
   },
   "打开完整页": {
     "en": "Open full page",
@@ -2088,7 +2544,9 @@ export const LOCALE_TEXT = {
     "fr": "Ouvrir la page complète",
     "it": "Apri pagina completa",
     "pt": "Abrir página completa",
-    "zh-TW": "開啟完整頁"
+    "zh-TW": "開啟完整頁",
+    "ar": "فتح الصفحة الكاملة",
+    "he": "פתח עמוד מלא"
   },
   "录制当前标签页为 MP4；停止后文件写入视频库。": {
     "en": "Record this tab as MP4; the file is saved to the video library after stopping.",
@@ -2099,7 +2557,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrez cet onglet en MP4 ; le fichier est ajouté à la bibliothèque vidéo à l'arrêt.",
     "it": "Registra questa scheda in MP4; dopo l'arresto il file viene aggiunto alla libreria video.",
     "pt": "Grave a guia atual como MP4; ao parar, o arquivo é gravado na biblioteca de vídeos.",
-    "zh-TW": "錄製目前分頁為 MP4；停止後檔案會寫入影片庫。"
+    "zh-TW": "錄製目前分頁為 MP4；停止後檔案會寫入影片庫。",
+    "ar": "تسجيل علامة التبويب هذه بصيغة MP4؛ يُحفظ الملف في مكتبة الفيديو بعد الإيقاف.",
+    "he": "הקלט את הלשונית הזו כ-MP4; הקובץ נשמר בספריית הווידאו לאחר העצירה."
   },
   "停止": {
     "en": "Stop",
@@ -2110,7 +2570,9 @@ export const LOCALE_TEXT = {
     "fr": "Arrêter",
     "it": "Arresta",
     "pt": "Parar",
-    "zh-TW": "停止"
+    "zh-TW": "停止",
+    "ar": "إيقاف",
+    "he": "עצור"
   },
   "历史": {
     "en": "History",
@@ -2121,7 +2583,9 @@ export const LOCALE_TEXT = {
     "fr": "Historique",
     "it": "Cronologia",
     "pt": "Histórico",
-    "zh-TW": "歷史紀錄"
+    "zh-TW": "歷史紀錄",
+    "ar": "السجل",
+    "he": "היסטוריה"
   },
   "记录当前标签页的操作步骤，供 Agent 参考。": {
     "en": "Record actions in this tab as a reference for the agent.",
@@ -2132,7 +2596,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrez les actions de cet onglet pour que l'Agent puisse s'y référer.",
     "it": "Registra i passaggi eseguiti in questa scheda come riferimento per l'Agent.",
     "pt": "Registre as ações da guia atual como referência para o Agent.",
-    "zh-TW": "記錄目前分頁的操作步驟，供 Agent 參考。"
+    "zh-TW": "記錄目前分頁的操作步驟，供 Agent 參考。",
+    "ar": "تسجيل خطوات الإجراءات في علامة التبويب هذه كمرجع للوكيل.",
+    "he": "הקלט את שלבי הפעולות בלשונית הזו כהפניה לסוכן."
   },
   "版本不一致": {
     "en": "Version mismatch",
@@ -2143,7 +2609,9 @@ export const LOCALE_TEXT = {
     "fr": "Versions incompatibles",
     "it": "Versioni non corrispondenti",
     "pt": "Versões incompatíveis",
-    "zh-TW": "版本不符"
+    "zh-TW": "版本不符",
+    "ar": "عدم تطابق الإصدار",
+    "he": "אי-התאמת גרסה"
   },
   "复制命令": {
     "en": "Copy command",
@@ -2154,7 +2622,9 @@ export const LOCALE_TEXT = {
     "fr": "Copier la commande",
     "it": "Copia comando",
     "pt": "Copiar comando",
-    "zh-TW": "複製指令"
+    "zh-TW": "複製指令",
+    "ar": "نسخ الأمر",
+    "he": "העתק פקודה"
   },
   "由": {
     "en": "by",
@@ -2165,7 +2635,9 @@ export const LOCALE_TEXT = {
     "fr": "Généré par",
     "it": "Generato da",
     "pt": "Gerado por",
-    "zh-TW": "由"
+    "zh-TW": "由",
+    "ar": "بواسطة",
+    "he": "על ידי"
   },
   "生成；保存前核对命令输出的 6 位配对码。": {
     "en": "generated; verify the 6-digit pairing code before saving.",
@@ -2176,7 +2648,9 @@ export const LOCALE_TEXT = {
     "fr": "; vérifiez le code d'association à 6 chiffres affiché par la commande avant d'enregistrer.",
     "it": "— verifica il codice di associazione a 6 cifre mostrato dal comando prima di salvare.",
     "pt": "; antes de salvar, confira o código de pareamento de 6 dígitos exibido pelo comando.",
-    "zh-TW": "產生；儲存前請核對指令輸出的 6 位數配對碼。"
+    "zh-TW": "產生；儲存前請核對指令輸出的 6 位數配對碼。",
+    "ar": "مُنشَّأ؛ تحقق من رمز الاقتران المكوّن من 6 أرقام قبل الحفظ.",
+    "he": "נוצר; אמת את קוד הצימוד בן 6 הספרות לפני השמירה."
   },
   "保存配对": {
     "en": "Save pairing",
@@ -2187,7 +2661,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrer l'association",
     "it": "Salva associazione",
     "pt": "Salvar pareamento",
-    "zh-TW": "儲存配對"
+    "zh-TW": "儲存配對",
+    "ar": "حفظ الاقتران",
+    "he": "שמור צימוד"
   },
   "切换到本机": {
     "en": "Switch to local",
@@ -2198,7 +2674,9 @@ export const LOCALE_TEXT = {
     "fr": "Basculer en local",
     "it": "Passa a locale",
     "pt": "Mudar para local",
-    "zh-TW": "切換至本機"
+    "zh-TW": "切換至本機",
+    "ar": "التبديل إلى المحلي",
+    "he": "עבור למקומי"
   },
   "高级：手动填写地址与 token": {
     "en": "Advanced: enter address and token manually",
@@ -2209,7 +2687,9 @@ export const LOCALE_TEXT = {
     "fr": "Avancé : saisir manuellement l'adresse et le token",
     "it": "Avanzate: inserisci manualmente indirizzo e token",
     "pt": "Avançado: informe o endereço e o token manualmente",
-    "zh-TW": "進階：手動填寫位址與 token"
+    "zh-TW": "進階：手動填寫位址與 token",
+    "ar": "متقدم: أدخل العنوان والرمز يدويًا",
+    "he": "מתקדם: הזן כתובת וטוקן ידנית"
   },
   "配对设备": {
     "en": "Paired devices",
@@ -2220,7 +2700,9 @@ export const LOCALE_TEXT = {
     "fr": "Appareils associés",
     "it": "Dispositivi associati",
     "pt": "Dispositivos pareados",
-    "zh-TW": "已配對裝置"
+    "zh-TW": "已配對裝置",
+    "ar": "الأجهزة المقترنة",
+    "he": "התקנים המצומדים"
   },
   "全部撤销": {
     "en": "Revoke all",
@@ -2231,7 +2713,9 @@ export const LOCALE_TEXT = {
     "fr": "Tout révoquer",
     "it": "Revoca tutti",
     "pt": "Revogar tudo",
-    "zh-TW": "全部撤銷"
+    "zh-TW": "全部撤銷",
+    "ar": "إلغاء الكل",
+    "he": "בטל הכל"
   },
   "接管时阻止页面点击/滚动": {
     "en": "Block page clicks/scroll while controlling",
@@ -2242,7 +2726,9 @@ export const LOCALE_TEXT = {
     "fr": "Bloquer les clics et le défilement de la page pendant le contrôle",
     "it": "Blocca clic e scorrimento durante il controllo",
     "pt": "Bloquear cliques/rolagem da página durante o controle",
-    "zh-TW": "接管時阻擋頁面點擊/捲動"
+    "zh-TW": "接管時阻擋頁面點擊/捲動",
+    "ar": "حظر نقر/تمرير الصفحة أثناء التحكم",
+    "he": "חסום לחיצות/גלילת עמוד בזמן שליטה"
   },
   "开启后，Agent 接管期间页面点击和滚动会被阻止（键盘不拦截）；点浮层的暂停/收起会立即放开。默认关闭。": {
     "en": "When on, page clicks and scrolling are blocked while the agent controls (keyboard is not blocked). Pause/minimize releases it immediately. Off by default.",
@@ -2253,7 +2739,9 @@ export const LOCALE_TEXT = {
     "fr": "Si activé, les clics et le défilement de la page sont bloqués pendant le contrôle de l'Agent (le clavier n'est pas bloqué) ; la mise en pause ou la réduction du panneau de contrôle les libère immédiatement. Désactivé par défaut.",
     "it": "Se attivo, durante il controllo dell'Agent i clic e lo scorrimento sulla pagina vengono bloccati (la tastiera non viene bloccata); i pulsanti Pausa e Riduci dell'overlay li sbloccano subito. Disattivato per impostazione predefinita.",
     "pt": "Quando ativado, cliques e rolagem na página são bloqueados enquanto o Agent controla (o teclado não é bloqueado); pausar ou recolher pelo painel flutuante libera na hora. Desativado por padrão.",
-    "zh-TW": "開啟後，Agent 接管期間頁面點擊與捲動會被阻擋（不攔截鍵盤）；點選浮層上的暫停/收合會立即解除。預設為關閉。"
+    "zh-TW": "開啟後，Agent 接管期間頁面點擊與捲動會被阻擋（不攔截鍵盤）；點選浮層上的暫停/收合會立即解除。預設為關閉。",
+    "ar": "عند التفعيل، تُحظر نقرات الصفحة والتمرير أثناء تحكم الوكيل (لوحة المفاتيح غير محظورة)؛ الإيقاف/التصغير من الطبقة العائمة يحرر فورًا. معطّل افتراضيًا.",
+    "he": "כאשר מופעל, לחיצות וגלילה בעמוד נחסמות בזמן שליטת הסוכן (מקלדת אינה נחסמת); השהיה/מזעור מהשכבה המשתחררים מיד. כבוי כברירת מחדל."
   },
   "--browser <名字>": {
     "en": "--browser <name>",
@@ -2264,7 +2752,9 @@ export const LOCALE_TEXT = {
     "fr": "--browser <nom>",
     "it": "--browser <nome>",
     "pt": "--browser <nome>",
-    "zh-TW": "--browser <名稱>"
+    "zh-TW": "--browser <名稱>",
+    "ar": "--browser <الاسم>",
+    "he": "--browser <שם>"
   },
   "--browser &lt;名字&gt;": {
     "en": "--browser <name>",
@@ -2275,7 +2765,9 @@ export const LOCALE_TEXT = {
     "fr": "--browser <nom>",
     "it": "--browser <nome>",
     "pt": "--browser &lt;nome&gt;",
-    "zh-TW": "--browser &lt;名稱&gt;"
+    "zh-TW": "--browser &lt;名稱&gt;",
+    "ar": "--browser &lt;الاسم&gt;",
+    "he": "--browser &lt;שם&gt;"
   },
   "开启后，接管期间页面点击和滚动会被阻止（键盘不拦截）；点浮层的暂停/收起会立即放开。默认关闭。": {
     "en": "When on, page clicks and scrolling are blocked while controlling (keyboard is not blocked). Pause/minimize releases it immediately. Off by default.",
@@ -2286,7 +2778,9 @@ export const LOCALE_TEXT = {
     "fr": "Si activé, les clics et le défilement de la page sont bloqués pendant le contrôle (le clavier n'est pas bloqué) ; la mise en pause ou la réduction du panneau de contrôle les libère immédiatement. Désactivé par défaut.",
     "it": "Se attivo, durante il controllo i clic e lo scorrimento sulla pagina vengono bloccati (la tastiera non viene bloccata); i pulsanti Pausa e Riduci dell'overlay li sbloccano subito. Disattivato per impostazione predefinita.",
     "pt": "Quando ativado, cliques e rolagem na página são bloqueados durante o controle (o teclado não é bloqueado); pausar ou recolher pelo painel flutuante libera na hora. Desativado por padrão.",
-    "zh-TW": "開啟後，接管期間頁面點擊與捲動會被阻擋（不攔截鍵盤）；點選浮層上的暫停/收合會立即解除。預設為關閉。"
+    "zh-TW": "開啟後，接管期間頁面點擊與捲動會被阻擋（不攔截鍵盤）；點選浮層上的暫停/收合會立即解除。預設為關閉。",
+    "ar": "عند التفعيل، تُحظر نقرات الصفحة والتمرير أثناء التحكم (لوحة المفاتيح غير محظورة)؛ الإيقاف/التصغير يحرر فورًا. معطّل افتراضيًا.",
+    "he": "כאשר מופעל, לחיצות וגלילה בעמוד נחסמות בזמן שליטה (מקלדת אינה נחסמת); השהיה/מזעור משחררים מיד. כבוי כברירת מחדל."
   },
   "中文": {
     "en": "Chinese",
@@ -2297,7 +2791,9 @@ export const LOCALE_TEXT = {
     "fr": "Chinois",
     "it": "Cinese",
     "pt": "Chinês",
-    "zh-TW": "簡體中文"
+    "zh-TW": "簡體中文",
+    "ar": "الصينية",
+    "he": "סינית"
   },
   "繁體中文": {
     "en": "Traditional Chinese",
@@ -2308,7 +2804,9 @@ export const LOCALE_TEXT = {
     "fr": "Chinois traditionnel",
     "it": "Cinese tradizionale",
     "pt": "Chinês tradicional",
-    "zh-TW": "繁體中文"
+    "zh-TW": "繁體中文",
+    "ar": "الصينية التقليدية",
+    "he": "סינית מסורתית"
   },
   "日本語": {
     "en": "Japanese",
@@ -2319,7 +2817,9 @@ export const LOCALE_TEXT = {
     "fr": "Japonais",
     "it": "Giapponese",
     "pt": "Japonês",
-    "zh-TW": "日本語"
+    "zh-TW": "日本語",
+    "ar": "اليابانية",
+    "he": "יפנית"
   },
   "返回": {
     "en": "Back",
@@ -2330,7 +2830,9 @@ export const LOCALE_TEXT = {
     "fr": "Retour",
     "it": "Indietro",
     "pt": "Voltar",
-    "zh-TW": "返回"
+    "zh-TW": "返回",
+    "ar": "رجوع",
+    "he": "חזרה"
   },
   "BridgeDeck 连接": {
     "en": "BridgeDeck connection",
@@ -2341,7 +2843,9 @@ export const LOCALE_TEXT = {
     "fr": "Connexion BridgeDeck",
     "it": "Connessione BridgeDeck",
     "pt": "Conexão do BridgeDeck",
-    "zh-TW": "BridgeDeck 連線"
+    "zh-TW": "BridgeDeck 連線",
+    "ar": "اتصال BridgeDeck",
+    "he": "חיבור BridgeDeck"
   },
   "修改浏览器名称": {
     "en": "Change browser name",
@@ -2352,7 +2856,9 @@ export const LOCALE_TEXT = {
     "fr": "Renommer le navigateur",
     "it": "Rinomina browser",
     "pt": "Renomear navegador",
-    "zh-TW": "修改瀏覽器名稱"
+    "zh-TW": "修改瀏覽器名稱",
+    "ar": "تغيير اسم المتصفح",
+    "he": "שנה שם דפדפן"
   },
   "复制后发给 Agent，指定当前浏览器": {
     "en": "Copy and send to the agent to target this browser",
@@ -2363,7 +2869,9 @@ export const LOCALE_TEXT = {
     "fr": "Copiez ces instructions et envoyez-les à l'Agent pour cibler ce navigateur",
     "it": "Copia e invia all'Agent per indicare questo browser",
     "pt": "Copie e envie ao Agent para indicar este navegador",
-    "zh-TW": "複製後傳給 Agent，指定目前瀏覽器"
+    "zh-TW": "複製後傳給 Agent，指定目前瀏覽器",
+    "ar": "انسخه وأرسله للوكيل لتحديد هذا المتصفح",
+    "he": "העתק ושלח לסוכן כדי למקד בדפדפן הזה"
   },
   "未配对：连接身份未验证，建议 bridge daemon pair": {
     "en": "Unpaired: connection identity is unverified; run bridge daemon pair",
@@ -2374,7 +2882,9 @@ export const LOCALE_TEXT = {
     "fr": "Non associé : l'identité de la connexion n'est pas vérifiée ; exécutez bridge daemon pair",
     "it": "Non associato: identità della connessione non verificata; esegui bridge daemon pair",
     "pt": "Não pareado: a identidade da conexão não foi verificada; recomendamos executar bridge daemon pair",
-    "zh-TW": "未配對：連線身分尚未驗證，建議執行 bridge daemon pair"
+    "zh-TW": "未配對：連線身分尚未驗證，建議執行 bridge daemon pair",
+    "ar": "غير مقترن: هوية الاتصال غير محققة؛ يُنصح بتشغيل bridge daemon pair",
+    "he": "לא מצומד: זהות החיבור לא אומתה; מומלץ להריץ bridge daemon pair"
   },
   "粘贴配对链接（含端口与凭据）": {
     "en": "Paste pairing link (with port and credential)",
@@ -2385,7 +2895,9 @@ export const LOCALE_TEXT = {
     "fr": "Collez le lien d'association (port et identifiants inclus)",
     "it": "Incolla il link di associazione (con porta e credenziali)",
     "pt": "Cole o link de pareamento (com porta e credencial)",
-    "zh-TW": "貼上配對連結（含連接埠與憑證）"
+    "zh-TW": "貼上配對連結（含連接埠與憑證）",
+    "ar": "ألصق رابط الاقتران (مع المنفذ والبيانات)",
+    "he": "הדבק קישור צימוד (עם פורט ופרטי גישה)"
   },
   "6 位配对码（bridge daemon pair 显示）": {
     "en": "6-digit pairing code (shown by bridge daemon pair)",
@@ -2396,7 +2908,9 @@ export const LOCALE_TEXT = {
     "fr": "Code d'association à 6 chiffres (affiché par bridge daemon pair)",
     "it": "Codice di associazione a 6 cifre (mostrato da bridge daemon pair)",
     "pt": "Código de pareamento de 6 dígitos (exibido por bridge daemon pair)",
-    "zh-TW": "6 位數配對碼（由 bridge daemon pair 顯示）"
+    "zh-TW": "6 位數配對碼（由 bridge daemon pair 顯示）",
+    "ar": "رمز اقتران من 6 أرقام (يعرضه bridge daemon pair)",
+    "he": "קוד צימוד בן 6 ספרות (מוצג על ידי bridge daemon pair)"
   },
   "配对 token": {
     "en": "Pairing token",
@@ -2407,7 +2921,9 @@ export const LOCALE_TEXT = {
     "fr": "Token d'association",
     "it": "Token di associazione",
     "pt": "Token de pareamento",
-    "zh-TW": "配對 token"
+    "zh-TW": "配對 token",
+    "ar": "رمز الاقتران",
+    "he": "טוקן צימוד"
   },
   "控制提示说明": {
     "en": "Control hint description",
@@ -2418,7 +2934,9 @@ export const LOCALE_TEXT = {
     "fr": "À propos des indices de contrôle",
     "it": "Informazioni sugli indicatori di controllo",
     "pt": "Sobre os indicadores de controle",
-    "zh-TW": "控制提示說明"
+    "zh-TW": "控制提示說明",
+    "ar": "وصف تلميح التحكم",
+    "he": "תיאור רמז שליטה"
   },
   "借用标签页确认说明": {
     "en": "Borrow confirmation description",
@@ -2429,7 +2947,9 @@ export const LOCALE_TEXT = {
     "fr": "À propos de la confirmation d'emprunt d'onglet",
     "it": "Informazioni sulla conferma del prestito di schede",
     "pt": "Sobre a confirmação de empréstimo de guia",
-    "zh-TW": "借用分頁確認說明"
+    "zh-TW": "借用分頁確認說明",
+    "ar": "وصف تأكيد استعارة علامة التبويب",
+    "he": "תיאור אישור שאילת לשונית"
   },
   "允许人工协助说明": {
     "en": "Allow human help description",
@@ -2440,7 +2960,9 @@ export const LOCALE_TEXT = {
     "fr": "À propos des demandes d'aide humaine",
     "it": "Informazioni sulle richieste di aiuto umano",
     "pt": "Sobre as solicitações de ajuda humana",
-    "zh-TW": "允許人工協助說明"
+    "zh-TW": "允許人工協助說明",
+    "ar": "وصف السماح بالمساعدة البشرية",
+    "he": "תיאור אפשרות עזרה אנושית"
   },
   "输入锁说明": {
     "en": "Input lock description",
@@ -2451,7 +2973,9 @@ export const LOCALE_TEXT = {
     "fr": "À propos du verrouillage de la saisie",
     "it": "Informazioni sul blocco dell'input",
     "pt": "Sobre o bloqueio de entrada da página",
-    "zh-TW": "輸入鎖定說明"
+    "zh-TW": "輸入鎖定說明",
+    "ar": "وصف قفل الإدخال",
+    "he": "תיאור נעילת קלט"
   },
   "Agent 控制时锁定页面输入": {
     "en": "Block page input while the agent controls",
@@ -2462,7 +2986,9 @@ export const LOCALE_TEXT = {
     "fr": "Verrouiller la saisie de la page pendant le contrôle de l'Agent",
     "it": "Blocca l'input della pagina durante il controllo dell'Agent",
     "pt": "Bloquear a entrada da página enquanto o Agent controla",
-    "zh-TW": "Agent 控制時鎖定頁面輸入"
+    "zh-TW": "Agent 控制時鎖定頁面輸入",
+    "ar": "حظر إدخال الصفحة أثناء تحكم الوكيل",
+    "he": "חסום קלט בעמוד בזמן שליטת הסוכן"
   },
   "复制实例 ID": {
     "en": "Copy instance ID",
@@ -2473,7 +2999,9 @@ export const LOCALE_TEXT = {
     "fr": "Copier l'ID d'instance",
     "it": "Copia ID istanza",
     "pt": "Copiar ID da instância",
-    "zh-TW": "複製執行個體 ID"
+    "zh-TW": "複製執行個體 ID",
+    "ar": "نسخ معرّف النسخة",
+    "he": "העתק מזהה מופע"
   },
   "性能指标": {
     "en": "Performance metrics",
@@ -2484,7 +3012,9 @@ export const LOCALE_TEXT = {
     "fr": "Indicateurs de performance",
     "it": "Metriche delle prestazioni",
     "pt": "Métricas de desempenho",
-    "zh-TW": "效能指標"
+    "zh-TW": "效能指標",
+    "ar": "مقاييس الأداء",
+    "he": "מדדי ביצועים"
   },
   "先选一个目标标签页": {
     "en": "Select a target tab first",
@@ -2495,7 +3025,9 @@ export const LOCALE_TEXT = {
     "fr": "Choisissez d'abord un onglet cible",
     "it": "Seleziona prima una scheda di destinazione",
     "pt": "Selecione uma guia de destino primeiro",
-    "zh-TW": "請先選取一個目標分頁"
+    "zh-TW": "請先選取一個目標分頁",
+    "ar": "اختر علامة تبويب مستهدفة أولًا",
+    "he": "בחר תחילה לשונית יעד"
   },
   "请求规则": {
     "en": "Request rules",
@@ -2506,7 +3038,9 @@ export const LOCALE_TEXT = {
     "fr": "Règles de requêtes",
     "it": "Regole delle richieste",
     "pt": "Regras de requisição",
-    "zh-TW": "請求規則"
+    "zh-TW": "請求規則",
+    "ar": "قواعد الطلبات",
+    "he": "כללי בקשות"
   },
   "给当前标签页加临时规则：fulfill / block / modify（URL 支持 *）。规则只在本浏览器本地生效，刷新后自动重注入。": {
     "en": "Add a temporary rule to this tab: fulfill / block / modify (URL supports *). Rules apply only in this browser and are re-injected after refresh.",
@@ -2517,7 +3051,9 @@ export const LOCALE_TEXT = {
     "fr": "Ajoutez une règle temporaire à cet onglet : fulfill / block / modify (l'URL accepte *). Les règles s'appliquent uniquement en local dans ce navigateur et sont réinjectées automatiquement après une actualisation.",
     "it": "Aggiungi una regola temporanea a questa scheda: fulfill / block / modify (l'URL supporta *). Le regole valgono solo in questo browser e vengono reiniettate automaticamente dopo il ricaricamento.",
     "pt": "Adicione uma regra temporária a esta guia: fulfill / block / modify (URL aceita *). As regras valem apenas neste navegador e são reinjetadas após a atualização da página.",
-    "zh-TW": "為目前分頁新增臨時規則：fulfill / block / modify（URL 支援 *）。規則只在這個瀏覽器本機生效，重新整理後會自動重新注入。"
+    "zh-TW": "為目前分頁新增臨時規則：fulfill / block / modify（URL 支援 *）。規則只在這個瀏覽器本機生效，重新整理後會自動重新注入。",
+    "ar": "أضف قاعدة مؤقتة لعلامة التبويب هذه: fulfill / block / modify (URL يدعم *). القواعد تسري محليًا في هذا المتصفح فقط وتُعاد حقنها تلقائيًا بعد التحديث.",
+    "he": "הוסף כלל זמני ללשונית הזו: fulfill / block / modify (URL תומך ב-*). הכללים חלים מקומית בדפדפן הזה ומזריקים מחדש אוטומטית לאחר רענון."
   },
   "添加": {
     "en": "Add",
@@ -2528,7 +3064,9 @@ export const LOCALE_TEXT = {
     "fr": "Ajouter",
     "it": "Aggiungi",
     "pt": "Adicionar",
-    "zh-TW": "新增"
+    "zh-TW": "新增",
+    "ar": "إضافة",
+    "he": "הוסף"
   },
   "清空": {
     "en": "Clear",
@@ -2539,7 +3077,9 @@ export const LOCALE_TEXT = {
     "fr": "Effacer",
     "it": "Svuota",
     "pt": "Limpar",
-    "zh-TW": "清除"
+    "zh-TW": "清除",
+    "ar": "مسح",
+    "he": "נקה"
   },
   "当前标签页没有规则": {
     "en": "No rules for this tab",
@@ -2550,7 +3090,9 @@ export const LOCALE_TEXT = {
     "fr": "Aucune règle pour cet onglet",
     "it": "Nessuna regola per questa scheda",
     "pt": "Nenhuma regra nesta guia",
-    "zh-TW": "目前分頁沒有規則"
+    "zh-TW": "目前分頁沒有規則",
+    "ar": "لا توجد قواعد لهذه العلامة",
+    "he": "אין כללים ללשונית הזו"
   },
   "操作时间线": {
     "en": "Action timeline",
@@ -2561,7 +3103,9 @@ export const LOCALE_TEXT = {
     "fr": "Chronologie des actions",
     "it": "Sequenza temporale delle operazioni",
     "pt": "Linha do tempo das ações",
-    "zh-TW": "操作時間軸"
+    "zh-TW": "操作時間軸",
+    "ar": "الجدول الزمني للإجراءات",
+    "he": "ציר זמן פעולות"
   },
   "还没有操作记录": {
     "en": "No actions recorded yet",
@@ -2572,7 +3116,9 @@ export const LOCALE_TEXT = {
     "fr": "Aucune action enregistrée pour le moment",
     "it": "Nessuna operazione registrata",
     "pt": "Ainda não há ações registradas",
-    "zh-TW": "尚無操作紀錄"
+    "zh-TW": "尚無操作紀錄",
+    "ar": "لا توجد إجراءات مسجلة بعد",
+    "he": "לא נרשמו פעולות עדיין"
   },
   "URL pattern，例如 */api/*": {
     "en": "URL pattern, e.g. */api/*",
@@ -2583,7 +3129,9 @@ export const LOCALE_TEXT = {
     "fr": "Motif d'URL, par ex. */api/*",
     "it": "Pattern URL, ad esempio */api/*",
     "pt": "Padrão de URL, ex.: */api/*",
-    "zh-TW": "URL 模式，例如 */api/*"
+    "zh-TW": "URL 模式，例如 */api/*",
+    "ar": "نمط URL، مثل */api/*",
+    "he": "תבנית URL, לדוגמה */api/*"
   },
   "fulfill 的响应正文（block/modify 可留空）": {
     "en": "Response body for fulfill (can be empty for block/modify)",
@@ -2594,7 +3142,9 @@ export const LOCALE_TEXT = {
     "fr": "Corps de la réponse pour fulfill (peut rester vide pour block/modify)",
     "it": "Corpo della risposta per fulfill (può essere vuoto per block/modify)",
     "pt": "Corpo da resposta de fulfill (pode ficar vazio em block/modify)",
-    "zh-TW": "fulfill 的回應本文（block/modify 可留空）"
+    "zh-TW": "fulfill 的回應本文（block/modify 可留空）",
+    "ar": "نص استجابة fulfill (يمكن تركه فارغًا في block/modify)",
+    "he": "גוף תגובת fulfill (יכול להישאר ריק ב-block/modify)"
   },
   "复现步骤。": {
     "en": "Reproduction steps.",
@@ -2605,7 +3155,9 @@ export const LOCALE_TEXT = {
     "fr": "pour reproduire les étapes.",
     "it": "per riprodurre i passaggi.",
     "pt": "Passos para reproduzir.",
-    "zh-TW": "重現步驟。"
+    "zh-TW": "重現步驟。",
+    "ar": "خطوات إعادة الإنتاج.",
+    "he": "שלבי שחזור."
   },
   "录制记录": {
     "en": "Recordings",
@@ -2616,7 +3168,9 @@ export const LOCALE_TEXT = {
     "fr": "Enregistrements",
     "it": "Registrazioni",
     "pt": "Gravações",
-    "zh-TW": "錄製紀錄"
+    "zh-TW": "錄製紀錄",
+    "ar": "سجلات التسجيل",
+    "he": "רשומות הקלטה"
   },
   "还没有录制记录": {
     "en": "No recordings yet",
@@ -2627,7 +3181,9 @@ export const LOCALE_TEXT = {
     "fr": "Aucun enregistrement pour le moment",
     "it": "Ancora nessuna registrazione",
     "pt": "Ainda não há gravações",
-    "zh-TW": "尚無錄製紀錄"
+    "zh-TW": "尚無錄製紀錄",
+    "ar": "لا توجد سجلات تسجيل بعد",
+    "he": "אין עדיין רשומות הקלטה"
   },
   "JSON 预览": {
     "en": "JSON preview",
@@ -2638,7 +3194,9 @@ export const LOCALE_TEXT = {
     "fr": "Aperçu JSON",
     "it": "Anteprima JSON",
     "pt": "Visualização do JSON",
-    "zh-TW": "JSON 預覽"
+    "zh-TW": "JSON 預覽",
+    "ar": "معاينة JSON",
+    "he": "תצוגה מקדימה JSON"
   },
   "聚焦标签页": {
     "en": "Focus tab",
@@ -2649,7 +3207,9 @@ export const LOCALE_TEXT = {
     "fr": "Activer l'onglet",
     "it": "Attiva scheda",
     "pt": "Focar guia",
-    "zh-TW": "聚焦分頁"
+    "zh-TW": "聚焦分頁",
+    "ar": "تركيز علامة التبويب",
+    "he": "מקד לשונית"
   },
   "隐私说明 · BridgeDeck": {
     "en": "Privacy notice · BridgeDeck",
@@ -2660,7 +3220,9 @@ export const LOCALE_TEXT = {
     "fr": "Notice de confidentialité · BridgeDeck",
     "it": "Informativa sulla privacy · BridgeDeck",
     "pt": "Aviso de privacidade · BridgeDeck",
-    "zh-TW": "隱私說明 · BridgeDeck"
+    "zh-TW": "隱私說明 · BridgeDeck",
+    "ar": "إشعار الخصوصية · BridgeDeck",
+    "he": "הודעת פרטיות · BridgeDeck"
   },
   "数据默认只在本机流转": {
     "en": "Data stays on this machine by default",
@@ -2671,7 +3233,9 @@ export const LOCALE_TEXT = {
     "fr": "Les données restent sur cet ordinateur par défaut",
     "it": "I dati restano su questo computer per impostazione predefinita",
     "pt": "Os dados ficam neste computador por padrão",
-    "zh-TW": "資料預設只在本機流通"
+    "zh-TW": "資料預設只在本機流通",
+    "ar": "تبقى البيانات على هذا الجهاز افتراضيًا",
+    "he": "הנתונים נשארים במחשב הזה כברירת מחדל"
   },
   "保存什么": {
     "en": "What is stored",
@@ -2682,7 +3246,9 @@ export const LOCALE_TEXT = {
     "fr": "Ce qui est conservé",
     "it": "Cosa viene salvato",
     "pt": "O que é salvo",
-    "zh-TW": "儲存哪些內容"
+    "zh-TW": "儲存哪些內容",
+    "ar": "ما يُحفظ",
+    "he": "מה נשמר"
   },
   "调试记录、长截图、视频和操作录制默认保存在当前浏览器的本地存储中，不会上传到服务器。\n        调试记录保留最近 30 天，最多 50 份、总计 50 MiB；凭据类字段会脱敏，正文有大小上限。": {
     "en": "Debug records, full-page screenshots, videos and action recordings are stored in this browser's local storage by default and are not uploaded to a server.\n        Debug records are kept for 30 days, up to 50 entries and 50 MiB total; credential fields are redacted and bodies have a size limit.",
@@ -2693,7 +3259,9 @@ export const LOCALE_TEXT = {
     "fr": "Les enregistrements de débogage, les captures d'écran de page complète, les vidéos et les enregistrements d'actions sont conservés par défaut dans le stockage local de ce navigateur et ne sont jamais envoyés à un serveur. Les enregistrements de débogage sont conservés 30 jours, au maximum 50 captures et 50 MiB au total ; les champs de type identifiant sont masqués et la taille des corps est limitée.",
     "it": "I record di debug, gli screenshot dell'intera pagina, i video e le registrazioni delle azioni vengono salvati per impostazione predefinita nell'archivio locale di questo browser e non vengono caricati su alcun server.\n        I record di debug vengono conservati per gli ultimi 30 giorni, fino a 50 record e 50 MiB complessivi; i campi delle credenziali vengono oscurati e i corpi hanno un limite di dimensione.",
     "pt": "Registros de depuração, capturas de tela da página inteira, vídeos e gravações de ações ficam por padrão no armazenamento local deste navegador e não são enviados a servidores.\n        Os registros de depuração são mantidos por 30 dias, com limite de 50 registros e 50 MiB no total; campos de credencial são ocultados e o conteúdo dos corpos tem limite de tamanho.",
-    "zh-TW": "偵錯紀錄、整頁截圖、影片和操作錄製預設儲存在目前瀏覽器的本機儲存空間中，不會上傳到伺服器。\n        偵錯紀錄保留最近 30 天，最多 50 份、總計 50 MiB；憑證類欄位會遮蔽，內文有大小上限。"
+    "zh-TW": "偵錯紀錄、整頁截圖、影片和操作錄製預設儲存在目前瀏覽器的本機儲存空間中，不會上傳到伺服器。\n        偵錯紀錄保留最近 30 天，最多 50 份、總計 50 MiB；憑證類欄位會遮蔽，內文有大小上限。",
+    "ar": "تُحفظ سجلات التصحيح واللقطات الطويلة والفيديو وتسجيلات الإجراءات محليًا في هذا المتصفح افتراضيًا، ولا تُرفع إلى خادم. تُحفظ سجلات التصحيح 30 يومًا، وبحد أقصى 50 سجلًا و50 MiB؛ تُخفى حقول بيانات الاعتماد وتُحدّ النصوص.",
+    "he": "רשומות ניפוי, צילומי עמוד ארוכים, וידאו והקלטות פעולות נשמרים מקומית בדפדפן הזה כברירת מחדל ואינם מועלים לשרת. רשומות ניפוי נשמרות 30 יום, עד 50 רשומות ו-50 MiB; שדות פרטי גישה מוסתרים והגופים מוגבלים."
   },
   "不保存什么": {
     "en": "What is not stored",
@@ -2704,7 +3272,9 @@ export const LOCALE_TEXT = {
     "fr": "Ce qui n'est pas conservé",
     "it": "Cosa non viene salvato",
     "pt": "O que não é salvo",
-    "zh-TW": "不儲存哪些內容"
+    "zh-TW": "不儲存哪些內容",
+    "ar": "ما لا يُحفظ",
+    "he": "מה לא נשמר"
   },
   "不保存输入框密码值、页面完整正文和截图内容到调试历史。操作录制会把密码框的值记成": {
     "en": "Password field values, full page text and screenshot contents are not stored in debug history. Action recording stores password values as",
@@ -2715,7 +3285,9 @@ export const LOCALE_TEXT = {
     "fr": "Les valeurs des champs de mot de passe, le texte intégral des pages et le contenu des captures d'écran ne sont pas enregistrés dans l'historique de débogage. L'enregistrement d'actions consigne les valeurs des champs de mot de passe sous la forme",
     "it": "I valori delle password nei campi di input, l'intero testo della pagina e il contenuto degli screenshot non vengono salvati nella cronologia di debug. La registrazione azioni memorizza i valori dei campi password come",
     "pt": "Valores de senha em campos de entrada, o texto completo da página e o conteúdo de capturas de tela não são salvos no histórico de depuração. A gravação de ações registra os valores de campos de senha como",
-    "zh-TW": "偵錯歷史不會儲存輸入框的密碼值、頁面完整內文與截圖內容。操作錄製會把密碼欄位的值記錄為"
+    "zh-TW": "偵錯歷史不會儲存輸入框的密碼值、頁面完整內文與截圖內容。操作錄製會把密碼欄位的值記錄為",
+    "ar": "لا تُحفظ قيم كلمات المرور في حقول الإدخال ولا النص الكامل للصفحة ولا محتوى اللقطات في سجل التصحيح. تسجيل الإجراءات يسجّل قيمة حقل كلمة المرور كـ",
+    "he": "ערכי סיסמה בשדות קלט, טקסט עמוד מלא ותוכן צילומי מסך אינם נשמרים בהיסטוריית הניפוי. הקלטת פעולות רושמת ערך שדה סיסמה כ-"
   },
   "。远程配对令牌只保存在扩展私有存储中，不写入普通偏好设置。": {
     "en": ". Remote pairing tokens are stored only in extension private storage, not in normal preferences.",
@@ -2726,7 +3298,9 @@ export const LOCALE_TEXT = {
     "fr": ". Le token de couplage distant est conservé uniquement dans le stockage privé de l'extension et n'est jamais écrit dans les préférences ordinaires.",
     "it": ". Il token di associazione remota viene conservato solo nell'archivio privato dell'estensione e non viene scritto nelle preferenze normali.",
     "pt": ". O token de pareamento remoto fica apenas no armazenamento privado da extensão e não é gravado nas preferências comuns.",
-    "zh-TW": "。遠端配對權杖只儲存在擴充功能的私有儲存空間中，不會寫入一般偏好設定。"
+    "zh-TW": "。遠端配對權杖只儲存在擴充功能的私有儲存空間中，不會寫入一般偏好設定。",
+    "ar": ". يُحفظ رمز الاقتران البعيد في تخزين الإضافة الخاص فقط، ولا يُكتب في التفضيلات العادية.",
+    "he": ". טוקן צימוד מרוחק נשמר רק באחסון הפרטי של התוסף ואינו נכתב בהעדפות רגילות."
   },
   "你的控制": {
     "en": "Your controls",
@@ -2737,7 +3311,9 @@ export const LOCALE_TEXT = {
     "fr": "Ce que vous contrôlez",
     "it": "I tuoi controlli",
     "pt": "Seus controles",
-    "zh-TW": "你的控制選項"
+    "zh-TW": "你的控制選項",
+    "ar": "تحكمك",
+    "he": "השליטה שלך"
   },
   "你可以在弹窗或设置页关闭连接、控制提示、自动化设置；可以随时清空调试历史、录制和视频。\n        本扩展只连接": {
     "en": "You can turn off the connection, control hints and automation settings in the popup or options page, and clear debug history, recordings and videos at any time.\n        This extension only connects to",
@@ -2748,7 +3324,9 @@ export const LOCALE_TEXT = {
     "fr": "Vous pouvez désactiver la connexion, les indices de contrôle et les paramètres d'automatisation depuis le popup ou la page de paramètres ; vous pouvez à tout moment effacer l'historique de débogage, les enregistrements et les vidéos. Cette extension se connecte uniquement à un daemon local sur",
     "it": "Dal popup o dalla pagina delle impostazioni puoi disattivare la connessione, gli indicatori di controllo e le impostazioni di automazione; puoi cancellare in qualsiasi momento la cronologia di debug, le registrazioni e i video.\n        Questa estensione si connette solo al daemon locale su",
     "pt": "No popup ou na página de configurações, você pode desativar a conexão, os indicadores de controle e as configurações de automação; também pode limpar o histórico de depuração, as gravações e os vídeos a qualquer momento.\n        Esta extensão se conecta apenas ao daemon local em",
-    "zh-TW": "你可以在彈出視窗或設定頁關閉連線、控制提示與自動化設定；也可以隨時清除偵錯歷史、錄製與影片。\n        本擴充功能只會連線到"
+    "zh-TW": "你可以在彈出視窗或設定頁關閉連線、控制提示與自動化設定；也可以隨時清除偵錯歷史、錄製與影片。\n        本擴充功能只會連線到",
+    "ar": "يمكنك إيقاف الاتصال وتلميح التحكم وإعدادات الأتمتة من النافذة المنبثقة أو صفحة الإعدادات؛ ويمكنك مسح سجل التصحيح والتسجيلات والفيديو في أي وقت. يتصل هذا الامتداد فقط بـ",
+    "he": "ניתן לכבות חיבור, רמז שליטה והגדרות אוטומציה מהחלון הקופץ או עמוד ההגדרות; ניתן לנקות היסטוריית ניפוי, הקלטות ווידאו בכל עת. התוסף מתחבר רק ל-"
   },
   "上的本地 daemon；远程连接必须由你主动配置并授权。": {
     "en": "the local daemon; remote connections must be configured and authorized by you.",
@@ -2759,7 +3337,243 @@ export const LOCALE_TEXT = {
     "fr": "; les connexions distantes doivent être configurées et autorisées par vous.",
     "it": "; le connessioni remote devono essere configurate e autorizzate da te.",
     "pt": "; conexões remotas só podem ser configuradas e autorizadas por você.",
-    "zh-TW": "上的本機 daemon；遠端連線必須由你主動設定並授權。"
-  }
+    "zh-TW": "上的本機 daemon；遠端連線必須由你主動設定並授權。",
+    "ar": "daemon المحلي. يجب عليك تهيئة الاتصال البعيد والتفويض به بنفسك.",
+    "he": "daemon מקומי. חיבור מרוחק חייב להיות מוגדר ומאושר על ידך."
+  },
+  "本地分片": {
+    "en": "Local chunks",
+    "ja": "ローカルチャンク",
+    "ko": "로컬 청크",
+    "de": "Lokale Chunks",
+    "es": "Fragmentos locales",
+    "fr": "Fragments locaux",
+    "it": "Frammenti locali",
+    "pt": "Fragmentos locais",
+    "zh-TW": "本機分片",
+    "ar": "مقاطع محلية",
+    "he": "מקטעים מקומיים"
+  },
+  "扫描": {
+    "en": "Scan",
+    "ja": "スキャン",
+    "ko": "스캔",
+    "de": "Scannen",
+    "es": "Escanear",
+    "fr": "Analyser",
+    "it": "Analizza",
+    "pt": "Verificar",
+    "zh-TW": "掃描",
+    "ar": "فحص",
+    "he": "סריקה"
+  },
+  "恢复最新": {
+    "en": "Restore latest",
+    "ja": "最新を復元",
+    "ko": "최근 항목 복원",
+    "de": "Neueste wiederherstellen",
+    "es": "Restaurar el más reciente",
+    "fr": "Restaurer le plus récent",
+    "it": "Ripristina l'ultimo",
+    "pt": "Restaurar o mais recente",
+    "zh-TW": "還原最新",
+    "ar": "استعادة الأحدث",
+    "he": "שחזר את האחרון"
+  },
+  "尚未扫描": {
+    "en": "Not scanned yet",
+    "ja": "まだスキャンしていません",
+    "ko": "아직 스캔하지 않음",
+    "de": "Noch nicht gescannt",
+    "es": "Aún no escaneado",
+    "fr": "Pas encore analysé",
+    "it": "Non ancora analizzato",
+    "pt": "Ainda não verificado",
+    "zh-TW": "尚未掃描",
+    "ar": "لم يُفحص بعد",
+    "he": "טרם נסרק"
+  },
+  "没有本地分片": {
+    "en": "No local chunks",
+    "ja": "ローカルチャンクがありません",
+    "ko": "로컬 청크가 없습니다",
+    "de": "Keine lokalen Chunks",
+    "es": "No hay fragmentos locales",
+    "fr": "Aucun fragment local",
+    "it": "Nessun frammento locale",
+    "pt": "Nenhum fragmento local",
+    "zh-TW": "沒有本機分片",
+    "ar": "لا توجد مقاطع محلية",
+    "he": "אין מקטעים מקומיים"
+  },
+  "没有可恢复的本地分片": {
+    "en": "No recoverable local chunks",
+    "ja": "復元できるローカルチャンクがありません",
+    "ko": "복구할 수 있는 로컬 청크가 없습니다",
+    "de": "Keine wiederherstellbaren lokalen Chunks",
+    "es": "No hay fragmentos locales recuperables",
+    "fr": "Aucun fragment local récupérable",
+    "it": "Nessun frammento locale recuperabile",
+    "pt": "Nenhum fragmento local recuperável",
+    "zh-TW": "沒有可還原的本機分片",
+    "ar": "لا توجد مقاطع محلية قابلة للاستعادة",
+    "he": "אין מקטעים מקומיים ניתנים לשחזור"
+  },
+  "已保存": {
+    "en": "Saved",
+    "ja": "保存しました",
+    "ko": "저장했습니다",
+    "de": "Gespeichert",
+    "es": "Guardado",
+    "fr": "Enregistré",
+    "it": "Salvato",
+    "pt": "Salvo",
+    "zh-TW": "已儲存",
+    "ar": "تم الحفظ",
+    "he": "נשמר"
+  },
+  "已恢复默认": {
+    "en": "Defaults restored",
+    "ja": "既定値に戻しました",
+    "ko": "기본값으로 복원했습니다",
+    "de": "Standardwerte wiederhergestellt",
+    "es": "Valores predeterminados restaurados",
+    "fr": "Valeurs par défaut restaurées",
+    "it": "Valori predefiniti ripristinati",
+    "pt": "Padrões restaurados",
+    "zh-TW": "已還原預設值",
+    "ar": "تمت استعادة الإعدادات الافتراضية",
+    "he": "שוחזרו ברירות המחדל"
+  },
+  "已复制：": {
+    "en": "Copied: ",
+    "ja": "コピーしました：",
+    "ko": "복사했습니다: ",
+    "de": "Kopiert: ",
+    "es": "Copiado: ",
+    "fr": "Copié : ",
+    "it": "Copiato: ",
+    "pt": "Copiado: ",
+    "zh-TW": "已複製：",
+    "ar": "تم النسخ: ",
+    "he": "הועתק: "
+  },
+  "复制失败，请手动复制：": {
+    "en": "Copy failed, copy manually: ",
+    "ja": "コピーに失敗しました。手動でコピーしてください：",
+    "ko": "복사에 실패했습니다. 직접 복사하세요: ",
+    "de": "Kopieren fehlgeschlagen, bitte manuell kopieren: ",
+    "es": "Error al copiar; cópialo manualmente: ",
+    "fr": "Échec de la copie ; copiez manuellement : ",
+    "it": "Copia non riuscita; copia manualmente: ",
+    "pt": "Falha ao copiar; copie manualmente: ",
+    "zh-TW": "複製失敗，請手動複製：",
+    "ar": "فشل النسخ، انسخ يدويًا: ",
+    "he": "ההעתקה נכשלה, העתק ידנית: "
+  },
+  "配对码需为 6 位数字": {
+    "en": "Pairing code must be 6 digits",
+    "ja": "ペアリングコードは6桁の数字である必要があります",
+    "ko": "페어링 코드는 6자리 숫자여야 합니다",
+    "de": "Der Kopplungscode muss aus 6 Ziffern bestehen",
+    "es": "El código de emparejamiento debe tener 6 dígitos",
+    "fr": "Le code d'appairage doit comporter 6 chiffres",
+    "it": "Il codice di associazione deve avere 6 cifre",
+    "pt": "O código de emparelhamento deve ter 6 dígitos",
+    "zh-TW": "配對碼需為 6 位數字",
+    "ar": "يجب أن يتكون رمز الاقتران من 6 أرقام",
+    "he": "קוד הצימוד חייב להכיל 6 ספרות"
+  },
+  "地址格式不正确": {
+    "en": "Invalid address format",
+    "ja": "アドレスの形式が正しくありません",
+    "ko": "주소 형식이 올바르지 않습니다",
+    "de": "Ungültiges Adressformat",
+    "es": "Formato de dirección no válido",
+    "fr": "Format d'adresse non valide",
+    "it": "Formato dell'indirizzo non valido",
+    "pt": "Formato de endereço inválido",
+    "zh-TW": "位址格式不正確",
+    "ar": "تنسيق العنوان غير صحيح",
+    "he": "פורמט הכתובת אינו תקין"
+  },
+  "已清空本机任务审计记录": {
+    "en": "Local task audit records cleared",
+    "ja": "本機のタスク監査記録を消去しました",
+    "ko": "이 기기의 작업 감사 기록을 지웠습니다",
+    "de": "Lokale Aufgaben-Auditprotokolle gelöscht",
+    "es": "Registros de auditoría locales borrados",
+    "fr": "Journaux d'audit locaux effacés",
+    "it": "Registri di audit locali cancellati",
+    "pt": "Registros de auditoria locais apagados",
+    "zh-TW": "已清除本機任務稽核記錄",
+    "ar": "تم مسح سجلات تدقيق المهام المحلية",
+    "he": "יומני הביקורת המקומיים נמחקו"
+  },
+  "目标标签页": {
+    "en": "Target tab",
+    "ja": "対象タブ",
+    "ko": "대상 탭",
+    "de": "Ziel-Tab",
+    "es": "Pestaña de destino",
+    "fr": "Onglet cible",
+    "it": "Scheda di destinazione",
+    "pt": "Aba de destino",
+    "zh-TW": "目標分頁",
+    "ar": "علامة التبويب الهدف",
+    "he": "לשונית היעד"
+  },
+  "起始网址（可选）": {
+    "en": "Start URL (optional)",
+    "ja": "開始 URL（任意）",
+    "ko": "시작 URL(선택 사항)",
+    "de": "Start-URL (optional)",
+    "es": "URL de inicio (opcional)",
+    "fr": "URL de départ (facultatif)",
+    "it": "URL di avvio (facoltativo)",
+    "pt": "URL inicial (opcional)",
+    "zh-TW": "起始網址（選填）",
+    "ar": "عنوان URL للبدء (اختياري)",
+    "he": "כתובת URL להתחלה (אופציונלי)"
+  },
+  "例如：发布一篇文章": {
+    "en": "e.g. publish an article",
+    "ja": "例：記事を公開する",
+    "ko": "예: 기사 게시",
+    "de": "z. B. einen Artikel veröffentlichen",
+    "es": "p. ej., publicar un artículo",
+    "fr": "ex. publier un article",
+    "it": "es. pubblicare un articolo",
+    "pt": "ex.: publicar um artigo",
+    "zh-TW": "例如：發布一篇文章",
+    "ar": "مثال: نشر مقال",
+    "he": "למשל: פרסום מאמר"
+  },
+  "协议": {
+    "en": "Protocol",
+    "ja": "プロトコル",
+    "ko": "프로토콜",
+    "de": "Protokoll",
+    "es": "Protocolo",
+    "fr": "Protocole",
+    "it": "Protocollo",
+    "pt": "Protocolo",
+    "zh-TW": "協定",
+    "ar": "البروتوكول",
+    "he": "פרוטוקול"
+  },
 };
-export const SUPPORTED_LANGS = ["zh","en","ja","ko","de","es","fr","it","pt","zh-TW"];
+
+export const SUPPORTED_LANGS = ["zh","en","ja","ko","de","es","fr","it","pt","zh-TW","ar","he"];
+
+// 动态文案（拼接句子）12 语言查表：页面侧从同一个入口取模板，不再各自拼中文。
+// 生成物与内容浮层共用一份（translation/dynamic-texts.mjs → extension/src/overlay-dynamic-locales.js），
+// 因此页面与浮层不会出现两套动态文案表。
+export {
+  DYNAMIC_TEXT,
+  DYNAMIC_KEYS,
+  DYNAMIC_LANGS,
+  dynamicText as dynamicLocaleText,
+  formatDynamic as formatDynamicLocaleText,
+  normalizeDynamicLang as normalizeDynamicLocaleLang,
+} from '../src/overlay-dynamic-locales.js';

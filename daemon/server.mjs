@@ -18,6 +18,53 @@ import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { attachWsServer } from '../lib/ws.mjs';
+import { createTransferStore } from './transfer.mjs';
+import { createAuthCommit } from './auth-commit.js';
+import { createAuthResolve } from './auth-resolve.js';
+import { createPairingApi } from './pairing-api.js';
+import { createLocalTrustApi } from './local-trust.js';
+import { createExtensionEventHandler } from './extension-events.js';
+import { createPreviewHandler } from './preview.js';
+import { createRpcHandler } from './rpc.js';
+import { createLocalDispatch } from './local-dispatch.js';
+import { recordRunLog } from './run-log-record.js';
+import { postProcessRoute } from './route-post.js';
+import { runInQueues } from './route-queue.js';
+import { createStartRequests } from './start-requests.js';
+import { createTabControls } from './tab-controls.js';
+import { createControlOps } from './control-ops.js';
+import { createReadViews } from './read-views.js';
+import { createSessionRebind } from './session-rebind.js';
+import { createSessionStop } from './session-stop.js';
+import { createTransferOps } from './transfer-ops.js';
+import { createSessionViews } from './session-views.js';
+import { createSessionAdmin } from './session-admin.js';
+import { createSessionStart } from './session-start.js';
+import { createLedgerTarget } from './ledger-target.js';
+import { createLedgerReport } from './ledger-report.js';
+import { createCommandQueue, queueLimitsFromEnv } from './command-queue.js';
+import { createDaemonDoctor } from './doctor.js';
+import { createStatusViews } from './status-views.js';
+import { createSessionQuota, quotaPolicyFromEnv } from './session-quota.js';
+import { createBatchSessions } from './batch-sessions.js';
+import { createLeaseArbiter } from './lease-arbitration.js';
+import { transferPolicyFromEnv } from './transfer-policy.js';
+import { createRoutePolicy } from './route-policy.js';
+import { createHealthPayload } from './health.js';
+import { createInflightOps } from './inflight-ops.js';
+// 兼容目标 0.5.0 对齐：通用 cancel / ledger.request（daemon 本地 RPC）+ 调用方 rpc_id 上下文。
+import { createGenericOps } from './generic-ops.js';
+import { COMPAT_RPC_NAMES } from '../lib/compat-rpc.mjs';
+import { currentRpcId } from './request-context.js';
+import { createExtensionDispatch } from './extension-dispatch.js';
+import { createPlanRunner } from './plan-run.js';
+import { createHttpHandler } from './http-handler.js';
+import { createAutoUpdate } from './auto-update.js';
+import { parseServerArgs } from './cli-args.js';
+import { createUsagePrinter } from './cli-args.js';
+import { withEffectState, annotateEffectSuccess } from './effect-state.js';
+import { createSubmit } from './submit.js';
+import { createPairingModule } from './pairing.mjs';
 import { isAllowedWhilePaused, shouldRejectRemoteTransfer, compareProtocol } from '../lib/protocol.mjs';
 import { validateMethodParams } from '../lib/schemas.mjs';
 import { enforceOperationLimit } from '../lib/limits.mjs';
@@ -27,24 +74,38 @@ import { createSessionQueue } from '../lib/session-queue.mjs';
 import { authKeyId } from '../lib/auth-challenge.mjs';
 import { createAuthSession } from '../lib/auth-session.mjs';
 import { createPairCode, pairCodeMatches } from '../lib/pair-code.mjs';
+import { normalizeEndpoint, pairProof, randomNonce } from '../lib/pair-proof.mjs';
 import { domainAllowed, normalizeDomains } from '../lib/domain-policy.mjs';
 import { decodeTextFrame } from '../lib/transport-frame.mjs';
 import { isSessionExpired, sessionPublicView } from '../lib/session-model.mjs';
+import { SessionRunLog } from '../lib/run-log.mjs';
 import { createSessionRecord, markSessionDisconnected, rebindSessionRecord, setSessionPaused } from '../lib/session-lifecycle.mjs';
 import { TabReservations } from '../lib/tab-reservations.mjs';
+import { TabControl, CONTROL_MODES } from '../lib/tab-control.mjs';
 import { fetchManifest, fetchArtifact } from '../lib/update-source.mjs';
 import { readUpdateState, writeUpdateState } from '../lib/update-state.mjs';
 import { verifyReleaseSignature } from '../lib/release-sign.mjs';
 import { RELEASE_PUBLIC_KEY } from '../lib/release-public-key.mjs';
 import { isControllerInfo } from '../extension/src/lib/controller-info.js';
 import { IntentLedger, isUnknownOutcome, hasNoEffect } from '../lib/intent-ledger.mjs';
+import { createSessionLeases } from '../lib/session-lease.mjs';
+import { createSessionRecovery, planPersistedSessionRecovery, recoverLedgerOnStartup } from './session-recovery.js';
+import { createLeaseOps } from './lease-ops.js';
+import { createCommandBoundary } from './command-boundary.js';
+import { createRecoveryReporter } from './recovery-report.js';
 import { AliasRegistry } from '../lib/alias-registry.mjs';
 import { selectBrowserInstance } from '../lib/browser-selection.mjs';
-import { createDeviceStore } from '../lib/device-store.mjs';
+import { createDeviceStore, deviceIdForToken } from '../lib/device-store.mjs';
 import { createStartJournal, normalizeStartToken } from '../lib/start-journal.mjs';
 import { LOCAL_METHODS, SESSION_METHODS, EXT_METHODS, SESSION_QUEUE_BYPASS, isMutating, remoteScopeAllows } from '../lib/methods.mjs';
 import { resolveSessionByScope } from '../lib/session-scope.mjs';
-import { FEATURE_RECOVERY, featureMatrix, featureShortfall, featuresForCall } from '../lib/protocol-features.mjs';
+import {
+  LEGACY_CAPABILITY_UNSUPPORTED,
+  PROTOCOL_UNSUPPORTED,
+  PROTOCOL_UNSUPPORTED_ALIASES,
+  assertProtocolCompatible,
+  featureMatrix,
+} from '../lib/protocol-features.mjs';
 import { serverProof as makeServerProof } from '../lib/local-proof.mjs';
 import { normalizePlanSteps } from '../lib/plan-steps.mjs';
 
@@ -114,15 +175,12 @@ function tlsPaths() {
     certPem: path.join(dir, 'cert.pem'),
   };
 }
-const PAIR_TTL_MS = 10 * 60 * 1000;
 let LOCAL_TRUST_PATH = '';
-let localTrust = { token: '', strict: false, pairedAt: 0, pendingUntil: 0, pendingCode: '' };
+let localTrust = { token: '', strict: false, pairedAt: 0, pendingUntil: 0, pendingCode: '', browserId: '', commitTxn: '', commitUntil: 0, rotationToken: '', rotationTxn: '', rotationUntil: 0 };
 const authGuard = createAuthGuard({ maxAttempts: 10, windowMs: 60_000, blockMs: 60_000, maxHelloBytes: 64 * 1024 });
 const sessionState = createSessionState();
 const HANDSHAKE_TIMEOUT_MS = 5000;
 const LOCAL_PAIR_TTL_MS = 5 * 60 * 1000;
-const PAIR_MAX_TTL_MS = 24 * 60 * 60 * 1000;
-const pairings = new Map(); // code -> { code, token, url, expiresAt, label, createdAt }
 const humanEventSeen = new Map(); // tabId -> 最近一次人类事件时间（用于限流）
 
 // 方法分类集中在 lib/methods.mjs：LOCAL/SESSION/INSTANCE/EXT、队列旁路与变异判定。
@@ -133,11 +191,23 @@ const WS_CALL_METHODS = new Set(['audit.list', 'status', 'session.list', 'browse
 
 const HOME_DIR = resolveHomeDir();
 // 预写意图账本：变异操作先落盘；超时/断连后拦截同 tab 重放，直到 ledger resolve。
+// WAL 每次 begin 都 append+fsync（BB_LEDGER_FSYNC=0 可在极端慢盘上关闭），启动时
+// recover() 把上次进程遗留的 pending → unknown 并留证据；非幂等动作 replayBlocked。
 const intentLedger = new IntentLedger({
   dir: HOME_DIR,
   staleMs: Number(process.env.BB_LEDGER_STALE_MS || 15000),
+  fsync: process.env.BB_LEDGER_FSYNC !== '0',
 });
-intentLedger.load();
+const ledgerRecovery = recoverLedgerOnStartup(intentLedger, { legacyState: 'unknown', reason: 'daemon-restart' });
+// 账本对账快照（daemon 自己的证据层，不是账本本体）：启动时读上次快照做漂移对账，
+// 正常停止/显式 snapshot 时原子写入。恢复只产证据，未知意图仍由账本保持 replayBlocked。
+const ledgerReport = createLedgerReport({ ledger: intentLedger, dir: HOME_DIR, recovery: ledgerRecovery, log });
+const ledgerRestore = ledgerReport.restore();
+if (ledgerRestore && ledgerRestore.exists && ledgerRestore.ok === false) {
+  log('账本对账快照不可用：' + (ledgerRestore.error || 'invalid') + '（' + (ledgerRestore.message || '') + '）');
+} else if (ledgerRestore && ledgerRestore.drift && ledgerRestore.drift.drift) {
+  log('账本对账：快照后已结算 ' + ledgerRestore.drift.counts.resolvedSince + ' 条，新增未知 ' + ledgerRestore.drift.counts.becameUnknown + ' 条');
+}
 LOCAL_TRUST_PATH = path.join(HOME_DIR, 'local-trust.json');
 const deviceStore = createDeviceStore(path.join(HOME_DIR, 'devices.json'));
 let auditSeq = 0;
@@ -146,8 +216,6 @@ const START_JOURNAL_PATH = path.join(HOME_DIR, 'session-starts.json');
 // 可恢复启动：请求 token 预写日志；同 token 重试返回既有会话，不重复开窗。
 const startJournal = createStartJournal(START_JOURNAL_PATH);
 const TRANSFER_DIR = path.join(HOME_DIR, 'transfers');
-const TRANSFER_MAX_BYTES = 64 * 1024 * 1024;
-const TRANSFER_CHUNK_BYTES = 1024 * 1024;
 /** transferId -> { id, sessionId, name, byteSize, received, filePath, fd, createdAt, finished } */
 const transfers = new Map();
 const DAEMON_JSON_PATH = path.join(HOME_DIR, 'daemon.json');
@@ -428,15 +496,144 @@ let shuttingDown = false;
 
 /** instanceId -> { instanceId, browser, browserVersion, extVersion, userAgent, connectedAt, lastPong, conn, pending } */
 const instances = new Map();
+
+const handleAuthCommit = createAuthCommit({
+  deviceStore, getLocalTrust: () => localTrust, saveLocalTrust, commitProofFor, log,
+});
+
+const pairing = createPairingModule({
+  deviceStore,
+  getInstances: () => instances.values(),
+  dropInstance,
+  log,
+  BridgeError,
+  wsUrlFor,
+  authKeyId,
+});
+
+const localTrustApi = createLocalTrustApi({
+  getLocalTrust: () => localTrust, saveLocalTrust, createPairCode, wsUrlFor, LOCAL_PAIR_TTL_MS, instances, dropInstance, pairCodeMatches, log, crypto,
+});
+const pairingApi = createPairingApi({ pairing, BIND_ADDRESS, getLocalTrust: () => localTrust, saveLocalTrust, wsUrlFor, crypto, log });
+const authResolve = createAuthResolve({ pairing, deviceStore, getLocalTrust: () => localTrust, authKeyId });
+
 /** sessionId -> { sessionId, instanceId, tabId, windowId, url, title, startedAt } */
 const sessions = new Map();
 const tabReservations = new TabReservations();
+// 共享 tab 的控制权/租约/handoff。只在同一 tab 有多个会话时参与仲裁。
+const tabControl = new TabControl();
+// 多会话 tab 所有权租约：独占 holder + 共享参与者 + 冲突证据（谁持有/何时/为何）。
+// 与 tabControl 分工：tabControl 管“共享 tab 上谁有写控制权”，本租约管“tab 归哪个会话所有”。
+const sessionLeases = createSessionLeases({
+  defaultTtlMs: Number(process.env.BB_TAB_LEASE_MS || 60_000),
+  // 启动中的 session.start 用 'start:<uuid>' 请求令牌占位，不能当成失联会话抢走。
+  isSessionAlive: (sessionId) => sessions.has(String(sessionId)) || String(sessionId).startsWith('start:'),
+});
+// 多会话租约运行时服务（第十批 F）：统一证据环、命令前 touch 续租、过期/崩溃残租回收、
+// 会话↔租约对账与所有权报告。默认行为不变：定时器只在显式 startSweeper() 后运行；
+// 存活会话的 TTL 到点不会被回收，只提示续租。
+const leaseOps = createLeaseOps({
+  leases: sessionLeases,
+  sessions,
+  sessionState,
+  log,
+  now: () => Date.now(),
+  defaultTtlMs: Number(process.env.BB_TAB_LEASE_MS || 60_000),
+  sweepIntervalMs: Number(process.env.BB_LEASE_SWEEP_MS || 5_000),
+  isAlive: (sessionId) => sessions.has(String(sessionId)) || String(sessionId).startsWith('start:'),
+});
+// 命令边界矩阵（幂等/超时/取消）：从单一目录派生，默认不改任何命令的默认超时/取消路径，
+// 只在 status 增量视图与 command.cancel 回包里附带证据。
+const commandBoundary = createCommandBoundary({
+  now: () => Date.now(),
+  defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
+});
+// ---------------------------------------------------------------------------
+// 第十一批 G：批处理会话配额 + 跨会话租约裁决（daemon 本地能力）
+// ---------------------------------------------------------------------------
+// 配额池：全局存活会话上限、单批上限、启动并发；策略来自 BB_SESSION_QUOTA /
+// BB_BATCH_QUOTA / BB_BATCH_CONCURRENCY，写错只忽略不阻塞 daemon 启动。
+const sessionQuota = createSessionQuota({
+  policy: quotaPolicyFromEnv().policy,
+  liveSessions: () => sessions.size,
+  liveInstances: () => {
+    const counts = new Map();
+    for (const session of sessions.values()) {
+      const key = String(session.instanceId || '');
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  },
+  now: () => Date.now(),
+  log,
+});
+// 批处理编排：startSession/stopSession 注入真实生命周期（函数声明提升，调用时已就绪）；
+// 带 url 的条目在启动成功后用 dispatch('navigate') 导航（与单条 CLI 走同一条账本/路由链）。
+const batchSessions = createBatchSessions({
+  quota: sessionQuota,
+  startSession: (params, timeoutMs) => startSessionWithLease(params, timeoutMs),
+  stopSession: (params, timeoutMs) => stopSessionWithLease(params, timeoutMs),
+  navigate: (sessionId, url, timeoutMs) => dispatch('navigate', { session: sessionId, url }, timeoutMs),
+  now: () => Date.now(),
+  log,
+  BridgeError,
+});
+// 跨会话租约裁决：默认只出计划（dry-run）；apply 仅在显式 lease.arbitrate apply=true 时执行。
+// dropControl 只在冲突是 control-without-session 时清理 tabControl 记录，不触碰租约本体。
+const leaseArbiter = createLeaseArbiter({
+  leaseOps,
+  sessions,
+  phases: (sessionId) => sessionState.phase(sessionId),
+  controls: () => [],
+  now: () => Date.now(),
+  log,
+  dropControl: (tabId) => {
+    if (!Number.isInteger(tabId)) return { ok: false, code: 'E_BAD_ARG', message: 'tabId 需要整数' };
+    try {
+      tabControl.unregister(tabId, null);
+      return { ok: true, tabId, dropped: true };
+    } catch (error) {
+      return { ok: false, code: (error && error.code) || 'E_INTERNAL', message: String((error && error.message) || error) };
+    }
+  },
+});
 const inflight = new Map();
 // 每个 session 一条串行队列：同一会话的命令按提交顺序执行，避免扩展侧
 // ref-store / debugger / 输入状态在并发工具调用下互相踩踏。
-const sessionQueue = createSessionQueue({ capacity: 64 });
+// 第九批 B：会话串行仍由 lib/session-queue.mjs 承担，外层 commandQueue 补
+// per-session/全局 inflight 上限、tab 轮转公平与排队诊断；enqueue/drop/snapshot/capacity
+// 语义与 lib 一致，所以既有注入点（session-stop/extension-events/health）零改动。
+const commandQueue = createCommandQueue({ limits: queueLimitsFromEnv(), log });
+const sessionQueue = commandQueue;
+const tabQueue = commandQueue;
 // 队列旁路表见 lib/methods.mjs 的 SESSION_QUEUE_BYPASS。
+// 启动恢复聚合：账本 reconcile + 持久化会话分类 + tab 租约重建（挂在 status/health）。
+const sessionRecovery = createSessionRecovery({ sessions, sessionState, sessionLeases, ledger: intentLedger, log });
+sessionRecovery.recordLedger(ledgerRecovery);
+// 崩溃恢复报告器（第十批 F）：把账本 pending/unknown、会话恢复计划、租约对账合成可查询报告；
+// 人工 resolve 走"计划→执行"两段式，**绝不自动 resolve**（autoResolved 恒为 0）。
+const recoveryReporter = createRecoveryReporter({
+  ledger: intentLedger,
+  recovery: sessionRecovery,
+  recoverySnapshot: () => sessionRecovery.snapshot(),
+  leaseOps,
+  sessions,
+  log,
+});
 loadSessions();
+// 启动租约对账：只产证据（不自动抢 holder、不自动回收）；恢复报告同理只读。
+try {
+  const leaseReconcile = leaseOps.reconcile({ apply: false });
+  sessionRecovery.recordLeaseReconcile(leaseReconcile);
+  sessionRecovery.recordRecoveryReport(recoveryReporter.report());
+} catch (error) {
+  log('启动租约对账/恢复报告失败（忽略）：' + ((error && error.message) || error));
+}
+// 定期回收"持有者已失联"的残租（崩溃遗留）。unref 不影响 daemon 退出；
+// 存活会话的到期租约不会被回收，只会被下一次命令派发前的 touch 续租。
+try { leaseOps.startSweeper(); } catch (error) {
+  log('租约自动回收定时器启动失败（忽略）：' + ((error && error.message) || error));
+}
 loadLocalTrust();
 // 上次进程的 staging 文件在崩溃后不可继续使用：启动时清空，避免目录膨胀。
 try {
@@ -446,27 +643,57 @@ try {
   fs.mkdirSync(TRANSFER_DIR, { recursive: true });
 } catch { /* 忽略 */ }
 
-function saveSessions() {
+let sessionsSaveTimer = null;
+
+function persistSessionsNow() {
   try {
     const list = [...sessions.values()].map((session) => ({ ...session, observation: null }));
     const temp = SESSIONS_PATH + '.tmp';
-    fs.writeFileSync(temp, JSON.stringify({ version: 1, sessions: list }, null, 2), 'utf8');
+    // 会话文件只用于重启恢复：compact JSON 足够，且比 pretty 少约 1/3 写入量。
+    fs.writeFileSync(temp, JSON.stringify({ version: 1, sessions: list }), 'utf8');
     fs.renameSync(temp, SESSIONS_PATH);
   } catch (error) {
     log('持久化会话失败：' + ((error && error.message) || error));
   }
 }
 
+/**
+ * 持久化会话列表。
+ * 默认 80ms 合并写入（同一批控制权/暂停变化只落一次盘）；会话 start/stop 与 daemon 停止用 immediate。
+ */
+function saveSessions({ immediate = false } = {}) {
+  if (immediate) {
+    if (sessionsSaveTimer) {
+      clearTimeout(sessionsSaveTimer);
+      sessionsSaveTimer = null;
+    }
+    persistSessionsNow();
+    return;
+  }
+  if (sessionsSaveTimer) return;
+  sessionsSaveTimer = setTimeout(() => {
+    sessionsSaveTimer = null;
+    persistSessionsNow();
+  }, 80);
+  if (sessionsSaveTimer.unref) sessionsSaveTimer.unref();
+}
+
+/** daemon 停止前调用：把挂起的会话写入立即落盘。 */
+function flushSessions() {
+  saveSessions({ immediate: true });
+}
+
 function loadSessions() {
   try {
     const data = JSON.parse(fs.readFileSync(SESSIONS_PATH, 'utf8'));
-    for (const session of data.sessions || []) {
-      if (session && typeof session.sessionId === 'string' && Number.isInteger(session.tabId) && Date.now() - (Number(session.startedAt) || 0) < 24 * 60 * 60 * 1000) {
-        sessions.set(session.sessionId, { ...session, observation: null, restored: true });
-        sessionState.recover(session.sessionId);
-      }
+    const plan = planPersistedSessionRecovery(data.sessions, { now: Date.now() });
+    sessionRecovery.recordSessionPlan(plan);
+    for (const item of plan.restore) {
+      sessions.set(item.sessionId, { ...item.record, observation: null, restored: true, runLog: new SessionRunLog() });
     }
-    if (sessions.size) log('已恢复 ' + sessions.size + ' 个持久化会话');
+    // 状态机按 recovering 恢复；租约按 startedAt 最老者为 holder、其余共享 join。
+    sessionRecovery.applySessionPlan(plan);
+    if (plan.restore.length) log('已恢复 ' + plan.restore.length + ' 个持久化会话');
   } catch {
     // 没有历史会话
   }
@@ -492,119 +719,7 @@ function wsUrlFor(host) {
   return (TLS_ENABLED ? 'wss://' : 'ws://') + target + ':' + currentPort + '/ws';
 }
 
-function prunePairings() {
-  const now = Date.now();
-  for (const [code, item] of pairings) {
-    if (item.expiresAt <= now) pairings.delete(code);
-  }
-}
 
-function pairCreate(params = {}) {
-  prunePairings();
-  if (params.replace === true) pairings.clear();
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  do {
-    code = Array.from({ length: 6 }, () => alphabet[crypto.randomInt(alphabet.length)]).join('');
-  } while (pairings.has(code));
-  const ttl = Math.min(Math.max(Number(params.ttlMs) || PAIR_TTL_MS, 60_000), PAIR_MAX_TTL_MS);
-  const item = {
-    code,
-    token: crypto.randomBytes(16).toString('hex'),
-    url: wsUrlFor(params.host ? String(params.host) : ''),
-    expiresAt: Date.now() + ttl,
-    label: typeof params.label === 'string' ? params.label.slice(0, 40) : '',
-    scope: params.scope === 'read' ? 'read' : 'control',
-    createdAt: Date.now(),
-  };
-  pairings.set(code, item);
-  log('pair 创建 code=' + code + ' ttl=' + ttl + 'ms');
-  return { ...item, link: item.url + '#' + item.token };
-}
-
-function pairList() {
-  prunePairings();
-  return {
-    devices: [...instances.values()]
-      .filter((instance) => instance.remote === true)
-      .map((instance) => ({ instanceId: instance.instanceId, browser: instance.browser, browserVersion: instance.browserVersion, connectedAt: instance.connectedAt, localAuth: 'remote-paired', scope: instance.scope || 'control' })),
-    pairings: [...pairings.values()]
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .map((item) => ({ code: item.code, url: item.url, label: item.label, scope: item.scope, expiresAt: item.expiresAt })),
-    bind: BIND_ADDRESS,
-    knownDevices: deviceStore.list(),
-  };
-}
-
-function pairRedeem(params = {}) {
-  prunePairings();
-  const code = String(params.code || '').trim().toUpperCase();
-  const item = pairings.get(code);
-  if (!item) throw new BridgeError('E_PAIR_INVALID', '配对码无效或已过期');
-  return { ok: true, code: item.code, url: item.url, token: item.token, scope: item.scope, expiresAt: item.expiresAt };
-}
-
-function pairRenew(params = {}) {
-  const deviceId = String(params.deviceId || '').trim();
-  const rotated = deviceStore.rotate(deviceId, { scope: params.scope });
-  if (!rotated) throw new BridgeError('E_PAIR_INVALID', '设备不存在：' + deviceId);
-  for (const [code, item] of [...pairings]) {
-    if (authKeyId(item.token) === rotated.oldTokenHash.slice(0, 32)) pairings.delete(code);
-  }
-  let kicked = 0;
-  const oldKey = rotated.oldTokenHash.slice(0, 32);
-  for (const instance of [...instances.values()]) {
-    if (instance.pairToken && authKeyId(instance.pairToken) === oldKey) {
-      kicked += 1;
-      try { instance.conn.close(4003, 'pair renewed'); } catch { /* 忽略 */ }
-      dropInstance(instance, '配对已续期');
-    }
-  }
-  const url = wsUrlFor('');
-  return { ok: true, deviceId: rotated.deviceId, token: rotated.token, url, link: url + '#' + rotated.token, scope: rotated.scope, kicked };
-}
-
-function pairRevoke(params = {}) {
-  const raw = String(params.deviceId || params.code || '').trim();
-  const code = raw.toUpperCase();
-  const item = pairings.get(code);
-  const existed = pairings.delete(code);
-  const known = deviceStore.revoke(raw) || { revoked: false, deviceId: null };
-  if (!known.revoked && item) deviceStore.revoke(authKeyId(item.token));
-  const revokedTokenHash = item ? authKeyId(item.token) : known.tokenHash;
-  let kicked = 0;
-  for (const instance of [...instances.values()]) {
-    const matchesPair = item && instance.pairToken && instance.pairToken === item.token;
-    const matchesDevice = revokedTokenHash && instance.pairToken && authKeyId(instance.pairToken) === revokedTokenHash.slice(0, 32);
-    if (matchesPair || matchesDevice) {
-      kicked += 1;
-      try { instance.conn.close(4003, 'pair revoked'); } catch { /* 忽略 */ }
-      dropInstance(instance, '配对已撤销');
-    }
-  }
-  return { ok: true, revoked: existed || known.revoked, code: item ? code : '', deviceId: known.deviceId || null, kicked };
-}
-
-/** 轮换本机配对 token：旧链接立即失效，用旧 token 认证的本机连接断开。 */
-function pairRotate() {
-  const previous = localTrust.token;
-  localTrust.token = crypto.randomBytes(24).toString('hex');
-  localTrust.pairedAt = Date.now();
-  localTrust.pendingUntil = 0;
-  localTrust.pendingCode = '';
-  saveLocalTrust();
-  let kicked = 0;
-  for (const instance of [...instances.values()]) {
-    if (instance.remote === true) continue;
-    if (instance.pairToken && instance.pairToken === previous) {
-      kicked += 1;
-      try { instance.conn.close(4003, 'local token rotated'); } catch { /* 忽略 */ }
-      dropInstance(instance, '本机 token 已轮换');
-    }
-  }
-  log('本机配对 token 已轮换，断开旧连接 ' + kicked + ' 个');
-  return { ok: true, rotated: true, kicked, link: wsUrlFor('') + '#' + localTrust.token };
-}
 
 function loadLocalTrust() {
   try {
@@ -615,91 +730,44 @@ function loadLocalTrust() {
       pairedAt: Number(raw.pairedAt) || 0,
       pendingUntil: Number(raw.pendingUntil) || 0,
       pendingCode: typeof raw.pendingCode === 'string' ? raw.pendingCode : '',
+      browserId: typeof raw.browserId === 'string' ? raw.browserId.slice(0, 64) : '',
+      commitTxn: typeof raw.commitTxn === 'string' ? raw.commitTxn : '',
+      commitUntil: Number(raw.commitUntil) || 0,
+      rotationToken: typeof raw.rotationToken === 'string' ? raw.rotationToken : '',
+      rotationTxn: typeof raw.rotationTxn === 'string' ? raw.rotationTxn : '',
+      rotationUntil: Number(raw.rotationUntil) || 0,
     };
   } catch {
-    localTrust = { token: '', strict: false, pairedAt: 0, pendingUntil: 0, pendingCode: '' };
+    localTrust = { token: '', strict: false, pairedAt: 0, pendingUntil: 0, pendingCode: '', browserId: '', commitTxn: '', commitUntil: 0, rotationToken: '', rotationTxn: '', rotationUntil: 0 };
   }
 }
 function saveLocalTrust() {
   try { fs.writeFileSync(LOCAL_TRUST_PATH, JSON.stringify(localTrust, null, 2), 'utf8'); } catch { /* 忽略 */ }
 }
-function localPairCreate(params = {}) {
-  const token = crypto.randomBytes(16).toString('hex');
-  const code = createPairCode();
-  localTrust.token = token;
-  localTrust.pendingUntil = Date.now() + LOCAL_PAIR_TTL_MS;
-  localTrust.pendingCode = code;
-  if (params.replace) localTrust.pairedAt = 0;
-  saveLocalTrust();
-  const link = wsUrlFor('') + '#' + token;
-  log('本机配对链接已生成（5 分钟内有效）');
-  return { ok: true, link, token, code, expiresAt: localTrust.pendingUntil, strict: localTrust.strict !== true };
-}
-function localTrustSet(params = {}) {
-  localTrust.strict = params.strict === true;
-  saveLocalTrust();
-  if (localTrust.strict) {
-    for (const instance of [...instances.values()]) {
-      if (instance.localVerified !== true) {
-        try { instance.conn.close(4003, 'local trust required'); } catch { /* 忽略 */ }
-        dropInstance(instance, '本机严格模式：未配对连接被拒绝');
-      }
-    }
-  }
-  log('本机信任模式 strict=' + localTrust.strict);
-  return { ok: true, strict: localTrust.strict };
-}
-function localPairVerified(token) {
-  if (!token || !localTrust.token || token !== localTrust.token) return false;
-  // 配对成功后长期有效；从未使用过的链接 5 分钟后过期。
-  if (localTrust.pairedAt > 0) return true;
-  return localTrust.pendingUntil === 0 || localTrust.pendingUntil > Date.now();
-}
 
-/** 新配对链接必须同时带 6 位确认码，防止只拿到链接就完成配对。 */
-function localPairCodeRequired() {
-  return localTrust.pendingUntil > Date.now() && Boolean(localTrust.pendingCode);
-}
-function localPairCodeValid(message) {
-  return !localPairCodeRequired() || pairCodeMatches(localTrust.pendingCode, message && message.pairCode);
-}
 
-function scopeForRemoteToken(token) {
-  if (!token) return 'control';
-  for (const item of pairings.values()) {
-    if (item.token === token && item.expiresAt > Date.now()) return item.scope === 'read' ? 'read' : 'control';
-  }
-  return deviceStore.scopeForToken(token) || 'control';
-}
 
-function isPairTokenValid(token) {
-  if (!token) return false;
-  const now = Date.now();
-  for (const item of pairings.values()) {
-    if (item.token === token && item.expiresAt > now) return true;
-  }
-  return deviceStore.verify(token);
-}
 
-/** 根据客户端发来的 keyId 找回密钥；不把明文 token 放进 hello。 */
-function findAuthSecret(keyId) {
-  if (!keyId) return null;
-  if (localTrust.token && authKeyId(localTrust.token) === keyId) {
-    return { token: localTrust.token, local: true, remote: false };
-  }
-  const now = Date.now();
-  for (const item of pairings.values()) {
-    if (item.expiresAt > now && authKeyId(item.token) === keyId) {
-      return { token: item.token, local: false, remote: true, scope: item.scope === 'read' ? 'read' : 'control' };
-    }
-  }
-  const deviceToken = deviceStore.secretForKeyId(keyId);
-  if (deviceToken) return { token: deviceToken, local: false, remote: true, scope: deviceStore.scopeForToken(deviceToken) || 'control' };
-  return null;
-}
+/** auth-commit：扩展用设备 token 对 commitTxn 签名，确认分阶段激活（pending → active）。 */
+
 
 function newInstanceId() {
   return crypto.randomBytes(4).toString('hex');
+}
+
+/** 设备 token 已绑定 browser_id：换浏览器复用 token 时直接拒绝。 */
+function rejectBrowserBinding(conn, message) {
+  try { conn.sendJson({ type: 'hello-error', code: 'E_PAIR_REJECTED', message }); } catch { /* 忽略 */ }
+  try { conn.close(4003, 'pair browser mismatch'); } catch { /* 忽略 */ }
+}
+
+/** 分阶段激活的 commit 证明：扩展用（新）设备 token 对 txn 签名，daemon 验证后 pending→active。 */
+function commitProofFor(token, txn) {
+  return crypto.createHmac('sha256', String(token || '')).update('bridgedeck-commit-v1\n' + String(txn || '')).digest('hex');
+}
+
+function newCommitTxn() {
+  return crypto.randomBytes(8).toString('hex');
 }
 
 function normalizeSettings(raw) {
@@ -721,6 +789,7 @@ function normalizeHello(hello) {
     browserVersion: typeof hello.browserVersion === 'string' ? hello.browserVersion : '',
     extVersion: typeof hello.extVersion === 'string' ? hello.extVersion : '',
     userAgent: typeof hello.userAgent === 'string' ? hello.userAgent : '',
+    browserId: typeof hello.browserId === 'string' ? hello.browserId.slice(0, 64) : '',
     label: typeof hello.label === 'string' ? hello.label.trim().slice(0, 40) : '',
     settings: normalizeSettings(hello.settings),
   };
@@ -778,6 +847,8 @@ function registerInstance(conn, hello, extra = {}) {
     capabilities: DAEMON_CAPABILITIES,
     localAuth: { state: instance.localVerified ? 'verified' : 'unpaired', strict: localTrust.strict === true },
     ...(extra.serverProof ? { serverProof: extra.serverProof } : {}),
+    ...(extra.deviceToken ? { deviceToken: extra.deviceToken } : {}),
+    ...(extra.commit ? { deviceStatus: 'pending', commitTxn: extra.commit.txn, commitProof: extra.commit.proof } : {}),
   });
   log(`扩展已连接 instance=${instance.instanceId} browser=${instance.browser} v${instance.browserVersion} ext=${instance.extVersion}`);
   instance.pairToken = typeof hello.pairToken === 'string' ? hello.pairToken : '';
@@ -827,73 +898,7 @@ function settleResponse(instance, msg) {
   }
 }
 
-function handleExtensionEvent(instance, msg) {
-  if (msg.event === 'settings' && msg.params && typeof msg.params === 'object') {
-    const params = msg.params;
-    instance.label = typeof params.label === 'string' ? params.label.trim().slice(0, 40) : '';
-    instance.settings = normalizeSettings(params);
-    log(`实例 ${instance.instanceId} 设置已更新 label="${instance.label}" borrowConfirm=${instance.settings.borrowConfirm} allowHelp=${instance.settings.allowHelp}`);
-    return;
-  }
-  if ((msg.event === 'human.input' || msg.event === 'human.blur') && msg.params && Number.isInteger(msg.params.tabId)) {
-    const tabId = msg.params.tabId;
-    const now = Date.now();
-    if (now - (humanEventSeen.get(tabId) || 0) < 200) return;
-    humanEventSeen.set(tabId, now);
-    for (const [sessionId, session] of sessions) {
-      if (session.instanceId !== instance.instanceId || session.tabId !== tabId) continue;
-      session.lastHumanInputAt = now;
-      if (msg.event === 'human.input' && session.paused !== true) {
-        session.paused = true;
-        session.pausedBy = 'auto';
-        session.pausedAt = now;
-        sendInstanceEvent(instance, 'takeover.state', { tabId, sessionId, paused: true, pausedBy: 'auto', borrowed: session.borrowed === true, controller: session.controller ?? null, project: session.controller?.project ?? null });
-        log('session ' + sessionId + ' 人类输入 → 自动暂停');
-      }
-      break;
-    }
-    return;
-  }
-  if (msg.event === 'takeover.pause' && msg.params && Number.isInteger(msg.params.tabId)) {
-    const tabId = msg.params.tabId;
-    for (const [sessionId, session] of sessions) {
-      if (session.instanceId === instance.instanceId && session.tabId === tabId) {
-        session.paused = msg.params.paused === true;
-        log('接管浮层切换暂停 session=' + sessionId + ' paused=' + session.paused);
-        sendInstanceEvent(instance, 'takeover.state', { tabId, sessionId, paused: session.paused, borrowed: session.borrowed === true });
-        break;
-      }
-    }
-    return;
-  }
-  if (msg.event === 'takeover.stop' && msg.params && Number.isInteger(msg.params.tabId)) {
-    const tabId = msg.params.tabId;
-    for (const [sessionId, session] of sessions) {
-      if (session.instanceId === instance.instanceId && session.tabId === tabId) {
-        log('用户从接管浮层收回控制 session=' + sessionId + ' tab=' + tabId);
-        stopSession({ sessionId }, 5000).catch((error) => log('收回控制失败：' + ((error && error.message) || error)));
-        break;
-      }
-    }
-    return;
-  }
-  if (msg.event === 'tab-removed' && msg.params && typeof msg.params.tabId === 'number') {
-    const tabId = msg.params.tabId;
-    for (const [sessionId, session] of sessions) {
-      if (session.instanceId === instance.instanceId && session.tabId === tabId) {
-        sessions.delete(sessionId);
-        aliases.clear(sessionId);
-        releaseTransfersForSession(sessionId);
-        sessionState.finish(sessionId);
-        sessionQueue.drop(sessionId);
-        saveSessions();
-        log(`tab ${tabId} 已关闭，移除 session ${sessionId}`);
-      }
-    }
-    return;
-  }
-  log(`忽略扩展事件 event=${msg.event}`);
-}
+
 
 /** 扩展发起的只读调用：{type:"call", id, method, params} → {type:"call-res", id, ok, result|error} */
 async function handleWsCall(instance, msg) {
@@ -918,6 +923,10 @@ async function handleWsCall(instance, msg) {
     reply({ ok: false, error: { code: (error && error.code) || 'E_INTERNAL', message: String((error && error.message) || error) } });
   }
 }
+
+const handleExtensionEvent = createExtensionEventHandler({
+  normalizeSettings, log, humanEventSeen, sessions, sendInstanceEvent, stopSession: (...args) => sessionStop.stopSession(...args), aliases, releaseTransfersForSession: (...args) => transferOps.releaseTransfersForSession(...args), sessionState, sessionQueue, tabQueue, saveSessions, sessionLeases,
+});
 
 function handleExtensionMessage(instance, msg) {
   instance.lastPong = Date.now();
@@ -1023,7 +1032,14 @@ function onExtensionConnection(conn, req) {
         try { conn.close(4004, 'protocol unsupported'); } catch { /* 忽略 */ }
         return;
       }
-      const authInfo = !authCompleted && typeof msg.authKeyId === 'string' ? findAuthSecret(msg.authKeyId) : null;
+      const authInfo = !authCompleted && typeof msg.authKeyId === 'string' ? authResolve.findAuthSecret(msg.authKeyId) : null;
+      const claimedBrowserId = typeof msg.browserId === 'string' ? msg.browserId.slice(0, 64) : '';
+      if (authInfo && authInfo.browserId && claimedBrowserId !== authInfo.browserId) {
+        if (isRemote) authGuard.fail(peerKey);
+        log('拒绝 browser_id 不匹配的配对 token（期望 ' + authInfo.browserId + '，实际 ' + (claimedBrowserId || '空') + '）');
+        rejectBrowserBinding(conn, '配对 token 已绑定到另一个浏览器，请重新配对');
+        return;
+      }
       if (authInfo) authScope = authInfo.scope === 'read' ? 'read' : 'control';
       if (msg.authChallenge === true && authInfo && !authCompleted) {
         const localVerified = !isRemote && authInfo.local;
@@ -1038,7 +1054,7 @@ function onExtensionConnection(conn, req) {
           try { conn.close(4003, 'local pair required'); } catch { /* 忽略 */ }
           return;
         }
-        if (!isRemote && localPairCodeRequired() && !localPairCodeValid(msg)) {
+        if (!isRemote && localTrustApi.localPairCodeRequired() && !localTrustApi.localPairCodeValid(msg)) {
           try { conn.sendJson({ type: 'hello-error', code: 'E_PAIR_REQUIRED', message: '本机配对码不匹配：请核对 bridge daemon pair 显示的 6 位数字' }); } catch (error) { log('发送配对码错误失败：' + (error && error.message)); }
           setTimeout(() => { try { conn.close(4003, 'local pair code required'); } catch { /* 忽略 */ } }, 50);
           return;
@@ -1052,7 +1068,12 @@ function onExtensionConnection(conn, req) {
         try { conn.sendJson({ type: 'auth-challenge', challenge, alg: 'hmac-sha256' }); } catch { /* 忽略 */ }
         return;
       }
-      const localVerified = !isRemote && localPairVerified(msg.pairToken);
+      const localVerified = !isRemote && localTrustApi.localPairVerified(msg.pairToken);
+      if (localVerified && localTrust.browserId && claimedBrowserId !== localTrust.browserId) {
+        log('拒绝 browser_id 不匹配的本机配对 token（期望 ' + localTrust.browserId + '，实际 ' + (claimedBrowserId || '空') + '）');
+        rejectBrowserBinding(conn, '本机配对 token 已绑定到另一个浏览器，请重新配对');
+        return;
+      }
       log('hello 本机验证 localVerified=' + localVerified + ' tokenPresent=' + Boolean(msg.pairToken) + ' remote=' + isRemote);
       if (!isRemote && localTrust.strict === true && !localVerified) {
         log('拒绝未配对的本机连接（trust-local off）');
@@ -1060,21 +1081,89 @@ function onExtensionConnection(conn, req) {
         try { conn.close(4003, 'local pair required'); } catch { /* 忽略 */ }
         return;
       }
-      if (isRemote && !isPairTokenValid(msg.pairToken)) {
+      if (isRemote && !authResolve.isPairTokenValid(msg.pairToken)) {
         log('拒绝未配对的远程连接：' + remoteAddress);
         authGuard.fail(peerKey);
         try { conn.sendJson({ type: 'hello-error', code: 'E_PAIR_REQUIRED', message: '远程连接需要有效的配对 token（bridge pair redeem <code>）' }); } catch { /* 忽略 */ }
         try { conn.close(4003, 'pair required'); } catch { /* 忽略 */ }
         return;
       }
-      if (!isRemote && localPairCodeRequired() && !localPairCodeValid(msg)) {
+      if (isRemote && msg.pairToken) {
+        const knownDevice = deviceStore.recordForToken(msg.pairToken);
+        if (knownDevice && knownDevice.browserId && claimedBrowserId !== knownDevice.browserId) {
+          authGuard.fail(peerKey);
+          log('拒绝 browser_id 不匹配的远程设备 token（期望 ' + knownDevice.browserId + '，实际 ' + (claimedBrowserId || '空') + '）');
+          rejectBrowserBinding(conn, '设备 token 已绑定到另一个浏览器，请重新配对');
+          return;
+        }
+      }
+      if (!isRemote && localTrustApi.localPairCodeRequired() && !localTrustApi.localPairCodeValid(msg)) {
         try { conn.sendJson({ type: 'hello-error', code: 'E_PAIR_REQUIRED', message: '本机配对码不匹配：请核对 bridge daemon pair 显示的 6 位数字' }); } catch (error) { log('发送配对码错误失败：' + (error && error.message)); }
         setTimeout(() => { try { conn.close(4003, 'local pair code required'); } catch { /* 忽略 */ } }, 50);
         return;
       }
+      // 配对激活：配对码/链接只用于首次激活；激活后旧 token 立即作废，换发独立设备 token。
+      // 分阶段：设备先进入 pending，扩展用新 token 对 commitTxn 签名确认后才 active；
+      // 断线未 commit 时，带 pending 设备 token 重连会重新拿到 commitTxn（断点恢复）。
+      const activationToken = authCompleted ? authSecret : msg.pairToken;
+      let deviceToken = '';
+      let commitInfo = null;
+      const commitTxn = newCommitTxn();
+      const commitUntil = Date.now() + 10 * 60 * 1000;
+      if (isRemote && activationToken) {
+        const pairingEntry = pairing.findByToken(activationToken);
+        if (pairingEntry) {
+          deviceStore.remember(pairingEntry.token, {
+            label: typeof msg.label === 'string' ? msg.label : '',
+            browser: typeof msg.browser === 'string' ? msg.browser : '',
+            browserId: claimedBrowserId,
+            instanceId: typeof msg.instanceId === 'string' ? msg.instanceId : '',
+            scope: pairingEntry.scope,
+          });
+          const rotated = deviceStore.rotate(deviceIdForToken(pairingEntry.token), { scope: pairingEntry.scope });
+          if (rotated) {
+            deviceToken = rotated.token;
+            pairing.consume(pairingEntry.code);
+            deviceStore.beginActivation(deviceToken, { browserId: claimedBrowserId, commitTxn, pendingUntil: commitUntil });
+            commitInfo = { txn: commitTxn, proof: commitProofFor(deviceToken, commitTxn) };
+            log('配对激活：code=' + pairingEntry.code + ' 已作废，设备换发新 token device=' + rotated.deviceId + '（pending）');
+          }
+        } else if (activationToken) {
+          const record = deviceStore.recordForToken(activationToken);
+          if (record && record.status === 'pending' && record.commitTxn) {
+            commitInfo = { txn: record.commitTxn, proof: commitProofFor(activationToken, record.commitTxn) };
+            log('配对断点恢复：device=' + record.deviceId + ' 重新下发 commitTxn');
+          } else if (record && record.rotationToken === activationToken && record.rotationTxn) {
+            commitInfo = { txn: record.rotationTxn, proof: commitProofFor(activationToken, record.rotationTxn) };
+            log('rotation 激活：device=' + record.deviceId + ' 下发 commitTxn');
+          }
+        }
+      } else if (!isRemote && activationToken && localTrustApi.localPairVerified(activationToken)
+        && (localTrust.pendingUntil > 0 || Boolean(localTrust.pendingCode))) {
+        // 本机首次激活：旧链接（含 #token）作废，换发独立 token；扩展用 hello-ack.deviceToken 持久化。
+        localTrust.token = crypto.randomBytes(24).toString('hex');
+        localTrust.pairedAt = Date.now();
+        localTrust.pendingUntil = 0;
+        localTrust.pendingCode = '';
+        localTrust.browserId = typeof msg.browserId === 'string' ? msg.browserId.slice(0, 64) : '';
+        localTrust.commitTxn = commitTxn;
+        localTrust.commitUntil = commitUntil;
+        saveLocalTrust();
+        deviceToken = localTrust.token;
+        commitInfo = { txn: commitTxn, proof: commitProofFor(deviceToken, commitTxn) };
+        log('本机配对激活：旧链接已作废，换发设备 token（pending）');
+      } else if (!isRemote && activationToken && localTrustApi.localPairVerified(activationToken) && localTrust.commitTxn) {
+        commitInfo = { txn: localTrust.commitTxn, proof: commitProofFor(activationToken, localTrust.commitTxn) };
+        log('本机配对断点恢复：重新下发 commitTxn');
+      } else if (!isRemote && activationToken && activationToken === localTrust.rotationToken && localTrust.rotationTxn) {
+        // 本机 rotation：新 token 先 pending，commit 后才替换旧 token。
+        deviceToken = activationToken;
+        commitInfo = { txn: localTrust.rotationTxn, proof: commitProofFor(activationToken, localTrust.rotationTxn) };
+        log('本机 rotation：下发 commitTxn');
+      }
       msg.localVerified = localVerified;
       try {
-        instance = registerInstance(conn, msg, { serverProof });
+        instance = registerInstance(conn, msg, { serverProof, deviceToken, commit: commitInfo });
       } catch (error) {
         log('注册浏览器实例失败：' + ((error && error.stack) || error));
         if (isRemote) authGuard.fail(peerKey);
@@ -1084,20 +1173,36 @@ function onExtensionConnection(conn, req) {
       clearTimeout(handshakeTimer);
       if (isRemote) authGuard.success(peerKey);
       instance.remote = isRemote;
+      // 本机激活换发 token 后，instance 也必须用新 token（commit 证明用 instance.pairToken 校验）。
+      if (deviceToken) instance.pairToken = deviceToken;
       if (isRemote) {
-        const remoteToken = authCompleted ? authSecret : msg.pairToken;
-        const remoteScope = authCompleted ? authScope : scopeForRemoteToken(remoteToken);
+        let remoteToken = authCompleted ? authSecret : msg.pairToken;
+        if (deviceToken) remoteToken = deviceToken;
+        const remoteScope = authCompleted ? authScope : authResolve.scopeForRemoteToken(remoteToken);
         instance.scope = remoteScope;
         if (remoteToken) {
           instance.pairToken = remoteToken;
-          try {
-            deviceStore.remember(remoteToken, { label: msg.label || msg.instanceLabel || '', browser: instance.browser, instanceId: instance.instanceId, scope: remoteScope });
-          } catch (error) {
-            log('保存远程设备凭据失败：' + ((error && error.message) || error));
+          if (deviceToken) {
+            try {
+              deviceStore.touch(deviceToken, { instanceId: instance.instanceId, label: msg.label || msg.instanceLabel || '', browserId: claimedBrowserId });
+            } catch (error) {
+              log('更新远程设备信息失败：' + ((error && error.message) || error));
+            }
+          } else {
+            try {
+              // 只更新已存在的设备记录：绝不能用 hello 里任意 token 新建设备（否则轮换后的旧 token 会被复活）。
+              deviceStore.touch(remoteToken, { label: msg.label || msg.instanceLabel || '', browser: instance.browser, instanceId: instance.instanceId, scope: remoteScope, browserId: claimedBrowserId });
+            } catch (error) {
+              log('更新远程设备凭据失败：' + ((error && error.message) || error));
+            }
           }
         }
       }
       // localVerified 已在 registerInstance 中写入并用于 hello-ack
+      return;
+    }
+    if (msg.type === 'auth-commit') {
+      handleAuthCommit(instance, conn, msg);
       return;
     }
     handleExtensionMessage(instance, msg);
@@ -1122,6 +1227,10 @@ function heartbeatTick() {
     } catch {
       /* 下一次 tick 或 close 事件会清理 */
     }
+  }
+  // 人工事件限流表按 tabId 记录：长时间未更新的条目清掉，避免反复开关 tab 造成无界增长。
+  for (const [tabId, at] of humanEventSeen) {
+    if (now - at > 10 * 60 * 1000) humanEventSeen.delete(tabId);
   }
 }
 
@@ -1151,28 +1260,12 @@ function browserList() {
     .map(instancePublicView);
 }
 
-function sessionList() {
-  const now = Date.now();
-  for (const [sessionId, session] of sessions) {
-    if (isSessionExpired(session, { connected: instances.has(session.instanceId), now })) {
-      sessions.delete(sessionId);
-    }
-  }
-  return [...sessions.values()]
-    .sort((a, b) => a.startedAt - b.startedAt)
-    .map((session) => sessionPublicView(session, {
-      connected: instances.has(session.instanceId),
-      phase: sessionState.phase(session.sessionId),
-      now,
-    }));
-}
-
 /** 解析 --browser 参数：instanceId 精确匹配，或 edge/chrome 前缀匹配。 */
 function pickInstance(browserSpec) {
   const list = [...instances.values()].sort((a, b) => a.connectedAt - b.connectedAt);
   if (!browserSpec) {
     if (!list.length) {
-      throw new BridgeError('E_NO_BROWSER', '没有已连接的浏览器；请在 Edge/Chrome 里加载并启用 browser-bridge 扩展');
+      throw new BridgeError('E_NO_BROWSER', '没有已连接的浏览器；请在 Edge/Chrome/Brave/Arc/Vivaldi/Opera/Helium 里加载并启用 browser-bridge 扩展');
     }
     const edge = list.filter((item) => item.browser === 'edge');
     const chrome = list.filter((item) => item.browser === 'chrome');
@@ -1246,6 +1339,10 @@ function sendCommand(instance, method, params, timeoutMs) {
       instanceId: instance.instanceId,
       tabId: Number.isInteger(params && params.tabId) ? params.tabId : null,
       startedAt: Date.now(),
+      // 调用方 rpc_id（来自 daemon/rpc.js 的 request-context）：通用 cancel { rpc_id }
+      // 靠它把“调用方视角的 id”解析到这条 daemon→扩展 命令。属于 daemon 内部字段，
+      // 不进 inflight.list / status 的默认载荷。
+      rpcId: currentRpcId(),
     };
     entry.timer = setTimeout(() => {
       if (instance.pending.get(id) === entry) {
@@ -1366,18 +1463,33 @@ function requireCapability(instance, method) {
   throw new BridgeError('E_UNSUPPORTED_CAPABILITY', `浏览器实例不支持 ${needed} 能力（method ${method}）`);
 }
 
-/** 新参数（unverified/expect/plan 等）在旧扩展上会静默失效：派发前按特性表拦住。 */
+/**
+ * 新参数/新能力（unverified、expect、plan、read、video、capture.stream、debug.journal、har）
+ * 在旧扩展上会静默失效：派发前按特性表硬拒绝。
+ *
+ * 语义（W4 起收敛到单一实现 lib/protocol-features.mjs）：
+ * - 主错误码 E_PROTOCOL_UNSUPPORTED，data 固定带 method/feature/required/actual/missing；
+ * - 兼容别名在 **daemon 这一层**兜底映射：data.legacyCode=E_UNSUPPORTED_CAPABILITY、
+ *   data.aliasCodes=[新码, 旧码]（即使 lib gate data 将来不带这两个字段，旧调用方仍能识别；
+ *   TS 包 packages/protocol 的类型契约不需要 daemon 改它）；
+ * - “能力位缺失”（hello caps 不含 frames/video/...）仍由 requireCapability 报旧码，未改；
+ * - 没有特性门的方法（click/navigate/observe/tab.list…）原样放行，1.8 客户端照常可用。
+ */
 function requireFeatures(instance, method, params) {
-  const features = featuresForCall(method, params);
-  if (!features.length) return;
-  const missing = featureShortfall(instance, features, compareProtocol);
-  if (!missing.length) return;
-  const detail = missing.map((item) => `${item.feature}（需要 ${item.required}，当前 ${item.actual}）`).join('、');
-  throw new BridgeError('E_UNSUPPORTED_CAPABILITY', `浏览器扩展协议版本过低，缺少特性：${detail}。${FEATURE_RECOVERY}`, {
-    missing,
-    method,
-    features,
-  });
+  try {
+    assertProtocolCompatible(instance, method, params, compareProtocol);
+  } catch (error) {
+    // 只翻译特性门拒绝；其它异常（例如 assert 内部 bug）原样抛出，避免把真 bug 伪装成协议错误。
+    if (!error || error.code !== PROTOCOL_UNSUPPORTED) throw error;
+    const base = error.data && typeof error.data === 'object' ? error.data : {};
+    const data = {
+      ...base,
+      legacyCode: base.legacyCode || LEGACY_CAPABILITY_UNSUPPORTED,
+      aliasCodes: Array.isArray(base.aliasCodes) && base.aliasCodes.length ? base.aliasCodes : PROTOCOL_UNSUPPORTED_ALIASES,
+    };
+    log(`协议门禁拒绝 ${method}：feature=${data.feature} required=${data.required} actual=${data.actual}`);
+    throw new BridgeError(error.code, error.message, data);
+  }
 }
 
 
@@ -1408,6 +1520,23 @@ function verifyDecision(route, method) {
   return route;
 }
 
+/**
+ * 共享 tab 控制权闸门（在 tab 队列内执行，保证同一 tab 上的判定与派发串行）。
+ * - 只读方法：永远放行（不续租）。
+ * - exclusive 模式下非持有者的变更动作：E_CONTROL_NOT_HELD。
+ * - open 模式：放行，只把“当前写者”记进租约（单会话 tab 同样续租，
+ *   这样后来者 --share 时主会话的控制权是新鲜的）。
+ */
+function enforceTabControl(route, method) {
+  if (!route || !route.session) return null;
+  const session = route.session;
+  const control = tabControls.syncTabControl(session.tabId);
+  if (!control) return null;
+  const decision = tabControl.check(session.tabId, session.sessionId, { mutating: isMutating(method), method });
+  if (!decision.ok) throw new BridgeError(decision.code, decision.message, decision.data);
+  return decision.control;
+}
+
 async function routeExtension(route, method, timeoutMs) {
   // route 已在 dispatchInner 里 prepareRoute + verifyDecision 过；这里只做能力降级与派发。
   requireCapability(route.instance, method);
@@ -1423,9 +1552,27 @@ async function routeExtension(route, method, timeoutMs) {
   if (method === 'observe-frames' && !hasCapability(route.instance, 'frames')) {
     effectiveMethod = 'observe';
   }
-  let result = route.session && !SESSION_QUEUE_BYPASS.has(method)
-    ? await sessionQueue.enqueue(route.session.sessionId, () => sendCommand(route.instance, effectiveMethod, route.params, timeoutMs))
-    : await sendCommand(route.instance, effectiveMethod, route.params, timeoutMs);
+  const run = () => {
+    // 命令派发前复核 tab 所有权租期：剩余不足一半时原地续租（不换代、不改 payload）。
+    // 失败（共享参与者/已释放）只留内部证据，绝不阻塞既有派发路径。
+    if (route.session) {
+      try { leaseOps.touch(route.session.tabId, route.session.sessionId, { reason: 'command' }); } catch { /* 证据失败不影响命令 */ }
+    }
+    const control = enforceTabControl(route, method);
+    return sendCommand(route.instance, effectiveMethod, route.params, timeoutMs).then((value) => {
+      if (control && route.session) {
+        route.session.control = {
+          epoch: control.epoch,
+          holder: control.holder,
+          mode: control.mode,
+          leaseRemainingMs: control.leaseRemainingMs,
+          shared: control.shared,
+        };
+      }
+      return value;
+    });
+  };
+  let result = await runInQueues({ route, method, run, sessionQueue, tabQueue, bypass: SESSION_QUEUE_BYPASS, commandQueue });
   if (effectiveMethod !== method && result && typeof result === 'object') {
     result.downgraded = true;
     result.frames = [{ frameId: 0, url: result.url || '', title: result.title || '', refs: result.refs || 0, observation: result.observation || '' }];
@@ -1436,841 +1583,130 @@ async function routeExtension(route, method, timeoutMs) {
     if (typeof result.url === 'string' && result.url) route.session.url = result.url;
     if (typeof result.title === 'string' && result.title) route.session.title = result.title;
   }
+  recordRunLog(route, method, result);
   // 导航之后文档重建，控制提示条会随旧文档消失：补挂一次（受设置约束，失败忽略）。
-  // 不阻塞导航返回：提示条是可见性 UI，晚一两百毫秒出现不影响动作。
-  if (route.session && ['navigate', 'reload', 'navigate-back', 'navigate-forward'].includes(method)) {
-    sendCommand(route.instance, 'control-hint', { tabId: route.session.tabId, enabled: true }, 3000).catch(() => {});
-  }
-  // 页面没变时扩展只回 unchanged（不带全文）：用 daemon 缓存补回文本，省一次大传输。
-  if (method === 'observe' && route.session && result && result.unchanged === true) {
-    const cached = route.session.observation;
-    if (cached && typeof cached.text === 'string') {
-      result.observation = cached.text;
-      result.cachedFrom = cached.at;
-    } else {
-      // 缓存缺失（daemon 重启/会话重建）：强制重取一次全文。
-      result = await sendCommand(route.instance, 'observe', { ...route.params, force: true }, timeoutMs);
-    }
-  }
-  // observe 结果留在 daemon 里，view 可以直接分段检索，不必重新采集页面。
-  if (method === 'observe' && route.session && result && typeof result.observation === 'string') {
-    route.session.observation = {
-      text: result.observation,
-      refs: typeof result.refs === 'number' ? result.refs : 0,
-      url: typeof result.url === 'string' ? result.url : route.session.url || '',
-      title: typeof result.title === 'string' ? result.title : route.session.title || '',
-      at: Date.now(),
-    };
-  }
-  // 短别名：观察/截图结果带回 oN / cN，后续可用 --observation o2 / --capture c1 引用。
-  if (route.session && result && typeof result === 'object') {
-    if (method === 'observe') {
-      if (!result.observationId) result.observationId = 'ob_' + crypto.randomBytes(6).toString('hex');
-      const alias = aliases.register(route.session.sessionId, 'observation', result.observationId);
-      if (alias) result.observationAlias = alias;
-    } else if (method === 'screenshot' && result.capture_id) {
-      const alias = aliases.register(route.session.sessionId, 'capture', result.capture_id);
-      if (alias) result.captureAlias = alias;
-    }
-  }
+  result = await postProcessRoute({ route, method, result, timeoutMs, sendCommand, aliases, crypto });
   return result;
 }
 
 /** audit.list：读最近的操作审计（只读元数据）。 */
-function getOperation(id) {
-  const wanted = String(id || '');
-  if (!wanted) throw new BridgeError('E_BAD_ARG', '需要 operation id');
-  const dir = path.join(HOME_DIR, 'audit');
-  let files = [];
-  try {
-    files = fs.readdirSync(dir).filter((name) => name.endsWith('.jsonl')).sort().reverse();
-  } catch {
-    files = [];
-  }
-  for (const name of files) {
-    let raw = '';
-    try {
-      raw = fs.readFileSync(path.join(dir, name), 'utf8');
-    } catch {
-      continue;
-    }
-    for (const line of raw.split(/\r?\n/)) {
-      if (!line.trim()) continue;
-      try {
-        const row = JSON.parse(line);
-        if (row.id === wanted) return { entry: row };
-      } catch {
-        // 跳过坏行
-      }
-    }
-  }
-  throw new BridgeError('E_NOT_FOUND', '找不到 operation ' + wanted);
-}
-
-function listAudit(params) {
-  const limitRaw = Number(params.limit);
-  const limit = Math.min(Math.max(Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : 100, 1), 500);
-  const since = Number(params.since) > 0 ? Number(params.since) : 0;
-  const dir = path.join(HOME_DIR, 'audit');
-  let files = [];
-  try {
-    files = fs.readdirSync(dir).filter((name) => name.endsWith('.jsonl')).sort();
-  } catch {
-    files = [];
-  }
-  const entries = [];
-  for (const name of files) {
-    let raw = '';
-    try {
-      raw = fs.readFileSync(path.join(dir, name), 'utf8');
-    } catch {
-      continue;
-    }
-    for (const line of raw.split(/\r?\n/)) {
-      if (!line.trim()) continue;
-      try {
-        const row = JSON.parse(line);
-        if (row.ts >= since) entries.push(row);
-      } catch {
-        // 跳过坏行
-      }
-    }
-  }
-  entries.sort((a, b) => b.ts - a.ts);
-  return { dir, total: entries.length, entries: entries.slice(0, limit) };
-}
-
-/** view：在当前 session 的最近一次 observe 缓存里检索/分页。 */
-function viewCache(params) {
-  const session = resolveSession(params.session !== undefined ? params.session : params.sessionId);
-  const cache = session.observation;
-  if (!cache) {
-    throw new BridgeError('E_CACHE_EMPTY', '该 session 还没有 observe 缓存；先运行 bridge observe');
-  }
-  const lines = String(cache.text || '').split('\n');
-  const needle = typeof params.grep === 'string' && params.grep ? params.grep.toLowerCase() : '';
-  const matched = needle ? lines.filter((line) => line.toLowerCase().includes(needle)) : lines;
-  const offset = Math.max(0, Number.isFinite(Number(params.offset)) ? Math.floor(Number(params.offset)) : 0);
-  const limitRaw = Number(params.limit);
-  const limit = Math.min(Math.max(Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : 200, 1), 2000);
-  return {
-    lines: matched.slice(offset, offset + limit),
-    total: lines.length,
-    matched: matched.length,
-    offset,
-    limit,
-    url: cache.url || '',
-    title: cache.title || '',
-    at: cache.at,
-    refs: cache.refs || 0,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // 本地 RPC 方法（PROTOCOL §4）
 // ---------------------------------------------------------------------------
 
-function inflightList() {
-  return [...inflight.values()].map((entry) => ({
-    id: entry.id,
-    instanceId: entry.instanceId,
-    method: entry.method,
-    tabId: entry.tabId,
-    startedAt: entry.startedAt,
-    elapsedMs: Date.now() - entry.startedAt,
-  }));
-}
-
-async function cancelInflight(params) {
-  const id = String(params && params.id ? params.id : '');
-  if (!id) throw new BridgeError('E_BAD_ARG', 'command.cancel 需要命令 id');
-  const entry = inflight.get(id);
-  if (!entry) throw new BridgeError('E_NOT_FOUND', '没有进行中的命令 ' + id);
-  if (entry.method === 'cancel') throw new BridgeError('E_BAD_ARG', '不能取消 cancel 命令');
-  const instance = instances.get(entry.instanceId);
-  if (!instance) throw new BridgeError('E_NO_BROWSER', '命令所属浏览器已断开');
-  const result = await sendCommand(instance, 'cancel', { rpc_id: id }, 3000);
-  return { id, forwarded: true, accepted: Boolean(result && result.cancelled === true) };
-}
-
-function buildStatus() {
-  return {
-    service: SERVICE,
-    version: VERSION,
-    protocol: PROTOCOL_VERSION,
-    pid: process.pid,
-    port: currentPort,
-    uptimeMs: Date.now() - startedAt,
-    browsers: browserList(),
-    sessions: sessionList(),
-    inflight: inflightList(),
-    queues: sessionQueue.snapshot(),
-    auth: authGuard.snapshot(),
-    compatibility: {
-      daemon: { protocol: PROTOCOL_VERSION, features: featureMatrix({ protocol: PROTOCOL_VERSION }, compareProtocol) },
-      browsers: browserList().map((item) => ({
-        instanceId: item.instanceId,
-        protocol: item.protocol,
-        features: featureMatrix(item, compareProtocol),
-      })),
-    },
-  };
-}
-
 /** 可恢复启动的 token 校验（转成协议错误）。 */
-function normalizeRequestToken(value) {
-  try {
-    return normalizeStartToken(String(value));
-  } catch (error) {
-    throw new BridgeError('E_BAD_ARG', String((error && error.message) || error));
-  }
-}
 
-function startRequestMeta(params) {
-  return {
-    browser: params.browser ?? null,
-    noFocus: params.noFocus === true,
-    incognito: params.incognito === true,
-    tab: params.tab ?? null,
-  };
-}
 
-/** 预登记：不创建任何窗口，只占住 token（prepare 语义）。 */
-async function prepareStartRequest(params) {
-  const requestId = normalizeRequestToken(params.requestId);
-  const existing = startJournal.get(requestId);
-  if (existing) {
-    if (existing.state === 'cancelled') {
-      throw new BridgeError('E_REQUEST_CANCELLED', '该 requestId 已被取消，请重新生成', { requestId, state: existing.state });
-    }
-    return { requestId, entry: existing };
-  }
-  return { requestId, entry: startJournal.prepare(requestId, startRequestMeta(params)) };
-}
 
-/** 认领：ready/claimed → claimed，表示调用方已经持久化会话。 */
-async function claimStartRequest(params) {
-  const requestId = normalizeRequestToken(params.requestId);
-  const existing = startJournal.get(requestId);
-  if (!existing) throw new BridgeError('E_BAD_ARG', 'requestId 不存在；请先 prepare 或 start', { requestId });
-  if (existing.state === 'cancelled') {
-    throw new BridgeError('E_REQUEST_CANCELLED', '该 requestId 已被取消', { requestId, state: existing.state });
-  }
-  if (existing.state !== 'ready' && existing.state !== 'claimed') {
-    throw new BridgeError('E_START_NOT_READY', '会话尚未 ready，不能认领', { requestId, state: existing.state });
-  }
-  if (existing.state === 'claimed') return { requestId, entry: existing };
-  return { requestId, entry: startJournal.setState(requestId, 'claimed', {}) };
-}
 
-/** 取消：prepared/ready/claimed 可直接取消并留下墓碑；starting 进行中拒绝。 */
-async function cancelStartRequest(params) {
-  const requestId = normalizeRequestToken(params.requestId);
-  const existing = startJournal.get(requestId);
-  if (existing && existing.state === 'cancelled') return { requestId, entry: existing };
-  if (existing && existing.state === 'starting') {
-    throw new BridgeError('E_START_PENDING', '启动进行中，暂不能取消；稍后用同一 requestId 查询', {
-      requestId,
-      startedAt: existing.at || null,
-    });
-  }
-  const sessionId = existing && existing.result ? existing.result.sessionId : null;
-  return { requestId, sessionId, entry: startJournal.setState(requestId, 'cancelled', {}) };
-}
-
-async function startRequestStatus(params) {
-  const requestId = normalizeRequestToken(params.requestId);
-  return { requestId, entry: startJournal.get(requestId) };
-}
-
-function tabOwnerSession(tabId, exceptSessionId) {
-  for (const [sessionId, session] of sessions) {
-    if (sessionId !== exceptSessionId && Number(session.tabId) === Number(tabId)) return sessionId;
-  }
-  return null;
-}
-
-function claimTab(tabId, owner) {
-  const active = tabOwnerSession(tabId, owner);
-  if (active) throw new BridgeError('E_BORROW_CONFLICT', '该标签页已被其他会话占用', { tabId, owner: active });
-  const claim = tabReservations.reserve(tabId, owner);
-  if (!claim.ok) throw new BridgeError('E_BORROW_CONFLICT', '该标签页已有借用确认进行中', { tabId, owner: claim.owner });
-  return claim;
-}
-
-async function startSession(params, timeoutMs) {  const traceStart = Date.now();
-  const traceStep = (label) => {
-    if (process.env.BB_DAEMON_TRACE === '1') log(`session.start ${label} +${Date.now() - traceStart}ms`);
-  };
-  const controller = params.controller;
-  if (controller !== undefined && !isControllerInfo(controller)) {
-    throw new BridgeError('E_BAD_ARG', 'session.start 的 controller 需要 name（1-80 字符），可选 project（1-120 字符）与 #rrggbb 颜色');
-  }
-  const callerScope = params.scope === undefined || params.scope === null ? '' : String(params.scope).trim().slice(0, 80);
-  if (params.scope !== undefined && params.scope !== null && !callerScope) {
-    throw new BridgeError('E_BAD_ARG', 'session.start 的 scope 不能为空字符串');
-  }
-  // 可恢复启动：token 幂等。同一个 requestId 重试返回既有会话；进行中的同一 token 拒绝并给出状态。
-  let requestToken = null;
-  if (params.requestId !== undefined && params.requestId !== null) {
-    try {
-      requestToken = normalizeStartToken(String(params.requestId));
-    } catch (error) {
-      throw new BridgeError('E_BAD_ARG', String((error && error.message) || error));
-    }
-    const existing = startJournal.get(requestToken);
-    if (existing) {
-      if (existing.state === 'cancelled') {
-        throw new BridgeError('E_REQUEST_CANCELLED', '该 requestId 已被取消，请重新生成', { requestId: requestToken, state: existing.state });
-      }
-      if ((existing.state === 'ready' || existing.state === 'claimed') && existing.result && sessions.has(existing.result.sessionId)) {
-        return { ...existing.result, reused: true };
-      }
-      if (existing.state === 'starting' && Date.now() - Number(existing.at || 0) < 120000) {
-        throw new BridgeError('E_START_PENDING', '同一 requestId 的启动仍在进行中；稍后用同一 requestId 重试即可取回会话', {
-          requestId: requestToken,
-          startedAt: existing.at || null,
-        });
-      }
-    }
-    startJournal.begin(requestToken, { browser: params.browser ?? null, noFocus: params.noFocus === true });
-  }
-  let claim = null;
-  try {
-  let instance;
-  let tabId = null;
-  let windowId = 0;
-  let url = '';
-  let title = '';
-  let borrowed = false;
-
-  if (params.tab !== undefined && params.tab !== null) {
-    const wanted = Number(params.tab);
-    if (!Number.isInteger(wanted)) throw new BridgeError('E_BAD_ARG', 'session.start 的 tab 需要整数 tabId');
-    instance = await findInstanceForTab(wanted);
-    if (!instance) throw new BridgeError('E_NO_TAB', `tabId ${wanted} 不属于任何已连接的浏览器`);
-    const ownerToken = 'start:' + crypto.randomUUID();
-    claim = { tabId: wanted, owner: ownerToken };
-    claimTab(wanted, ownerToken);
-    const borrowParams = { tabId: wanted };
-    if (typeof globalBorrowConfirm === 'boolean') borrowParams.borrowConfirm = globalBorrowConfirm;
-    let info;
-    try {
-      info = await sendCommand(instance, 'tab.borrow', borrowParams, timeoutMs);
-    } catch (error) {
-      tabReservations.release(wanted, ownerToken);
-      claim = null;
-      throw error;
-    }
-    tabId = wanted;
-    borrowed = true;
-    windowId = info && Number.isInteger(info.windowId) ? info.windowId : 0;
-    url = info && typeof info.url === 'string' ? info.url : '';
-    title = info && typeof info.title === 'string' ? info.title : '';
-  } else {
-    instance = pickInstance(params.browser);
-    const result = await sendCommand(instance, 'window.newAgent', { noFocus: params.noFocus === true, incognito: params.incognito === true }, timeoutMs);
-    traceStep('window.newAgent');
-    tabId = result && typeof result.tabId === 'number' ? result.tabId : null;
-    if (tabId === null) throw new BridgeError('E_INTERNAL', 'window.ensureAgent 未返回 tabId');
-    windowId = result && typeof result.windowId === 'number' ? result.windowId : 0;
-    url = result && typeof result.url === 'string' ? result.url : '';
-    title = result && typeof result.title === 'string' ? result.title : '';
-  }
-
-  const sessionId = newSessionId();
-  sessionState.begin(sessionId);
-  sessions.set(sessionId, createSessionRecord({
-    sessionId,
-    instanceId: instance.instanceId,
-    tabId,
-    windowId,
-    url,
-    title,
-    borrowed,
-    incognito: params.incognito === true,
-    controller,
-    scope: callerScope,
-    allowDomains: normalizeDomains(params.allowDomains),
-    denyDomains: normalizeDomains(params.denyDomains),
-    minIntervalMs: Math.max(0, Math.min(Number(params.minIntervalMs) || 0, 5000)),
-  }));
-  saveSessions();
-  if (claim) {
-    tabReservations.transfer(claim.tabId, claim.owner, sessionId);
-    claim = null;
-  }
-  log(`session ${sessionId} 创建 instance=${instance.instanceId} tab=${tabId}${borrowed ? '（借用）' : ''}`);
-  // 自动挂载对话框拦截（queue 策略）：动作触发原生弹窗时先回 dialog_pending，由调用方决策。
-  // 同一 tab 的命令按队列串行，因此这里不等待 arm 完成也不会让后续动作抢在拦截器之前。
-  sendCommand(instance, 'dialog.arm', { tabId, policy: { queue: true } }, 5000)
-    .then(() => traceStep('dialog.arm'))
-    .catch((error) => {
-      log('session ' + sessionId + ' 对话框拦截挂载失败（忽略）：' + ((error && error.message) || error));
-    });
-  // 接管浮层状态（新 UI 取代旧控制提示条）
-  sendInstanceEvent(instance, 'takeover.state', { tabId, sessionId, paused: false, borrowed, controller: controller ?? null, project: controller?.project ?? null });
-  try {
-    // 控制提示是可见性 UI；不阻塞会话返回，注入失败也不影响控制权。
-    sendCommand(instance, 'control-hint', { tabId, enabled: true }, 5000).catch(() => {});
-    traceStep('control-hint');
-  } catch (error) {
-    log('session ' + sessionId + ' 控制提示注入失败（忽略）：' + ((error && error.message) || error));
-  }
-  sessionState.activate(sessionId);
-  traceStep('done');
-  const started = { sessionId, tabId, windowId, instanceId: instance.instanceId, borrowed };
-  if (requestToken) startJournal.ready(requestToken, started);
-  return started;
-  } catch (error) {
-    if (claim) tabReservations.release(claim.tabId, claim.owner);
-    if (requestToken) startJournal.fail(requestToken, (error && error.message) || error);
-    throw error;
-  }
-}
-
-/** session.rebind：把会话切到另一个标签页（可顺带归还旧的借用 tab）。 */
-async function rebindSession(params, timeoutMs) {
-  const session = resolveSession(params.session !== undefined ? params.session : params.sessionId);
-  const wanted = Number(params.tab);
-  if (!Number.isInteger(wanted)) throw new BridgeError('E_BAD_ARG', 'session.rebind 需要 --tab <tabId>');
-  const target = await findInstanceForTab(wanted);
-  if (!target) throw new BridgeError('E_NO_TAB', `tabId ${wanted} 不属于任何已连接的浏览器`);
-  if (wanted !== Number(session.tabId)) claimTab(wanted, session.sessionId);
-
-  const previous = instances.get(session.instanceId);
-  const oldTabId = session.tabId;
-
-  const info = await sendCommand(target, 'tab.borrow', { tabId: wanted }, timeoutMs);
-  if (previous && oldTabId && oldTabId !== wanted) {
-    try { await sendCommand(previous, 'dialog.disarm', { tabId: oldTabId }, 3000); } catch { /* 忽略 */ }
-    try { await sendCommand(previous, 'control-hint', { tabId: oldTabId, enabled: false }, 3000); } catch { /* 忽略 */ }
-    try { await sendCommand(previous, 'debugger.detach', { tabId: oldTabId }, 5000); } catch { /* 忽略 */ }
-    if (params.releaseOld === true && session.borrowed === true) {
-      try { await sendCommand(previous, 'tab.return', { tabId: oldTabId }, 3000); } catch { /* 忽略 */ }
-    }
-  }
-
-  if (wanted !== Number(oldTabId)) {
-    tabReservations.release(oldTabId, session.sessionId);
-    tabReservations.reserve(wanted, session.sessionId);
-  }
-  rebindSessionRecord(session, {
-    instanceId: target.instanceId,
-    tabId: wanted,
-    windowId: info && Number.isInteger(info.windowId) ? info.windowId : 0,
-    url: info && typeof info.url === 'string' ? info.url : '',
-    title: info && typeof info.title === 'string' ? info.title : '',
-  });
-  saveSessions();
-
-  try { await sendCommand(target, 'dialog.arm', { tabId: wanted, policy: { queue: true } }, 5000); } catch (error) {
-    log('session ' + session.sessionId + ' 重绑后对话框拦截失败（忽略）：' + ((error && error.message) || error));
-  }
-  try { await sendCommand(target, 'control-hint', { tabId: wanted, enabled: true }, 5000); } catch { /* 忽略 */ }
-  if (previous && oldTabId && oldTabId !== wanted) sendInstanceEvent(previous, 'takeover.hide', { tabId: oldTabId });
-  sendInstanceEvent(target, 'takeover.state', { tabId: wanted, sessionId: session.sessionId, paused: session.paused === true, borrowed: true });
-  log(`session ${session.sessionId} 重绑到 tab=${wanted} instance=${target.instanceId}`);
-  return sessionPublicView(session, {
-    connected: instances.has(session.instanceId),
-    phase: sessionState.phase(session.sessionId),
-  });
-}
-
-async function pauseSession(params, timeoutMs) {
-  const session = resolveSession(params.session !== undefined ? params.session : params.sessionId);
-  const wantPause = params.paused === true;
-  // 自动恢复只允许作用于 auto 暂停；手动暂停必须由人确认（E_PAUSED_MANUAL）。
-  if (!wantPause && params.auto === true && session.pausedBy !== 'auto') {
-    throw new BridgeError('E_PAUSED_MANUAL', '会话是人工暂停的，auto 恢复被拒绝；请显式 resume 或交回控制');
-  }
-  session.paused = setSessionPaused(session, wantPause);
-  session.pausedBy = session.paused ? (params.reason === 'auto' ? 'auto' : 'manual') : null;
-  session.pausedAt = session.paused ? Date.now() : null;
-  const instance = instances.get(session.instanceId);
-  if (instance) sendInstanceEvent(instance, 'takeover.state', { tabId: session.tabId, sessionId: session.sessionId, paused: session.paused, pausedBy: session.pausedBy, borrowed: session.borrowed === true, controller: session.controller ?? null, project: session.controller?.project ?? null });
-  log('session ' + session.sessionId + ' paused=' + session.paused + (session.pausedBy ? ' by=' + session.pausedBy : ''));
-  return { sessionId: session.sessionId, paused: session.paused, pausedBy: session.pausedBy };
-}
-
-async function stopSession(params, timeoutMs) {
-  const session = resolveSession(params.session !== undefined ? params.session : params.sessionId);
-  aliases.clear(session.sessionId);
-  tabReservations.release(session.tabId, session.sessionId);
-  if (sessionState.requestStop(session.sessionId) === false) {
-    return { ok: true, alreadyStopping: true, borrowed: session.borrowed === true };
-  }
-  sessionQueue.drop(session.sessionId);
-  const instance = instances.get(session.instanceId);
-  const closeTimeout = Math.min(Number(timeoutMs) > 0 ? Number(timeoutMs) : 15_000, 15_000);
-  if (instance) {
-    // 独立清理动作并行下发，避免 3-4 个 RTT 串行叠加到 session stop 上。
-    const cleanup = [
-      sendCommand(instance, 'dialog.disarm', { tabId: session.tabId }, 3000).catch(() => {}),
-      sendCommand(instance, 'debugger.detach', { tabId: session.tabId }, 5000).catch((error) => {
-        log(`session ${session.sessionId} 释放 debugger 失败（忽略）：${error && error.message}`);
-      }),
-    ];
-    // 关闭标签页时控制提示会随页面消失，不必再单独下发；保留窗口/借用标签才需要。
-    if (params.keep === true || session.borrowed === true) {
-      cleanup.push(sendCommand(instance, 'control-hint', { tabId: session.tabId, enabled: false }, 3000).catch(() => {}));
-    }
-    // 关闭标签页时清理动作无需等待：标签页马上消失，dialog/debugger 的清理随页面一起结束。
-    // 保留窗口或归还借用标签才需要确认清理完成。
-    const closingTab = session.borrowed !== true && params.keep !== true;
-    if (closingTab) {
-      for (const pending of cleanup) pending.catch(() => {});
-    } else {
-      await Promise.allSettled(cleanup);
-    }
-    if (session.borrowed === true) {
-      // 借用的用户标签页：只清标记，不移动、不关闭。
-      try {
-        await sendCommand(instance, 'tab.return', { tabId: session.tabId }, Math.min(closeTimeout, 10_000));
-      } catch (err) {
-        logError(`session ${session.sessionId} 归还 tab 失败：${err.code || ''} ${err.message}`);
-      }
-    } else if (params.keep !== true) {
-      try {
-        await sendCommand(instance, 'tab.close', { tabId: session.tabId }, closeTimeout);
-      } catch (err) {
-        logError(`session ${session.sessionId} 关闭 tab 失败：${err.code || ''} ${err.message}`);
-      }
-      // 每个 session 独占一个 Agent 窗口：关闭标签页后窗口通常随之消失；这里只做兜底，
-      // 不等待结果，避免会话结束被窗口关闭流程拖慢。
-      if (Number.isInteger(session.windowId) && session.windowId > 0) {
-        sendCommand(instance, 'window.close', { windowId: session.windowId }, Math.min(closeTimeout, 5000)).catch(() => {});
-      }
-    }
-  }
-  if (instance) sendInstanceEvent(instance, 'takeover.hide', { tabId: session.tabId });
-  releaseTransfersForSession(session.sessionId);
-  sessions.delete(session.sessionId);
-  sessionState.finish(session.sessionId);
-  log(`session ${session.sessionId} 已停止${session.borrowed ? '（归还借用标签页）' : params.keep === true ? '（保留窗口）' : ''}`);
-  return { ok: true, borrowed: session.borrowed === true };
-}
-
-// ---------------------------------------------------------------------------
-// 文件传输 staging（transfer.*）
-// 页面/CLI 只拿 opaque transferId；真实路径只在 daemon 内部与 daemon->扩展 出现。
-// ---------------------------------------------------------------------------
-
-function safeTransferName(value) {
-  const raw = String(value == null ? '' : value).trim();
-  const base = path.basename(raw);
-  if (!raw || raw !== base || raw === '.' || raw === '..' || /[\\/]/.test(raw)) {
-    throw new BridgeError('E_BAD_ARG', 'transfer 需要合法文件名（不能包含路径）');
-  }
-  if (/[\u0000-\u001f<>:"|?*]/.test(base)) throw new BridgeError('E_BAD_ARG', '文件名包含非法字符');
-  return base.slice(0, 200);
-}
-
-function requireTransfer(transferId) {
-  const entry = transfers.get(String(transferId || ''));
-  if (!entry) throw new BridgeError('E_TRANSFER_NOT_FOUND', 'transfer 不存在或已释放');
-  return entry;
-}
-
-function closeTransferFile(entry) {
-  if (entry && entry.fd != null) {
-    try { fs.closeSync(entry.fd); } catch { /* 忽略 */ }
-    entry.fd = null;
-  }
-}
-
-function removeTransfer(entry, reason) {
-  if (!entry) return false;
-  closeTransferFile(entry);
-  try { fs.rmSync(path.dirname(entry.filePath), { recursive: true, force: true }); } catch { /* 忽略 */ }
-  transfers.delete(entry.id);
-  log(`transfer ${entry.id} 释放${reason ? '（' + reason + '）' : ''}`);
-  return true;
-}
-
-function releaseTransfersForSession(sessionId) {
-  for (const entry of [...transfers.values()]) {
-    if (entry.sessionId === sessionId) removeTransfer(entry, 'session stop');
-  }
-}
-
-function transferBegin(params = {}) {
-  const session = resolveSession(params.session !== undefined ? params.session : params.sessionId);
-  const name = safeTransferName(params.name);
-  const byteSize = Number(params.byteSize);
-  if (!Number.isInteger(byteSize) || byteSize <= 0 || byteSize > TRANSFER_MAX_BYTES) {
-    throw new BridgeError('E_BAD_ARG', `byteSize 必须是 1..${TRANSFER_MAX_BYTES} 的整数`);
-  }
-  let transferId = '';
-  do {
-    transferId = 'tr_' + crypto.randomBytes(8).toString('hex');
-  } while (transfers.has(transferId));
-  const filePath = path.join(TRANSFER_DIR, transferId, name);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const fd = fs.openSync(filePath, 'w');
-  const entry = { id: transferId, sessionId: session.sessionId, name, byteSize, received: 0, filePath, fd, createdAt: Date.now(), finished: false };
-  transfers.set(transferId, entry);
-  log(`transfer ${transferId} begin name=${name} bytes=${byteSize} session=${session.sessionId}`);
-  return { transferId, chunkSize: TRANSFER_CHUNK_BYTES };
-}
-
-function transferChunk(params = {}) {
-  const entry = requireTransfer(params.transferId);
-  if (entry.finished) throw new BridgeError('E_TRANSFER_STATE', 'transfer 已完成，不能继续写入');
-  const offset = Number(params.offset);
-  if (!Number.isInteger(offset) || offset !== entry.received) {
-    throw new BridgeError('E_TRANSFER_OFFSET', `offset 不连续：期望 ${entry.received}，收到 ${params.offset}`);
-  }
-  const raw = String(params.dataBase64 == null ? '' : params.dataBase64);
-  let buffer;
-  try {
-    buffer = Buffer.from(raw, 'base64');
-  } catch {
-    throw new BridgeError('E_BAD_ARG', 'dataBase64 不是合法 base64');
-  }
-  if (!buffer.length) throw new BridgeError('E_BAD_ARG', 'dataBase64 不能为空');
-  if (buffer.length > TRANSFER_CHUNK_BYTES) {
-    throw new BridgeError('E_TRANSFER_LIMIT', `单块不能超过 ${TRANSFER_CHUNK_BYTES} 字节`);
-  }
-  if (entry.received + buffer.length > entry.byteSize) {
-    throw new BridgeError('E_TRANSFER_LIMIT', `写入超过声明的 byteSize=${entry.byteSize}`);
-  }
-  fs.writeSync(entry.fd, buffer, 0, buffer.length, entry.received);
-  entry.received += buffer.length;
-  return { nextOffset: entry.received, eof: entry.received === entry.byteSize };
-}
-
-function transferFinish(params = {}) {
-  const entry = requireTransfer(params.transferId);
-  if (entry.finished) return { transferId: entry.id, byteSize: entry.received };
-  if (entry.received !== entry.byteSize) {
-    throw new BridgeError('E_TRANSFER_INCOMPLETE', `已写入 ${entry.received}/${entry.byteSize} 字节，不能 finish`);
-  }
-  try { fs.fsyncSync(entry.fd); } catch { /* 忽略 */ }
-  closeTransferFile(entry);
-  entry.finished = true;
-  log(`transfer ${entry.id} finish bytes=${entry.received}`);
-  return { transferId: entry.id, byteSize: entry.received };
-}
-
-function transferRead(params = {}) {
-  const entry = requireTransfer(params.transferId);
-  const offset = Number(params.offset);
-  if (!Number.isInteger(offset) || offset < 0 || offset > entry.byteSize) {
-    throw new BridgeError('E_BAD_ARG', `offset 必须在 0..${entry.byteSize}`);
-  }
-  const wanted = Number(params.maxBytes);
-  const maxBytes = Number.isInteger(wanted) && wanted > 0 ? Math.min(wanted, TRANSFER_CHUNK_BYTES) : TRANSFER_CHUNK_BYTES;
-  const remaining = entry.byteSize - offset;
-  const size = Math.min(maxBytes, remaining);
-  const buffer = Buffer.alloc(size);
-  if (size > 0) {
-    const fd = fs.openSync(entry.filePath, 'r');
-    try {
-      fs.readSync(fd, buffer, 0, size, offset);
-    } finally {
-      fs.closeSync(fd);
-    }
-  }
-  return {
-    nextOffset: offset + size,
-    eof: offset + size >= entry.byteSize,
-    dataBase64: buffer.toString('base64'),
-  };
-}
-
-function transferRelease(params = {}) {
-  const id = String(params.transferId || '');
-  const entry = transfers.get(id);
-  if (!entry) return { released: false };
-  removeTransfer(entry, 'release');
-  return { released: true };
-}
-
-/** upload 前把 transferId 换成 daemon 内部 staging 路径；路径只出现在 daemon->扩展。 */
-function injectTransferPaths(params = {}) {
-  const files = Array.isArray(params.files) ? params.files : [];
-  const paths = Array.isArray(params.paths) ? params.paths.slice() : [];
-  for (let index = 0; index < files.length; index += 1) {
-    const file = files[index];
-    if (!file || !file.transferId) continue;
-    const entry = requireTransfer(file.transferId);
-    if (entry.sessionId !== params.sessionId && entry.sessionId !== params.session) {
-      throw new BridgeError('E_TRANSFER_STATE', 'transfer 不属于当前会话');
-    }
-    if (!entry.finished) throw new BridgeError('E_TRANSFER_INCOMPLETE', 'transfer 尚未 finish');
-    file.stagedPath = entry.filePath;
-    paths[index] = entry.filePath;
-  }
-  if (paths.length) params.paths = paths;
-  return params;
-}
-
-/** 把扩展下载到浏览器的文件导入 daemon staging，CLI 用 transfer.read 流式读取。 */
-function stageDownloadResult(result, sessionId) {
-  try {
-    if (!result || typeof result.filename !== 'string' || !result.filename) return result;
-    const stat = fs.statSync(result.filename);
-    if (!stat.isFile() || stat.size <= 0 || stat.size > TRANSFER_MAX_BYTES) return result;
-    let transferId = '';
-    do {
-      transferId = 'tr_' + crypto.randomBytes(8).toString('hex');
-    } while (transfers.has(transferId));
-    const name = safeTransferName(path.basename(result.filename));
-    const filePath = path.join(TRANSFER_DIR, transferId, name);
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.copyFileSync(result.filename, filePath);
-    transfers.set(transferId, {
-      id: transferId, sessionId, name, byteSize: stat.size, received: stat.size,
-      filePath, fd: null, createdAt: Date.now(), finished: true, direction: 'download',
-    });
-    log(`transfer ${transferId} download staged name=${name} bytes=${stat.size}`);
-    return { ...result, transferId, transferBytes: stat.size };
-  } catch (error) {
-    log('下载文件导入 staging 失败（继续用浏览器路径）：' + ((error && error.message) || error));
-    return result;
-  }
-}
-
-/** 变异操作的账本目标：优先 tabId，其次用 session 解析出 tab。 */
-function ledgerTarget(params) {
-  const sessionId = params && (params.session !== undefined ? params.session : params.sessionId);
-  if (sessionId === undefined || sessionId === null || sessionId === '') return { tabId: null, sessionId: null };
-  try {
-    const session = resolveSession(sessionId);
-    return { tabId: session.tabId ?? null, sessionId: session.sessionId };
-  } catch {
-    return { tabId: null, sessionId: String(sessionId) };
-  }
-}
-
-/**
- * 账本目标直接取自已解析的 route：sessionId/tabId 不再二次 resolveSession。
- * 直接按 tabId 操作的实例方法没有 session，用命令参数里的 tabId。
- */
-function ledgerTargetFromRoute(route) {
-  const session = route && route.session ? route.session : null;
-  const explicitTabId = route && route.params && Number.isInteger(route.params.tabId) ? route.params.tabId : null;
-  const tabId = explicitTabId !== null ? explicitTabId : (session && Number.isInteger(session.tabId) ? session.tabId : null);
-  return { tabId, sessionId: session ? session.sessionId : null };
-}
-
-/** 需要先 prepareRoute 才能确定账本目标的方法（扩展方法 + 唯一走 routeExtension 的本地方法）。 */
-function isExtensionRouted(method) {
-  return EXT_METHODS.has(method) || method === 'settings.get';
-}
+const tabControls = createTabControls({ sessions, tabReservations, tabControl, sessionState, CONTROL_MODES, BridgeError, saveSessions, lease: sessionLeases });
 
 /**
  * 扩展方法统一入口：prepareRoute → verifyDecision → ledgerTargetFromRoute → sendCommand。
  * 账本目标与真正派发的实例/tab 来自同一份 route，避免再解析一次 session。
  */
-async function enforceSessionPolicy(route, method, params = route.params) {
-  if (!route || !route.session) return;
-  let targetUrl = '';
-  if ((method === 'navigate' || method === 'tab.new' || method === 'download') && params && params.url) targetUrl = String(params.url);
-  if (method === 'step' && params && params.action && typeof params.action === 'object') {
-    const inner = params.action;
-    const innerMethod = String(inner.method || inner.action || '');
-    if (['navigate', 'tab.new', 'download'].includes(innerMethod) && inner.params && inner.params.url) targetUrl = String(inner.params.url);
-  }
-  if (targetUrl) {
-    const decision = domainAllowed(route.session.allowDomains, route.session.denyDomains, targetUrl);
-    if (!decision.allowed) throw new BridgeError('E_FORBIDDEN', '会话域名策略拒绝：' + decision.reason + '（' + targetUrl + '）');
-  }
-  if (isMutating(method) && route.session.minIntervalMs > 0) {
-    const now = Date.now();
-    const scheduled = Math.max(now, (Number(route.session.lastActionAt) || 0) + route.session.minIntervalMs);
-    route.session.lastActionAt = scheduled;
-    if (scheduled > now) await sleep(scheduled - now);
-  }
-}
-
-async function dispatchExtension(method, params, timeoutMs) {
-  const route = await prepareRoute(method, params);
-  await enforceSessionPolicy(route, method, route.params);
-  requireFeatures(route.instance, method, route.params);
-  verifyDecision(route, method);
-  const result = await submitRouted(route, method, params, timeoutMs);
-  // handback 是人工把控制权交回：daemon 必须同步解除暂停，否则下一条命令仍被 E_SESSION_PAUSED 拒绝。
-  if (method === 'cooperate.handback' && route.session && route.session.paused === true) {
-    route.session.paused = false;
-    route.session.pausedBy = null;
-    route.session.pausedAt = null;
-    saveSessions();
-    sendInstanceEvent(route.instance, 'takeover.state', {
-      tabId: route.session.tabId,
-      sessionId: route.session.sessionId,
-      paused: false,
-      pausedBy: null,
-      borrowed: route.session.borrowed === true,
-      controller: route.session.controller ?? null,
-      project: route.session.controller?.project ?? null,
-    });
-  }
-  return result;
-}
-
 /** 给失败结果补 effect_state：未派发=none，其余无法证明时=unknown（保守语义）。 */
-function withEffectState(error, effectState) {
-  if (!error || typeof error !== 'object') return error;
-  const data = { ...(error.data && typeof error.data === 'object' ? error.data : {}) };
-  if (data.effect_state === undefined && data.effectState === undefined) data.effect_state = effectState;
-  error.data = data;
-  return error;
-}
 
-/** 变异操作成功 → committed；业务失败结果（ok:false / failedAt）与只读方法保持原样。 */
-function annotateEffectSuccess(result, method) {
-  if (!isMutating(method) || !result || typeof result !== 'object' || Array.isArray(result)) return result;
-  if (result.ok === false || result.failed === true || result.failedAt !== undefined) return result;
-  if (result.effectState === undefined && result.effect_state === undefined) result.effectState = 'committed';
-  return result;
-}
 
 /** 落账 → routeExtension（内部 sendCommand）→ 按结果结算；intentLedger.begin 每次必调。 */
-async function submitRouted(route, method, params, timeoutMs) {
-  const intent = intentLedger.begin(method, params, ledgerTargetFromRoute(route));
-  try {
-    const result = await routeExtension(route, method, timeoutMs);
-    intentLedger.finish(intent, 'done');
-    return annotateEffectSuccess(result, method);
-  } catch (error) {
-    // 先判"是否确定未派发"，再结算：否则 E_TIMEOUT 一类会把未派发的操作记成 unknown 并冻结标签页。
-    const notDispatched = error && (error.code === 'E_TARGET_MISMATCH' || hasNoEffect(error));
-    if (isMutating(method)) withEffectState(error, notDispatched ? 'none' : 'unknown');
-    const noEffect = notDispatched === true || (error && (
-      error.effectState === 'none' || error.effect_state === 'none'
-      || (error.data && (error.data.effect_state === 'none' || error.data.effectState === 'none'))
-    ));
-    // evaluate 是诊断/读取通道：超时也视为已结算，避免只读命令把标签页冻结。
-    const settleUnknown = noEffect !== true && isUnknownOutcome(error) && method !== 'evaluate';
-    intentLedger.finish(intent, settleUnknown ? 'unknown' : 'failed');
-    throw error;
-  }
-}
 
-/** 解析 --session-scope：显式 session 优先；否则把 scope 解析成唯一 sessionId。 */
-function applySessionScope(params) {
-  if (!params || params.sessionScope === undefined) return;
-  const scope = params.sessionScope;
-  delete params.sessionScope;
-  if (params.session !== undefined || params.sessionId !== undefined) return;
-  const resolved = resolveSessionByScope([...sessions.values()], scope);
-  if (resolved.error) throw new BridgeError(resolved.error, resolved.message);
-  params.session = resolved.session.sessionId;
-}
+
+const inflightOps = createInflightOps({ inflight, instances, sendCommand, BridgeError, boundary: commandBoundary });
+
+const health = createHealthPayload({ SERVICE, PROTOCOL_VERSION, VERSION, startedAt, getCurrentPort: () => currentPort, TLS_ENABLED, BIND_ADDRESS, PUBLIC_URL, instances, sessions, browserList, sessionList: () => sessionViews.sessionList(), inflightList: () => inflightOps.inflightList(), sessionQueue, authGuard, featureMatrix, compareProtocol, recovery: () => sessionRecovery.snapshot() });
+
+const routePolicy = createRoutePolicy({ BridgeError, isMutating, domainAllowed, sleep });
+
+const ledgerOps = createLedgerTarget({ resolveSession, EXT_METHODS });
+
+const submitApi = createSubmit({
+  intentLedger, routeExtension, withEffectState, annotateEffectSuccess, sessions, resolveSessionByScope, BridgeError, ledgerTargetFromRoute: ledgerOps.ledgerTargetFromRoute,
+});
+
+const extensionDispatch = createExtensionDispatch({ prepareRoute, routePolicy, requireFeatures, verifyDecision, submitApi, saveSessions, sendInstanceEvent, sessionState });
+
+const planRunner = createPlanRunner({ BridgeError, dispatchInner, extensionDispatch });
 
 async function dispatch(method, params, timeoutMs) {
-  if (method === 'ledger.status') return intentLedger.status({ limit: params && params.limit });
+  if (method === 'ledger.status') {
+    const limit = params && params.limit;
+    const status = intentLedger.status({ limit });
+    // 默认载荷（pending/recent/recovery/wal/durability）保持不变；只有显式请求才追加
+    // 结构化快照 / 对账恢复报告 / 崩溃恢复报告，供 `bridge daemon ledger snapshot|restore` 消费。
+    const wantsStructured = Boolean(params) && (params.snapshot === true || params.compare === true || params.persist === true || params.recovery === true);
+    if (!wantsStructured) return status;
+    const snapshot = ledgerReport.snapshot({ status });
+    const result = { ...status, snapshot };
+    if (params.persist === true) result.persisted = ledgerReport.persistSnapshot({ status });
+    if (params.compare === true) result.restore = ledgerReport.restore({ status });
+    // recovery=true：端到端崩溃恢复报告（含人工 resolve 策略、按 tab/method 聚合、租约对账）。
+    if (params.recovery === true) {
+      try {
+        result.recoveryReport = recoveryReporter.report({ limit: limit == null ? 20 : limit, status });
+      } catch (error) {
+        result.recoveryReport = { ok: false, error: (error && error.code) || 'E_INTERNAL', message: String((error && error.message) || error) };
+      }
+    }
+    return result;
+  }
   if (method === 'ledger.resolve') {
-    if (!params || !params.id) throw new BridgeError('E_BAD_ARG', 'ledger.resolve 需要 id');
-    return { entry: intentLedger.resolve(params.id, params.outcome) };
+    // 人工批量 resolve（第十批 F）：ids=[...] 是"计划→执行"两段式，protected 永不自动解锁。
+    // 只有在显式传 ids 时才走这里；既有 id / tabId / all 语义保持不变。
+    if (params && Array.isArray(params.ids)) {
+      const manual = recoveryReporter.manualResolve({
+        ids: params.ids,
+        outcome: params.outcome,
+        by: params.by || 'rpc-manual',
+        dryRun: params.dryRun === true,
+      });
+      // 参数层错误（空目标/未知结论）与既有 ledger.resolve 一致地抛 BridgeError（E_BAD_ARG），
+      // 而不是把 {ok:false} 当成成功回包，方便 CLI 以参数错误退出。
+      if (manual && manual.ok === false && manual.error) {
+        throw new BridgeError(manual.error, manual.message || '人工 resolve 参数不合法', {
+          ...(manual.allowedOutcomes ? { allowedOutcomes: manual.allowedOutcomes } : {}),
+        });
+      }
+      if (manual && manual.ok === true && manual.dryRun !== true) {
+        try { sessionRecovery.recordRecoveryReport(recoveryReporter.report()); } catch { /* 报告刷新失败不影响 resolve 结果 */ }
+      }
+      return manual;
+    }
+    // 单条 dryRun：只出计划与理由（不写账本），用于"先看会发生什么"。
+    if (params && params.id && params.dryRun === true) {
+      const planned = recoveryReporter.manualResolve({
+        ids: [params.id],
+        outcome: params.outcome,
+        by: params.by || 'rpc-manual',
+        dryRun: true,
+      });
+      if (planned && planned.ok === false && planned.error) {
+        throw new BridgeError(planned.error, planned.message || '人工 resolve 参数不合法', {
+          ...(planned.allowedOutcomes ? { allowedOutcomes: planned.allowedOutcomes } : {}),
+        });
+      }
+      return planned;
+    }
+    // 单条：0.3.0 语义不变（需要 id；崩溃恢复的非幂等动作强制 confirmed|not-applied 由账本裁定）。
+    if (params && params.id) {
+      return { entry: intentLedger.resolve(params.id, params.outcome, { by: params.by || 'rpc' }) };
+    }
+    // 批量（新增）：按 tab 或 all 和解，返回结构化报告（含 protected/active/skipped 原因）。
+    if (params && (params.tabId !== undefined || params.all === true)) {
+      return ledgerReport.reconcile({
+        tabId: params.tabId,
+        all: params.all === true,
+        outcome: params.outcome,
+        by: params.by || 'rpc-tab',
+        dryRun: params.dryRun === true,
+      });
+    }
+    throw new BridgeError('E_BAD_ARG', 'ledger.resolve 需要 id');
   }
   // 只有本地方法（以及需要自动和解的 cooperate.sync）才在这里解析账本目标；
   // 扩展方法的目标由 prepareRoute 之后的 ledgerTargetFromRoute 给出，避免二次 resolveSession。
-  const needsTarget = method === 'cooperate.sync' || (isMutating(method) && !isExtensionRouted(method));
-  const target = needsTarget ? ledgerTarget(params) : null;
-  // 对齐上游语义：sync 时若为 auto 暂停且人类静默 >=2s、Agent 静默 >=3s，则自动恢复。
+  const needsTarget = method === 'cooperate.sync' || (isMutating(method) && !ledgerOps.isExtensionRouted(method));
+  const target = needsTarget ? ledgerOps.ledgerTarget(params) : null;
+  // 对齐兼容目标语义：sync 时若为 auto 暂停且人类静默 >=2s、Agent 静默 >=3s，则自动恢复。
   if (method === 'cooperate.sync' && target.sessionId) {
     try {
       const session = resolveSession(target.sessionId);
@@ -2279,6 +1715,7 @@ async function dispatch(method, params, timeoutMs) {
         session.paused = false;
         session.pausedBy = null;
         session.pausedAt = null;
+        try { sessionState.resume(session.sessionId, { reason: 'cooperate-sync-idle' }); } catch { /* 忽略 */ }
         const owner = instances.get(session.instanceId);
         if (owner) sendInstanceEvent(owner, 'takeover.state', { tabId: session.tabId, sessionId: session.sessionId, paused: false, pausedBy: null, borrowed: session.borrowed === true, controller: session.controller ?? null, project: session.controller?.project ?? null });
         log('session ' + session.sessionId + ' 空闲自动恢复（sync）');
@@ -2288,7 +1725,7 @@ async function dispatch(method, params, timeoutMs) {
   }
   // 走扩展路由的方法在 dispatchExtension 里 prepareRoute 之后再落账（目标取自 route.session）；
   // 其余本地方法在这里落账。两条路径互斥，保证每个变异调用恰好 begin 一次。
-  const intent = isMutating(method) && !isExtensionRouted(method)
+  const intent = isMutating(method) && !ledgerOps.isExtensionRouted(method)
     ? intentLedger.begin(method, params, target)
     : null;
   try {
@@ -2311,65 +1748,6 @@ async function dispatch(method, params, timeoutMs) {
 }
 
 /** 把步骤异常转成协议错误对象（plan 用；不抛出，交由调用方决定是否停）。 */
-function wireStepError(error) {
-  if (!error) return { code: 'E_INTERNAL', message: '未知错误' };
-  const code = typeof error.code === 'string' && error.code.startsWith('E_') ? error.code : 'E_INTERNAL';
-  return { code, message: String(error.message || code), ...(error.data && typeof error.data === 'object' ? { data: error.data } : {}) };
-}
-
-/**
- * plan：逐步骤经由正常派发路径执行。
- * 这样每一步都有自己的账本记录与结算（首步失败即停、不重试），
- * 结束后再同步观察一次并带回结果。
- */
-async function runPlan(params, timeoutMs) {
-  const steps = Array.isArray(params && params.steps) ? params.steps : null;
-  if (!steps || !steps.length) throw new BridgeError('E_BAD_ARG', 'plan 需要非空 steps 数组');
-  if (steps.length > 50) throw new BridgeError('E_BAD_ARG', 'plan 单次最多 50 步');
-  const results = [];
-  let failedAt = null;
-  for (let index = 0; index < steps.length; index += 1) {
-    const step = steps[index] && typeof steps[index] === 'object' ? steps[index] : {};
-    if (step.method === 'plan') throw new BridgeError('E_BAD_ARG', 'plan 不能嵌套 plan');
-    const stepParams = step.params && typeof step.params === 'object' ? { ...step.params } : {};
-    if (stepParams.tabId == null && params.tabId != null) stepParams.tabId = params.tabId;
-    for (const key of ['context', 'observation', 'expect']) {
-      if (stepParams[key] == null && params[key] != null) stepParams[key] = params[key];
-    }
-    if (stepParams.session === undefined && params.session !== undefined) stepParams.session = params.session;
-    if (stepParams.sessionId === undefined && params.sessionId !== undefined) stepParams.sessionId = params.sessionId;
-    try {
-      const result = await dispatchInner(step.method, stepParams, timeoutMs);
-      results.push({ index, method: step.method, ok: true, result });
-    } catch (error) {
-      results.push({ index, method: step.method, ok: false, error: wireStepError(error) });
-      if (params.continueOnError !== true) {
-        failedAt = index;
-        break;
-      }
-    }
-  }
-  let observation = null;
-  try {
-    const base = {};
-    if (params.tabId != null) base.tabId = params.tabId;
-    if (params.session !== undefined) base.session = params.session;
-    if (params.sessionId !== undefined) base.sessionId = params.sessionId;
-    const obs = await dispatchExtension('observe', { ...base, force: true, probeHover: false }, timeoutMs);
-    if (obs && typeof obs.observation === 'string') {
-      observation = { text: obs.observation, refs: obs.refs, url: obs.url };
-    }
-  } catch {
-    // 页面可能已关闭/导航失败：plan 结果仍然有效，不因观察失败覆盖。
-  }
-  return {
-    steps: results,
-    completed: results.filter((item) => item.ok).length,
-    failedAt,
-    ...(observation ? { observation } : {}),
-  };
-}
-
 async function dispatchInner(method, params, timeoutMs) {
   // plan 的兼容写法（{action,...}）先归一再过 schema。
   if (method === 'plan' && params && Array.isArray(params.steps)) {
@@ -2379,103 +1757,38 @@ async function dispatchInner(method, params, timeoutMs) {
   if (schemaErrors.length) {
     throw new BridgeError('E_BAD_ARG', `参数校验失败（${method}）：` + schemaErrors.join('；'), { errors: schemaErrors });
   }
+  const local = await localDispatch(method, params, timeoutMs);
+  if (!local || local.handled !== false) return local;
+
   switch (method) {
-    case 'status':
-      return buildStatus();
-    case 'browsers':
-      return { browsers: browserList() };
-    case 'session.start':
-      return startSession(params, timeoutMs);
-    case 'session.start_tracked':
-      return startSession({ ...params, requestId: params.requestId ?? params.request_id }, timeoutMs);
-    case 'session.request_prepare':
-      return prepareStartRequest(params);
-    case 'session.request_claim':
-      return claimStartRequest(params);
-    case 'session.request_cancel':
-      return cancelStartRequest(params);
-    case 'session.request_status':
-      return startRequestStatus(params);
-    case 'session.stop':
-      return stopSession(params, timeoutMs);
-    case 'session.list':
-      return { sessions: sessionList() };
-    case 'session.rebind':
-      return rebindSession(params, timeoutMs);
-    case 'session.pause':
-      return pauseSession(params, timeoutMs);
-    case 'session.resume':
-      return pauseSession({ ...params, paused: false }, timeoutMs);
-    case 'view':
-      return viewCache(params);
-    case 'audit.list':
-      return listAudit(params);
-    case 'operations.list':
-      return listAudit(params);
-    case 'operations.get':
-      return getOperation(params.id);
-    case 'inflight.list':
-      return { commands: inflightList() };
-    case 'command.cancel':
-      return cancelInflight(params);
-    case 'local.pair':
-      return localPairCreate(params);
-    case 'local.trust':
-      return localTrustSet(params);
-    case 'pair.create':
-      return pairCreate(params);
-    case 'pair.list':
-      return pairList();
-    case 'pair.redeem':
-      return pairRedeem(params);
-    case 'pair.revoke':
-      return pairRevoke(params);
-    case 'pair.renew':
-      return pairRenew(params);
-    case 'pair.rotate':
-      return pairRotate();
-    case 'settings.get':
-      return dispatchExtension('settings.get', params, timeoutMs);
-    case 'settings.set':
-      return broadcastSettingsSet(params, timeoutMs);
-    case 'transfer.begin':
-      return transferBegin(params);
-    case 'transfer.chunk':
-      return transferChunk(params);
-    case 'transfer.finish':
-      return transferFinish(params);
-    case 'transfer.read':
-      return transferRead(params);
-    case 'transfer.release':
-      return transferRelease(params);
     case 'upload': {
       const route = await prepareRoute('upload', params);
-      await enforceSessionPolicy(route, 'upload', route.params);
+      await routePolicy.enforceSessionPolicy(route, 'upload', route.params);
       verifyDecision(route, 'upload');
-      const withPaths = injectTransferPaths({ ...route.params, sessionId: route.session ? route.session.sessionId : undefined });
+      const withPaths = transferOps.injectTransferPaths({ ...route.params, sessionId: route.session ? route.session.sessionId : undefined });
       delete withPaths.sessionId;
       route.params = withPaths;
-      return submitRouted(route, 'upload', params, timeoutMs);
+      return submitApi.submitRouted(route, 'upload', params, timeoutMs);
     }
     case 'download': {
       const route = await prepareRoute('download', params);
-      await enforceSessionPolicy(route, 'download', route.params);
+      await routePolicy.enforceSessionPolicy(route, 'download', route.params);
       verifyDecision(route, 'download');
-      const result = await submitRouted(route, 'download', params, timeoutMs);
-      return stageDownloadResult(result, route.session ? route.session.sessionId : null);
+      const result = await submitApi.submitRouted(route, 'download', params, timeoutMs);
+      return transferOps.stageDownloadResult(result, route.session ? route.session.sessionId : null);
     }
     case 'daemon.stop':
       // 生命周期方法：先回包再优雅退出。
       scheduleShutdown('rpc daemon.stop', 0);
       return { ok: true };
     case 'operation.await': {
-      const result = await dispatchExtension('operation.await', params, timeoutMs);
+      const result = await extensionDispatch.dispatchExtension('operation.await', params, timeoutMs);
       return enforceOperationLimit(result);
     }
     case 'plan':
-      return runPlan(params, timeoutMs);
+      return planRunner.runPlan(params, timeoutMs);
     default:
-      if (EXT_METHODS.has(method)) return dispatchExtension(method, params, timeoutMs);
+      if (EXT_METHODS.has(method)) return extensionDispatch.dispatchExtension(method, params, timeoutMs);
       throw new BridgeError('E_UNKNOWN_METHOD', `unknown method: ${method}`);
   }
 }
@@ -2484,232 +1797,140 @@ async function dispatchInner(method, params, timeoutMs) {
 // HTTP 服务
 // ---------------------------------------------------------------------------
 
-function healthPayload() {
-  return {
-    ok: true,
-    service: SERVICE,
-    protocol: PROTOCOL_VERSION,
-    version: VERSION,
-    pid: process.pid,
-    uptimeMs: Date.now() - startedAt,
-    port: currentPort,
-    tls: TLS_ENABLED,
-    bind: BIND_ADDRESS,
-    publicUrl: PUBLIC_URL || null,
-    browsers: instances.size,
-    sessions: sessions.size,
-  };
-}
 
-async function handleRpcRequest(req, res) {
-  if (!tokenMatches(req.headers['x-bridge-token'])) {
-    sendJson(res, 401, { ok: false, error: { code: 'E_AUTH', message: 'invalid token' } });
-    return;
-  }
-  let raw;
+
+
+
+
+
+
+
+const startRequests = createStartRequests({ startJournal, normalizeStartToken, BridgeError });
+
+const sessionRebind = createSessionRebind({ resolveSession, tabControls, instances, sendCommand, tabReservations, rebindSessionRecord, tabControl, saveSessions, sendInstanceEvent, log, sessionPublicView, sessionState, BridgeError, findInstanceForTab, lease: sessionLeases });
+
+const readViews = createReadViews({ HOME_DIR, BridgeError, resolveSession });
+
+const sessionViews = createSessionViews({ sessions, instances, tabControl, sessionState, sessionPublicView, isSessionExpired, resolveSession, sessionLeases });
+
+const transferPolicy = transferPolicyFromEnv();
+const transferOps = createTransferOps({ dir: TRANSFER_DIR, log, BridgeError, resolveSession, policy: transferPolicy });
+// 失败清理：定期回收"空闲未完成"（客户端断连不再续传）与"过期已完成"（消费方没来读）的 staging。
+// unref 保证不影响 daemon 退出；卸载时在 shutdown() 里 clearInterval。
+const transferSweeper = setInterval(() => {
   try {
-    raw = await readBody(req);
-  } catch (err) {
-    sendJson(res, 400, { ok: false, error: { code: 'E_BAD_REQUEST', message: err.message } });
-    return;
-  }
-  let message;
-  try {
-    message = JSON.parse(raw || '{}');
-  } catch {
-    sendJson(res, 400, { ok: false, error: { code: 'E_BAD_JSON', message: 'request body is not valid JSON' } });
-    return;
-  }
-  const method = typeof message.method === 'string' ? message.method : '';
-  const params = message.params && typeof message.params === 'object' ? message.params : {};
-  const timeoutMs = Number(message.timeoutMs) > 0 ? Number(message.timeoutMs) : DEFAULT_TIMEOUT_MS;
-
-  if (!LOCAL_METHODS.has(method) && !EXT_METHODS.has(method)) {
-    // 方法不存在按 PROTOCOL §2 返回 404。
-    sendJson(res, 404, { ok: false, error: { code: 'E_UNKNOWN_METHOD', message: `unknown method: ${method}` } });
-    return;
-  }
-
-  const startedAtMs = Date.now();
-  try {
-    applySessionScope(params);
-    const result = await dispatch(method, params, timeoutMs);
-    audit(method, params, result, null, Date.now() - startedAtMs);
-    sendJson(res, 200, { ok: true, result });
-  } catch (err) {
-    audit(method, params, null, err, Date.now() - startedAtMs);
-    const code = err && err.code ? err.code : 'E_INTERNAL';
-    const text = err && err.message ? err.message : String(err);
-    if (code !== 'E_TIMEOUT' && code !== 'E_NO_SESSION' && code !== 'E_NO_BROWSER' && code !== 'E_BAD_ARG') {
-      logError(`rpc ${method} 失败 ${code}: ${text}`);
-    }
-    const payload = { code, message: text };
-    if (err && err.data !== undefined) payload.data = err.data;
-    sendJson(res, 200, { ok: false, error: payload });
-  }
-}
-
-
-function previewAuthorized(token) {
-  return Boolean(token) && (tokenMatches(token) || isPairTokenValid(token));
-}
-
-function sendPng(res, buffer) {
-  res.writeHead(200, {
-    'content-type': 'image/png',
-    'cache-control': 'no-store',
-    'referrer-policy': 'no-referrer',
-  });
-  res.end(buffer);
-}
-
-function previewPageHtml(sessionId, token) {
-  const safeSession = JSON.stringify(sessionId);
-  const safeToken = JSON.stringify(token);
-  return '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-    + '<title>BridgeDeck Remote View</title>'
-    + '<style>body{margin:0;background:#111827;color:#e5e7eb;font:14px/1.5 system-ui,sans-serif}header{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#1f2937;position:sticky;top:0}header h1{font-size:14px;margin:0;flex:1}button{height:30px;padding:0 12px;border:0;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}main{padding:10px}#meta{color:#9ca3af;font-size:12px;margin-bottom:8px;overflow-wrap:anywhere}img{max-width:100%;height:auto;display:block;margin:auto;background:#000;border:1px solid #374151}</style>'
-    + '<header><h1>BridgeDeck Remote View</h1><span id="status" style="color:#9ca3af;font-size:12px">…</span><input id="key" placeholder="按键 Enter/Tab" style="height:30px;width:110px;border-radius:8px;border:1px solid #374151;background:#111827;color:#e5e7eb;padding:0 8px"><button id="sendKey">发送按键</button><button id="focus">聚焦标签页</button></header>'
-    + '<main><div id="meta"></div><img id="shot" alt="" title="点击画面即远程点击"></main>'
-    + '<script type="module">const S=' + safeSession + ',T=' + safeToken + ';'
-    + 'const qs=(p)=>"/preview/"+p+"?session="+encodeURIComponent(S)+"&token="+encodeURIComponent(T);'
-    + 'const shot=document.getElementById("shot"),status=document.getElementById("status"),meta=document.getElementById("meta"),keyInput=document.getElementById("key");'
-    + 'let vw=0,vh=0;'
-    + 'async function loadMeta(){try{const r=await fetch(qs("meta"));if(!r.ok)throw new Error("HTTP "+r.status);const j=await r.json();vw=j.width;vh=j.height;meta.textContent=(j.title||S)+" · "+j.url+" · "+vw+"x"+vh;}catch(e){meta.textContent=S;}}'
-    + 'async function refresh(){try{const r=await fetch(qs("shot"),{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);const b=await r.blob();shot.src=URL.createObjectURL(b);status.textContent="已更新 "+new Date().toLocaleTimeString();}catch(e){status.textContent="刷新失败："+e.message}}'
-    + 'async function post(p,body){const r=await fetch(qs(p),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error((await r.text()).slice(0,120));return r.json();}'
-    + 'shot.onclick=async(e)=>{try{const r=shot.getBoundingClientRect();const ix=(e.clientX-r.left)/r.width*shot.naturalWidth;const iy=(e.clientY-r.top)/r.height*shot.naturalHeight;const x=vw?ix*vw/shot.naturalWidth:ix;const y=vh?iy*vh/shot.naturalHeight:iy;await post("click",{x,y});status.textContent="已点击 "+Math.round(x)+","+Math.round(y);setTimeout(refresh,250);}catch(err){status.textContent="点击失败："+err.message}};'
-    + 'document.getElementById("sendKey").onclick=async()=>{try{await post("key",{key:keyInput.value||"Enter"});status.textContent="已发送按键";setTimeout(refresh,250);}catch(err){status.textContent="按键失败："+err.message}};'
-    + 'document.getElementById("focus").onclick=async()=>{try{await post("focus",{});status.textContent="已聚焦";}catch(e){status.textContent="聚焦失败："+e.message}};'
-    + 'loadMeta();refresh();setInterval(refresh,2000);setInterval(loadMeta,5000);</script></html>';
-}
-
-async function previewBody(req) {
-  try {
-    const raw = await readBody(req);
-    return JSON.parse(raw || '{}');
-  } catch {
-    return {};
-  }
-}
-
-function previewControlAllowed(instance) {
-  return !(instance && instance.remote === true && instance.scope === 'read');
-}
-
-async function previewSelectorAt(instance, tabId, x, y) {
-  const expression = '(() => { const el = document.elementFromPoint(' + Number(x) + ',' + Number(y) + '); if (!el) return "";'
-    + ' const old = el.id; if (old && document.querySelectorAll("#" + CSS.escape(old)).length === 1) return "#" + CSS.escape(old);'
-    + ' const id = "__bb_preview_" + Date.now().toString(36); el.id = id; return "#" + id; })()';
-  const result = await sendCommand(instance, 'evaluate', { tabId, expression }, 5000);
-  return String((result && result.value) || '');
-}
-
-async function handlePreviewRequest(req, res, pathname, url) {
-  const token = url.searchParams.get('token') || '';
-  if (!previewAuthorized(token)) {
-    sendJson(res, 401, { ok: false, error: { code: 'E_AUTH', message: 'preview token invalid' } });
-    return;
-  }
-  let session;
-  try {
-    session = resolveSession(url.searchParams.get('session') || '');
+    const swept = transferOps.transferSweep();
+    if (swept.removed.length) log('transfer 清理：' + swept.removed.length + ' 个 staging（' + swept.bytes + ' 字节）');
   } catch (error) {
-    sendJson(res, 404, { ok: false, error: { code: 'E_NO_SESSION', message: (error && error.message) || 'no session' } });
-    return;
+    logError('transfer 清理失败：' + ((error && error.message) || error));
   }
-  if (pathname === '/preview' || pathname === '/preview/') {
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' });
-    res.end(previewPageHtml(session.sessionId, token));
-    return;
+}, transferPolicy.sweepIntervalMs);
+if (transferSweeper.unref) transferSweeper.unref();
+
+// daemon 结构化自检 + status 增量视图（视图按需计算；默认 status 载荷与 0.3.0 一致）。
+const daemonDoctor = createDaemonDoctor({
+  ledgerReport, transferOps, commandQueue, sessionRecovery, ledger: intentLedger,
+  version: VERSION, protocol: PROTOCOL_VERSION, startedAt, homeDir: HOME_DIR, now: () => Date.now(),
+});
+const statusViews = createStatusViews({
+  baseStatus: health.buildStatus, ledgerReport, transferOps, commandQueue, daemonDoctor,
+  leaseOps, commandBoundary, batchSessions, leaseArbiter,
+});
+
+const sessionStop = createSessionStop({ resolveSession, aliases, tabReservations, tabControls, tabControl, sessionState, sessions, instances, sendCommand, sendInstanceEvent, saveSessions, sessionPublicView, log, logError, BridgeError, sessionQueue, lease: sessionLeases, releaseTransfersForSession: transferOps.releaseTransfersForSession });
+
+const sessionStart = createSessionStart({ log, isControllerInfo, BridgeError, normalizeStartToken, startJournal, sessions, instances, tabControls, findInstanceForTab, crypto, tabReservations, getBorrowConfirm: () => globalBorrowConfirm, sendCommand, pickInstance, newSessionId, sessionState, createSessionRecord, normalizeDomains, saveSessions, tabControl, sendInstanceEvent, lease: sessionLeases });
+
+const sessionAdmin = createSessionAdmin({ resolveSession, instances, sendInstanceEvent, log, BridgeError, sessions, sessionStop, sessionState });
+
+const controlOps = createControlOps({ resolveSession, tabControls, tabControl, BridgeError, log });
+
+// 会话生命周期 → 租约证据（第十批 F）。只在成功后补登/重绑/释放，失败不改变原有错误语义；
+// note* 内部对冲突/缺失全部容错（session.start 撞上恢复租约时会自动降级为 join 参与者）。
+async function startSessionWithLease(params, timeoutMs) {
+  const started = await sessionStart.startSession(params, timeoutMs);
+  try { leaseOps.noteSessionStarted(started); } catch (error) {
+    log('会话启动后租约登记失败（忽略）：' + ((error && error.message) || error));
   }
-  const instance = instances.get(session.instanceId);
-  if (!instance) {
-    sendJson(res, 503, { ok: false, error: { code: 'E_NO_BROWSER', message: 'browser disconnected' } });
-    return;
-  }
-  if (pathname === '/preview/meta') {
-    try {
-      const result = await sendCommand(instance, 'evaluate', { tabId: session.tabId, expression: '({ width: window.innerWidth, height: window.innerHeight })' }, 5000);
-      const value = (result && result.value) || {};
-      sendJson(res, 200, { ok: true, width: Number(value.width) || 0, height: Number(value.height) || 0, url: session.url || '', title: session.title || '' });
-    } catch (error) { sendJson(res, 502, { ok: false, error: { code: 'E_PREVIEW_META', message: (error && error.message) || 'meta failed' } }); }
-    return;
-  }
-  if (pathname === '/preview/click' && req.method === 'POST') {
-    if (!previewControlAllowed(instance)) { sendJson(res, 403, { ok: false, error: { code: 'E_FORBIDDEN', message: 'read-only device' } }); return; }
-    const body = await previewBody(req);
-    const x = Number(body.x); const y = Number(body.y);
-    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > 20000 || y > 20000) { sendJson(res, 400, { ok: false, error: { code: 'E_BAD_ARG', message: 'x/y required' } }); return; }
-    try {
-      const selector = await previewSelectorAt(instance, session.tabId, x, y);
-      if (!selector) { sendJson(res, 409, { ok: false, error: { code: 'E_NOT_FOUND', message: 'no element at point' } }); return; }
-      const result = await sendCommand(instance, 'click', { tabId: session.tabId, selector, force: true }, 8000);
-      sendJson(res, 200, { ok: true, selector, result });
-    } catch (error) { sendJson(res, 502, { ok: false, error: { code: 'E_CLICK', message: (error && error.message) || 'click failed' } }); }
-    return;
-  }
-  if (pathname === '/preview/key' && req.method === 'POST') {
-    if (!previewControlAllowed(instance)) { sendJson(res, 403, { ok: false, error: { code: 'E_FORBIDDEN', message: 'read-only device' } }); return; }
-    const body = await previewBody(req);
-    const key = String(body.key || '').slice(0, 32);
-    if (!key) { sendJson(res, 400, { ok: false, error: { code: 'E_BAD_ARG', message: 'key required' } }); return; }
-    try {
-      const result = await sendCommand(instance, 'press', { tabId: session.tabId, key }, 5000);
-      sendJson(res, 200, { ok: true, result });
-    } catch (error) { sendJson(res, 502, { ok: false, error: { code: 'E_KEY', message: (error && error.message) || 'key failed' } }); }
-    return;
-  }
-  if (pathname === '/preview/shot') {
-    try {
-      const result = await sendCommand(instance, 'screenshot', { tabId: session.tabId, scope: 'viewport', preview: true }, 10000);
-      const dataUrl = String((result && result.dataUrl) || '');
-      const comma = dataUrl.indexOf(',');
-      if (comma < 0) throw new Error('screenshot returned no dataUrl');
-      sendPng(res, Buffer.from(dataUrl.slice(comma + 1), 'base64'));
-    } catch (error) {
-      sendJson(res, 502, { ok: false, error: { code: 'E_SCREENSHOT', message: (error && error.message) || 'screenshot failed' } });
-    }
-    return;
-  }
-  if (pathname === '/preview/focus' && req.method === 'POST') {
-    try {
-      await sendCommand(instance, 'window.focus', { windowId: session.windowId }, 5000);
-      sendJson(res, 200, { ok: true });
-    } catch (error) {
-      sendJson(res, 502, { ok: false, error: { code: 'E_FOCUS', message: (error && error.message) || 'focus failed' } });
-    }
-    return;
-  }
-  sendJson(res, 404, { ok: false, error: { code: 'E_NOT_FOUND', message: 'preview route not found' } });
+  return started;
 }
 
-function handleHttpRequest(req, res) {
-  let pathname = '/';
-  let requestUrl = null;
-  try {
-    requestUrl = new URL(req.url || '/', 'http://127.0.0.1');
-    pathname = requestUrl.pathname;
-  } catch { /* 保持默认 */ }
-  if (req.method === 'GET' && pathname === '/health') {
-    sendJson(res, 200, healthPayload());
-    return;
+async function stopSessionWithLease(params, timeoutMs) {
+  let before = null;
+  try { before = resolveSession(params && params.session !== undefined ? params.session : params.sessionId); } catch { /* 交给 stopSession 报错 */ }
+  const result = await sessionStop.stopSession(params, timeoutMs);
+  try { if (before) leaseOps.noteSessionStopped({ sessionId: before.sessionId, tabId: before.tabId }); } catch (error) {
+    log('会话停止后租约释放失败（忽略）：' + ((error && error.message) || error));
   }
-  if (requestUrl && pathname.startsWith('/preview')) {
-    handlePreviewRequest(req, res, pathname, requestUrl).catch((err) => {
-      try { sendJson(res, 500, { ok: false, error: { code: 'E_INTERNAL', message: (err && err.message) || 'preview error' } }); } catch { /* 忽略 */ }
-    });
-    return;
-  }
-  if (req.method === 'POST' && pathname === '/rpc') {
-    handleRpcRequest(req, res).catch((err) => {
-      logError(`处理 /rpc 异常：${err && err.stack ? err.stack : err}`);
-      try { sendJson(res, 500, { ok: false, error: { code: 'E_INTERNAL', message: 'internal error' } }); } catch { /* 忽略 */ }
-    });
-    return;
-  }
-  sendJson(res, 404, { ok: false, error: { code: 'E_NOT_FOUND', message: `no route: ${req.method} ${pathname}` } });
+  return result;
 }
+
+async function rebindSessionWithLease(params, timeoutMs) {
+  let before = null;
+  try { before = resolveSession(params && params.session !== undefined ? params.session : params.sessionId); } catch { /* 交给 rebindSession 报错 */ }
+  const result = await sessionRebind.rebindSession(params, timeoutMs);
+  try {
+    if (before) {
+      const toTabId = result && Number.isInteger(result.tabId) ? result.tabId : (params && params.tab);
+      leaseOps.noteSessionRebound({ sessionId: before.sessionId, fromTabId: before.tabId, toTabId });
+      if (result && Number.isInteger(result.tabId)) before.tabId = result.tabId;
+    }
+  } catch (error) {
+    log('会话重绑后租约迁移失败（忽略）：' + ((error && error.message) || error));
+  }
+  return result;
+}
+
+const genericOps = createGenericOps({
+  inflight,
+  instances,
+  inflightList: () => inflightOps.inflightList(),
+  cancelInflight: (params) => inflightOps.cancelInflight(params),
+  cancelStartRequest: (params) => startRequests.cancelStartRequest(params),
+  ledger: intentLedger,
+  ledgerReport,
+  recoveryReporter,
+  resolveSession,
+  getOperation: (id) => readViews.getOperation(id),
+  BridgeError,
+  log,
+});
+
+const compatPing = () => ({ ok: true, pong: true, protocol: PROTOCOL_VERSION, version: VERSION, ts: Date.now() });
+const compatHandshake = () => ({ ok: true, protocol: PROTOCOL_VERSION, version: VERSION });
+
+const localDispatch = createLocalDispatch({
+  buildStatus: statusViews.buildStatus, browserList, startSession: startSessionWithLease, prepareStartRequest: startRequests.prepareStartRequest, claimStartRequest: startRequests.claimStartRequest, cancelStartRequest: startRequests.cancelStartRequest, startRequestStatus: startRequests.startRequestStatus, stopSession: stopSessionWithLease, stopAllSessions: sessionAdmin.stopAllSessions, runLogView: sessionViews.runLogView, sessionList: sessionViews.sessionList, rebindSession: rebindSessionWithLease, pauseSession: sessionAdmin.pauseSession, controlStatus: controlOps.controlStatus, claimControl: controlOps.claimControl, releaseControl: controlOps.releaseControl, handoffControl: controlOps.handoffControl, setControlMode: controlOps.setControlMode, viewCache: readViews.viewCache, listAudit: readViews.listAudit, getOperation: readViews.getOperation, inflightList: inflightOps.inflightList, cancelInflight: inflightOps.cancelInflight, localTrustApi, pairingApi, dispatchExtension: extensionDispatch.dispatchExtension, broadcastSettingsSet, transferBegin: transferOps.transferBegin, transferChunk: transferOps.transferChunk, transferFinish: transferOps.transferFinish, transferRead: transferOps.transferRead, transferRelease: transferOps.transferRelease,
+  // 兼容目标 0.5.0 对齐：通用 cancel / ledger.request（真实实现复用 inflight + intent ledger）。
+  genericCancel: genericOps.cancel,
+  genericLedgerRequest: genericOps.ledgerRequest,
+compatPing,
+compatHandshake,
+  // 第十一批 G：批处理会话 + 配额 + 跨会话租约裁决（全部本地方法）。
+  batchPlan: batchSessions.plan,
+  batchStart: batchSessions.start,
+  batchStatus: (params) => batchSessions.status(params && params.batchId),
+  batchList: (params) => batchSessions.list(params || {}),
+  batchCancel: (params) => batchSessions.cancel(params && params.batchId),
+  quotaSnapshot: (params) => sessionQuota.snapshot({ limit: params && params.limit }),
+  leaseReport: (params) => leaseArbiter.report(params || {}),
+  leaseArbitrate: (params) => leaseArbiter.arbitrate(params || {}),
+  BridgeError,
+});
+
+// 第十一批 G 新增的本地 RPC 方法：rpc 入口按 LOCAL_METHODS ∪ 本表放行。
+// 方法目录（lib/method-catalog.mjs）是扩展/协议侧的单一来源，这里不修改它；
+// 新方法只存在于 daemon 本地面，CLI 通过同一 token/鉴权链调用。
+const BATCH_LOCAL_METHODS = Object.freeze(['batch.plan', 'batch.start', 'batch.status', 'batch.list', 'batch.cancel', 'batch.quota', 'lease.report', 'lease.arbitrate']);
+const RPC_LOCAL_METHODS = new Set([...LOCAL_METHODS, ...BATCH_LOCAL_METHODS, ...COMPAT_RPC_NAMES]);
+
+const rpcHandler = createRpcHandler({
+  tokenMatches, readBody, sendJson, LOCAL_METHODS: RPC_LOCAL_METHODS, EXT_METHODS, DEFAULT_TIMEOUT_MS, applySessionScope: submitApi.applySessionScope, dispatch, audit, logError,
+});
+
+const previewHandler = createPreviewHandler({
+  resolveSession, instances, sendCommand, tokenMatches, authResolve, readBody, sendJson,
+});
 
 function ensureTlsCert() {
   const paths = tlsPaths();
@@ -2752,6 +1973,8 @@ function ensureTlsCert() {
   log('已生成自签 TLS 证书 ' + paths.cert);
   return paths;
 }
+
+const handleHttpRequest = createHttpHandler({ health, previewHandler, rpcHandler, sendJson, logError });
 
 function createHttpServer() {
   let server;
@@ -2833,95 +2056,7 @@ async function listenOnCandidatePort(explicitPort) {
   throw new BridgeError('E_LISTEN', `无法监听 127.0.0.1（已尝试 ${candidates.join(', ')}）：${lastError && lastError.message ? lastError.message : 'unknown'}`);
 }
 
-let autoUpdateTimer = null;
-let autoUpdateRunning = false;
-
-function extractReleaseArchive(archive, target) {
-  let result = spawnSync('tar', ['-xf', archive, '-C', target], { encoding: 'utf8' });
-  if (result.status === 0) return;
-  if (process.platform !== 'win32') {
-    result = spawnSync('unzip', ['-q', '-o', archive, '-d', target], { encoding: 'utf8' });
-    if (result.status === 0) return;
-  }
-  throw new Error('自动应用失败：' + String(result.error?.message || result.stderr || result.stdout || archive));
-}
-
-async function checkAutoUpdate() {
-  if (autoUpdateRunning) return;
-  const statePath = path.join(HOME_DIR, 'update-state.json');
-  const state = readUpdateState(statePath);
-  const auto = state.auto;
-  if (!auto || auto.enabled !== true || !auto.source) return;
-  const now = Date.now();
-  const last = auto.lastCheckAt ? Date.parse(auto.lastCheckAt) : 0;
-  if (auto.intervalMs && now - last < Number(auto.intervalMs)) return;
-  autoUpdateRunning = true;
-  try {
-    const manifest = await fetchManifest(auto.source);
-    let signature = null;
-    let verifyKey = '';
-    if (auto.key) {
-      try { verifyKey = fs.readFileSync(auto.key, 'utf8').trim(); } catch { verifyKey = ''; }
-    } else if (manifest && manifest.signature && manifest.signature.alg === 'ed25519') {
-      verifyKey = RELEASE_PUBLIC_KEY;
-    }
-    if (verifyKey) {
-      try { signature = verifyReleaseSignature(manifest, verifyKey); } catch { signature = false; }
-      if (signature === false) throw new Error('发布清单签名无效');
-    }
-    const latest = typeof manifest.version === 'string' ? manifest.version : null;
-    if (latest && !/^[0-9A-Za-z._-]{1,32}$/.test(latest)) throw new Error('清单 version 非法：' + latest);
-    const available = Boolean(latest && latest !== VERSION);
-    if (available && auto.apply === true && signature !== true) throw new Error('自动应用要求有效的发布签名');
-    let downloadedDir = null;
-    if (available && auto.download === true && Array.isArray(manifest.artifacts)) {
-      downloadedDir = path.join(HOME_DIR, 'update-cache', 'v' + latest);
-      fs.mkdirSync(downloadedDir, { recursive: true });
-      for (const artifact of manifest.artifacts) {
-        if (!artifact || typeof artifact.file !== 'string' || !artifact.sha256) continue;
-        const artifactUrl = new URL(artifact.file, auto.source).toString();
-        const buffer = await fetchArtifact(artifactUrl);
-        const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-        if (hash !== String(artifact.sha256).toLowerCase()) throw new Error('artifact sha256 不匹配：' + artifact.name);
-        fs.writeFileSync(path.join(downloadedDir, path.basename(artifact.file)), buffer, { mode: 0o600 });
-      }
-    }
-    let appliedAt = null;
-    if (available && auto.apply === true && auto.applyTarget && downloadedDir) {
-      fs.mkdirSync(auto.applyTarget, { recursive: true });
-      for (const file of fs.readdirSync(downloadedDir).filter((name) => /\.(zip|tar\.gz)$/i.test(name))) {
-        extractReleaseArchive(path.join(downloadedDir, file), auto.applyTarget);
-      }
-      appliedAt = new Date().toISOString();
-    }
-    writeUpdateState(statePath, {
-      auto: {
-        ...auto,
-        lastCheckAt: new Date().toISOString(),
-        latest,
-        available,
-        signature,
-        downloadedDir,
-        appliedAt,
-        error: null,
-      },
-    });
-    if (available) log('自动更新：发现新版本 ' + latest + '（当前 ' + VERSION + '）');
-  } catch (error) {
-    writeUpdateState(statePath, {
-      auto: { ...auto, lastCheckAt: new Date().toISOString(), error: String((error && error.message) || error) },
-    });
-  } finally {
-    autoUpdateRunning = false;
-  }
-}
-
-function startAutoUpdateCheck() {
-  if (autoUpdateTimer) return;
-  setTimeout(() => { checkAutoUpdate().catch(() => {}); }, 5000).unref?.();
-  autoUpdateTimer = setInterval(() => { checkAutoUpdate().catch(() => {}); }, 10 * 60 * 1000);
-  autoUpdateTimer.unref?.();
-}
+const autoUpdate = createAutoUpdate({ HOME_DIR, VERSION, fs, path, crypto, spawnSync, fetchManifest, fetchArtifact, verifyReleaseSignature, RELEASE_PUBLIC_KEY, readUpdateState, writeUpdateState, log });
 
 async function startForeground(opts) {
   foreground = true;
@@ -2951,7 +2086,7 @@ async function startForeground(opts) {
     startedAt,
   });
   heartbeatTimer = setInterval(heartbeatTick, PING_INTERVAL_MS);
-  startAutoUpdateCheck();
+  autoUpdate.startAutoUpdateCheck();
   installProcessHandlers();
   log(`listening on http://127.0.0.1:${port}/ （pid ${process.pid}）`);
   if (foreground) console.log(`daemon listening on 127.0.0.1:${port} (pid ${process.pid})`);
@@ -2994,7 +2129,18 @@ async function shutdown(reason, code = 0) {
     instance.pending.clear();
     try { instance.conn.close(1001, 'daemon shutdown'); } catch { /* 忽略 */ }
   }
-  saveSessions();
+  saveSessions({ immediate: true });
+  // 结算类账本写入是 25ms 合并的：停止前必须落盘，否则重启后看到的是 active（会被误判 stale）。
+  try { intentLedger.checkpoint(); } catch { /* 忽略 */ }
+  // 停止前写对账快照：下次启动 restore() 可以回答"上次停下来时还有哪些未知意图"。
+  try { ledgerReport.persistSnapshot(); } catch { /* 忽略 */ }
+  try { transferOps.transferSweep(); } catch { /* 忽略 */ }
+  if (transferSweeper) {
+    try { clearInterval(transferSweeper); } catch { /* 忽略 */ }
+  }
+  // 停止租约自动回收定时器（unref 的不需要，但显式停掉便于测试/重启复用）。
+  try { leaseOps.stopSweeper(); } catch { /* 忽略 */ }
+  sessionLeases.clear();
   instances.clear();
   sessions.clear();
   removeDaemonJsonOwned();
@@ -3082,54 +2228,7 @@ async function runStop() {
 // 参数与入口
 // ---------------------------------------------------------------------------
 
-function parseServerArgs(argv) {
-  const opts = { port: null, foreground: false, stop: false, help: false };
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (arg === '--port') {
-      const value = Number(argv[i + 1]);
-      if (!Number.isInteger(value) || value <= 0 || value > 65535) {
-        console.error('--port 需要一个 1-65535 的整数');
-        process.exit(2);
-      }
-      opts.port = value;
-      i += 1;
-    } else if (arg.startsWith('--port=')) {
-      const value = Number(arg.slice('--port='.length));
-      if (!Number.isInteger(value) || value <= 0 || value > 65535) {
-        console.error('--port 需要一个 1-65535 的整数');
-        process.exit(2);
-      }
-      opts.port = value;
-    } else if (arg === '--foreground') {
-      opts.foreground = true;
-    } else if (arg === '--stop') {
-      opts.stop = true;
-    } else if (arg === '-h' || arg === '--help') {
-      opts.help = true;
-    } else {
-      console.error(`未知参数：${arg}`);
-      process.exit(2);
-    }
-  }
-  return opts;
-}
-
-function printUsage() {
-  console.log(`BridgeDeck daemon v${VERSION}
-
-用法：
-  node daemon/server.mjs [--port <n>] [--foreground]
-  node daemon/server.mjs --stop
-  node daemon/server.mjs --help
-
-说明：
-  默认后台 detached 拉起自身并退出；--foreground 前台运行（CLI 自动拉起用此模式）。
-  --port     指定监听端口（默认 BB_PORT，否则 52900..52909 取第一个可用）
-  --stop     优雅停止正在运行的 daemon 并清理 daemon.json
-  状态目录    ${HOME_DIR}（BB_HOME 可覆盖）
-  日志        ${LOG_PATH}（5MB 轮转）`);
-}
+const printUsage = createUsagePrinter({ VERSION, HOME_DIR, LOG_PATH });
 
 async function main() {
   const opts = parseServerArgs(process.argv.slice(2));

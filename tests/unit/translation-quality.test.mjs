@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const langs = ['ja', 'ko', 'de', 'es', 'fr', 'it', 'pt', 'zh-TW'];
+const langs = ['ja', 'ko', 'de', 'es', 'fr', 'it', 'pt', 'zh-TW', 'ar', 'he'];
 const worklist = JSON.parse(fs.readFileSync(path.join(ROOT, 'translation', 'worklist.json'), 'utf8'));
 const missingWorklist = JSON.parse(fs.readFileSync(path.join(ROOT, 'translation', 'missing-worklist.json'), 'utf8'));
 const keys = Object.keys(worklist);
@@ -17,7 +17,7 @@ function tokens(value) {
     .sort();
 }
 
-test('8 个翻译文件键集完整、无空值、技术 token 保留', () => {
+test('10 个翻译文件键集完整、无空值、技术 token 保留', () => {
   for (const lang of langs) {
     const file = path.join(ROOT, 'translation', lang + '.json');
     assert.ok(fs.existsSync(file), lang + ' 缺翻译文件');

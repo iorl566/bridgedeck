@@ -1,0 +1,442 @@
+{
+  "schema": "eval-prng-vectors/1",
+  "algorithm": "mulberry32",
+  "cases": [
+    {
+      "input": 185784037,
+      "normalized": 185784037,
+      "uint32": [
+        895843184,
+        4071314047,
+        1840642415,
+        234355597,
+        516466300,
+        2527037293,
+        2086857367,
+        3799135490
+      ],
+      "ints": [
+        2,
+        6,
+        4,
+        0,
+        6,
+        -3,
+        -2,
+        4
+      ],
+      "bools": [
+        true,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+        false
+      ],
+      "shuffled": [
+        4,
+        0,
+        1,
+        3,
+        5,
+        2
+      ],
+      "snapshot": {
+        "algorithm": "mulberry32",
+        "seed": 185784037,
+        "state": 185784037,
+        "draws": 0
+      }
+    },
+    {
+      "input": 0,
+      "normalized": 0,
+      "uint32": [
+        1144304738,
+        1416247,
+        958946056,
+        627933444,
+        2007157716,
+        2340967985,
+        2642484575,
+        2787370982
+      ],
+      "ints": [
+        2,
+        5,
+        -1,
+        3,
+        0,
+        1,
+        2,
+        -3
+      ],
+      "bools": [
+        false,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false
+      ],
+      "shuffled": [
+        1,
+        4,
+        3,
+        0,
+        5,
+        2
+      ],
+      "snapshot": {
+        "algorithm": "mulberry32",
+        "seed": 0,
+        "state": 0,
+        "draws": 0
+      }
+    },
+    {
+      "input": 1,
+      "normalized": 1,
+      "uint32": [
+        2693262067,
+        11749833,
+        2265367787,
+        4213581821,
+        4159151403,
+        1207330352,
+        2632122864,
+        3095568220
+      ],
+      "ints": [
+        -2,
+        4,
+        -2,
+        6,
+        -3,
+        5,
+        5,
+        5
+      ],
+      "bools": [
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "shuffled": [
+        0,
+        5,
+        2,
+        4,
+        3,
+        1
+      ],
+      "snapshot": {
+        "algorithm": "mulberry32",
+        "seed": 1,
+        "state": 1,
+        "draws": 0
+      }
+    },
+    {
+      "input": 305419896,
+      "normalized": 305419896,
+      "uint32": [
+        455919406,
+        4042750857,
+        4036713555,
+        1004527575,
+        3885174651,
+        3342903291,
+        1200158424,
+        1464636653
+      ],
+      "ints": [
+        5,
+        -1,
+        3,
+        4,
+        3,
+        -1,
+        0,
+        4
+      ],
+      "bools": [
+        true,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false
+      ],
+      "shuffled": [
+        5,
+        1,
+        0,
+        3,
+        2,
+        4
+      ],
+      "snapshot": {
+        "algorithm": "mulberry32",
+        "seed": 305419896,
+        "state": 305419896,
+        "draws": 0
+      }
+    },
+    {
+      "input": "0xdeadbeef",
+      "normalized": 3735928559,
+      "uint32": [
+        4043151706,
+        1147597007,
+        3315858022,
+        1538288752,
+        2042435954,
+        3600176436,
+        484360372,
+        1362401224
+      ],
+      "ints": [
+        -3,
+        4,
+        1,
+        -3,
+        6,
+        7,
+        -2,
+        5
+      ],
+      "bools": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "shuffled": [
+        3,
+        0,
+        1,
+        5,
+        2,
+        4
+      ],
+      "snapshot": {
+        "algorithm": "mulberry32",
+        "seed": 3735928559,
+        "state": 3735928559,
+        "draws": 0
+      }
+    },
+    {
+      "input": "bridge",
+      "normalized": 3937928720,
+      "uint32": [
+        2976714694,
+        908704426,
+        1095051440,
+        1638562140,
+        223397447,
+        2167391151,
+        3028533909,
+        494653740
+      ],
+      "ints": [
+        5,
+        0,
+        7,
+        3,
+        6,
+        -1,
+        2,
+        6
+      ],
+      "bools": [
+        false,
+        true,
+        false,
+        false,
+        true,
+        false,
+        false,
+        true
+      ],
+      "shuffled": [
+        2,
+        5,
+        3,
+        0,
+        1,
+        4
+      ],
+      "snapshot": {
+        "algorithm": "mulberry32",
+        "seed": 3937928720,
+        "state": 3937928720,
+        "draws": 0
+      }
+    },
+    {
+      "input": "浏览器桥",
+      "normalized": 2024263385,
+      "uint32": [
+        4240585045,
+        4262482740,
+        2262685210,
+        2834443204,
+        544849793,
+        643300560,
+        2136560202,
+        747909877
+      ],
+      "ints": [
+        1,
+        7,
+        2,
+        7,
+        1,
+        -2,
+        4,
+        -3
+      ],
+      "bools": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        false,
+        true
+      ],
+      "shuffled": [
+        4,
+        3,
+        5,
+        2,
+        0,
+        1
+      ],
+      "snapshot": {
+        "algorithm": "mulberry32",
+        "seed": 2024263385,
+        "state": 2024263385,
+        "draws": 0
+      }
+    },
+    {
+      "input": "seed-with.space",
+      "normalized": 4038548571,
+      "uint32": [
+        1576067729,
+        1569719843,
+        213086991,
+        2082218460,
+        1964700006,
+        3370883701,
+        3211519855,
+        3403038962
+      ],
+      "ints": [
+        2,
+        7,
+        4,
+        0,
+        2,
+        6,
+        2,
+        1
+      ],
+      "bools": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "shuffled": [
+        1,
+        2,
+        0,
+        4,
+        3,
+        5
+      ],
+      "snapshot": {
+        "algorithm": "mulberry32",
+        "seed": 4038548571,
+        "state": 4038548571,
+        "draws": 0
+      }
+    }
+  ],
+  "hashes": [
+    {
+      "text": "",
+      "fnv1a32": 2166136261,
+      "mixed": 509318827
+    },
+    {
+      "text": "a",
+      "fnv1a32": 3826002220,
+      "mixed": 788826981
+    },
+    {
+      "text": "ab",
+      "fnv1a32": 1294271946,
+      "mixed": 1038142984
+    },
+    {
+      "text": "bridge",
+      "fnv1a32": 3937928720,
+      "mixed": 2931483579
+    },
+    {
+      "text": "浏览器",
+      "fnv1a32": 2642423244,
+      "mixed": 121598361
+    },
+    {
+      "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "fnv1a32": 3951279181,
+      "mixed": 2890762979
+    }
+  ],
+  "caseSeeds": [
+    {
+      "seed": 185784037,
+      "propertyId": "vom-geometry/rect-area",
+      "caseIndex": 0,
+      "caseSeed": 1081065868
+    },
+    {
+      "seed": 185784037,
+      "propertyId": "vom-geometry/rect-area",
+      "caseIndex": 1,
+      "caseSeed": 3116133148
+    },
+    {
+      "seed": 12345,
+      "propertyId": "eval-kernel/prng-stream-replay",
+      "caseIndex": 7,
+      "caseSeed": 1223138130
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-# tools/uia-click.ps1 - find and invoke a Windows UIA control in a real Edge window.
+# tools/uia-click.ps1 - find and invoke a Windows UIA control in a real Chromium browser window.
 # Used for local acceptance of overlays rendered in closed shadow DOM.
 param(
   [Parameter(Mandatory = $true)][string]$Name,
@@ -18,13 +18,13 @@ $script:UiaType = switch ($ControlType) {
   default { $null }
 }
 
-$edgePids = @(Get-Process msedge -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+$browserPids = @(); foreach ($procName in @('msedge','chrome','brave','vivaldi','opera','helium')) { $browserPids += @(Get-Process -Name $procName -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id) }
 $root = [System.Windows.Automation.AutomationElement]::RootElement
 $top = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
 $candidates = @()
 foreach ($win in $top) {
   try {
-    if ($edgePids -notcontains $win.Current.ProcessId) { continue }
+    if ($browserPids -notcontains $win.Current.ProcessId) { continue }
     if ($WindowText) {
       $textCond = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $WindowText)
       $marker = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $textCond)

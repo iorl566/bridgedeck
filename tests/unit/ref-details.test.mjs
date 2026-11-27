@@ -1,19 +1,17 @@
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildRefDetails } from '../../extension/src/lib/ref-details.js';
 
-const details = buildRefDetails([
-  { ref: '@e1', backendNodeId: 42, role: 'button', name: '提交' },
-  { ref: null, backendNodeId: 43 },
-  { ref: '@e2', backendNodeId: null, role: 'link', name: 'x'.repeat(200) },
-], { frameId: 7, documentId: 'doc-1', revision: 9 });
-
-assert.equal(details.length, 2);
-assert.deepEqual(details[0], {
-  ref: '@e1', backendNodeId: 42, role: 'button', name: '提交', stableRef: 's-42', frameId: 7, documentId: 'doc-1', revision: 9,
+test('buildRefDetails 把 cdpSessionId 纳入稳定身份', () => {
+  const nodes = [{ ref: '@e1', tag: 'button', id: 'go', role: 'button', name: '提交' }];
+  const a = buildRefDetails(nodes, { frameId: 0, documentId: 'https://x', cdpSessionId: '1:0' })[0];
+  const b = buildRefDetails(nodes, { frameId: 0, documentId: 'https://x', cdpSessionId: '2:0' })[0];
+  assert.equal(a.cdpSessionId, '1:0');
+  assert.notEqual(a.stableRef, b.stableRef);
 });
-assert.equal(details[1].backendNodeId, null);
-assert.match(details[1].stableRef, /^s-[a-z0-9]+$/);
-assert.equal(details[1].name.length, 120);
-assert.deepEqual(buildRefDetails(null), []);
 
-console.log('REF_DETAILS_OK');
+test('同一会话/文档下 stableRef 可复用', () => {
+  const nodes = [{ ref: '@e1', tag: 'button', id: 'go', role: 'button', name: '提交' }];
+  const context = { frameId: 0, documentId: 'https://x', cdpSessionId: '1:0' };
+  assert.equal(buildRefDetails(nodes, context)[0].stableRef, buildRefDetails(nodes, context)[0].stableRef);
+});

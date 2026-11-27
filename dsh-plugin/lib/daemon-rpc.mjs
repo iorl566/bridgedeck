@@ -76,7 +76,10 @@ export async function daemonRpc(method, params = {}, options = {}) {
   const info = readDaemonInfo(home);
   if (!info) throw new DaemonRpcError('E_DAEMON', 'daemon 未运行（' + path.join(home, 'daemon.json') + ' 不存在）');
   const timeoutMs = Number.isFinite(Number(options.timeoutMs)) ? Math.max(1000, Number(options.timeoutMs)) : 60000;
-  const { json } = await requestJson(info, '/rpc', { method, params, timeoutMs: timeoutMs - 1000 }, timeoutMs);
+  // 请求层超时提前 1 秒触发，留出把 E_TIMEOUT 交回调用方的时间；但不能小于 1 秒，
+  // 否则 `timeoutMs=1000` 时 http 的 timeout=0 会退化成“永不超时”（daemon 假死时挂住）。
+  const requestTimeoutMs = Math.max(1000, timeoutMs - 1000);
+  const { json } = await requestJson(info, '/rpc', { method, params, timeoutMs }, requestTimeoutMs);
   if (!json || json.ok !== true) {
     const error = (json && json.error) || {};
     throw new DaemonRpcError(error.code || 'E_RPC', error.message || 'daemon 返回失败', error.data);

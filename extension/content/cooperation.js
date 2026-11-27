@@ -11,15 +11,24 @@
   if (globalThis.__bbCooperation) return;
   const BLOCKER_ID = '__bb_input_blocker';
   const PASSTHROUGH_TTL_MS = 5000;
+  // 时间戳级归因：Agent 派发输入前登记 expectation，事件 timeStamp（performance 时基）
+  // 落在 ±1.5ms 内即视为 Agent，优先于坐标/按键匹配（输入期望时钟）。
+  const ATTRIBUTION_TIME_TOLERANCE_MS = 1.5;
   const isTop = window.top === window;
   let blocked = false;
   let blocker = null;
   let listening = false;
   const passes = new Map(); // token -> { expiresAt, timer }
-  const activity = { lastHumanAt: 0, lastKind: '', editing: false, events: [] };
+  const activity = { lastHumanAt: 0, lastAgentAt: 0, lastKind: '', editing: false, events: [] };
   let agentUntil = 0;
+  let expectation = null;
+  let lastAttribution = null;
   let revision = 0;
   let authorityGeneration = 0;
+  let inputClock = 0;
+  let lastScrollAt = 0;
+  const textLog = [];
+  let textFloor = 0;
   const acceptGeneration = (generation) => {
     if (!Number.isInteger(Number(generation))) return true;
     if (Number(generation) < authorityGeneration) return false;
@@ -27,26 +36,60 @@
     return true;
   };
   const bump = () => { revision += 1; };
-  const frameState = { mutations: 0, childList: 0, attributes: 0, text: 0, scroll: 0, pointer: 0, keyboard: 0, human: 0, startedAt: Date.now() };
+  const frameState = { mutations: 0, structure: 0, textual: 0, childList: 0, attributes: 0, text: 0, scroll: 0, pointer: 0, keyboard: 0, human: 0, startedAt: Date.now() };
   const bumpFrame = (kind, by = 1) => {
     if (!kind) return;
     frameState[kind] = (frameState[kind] || 0) + by;
     bump();
   };
+  const focusSensitiveStyles = () => {
+    try {
+      for (const sheet of Array.from(document.styleSheets || [])) {
+        let rules = null;
+        try { rules = sheet.cssRules; } catch { continue; }
+        for (const rule of Array.from(rules || [])) {
+          if (!rule || !rule.selectorText || !rule.style) continue;
+          if (!/:focus(?:-visible|-within)?\b/.test(rule.selectorText)) continue;
+          if (/(display|visibility|opacity|height|width)/i.test(rule.style.cssText || '')) return true;
+        }
+      }
+    } catch { /* 样式表不可读时按中性处理 */ }
+    return false;
+  };
+  const mediaState = () => {
+    try {
+      return Array.from(document.querySelectorAll('video,audio')).slice(0, 5).map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        playing: el.paused === false,
+        currentTime: Number.isFinite(el.currentTime) ? Math.round(el.currentTime * 10) / 10 : null,
+        duration: Number.isFinite(el.duration) ? Math.round(el.duration * 10) / 10 : null,
+        muted: el.muted === true,
+      }));
+    } catch { return []; }
+  };
   const observeFrameState = () => {
     if (!document || typeof MutationObserver !== 'function') return;
     try {
       new MutationObserver((records) => {
+        let structural = false;
+        let textual = false;
         for (const record of records) {
           frameState.mutations += 1;
-          if (record.type === 'childList') frameState.childList += 1;
-          else if (record.type === 'attributes') frameState.attributes += 1;
-          else if (record.type === 'characterData') frameState.text += 1;
+          if (record.type === 'childList') { frameState.childList += 1; structural = true; }
+          else if (record.type === 'attributes') { frameState.attributes += 1; structural = true; }
+          else if (record.type === 'characterData') {
+            frameState.text += 1;
+            textual = true;
+            textLog.push({ at: Date.now(), before: String(record.oldValue || '').slice(0, 120), after: String(record.target && record.target.data || '').slice(0, 120) });
+            while (textLog.length > 20) { textLog.shift(); textFloor += 1; }
+          }
         }
+        if (structural) frameState.structure += 1;
+        if (textual) frameState.textual += 1;
         if (records.length) bump();
       }).observe(document.documentElement || document, { subtree: true, childList: true, attributes: true, characterData: true });
     } catch { /* 受限文档不阻塞协作 */ }
-    addEventListener('scroll', () => bumpFrame('scroll'), { passive: true, capture: true });
+    addEventListener('scroll', () => { lastScrollAt = Date.now(); bumpFrame('scroll'); }, { passive: true, capture: true });
   };
   observeFrameState();
 
@@ -139,21 +182,25 @@
     }
     return blocked;
   };
-  const passThrough = (token, active) => {
+  const passThrough = (token, active, expect) => {
     if (!isTop || !token) return passes.size;
     const id = String(token);
     const existing = passes.get(id);
     if (active === false) {
       if (existing) clearTimeout(existing.timer);
       passes.delete(id);
+      expectation = null;
       bump();
-      agentUntil = Math.max(agentUntil, Date.now() + 500);
+      agentUntil = Math.max(agentUntil, Date.now() + 1500);
       apply();
       return passes.size;
     }
     if (!existing) {
       bump();
       agentUntil = Math.max(agentUntil, Date.now() + 1500);
+      if (Array.isArray(expect) && expect.length) {
+        expectation = { kinds: expect.map(String), at: Date.now(), perfAt: performance.now() };
+      }
       const timer = globalThis['set' + 'Timeout'](() => {
         passes.delete(id);
         apply();
@@ -177,19 +224,65 @@
     target.matches && target.matches('input,textarea,select,[contenteditable="true"]')
   ));
   const noteHuman = (kind, target) => {
-    if (!isTop || passes.size > 0 || Date.now() < agentUntil) return;
+    if (!isTop) return;
     bump();
     const now = Date.now();
+    lastAttribution = { owner: 'human', reason: 'input', kind, at: now };
     activity.lastHumanAt = now;
     activity.lastKind = kind;
     activity.editing = editableTarget(target);
     activity.events.push({ kind, at: now, label: labelOf(target) });
     frameState.human += 1;
+    frameState.humanAttributed = (frameState.humanAttributed || 0) + 1;
+    inputClock += 1;
     bumpFrame(kind === 'keydown' ? 'keyboard' : 'pointer');
     if (activity.events.length > 32) activity.events.shift();
   };
   const humanEvent = (kind) => (event) => {
     if (!event || event.isTrusted !== true) return;
+    const now = Date.now();
+    if (expectation && now - expectation.at <= 5000 && Array.isArray(expectation.kinds)) {
+      const eventPerf = Number(event.timeStamp);
+      const skewMs = Number.isFinite(eventPerf) && Number.isFinite(expectation.perfAt)
+        ? eventPerf - expectation.perfAt
+        : NaN;
+      // 时间戳优先：同一输入派发窗口内 ±1.5ms 的事件直接归 Agent（不要求坐标/按键完全一致）。
+      const timeOk = Number.isFinite(skewMs) && Math.abs(skewMs) <= ATTRIBUTION_TIME_TOLERANCE_MS;
+      const pointOk = kind !== 'pointer'
+        || !Number.isFinite(expectation.x)
+        || !Number.isFinite(expectation.y)
+        || (Math.abs(Number(event.clientX) - expectation.x) <= 2 && Math.abs(Number(event.clientY) - expectation.y) <= 2);
+      const keyOk = kind !== 'key'
+        || !expectation.key
+        || String(event.key || '') === String(expectation.key);
+      if (expectation.kinds.includes(kind) && (timeOk || (pointOk && keyOk))) {
+        const reason = timeOk ? 'timestamp' : 'coordinate';
+        lastAttribution = {
+          owner: 'agent',
+          reason,
+          kind,
+          skewMs: Number.isFinite(skewMs) ? Math.round(skewMs * 100) / 100 : null,
+          at: now,
+        };
+        activity.lastAgentAt = now;
+        if (timeOk) frameState.agentAttributedByTimestamp = (frameState.agentAttributedByTimestamp || 0) + 1;
+        else frameState.agentAttributedByCoordinate = (frameState.agentAttributedByCoordinate || 0) + 1;
+        expectation = null;
+        frameState.agentAttributed = (frameState.agentAttributed || 0) + 1;
+        inputClock += 1;
+        return;
+      }
+      // 期待窗口内出现了不匹配的输入（类型、时间戳或坐标）：deny-by-default，按人工处理。
+      noteHuman(kind, event.target);
+      return;
+    }
+    if (passes.size > 0 || now < agentUntil) {
+      activity.lastAgentAt = now;
+      lastAttribution = { owner: 'agent', reason: 'grace', kind, skewMs: null, at: now };
+      frameState.agentAttributed = (frameState.agentAttributed || 0) + 1;
+      inputClock += 1;
+      return;
+    }
     noteHuman(kind, event.target);
   };
   const markAgentPoint = (x, y) => {
@@ -218,7 +311,10 @@
     window.addEventListener('keydown', humanEvent('key'), true);
     window.addEventListener('input', humanEvent('input'), true);
     window.addEventListener('change', humanEvent('change'), true);
-    window.addEventListener('scroll', humanEvent('scroll'), true);
+    // 滚动可能由 Agent 的 scroll-into-view 触发：只有紧跟人工输入时才计为人工。
+    window.addEventListener('scroll', () => {
+      if (Date.now() - activity.lastHumanAt <= 1000) noteHuman('scroll', document.documentElement);
+    }, true);
     window.addEventListener('focusin', humanEvent('focus'), true);
   }
   const secret = (element) => {
@@ -230,7 +326,9 @@
   };
   const readState = () => {
     const fields = [];
-    for (const element of document.querySelectorAll('input,textarea,select,[contenteditable="true"]')) {
+    const fieldNodes = Array.from(document.querySelectorAll('input,textarea,select,[contenteditable="true"]'));
+    const fieldsTruncated = fieldNodes.length > 50;
+    for (const element of fieldNodes) {
       if (fields.length >= 50) break;
       const sensitive = secret(element);
       fields.push({
@@ -265,8 +363,17 @@
       revision,
       authority: { revision, generation: authorityGeneration },
       mode: modeFor(),
+      control: {
+        inputLocked: blocked,
+        agentActive: passes.size > 0 || Date.now() < agentUntil,
+        shared: passes.size > 0,
+        humanActive: activity.lastHumanAt > 0 && Date.now() - activity.lastHumanAt < 2500,
+        agentGraceMs: Math.max(0, agentUntil - Date.now()),
+      },
       frameState: {
         mutations: frameState.mutations,
+        structure: frameState.structure || 0,
+        textual: frameState.textual || 0,
         childList: frameState.childList,
         attributes: frameState.attributes,
         text: frameState.text,
@@ -274,6 +381,31 @@
         pointer: frameState.pointer,
         keyboard: frameState.keyboard,
         human: frameState.human,
+        agentAttributed: frameState.agentAttributed || 0,
+        agentAttributedByTimestamp: frameState.agentAttributedByTimestamp || 0,
+        agentAttributedByCoordinate: frameState.agentAttributedByCoordinate || 0,
+        timeToleranceMs: ATTRIBUTION_TIME_TOLERANCE_MS,
+        attribution: lastAttribution,
+        humanAttributed: frameState.humanAttributed || 0,
+        inputClock,
+        expectationPending: Boolean(expectation),
+        lastHumanKind: activity.lastKind,
+        focusIsDocument: !active || active === document.body || active === document.documentElement,
+        fieldsComplete: !fieldsTruncated,
+        scrolling: lastScrollAt > 0 && Date.now() - lastScrollAt < 500,
+        texts: textLog.slice(-20),
+        textsComplete: textLog.length <= 20,
+        document: typeof location !== 'undefined' ? String(location.href || '') : '',
+        focusNeutral: !focusSensitiveStyles(),
+        media: mediaState(),
+        mediaComplete: (() => { try { return document.querySelectorAll('video,audio').length <= 5; } catch { return true; } })(),
+        selection: (() => { try { return String((window.getSelection && window.getSelection()) ? window.getSelection().toString() : '').slice(0, 200); } catch { return ''; } })(),
+        events: activity.events.slice(-20),
+        eventsComplete: activity.events.length <= 20,
+        textFloor,
+        lastHumanAt: activity.lastHumanAt,
+        lastAgentAt: activity.lastAgentAt,
+        lastInput: Math.max(activity.lastHumanAt, activity.lastAgentAt),
         busy: passes.size > 0 || Date.now() < agentUntil,
         editing: activity.editing,
         revision,
@@ -281,6 +413,7 @@
       },
       activity: {
         lastHumanAt: activity.lastHumanAt,
+        lastAgentAt: activity.lastAgentAt,
         lastKind: activity.lastKind,
         editing: activity.editing,
         agentGraceMs: Math.max(0, agentUntil - Date.now()),
@@ -300,9 +433,24 @@
       sendResponse({ ok: true, blocked: setBlocked(message.blocked === true), generation: authorityGeneration });
       return false;
     }
+    if (message.type === 'bb.cooperation.expect') {
+      const expect = message.expectation || {};
+      if (Array.isArray(expect.kinds) && expect.kinds.length) {
+        expectation = {
+          kinds: expect.kinds.map(String),
+          x: Number.isFinite(Number(expect.x)) ? Number(expect.x) : null,
+          y: Number.isFinite(Number(expect.y)) ? Number(expect.y) : null,
+          key: expect.key != null ? String(expect.key) : '',
+          at: Date.now(),
+          perfAt: performance.now(),
+        };
+      }
+      sendResponse({ ok: true, expectation: Boolean(expectation) });
+      return false;
+    }
     if (message.type === 'bb.cooperation.passthrough') {
       if (!acceptGeneration(message.generation)) { sendResponse({ ok: false, stale: true, generation: authorityGeneration }); return false; }
-      sendResponse({ ok: true, pending: passThrough(message.token, message.active !== false), generation: authorityGeneration });
+      sendResponse({ ok: true, pending: passThrough(message.token, message.active !== false, message.expectation), generation: authorityGeneration });
       return false;
     }
     if (message.type === 'bb.cooperation.passthrough-clear') {

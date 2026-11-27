@@ -1,4 +1,6 @@
-import { whenReady } from './i18n.js';
+import { getLang, translate, whenReady } from './i18n.js';
+import { describeError } from './error-hints.js';
+import { openDialog, dialogText } from './a11y-dialog.js';
 import { mountAuditPanel } from './panels/audit-panel.js';
 import { mountLongshotPanel } from './panels/longshot-panel.js';
 import { mountVideoPanel } from './panels/video-panel.js';
@@ -19,6 +21,14 @@ function setSwitch(el, on) {
   if (!el) return;
   el.classList.toggle('on', on);
   el.setAttribute('aria-checked', on ? 'true' : 'false');
+}
+
+/** 统一错误展示：有协议错误码时展示 12 语言提示，不把英文原始错误直接丢给用户。 */
+function setErrorNode(node, value) {
+  if (!node) return;
+  const text = value ? describeError(value, getLang()).text : '';
+  node.textContent = text;
+  node.classList.toggle('hidden', !text);
 }
 
 function setTheme() {
@@ -56,8 +66,7 @@ function render(next) {
   const errorNode = $('stateError');
   if (errorNode) {
     const text = !connected && state.lastError ? String(state.lastError) : '';
-    errorNode.textContent = text;
-    errorNode.classList.toggle('hidden', !text);
+    setErrorNode(errorNode, text);
   }
   const upgrade = $('upgradeNotice');
   if (upgrade) {
@@ -91,6 +100,8 @@ function render(next) {
 
   $('cliVersion').textContent = state.cliVersion || '—';
   $('extVersion').textContent = chrome.runtime.getManifest().version;
+  const protocolNode = $('protocolVersion');
+  if (protocolNode) protocolNode.textContent = 'v' + PROTOCOL_VERSION;
   $('instanceId').textContent = state.instanceId || '—';
   $('copyInstance').disabled = !state.instanceId;
 
@@ -155,11 +166,7 @@ async function setSetting(patch) {
   try {
     const result = await send({ type: 'bb.settings.set', patch });
     if (!result || result.ok === false) {
-      const errorNode = $('stateError');
-      if (errorNode) {
-        errorNode.textContent = (result && result.error) || '设置保存失败';
-        errorNode.classList.remove('hidden');
-      }
+      setErrorNode($('stateError'), (result && result.error) || '设置保存失败');
       return;
     }
     await refresh();
@@ -198,6 +205,8 @@ const PAIRING_GUIDE = {
   es: ['Ejecuta bridge daemon pair para obtener un enlace', 'Pégalo abajo y guarda', 'Las conexiones sin emparejar siguen funcionando con un aviso de identidad'],
   it: ['Esegui bridge daemon pair per ottenere un link', 'Incollalo qui sotto e salva', 'Le connessioni non associate funzionano comunque con un avviso di identità'],
   pt: ['Execute bridge daemon pair para obter um link', 'Cole abaixo e salve', 'Conexões não emparelhadas continuam funcionando com um aviso de identidade'],
+  ar: ['شغّل bridge daemon pair للحصول على رابط الاقتران', 'الصقه أدناه ثم احفظ', 'الاتصالات غير المقترنة ما زالت تعمل مع تحذير بشأن الهوية'],
+  he: ['הרץ bridge daemon pair לקבלת קישור צימוד', 'הדבק אותו למטה ושמור', 'חיבורים ללא צימוד עדיין עובדים, עם אזהרת זהות'],
 };
 
 function renderPairingGuide() {
@@ -253,6 +262,17 @@ async function refreshDevices() {
 }
 
 $('deviceRevokeAll')?.addEventListener('click', async () => {
+  // 破坏性操作先确认：确认框带焦点陷阱/Escape/aria-live（见 ui/a11y-dialog.js）。
+  const labels = dialogText(getLang());
+  const dialog = openDialog({
+    title: labels.revokeTitle,
+    body: labels.revokeBody,
+    confirmLabel: labels.revokeConfirm,
+    lang: getLang(),
+    tone: 'danger',
+  });
+  const outcome = await dialog.result;
+  if (!outcome.confirmed) return;
   await send({ type: 'bb.devices.revoke', all: true });
   await refreshDevices();
 });
@@ -276,7 +296,10 @@ function setView(view, title = '快捷功能') {
   $('backFromFeatures').classList.toggle('hidden', main);
   $('openFeatures').classList.toggle('hidden', !main);
   $('openFeatures').setAttribute('aria-expanded', String(features || sub));
-  document.querySelector('.brand img').classList.toggle('hidden', !main);
+  const brandLogo = document.querySelector('.brand-logo');
+  if (brandLogo) brandLogo.classList.toggle('hidden', !main);
+  const brandImg = document.querySelector('.brand img');
+  if (brandImg) brandImg.classList.toggle('hidden', !main);
   document.querySelector('.brand h1').textContent = main ? 'BridgeDeck' : title;
 }
 
@@ -420,16 +443,16 @@ $('pairSave').addEventListener('click', async () => {
       url = url.replace(/^http/i, 'ws').replace(/\/$/, '') + '/ws';
     }
   }
-  if (!/^wss?:\/\//i.test(url)) return showPairError('需要 ws:// 或 wss:// 地址');
-  if (code && code.length !== 6) return showPairError('配对码需为 6 位数字');
+  if (!/^wss?:\/\//i.test(url)) return showPairError(translate('需要 ws:// 或 wss:// 地址'));
+  if (code && code.length !== 6) return showPairError(translate('配对码需为 6 位数字'));
   if (/^ws:\/\//i.test(url)) {
     try {
       const parsed = new URL(url);
       if (!['127.0.0.1', 'localhost', '[::1]', '::1'].includes(parsed.hostname.toLowerCase())) {
-        return showPairError('非本机连接必须使用 wss://');
+        return showPairError(translate('非本机连接必须使用 wss://'));
       }
     } catch {
-      return showPairError('地址格式不正确');
+      return showPairError(translate('地址格式不正确'));
     }
   }
   showPairError('');
@@ -607,3 +630,23 @@ void refresh().then(() => {
 });
 const REFRESH_MS = 2500;
 if (!previewMode) globalThis['set' + 'Interval'](() => { void refresh(); }, REFRESH_MS);
+
+// ?selftest=a11y 端到端可访问性自检（lang / 按钮名 / switch aria-checked / img alt）
+const a11yMode = new URL(location.href).searchParams.get('selftest') === 'a11y';
+if (a11yMode) {
+  globalThis['set' + 'Timeout'](() => {
+    const issues = [];
+    if (!document.documentElement.getAttribute('lang')) issues.push('html-lang');
+    for (const button of document.querySelectorAll('button')) {
+      const name = String(button.getAttribute('aria-label') || button.getAttribute('title') || button.textContent || '').trim();
+      if (!name) issues.push('button:' + (button.id || '(anonymous)'));
+    }
+    for (const control of document.querySelectorAll('[role="switch"]')) {
+      if (!control.hasAttribute('aria-checked')) issues.push('switch:' + (control.id || '(anonymous)'));
+    }
+    for (const image of document.querySelectorAll('img')) {
+      if (!image.hasAttribute('alt')) issues.push('img:' + (image.id || image.src || '(anonymous)'));
+    }
+    document.title = issues.length ? 'SELFTEST:fail:a11y:' + issues.join(',') : 'SELFTEST:ok:a11y:0';
+  }, 300);
+}

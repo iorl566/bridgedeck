@@ -1,7 +1,8 @@
 // src/ws-client.js —— 扩展 ↔ daemon 的 WebSocket 客户端（PROTOCOL.md §3）
-import { readSettings } from './settings.js';
+import { readSettings, writeSettings } from './settings.js';
 import { log, warn } from './log.js';
 import { PROTOCOL_VERSION, protocolSkew } from './protocol-version.js';
+import { browserVersionOf, detectBrowser } from './lib/browser-detect.js';
 
 const PORTS = [52900, 52901, 52902, 52903, 52904, 52905, 52906, 52907, 52908, 52909];
 const CONNECT_TIMEOUT_MS = 2500;
@@ -22,13 +23,37 @@ async function hmacHex(key, text) {
   return toHex(await crypto.subtle.sign('HMAC', imported, new TextEncoder().encode(String(text))));
 }
 
+// browser_id：同一浏览器 profile 的稳定标识（首次生成后存 storage.local）。
+// daemon 用它把设备 token 绑定到具体浏览器，换浏览器复用 token 会被拒绝。
+let cachedBrowserId = '';
+async function ensureBrowserId() {
+  if (cachedBrowserId) return cachedBrowserId;
+  try {
+    const stored = await chrome.storage.local.get('bb.browserId');
+    const saved = stored && stored['bb.browserId'];
+    if (typeof saved === 'string' && saved.trim()) {
+      cachedBrowserId = saved.trim();
+      return cachedBrowserId;
+    }
+  } catch {
+    // storage 不可用时退回一次性的随机 id
+  }
+  const random = (globalThis.crypto && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : ('bid-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+  cachedBrowserId = random.replace(/[^a-z0-9-]/gi, '').toLowerCase().slice(0, 64) || 'bid-unknown';
+  try { await chrome.storage.local.set({ 'bb.browserId': cachedBrowserId }); } catch { /* 忽略 */ }
+  return cachedBrowserId;
+}
+
 function browserName() {
-  return /Edg\//i.test(navigator.userAgent) ? 'edge' : 'chrome';
+  const brands = (navigator.userAgentData && Array.isArray(navigator.userAgentData.brands)) ? navigator.userAgentData.brands : [];
+  const hasBrave = Boolean(navigator.brave && typeof navigator.brave === 'object');
+  return detectBrowser({ userAgent: navigator.userAgent, brands, hasBrave });
 }
 
 function browserVersion() {
-  const match = /(?:Edg|Chrome)\/([\d.]+)/i.exec(navigator.userAgent);
-  return match ? match[1] : '';
+  return browserVersionOf(navigator.userAgent);
 }
 
 function withQuery(rawUrl, params) {
@@ -53,6 +78,7 @@ export class BridgeSocket {
     this.helloDone = false;
     this.pairToken = '';
     this.pairCode = '';
+    this.browserId = '';
     this.stopped = true;
     this.connecting = false;
     this.retryTimer = null;
@@ -215,6 +241,7 @@ export class BridgeSocket {
     } catch {
       settings = {};
     }
+    this.browserId = await ensureBrowserId();
     const endpoints = await this.endpoints().catch(() => []);
     const failures = [];
     for (const endpoint of endpoints) {
@@ -278,6 +305,7 @@ export class BridgeSocket {
           browserVersion: browserVersion(),
           extVersion: chrome.runtime.getManifest().version,
           instanceId: this.instanceId || undefined,
+          browserId: this.browserId || undefined,
           protocol: PROTOCOL_VERSION,
           capabilities: CAPABILITIES,
           label: settings.instanceLabel || '',
@@ -380,6 +408,13 @@ export class BridgeSocket {
       case 'ping':
         this.sendJson({ type: 'pong' });
         return;
+      case 'commit-ack':
+        log('配对激活 commit 完成 txn=' + String(message.txn || '').slice(0, 16));
+        return;
+      case 'commit-error':
+        this.lastError = message.message || message.code || 'commit 失败';
+        log('配对激活 commit 失败：' + this.lastError);
+        return;
       case 'pong':
         return;
       default:
@@ -400,6 +435,19 @@ export class BridgeSocket {
     chrome.storage.session.set({ 'bb.lastPort': this.port }).catch(() => {});
     this.setState(this.protocolSkew ? 'version_skew' : 'connected');
     this.localAuth = message.localAuth && typeof message.localAuth === 'object' ? message.localAuth : null;
+    // 配对激活后 daemon 会作废旧链接并换发独立设备 token：立即持久化，重连用新 token。
+    if (typeof message.deviceToken === 'string' && message.deviceToken && message.deviceToken !== this.pairToken) {
+      this.pairToken = message.deviceToken;
+      log('配对已激活：设备 token 已轮换');
+      writeSettings({ daemonToken: message.deviceToken }).catch(() => {});
+    }
+    // 分阶段激活：daemon 先给 pending + commitTxn，扩展用（新）设备 token 签名确认后才 active。
+    if (typeof message.commitTxn === 'string' && message.commitTxn) {
+      const txn = message.commitTxn;
+      hmacHex(this.pairToken, 'bridgedeck-commit-v1\n' + txn)
+        .then((proof) => this.sendJson({ type: 'auth-commit', txn, proof }))
+        .catch((error) => warn('commit 证明计算失败', error && error.message));
+    }
     this.lastError = null;
     if (message.instanceId) {
       this.instanceId = message.instanceId;

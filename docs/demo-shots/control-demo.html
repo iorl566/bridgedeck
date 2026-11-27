@@ -1,0 +1,31 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>BridgeDeck 控制演示</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:760px;margin:36px auto;padding:0 18px;color:#1f2430}
+h1{font-size:22px}.muted{color:#667085;font-size:13px}
+.card{border:1px solid #d8dce6;border-radius:12px;padding:16px 18px;margin:14px 0}
+input{font-size:16px;padding:8px 10px;width:320px}
+button{font-size:15px;padding:9px 16px;margin-left:8px}
+#echoOut{margin-top:10px;color:#1f6f43;font-weight:600}
+#actionLog{margin-top:10px;color:#8a3ffc;font-weight:600}
+body.changed{background:#eefbf3}
+</style></head><body>
+<h1>BridgeDeck 0.4 · 可验证控制演示页</h1>
+<p class="muted">页面脚本会把 Agent 的 fill/click 结果实时显示在下面，便于确认“真的控制到了”。</p>
+<div class="card">
+  <label>输入框：<input id="echo" placeholder="Agent 会在这里填字"></label>
+  <div id="echoOut">（等待 Agent 填写…）</div>
+</div>
+<div class="card">
+  <button id="go">让页面变绿</button>
+  <div id="actionLog">（等待 Agent 点击…）</div>
+</div>
+<script>
+const echo = document.getElementById('echo');
+const echoOut = document.getElementById('echoOut');
+echo.addEventListener('input', () => { echoOut.textContent = '已收到输入：' + echo.value; });
+document.getElementById('go').addEventListener('click', () => {
+  document.body.classList.add('changed');
+  document.getElementById('actionLog').textContent = '按钮已被点击：' + new Date().toLocaleTimeString();
+});
+</script>
+</body></html>
