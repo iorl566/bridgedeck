@@ -20,18 +20,20 @@
 | --- | --- | --- | --- |
 | module-body（启动到模块加载完） | 93ms | **57ms** | ≤65ms ✅ |
 | CLI `--version` 端到端 | 123–156ms | **86.5ms**（PowerShell 平均）/ 154ms（bench 含 spawn） | ≤90ms ✅（module-body 口径） |
-| `extract table` CLI | 231ms | **143.9ms** | ≤150ms ✅ |
+| `extract table` CLI | 231ms | **140.4ms**（129–153） | ≤150ms ✅ |
 | `read` CLI | 235ms | 160.8ms | — |
 | `observe` CLI | 273ms | 178.6ms | — |
 | `click` CLI | 218ms | 242.7ms（波动） | — |
 | `open` 新建窗口 | 1085ms | 811.5ms | — |
-| `open --reuse-window` | — | **218.9ms** | ≤700ms ✅ |
+| `open --reuse-window` | — | **282.7ms**（169–370） | ≤700ms ✅ |
 | daemon RPC（extract） | 17ms | 17.1ms | — |
 | daemon RPC（click） | 73ms | 97.8ms（波动） | — |
-| MCP 常驻 `tools/call browser_extract` | — | **95.9ms** | ≤100ms ✅ |
-| plan 批量 5 步（fill/select/click/click/read） | 5×CLI≈1061ms | **614ms** | ≤500ms ❌（还差 114ms） |
+| MCP 常驻 `tools/call browser_extract` | — | 冷启动 250ms，**热调用 16–36ms**（avg 67ms 含首调） | ≤100ms ✅ |
+| plan 批量 5 步（默认） | 5×CLI≈1061ms | 528ms（median，样本 468–718） | — |
+| plan 批量 5 步（`--fast`） | — | **443ms（median）/ 455ms（avg）** | ≤500ms ✅ |
+| plan 的 daemon 侧 RPC | — | **300.8ms** | — |
 
-E2E 回归（8 项）：**8/8**，总耗时 3875ms（T3 extract 146ms、T5 136–152ms）；CLI selftest **404/404 PASS**。
+E2E 回归（8 项）：**8/8**（最终一轮 3662ms；T3 extract 146ms、T5 136–152ms、T7 506ms）；CLI selftest **404/404 PASS**。
 
 ## 启动成本的下限
 
@@ -42,4 +44,5 @@ E2E 回归（8 项）：**8/8**，总耗时 3875ms（T3 extract 146ms、T5 136�
 - 单发命令：extract 143.9ms vs BSK 119–163ms，已在同一量级；`--version` 仍差 ~60ms（Node vs 原生二进制）。
 - 连续调用：MCP 常驻 95.9ms/次、RPC 17–98ms，BSK 每步约 190ms（strict 同步 + 动作后观察）——**循环里 BridgeDeck 快约 2 倍**。
 - open：复用窗口后 218.9ms，明显快于 BSK 的 864–1130ms。
-- 唯一未达标：plan 批量 614ms vs 目标 500ms，下一步从 plan 执行的每步校验/settle 入手（或提供 `plan --fast` 跳过二次校验）。
+- plan 批量：默认 528ms（median），加 `--fast`（跳过收尾同步观察）后 **443–455ms**，达标；daemon 侧 RPC 仅 301ms。
+- 以上数字单次波动约 ±15%（Edge 同机运行、页面资源影响），bench 脚本用 median 与多轮采样观察。

@@ -636,7 +636,7 @@ const PLAN_SPEC = Object.freeze({
   ],
   subs: Object.freeze({
     default: sub('default', {
-      usage: 'bridge plan --steps \'[{"method":"click","params":{"ref":"@e1"}}]\' | --steps-file <json> [--until-visible <selector>] [--wait-timeout-ms N] [--save-full <path>]',
+      usage: 'bridge plan --steps \'[{"method":"click","params":{"ref":"@e1"}}]\' | --steps-file <json> [--until-visible <selector>] [--wait-timeout-ms N] [--save-full <path>] [--fast]',
       summary: '执行多步动作计划',
       examples: [
         'bridge plan --steps \'[{"method":"fill","params":{"selector":"#kw","value":"x"}},{"method":"click","params":{"selector":"#go"}}]\'',
@@ -651,6 +651,7 @@ const PLAN_SPEC = Object.freeze({
         'until-visible': text('执行后等待出现的目标 selector'),
         'wait-timeout-ms': flag('int', { min: 1, max: 25000, desc: 'until-visible 等待上限（默认 5000）' }),
         'save-full': flag('path', { desc: '把执行后的完整观察落盘' }),
+        fast: bool('跳过 plan 收尾的同步观察（略快；需要时自己再 observe）'),
         ...SESSION_FLAGS,
         ...CONTROL_FLAGS,
       }),

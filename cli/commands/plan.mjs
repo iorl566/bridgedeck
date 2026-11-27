@@ -136,6 +136,7 @@ export function createPlanCommands(ctx) {
     const planned = buildPlanCommand(flags, pos);
     if (isDryRun(flags)) return outputDryRun(planned, io);
     const steps = planned.steps[0].params.steps;
+    if (flags.fast === true) planned.steps[0].params.observeAfter = false;
     const body = await callStep(planned.steps[0], io);
     if (!body.ok) return outputFailure(body);
     const untilVisible = flags['until-visible'] !== undefined ? String(flags['until-visible']).trim() : '';

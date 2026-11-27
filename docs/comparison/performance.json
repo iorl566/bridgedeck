@@ -1,155 +1,172 @@
 {
-  "at": "2026-11-27T06:53:33.107Z",
+  "at": "2026-11-27T06:56:49.221Z",
   "platform": "win32",
   "node": "v24.22.3",
   "cli": {
     "version": {
-      "avgMs": 154.1,
+      "avgMs": 117.4,
       "samples": [
-        135.1,
-        203.4,
-        144.7,
-        125.1,
-        162.1
+        126.7,
+        115,
+        108.6,
+        109.6,
+        127
       ],
       "code": 2
     },
     "observe": {
-      "avgMs": 178.6,
+      "avgMs": 213.8,
       "samples": [
-        202.3,
-        159.8,
-        150.2,
-        202.5,
-        178.5
+        295.6,
+        216.1,
+        168.6,
+        169.5,
+        219.2
       ],
       "code": 0
     },
     "read": {
-      "avgMs": 160.8,
+      "avgMs": 142.7,
       "samples": [
-        274.3,
-        136.1,
-        130.7,
-        127.2,
-        135.8
+        184.2,
+        142.9,
+        125.6,
+        133.1,
+        127.7
       ],
       "code": 0
     },
     "extract": {
-      "avgMs": 143.9,
+      "avgMs": 140.4,
       "samples": [
-        145.7,
-        166.2,
-        140.1,
-        134.4,
-        133.2
+        137.4,
+        141.2,
+        153,
+        140.7,
+        129.5
       ],
       "code": 0
     },
     "click": {
-      "avgMs": 242.7,
+      "avgMs": 243.3,
       "samples": [
-        245.2,
-        261.6,
-        258.8,
-        229,
-        218.9
+        235.8,
+        236.7,
+        264,
+        241.6,
+        238.3
       ],
       "code": 0
     },
     "screenshot": {
-      "avgMs": 303.3,
+      "avgMs": 281.4,
       "samples": [
-        297.7,
-        295.9,
-        282.5,
-        340.5,
-        300
+        297.6,
+        281.6,
+        276.8,
+        274.9,
+        276
       ],
       "code": 0
     },
     "open(new)": {
-      "avgMs": 811.5,
+      "avgMs": 858.8,
       "samples": [
-        790.5,
-        822.8,
-        821.2
+        773.1,
+        837.7,
+        965.6
       ]
     },
     "open(reuse)": {
-      "avgMs": 218.9,
+      "avgMs": 282.7,
       "samples": [
-        292.4,
-        190.9,
-        173.4
+        370,
+        239.4,
+        238.7
       ]
     }
   },
   "rpc": {
     "observe": {
-      "avgMs": 37.4,
+      "avgMs": 33.9,
       "samples": [
-        50.2,
-        34.9,
-        34.2,
-        35.1,
-        32.5
+        47.8,
+        32.1,
+        23,
+        32.7,
+        34.2
       ]
     },
     "read": {
-      "avgMs": 18.9,
+      "avgMs": 13,
       "samples": [
-        22.8,
-        15.3,
-        19.8,
-        18.2,
-        18.3
+        13,
+        13.5,
+        12.9,
+        12.6,
+        13.1
       ]
     },
     "extract": {
-      "avgMs": 17.1,
+      "avgMs": 13.4,
       "samples": [
-        15.6,
-        22.9,
-        15.1,
-        14,
-        18
+        13.2,
+        14.5,
+        14.6,
+        13.5,
+        11.3
       ]
     },
     "click": {
-      "avgMs": 97.8,
+      "avgMs": 84.9,
       "samples": [
-        95.1,
-        95.3,
-        85.5,
-        98.8,
-        114.4
+        93.2,
+        81.5,
+        84.2,
+        80.3,
+        85.1
       ]
     }
   },
   "plan": {
     "lastCode": 0,
-    "lastOut": "{\"ok\":true,\"result\":{\"steps\":[{\"index\":0,\"method\":\"fill\",\"ok\":true,\"result\":{\"ok\":true,\"actual_value\":\"hello\",\"expected_value\":\"hello\",\"formatted\":false,\"matches\":true,\"effectState\":\"committed\",\"cleanupState\":\"ok\",\"phase\":\"pointer\",\"tx_id\":\"atx_00c\",\"journal_id\":\"aj_mwymkzww_wh5k_00c\",\"replayable\":f",
-    "avgMs": 614.1,
+    "lastOut": "{\"ok\":true,\"result\":{\"steps\":[{\"index\":0,\"method\":\"fill\",\"ok\":true,\"result\":{\"ok\":true,\"actual_value\":\"hello\",\"expected_value\":\"hello\",\"formatted\":false,\"matches\":true,\"effectState\":\"committed\",\"cleanupState\":\"ok\",\"phase\":\"pointer\",\"tx_id\":\"atx_00c\",\"journal_id\":\"aj_mwymp78a_vi6v_00c\",\"replayable\":f",
+    "avgMs": 571.3,
     "samples": [
-      579.6,
-      592.6,
-      670.1
-    ]
+      717.9,
+      528.2,
+      467.8
+    ],
+    "fastLastCode": 0,
+    "fastAvgMs": 454.6,
+    "fastSamples": [
+      482.9,
+      437.8,
+      443
+    ],
+    "rpcAvgMs": 300.8,
+    "rpcSamples": [
+      305.6,
+      336.8,
+      287.9,
+      281.7,
+      292
+    ],
+    "fastMedianMs": 443,
+    "medianMs": 528.2
   },
   "mcp": {
-    "initializeMs": 878.3,
+    "initializeMs": 137.1,
     "tools": 92,
     "tool": "browser_extract",
     "lastCode": "ok",
-    "avgMs": 95.9,
+    "avgMs": 67.2,
     "samples": [
-      301.3,
-      77.1,
-      45.4,
-      37.4,
-      18.3
+      249.5,
+      36,
+      18,
+      16.8,
+      15.7
     ]
   }
 }

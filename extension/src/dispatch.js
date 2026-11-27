@@ -291,7 +291,8 @@ async function plan(params = {}) {
     }
   }
   // 一次调用就返回同步状态：省掉调用方"plan 完再 observe"的一次往返。
-  const observation = await observeAfterAction(Number.isInteger(params.tabId) ? params.tabId : null);
+  // --fast：跳过收尾的同步观察（省一次 observe 往返；调用方自己需要时再 observe）。
+  const observation = params.observeAfter === false ? null : await observeAfterAction(Number.isInteger(params.tabId) ? params.tabId : null);
   return {
     steps: results,
     completed: results.filter((item) => item.ok).length,

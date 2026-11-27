@@ -123,3 +123,20 @@ node tools/compare/report.mjs --run docs/comparison/runs/<id>
 | 来自缓存 | 15 | 18 |
 
 结论：两边抓到的量级相当（36 vs 30），BridgeDeck 多出的是 iframe 文档/后续 Fetch，BSK 的 Image 更多（记录粒度不同）。web3 的 Y2 已改为解析真实数组，报告里显示为 23 条（Bridge）与 19 条（BSK），不再用截断文本判断。
+
+
+## 性能基准（BridgeDeck 侧）
+
+复跑：`node tools/bench-perf.mjs`；明细见 [docs/PERFORMANCE.md](../PERFORMANCE.md) 与 `docs/comparison/performance.json`。
+
+| 指标 | BridgeDeck | BSK 对照 |
+| --- | --- | --- |
+| CLI module-body 冷启动 | **57ms** | 原生二进制约 20ms |
+| CLI `--version` 端到端 | 86–117ms（口径含 spawn） | 19.5ms |
+| `extract table` CLI | **140ms**（129–153） | 119–163ms |
+| daemon RPC（extract/read/observe/click） | 13 / 13 / 34 / 85ms | 每步约 190ms（含 strict 同步） |
+| MCP 常驻热调用 | **16–36ms/次** | — |
+| plan 批量 5 步 | 默认 528ms；`--fast` **443–455ms**（RPC 301ms） | 5×CLI≈1059ms |
+| `open --reuse-window` | **283ms**（169–370） | 864–1130ms（新建窗口） |
+
+结论：单发命令与 BSK 同量级；循环/批量场景 BridgeDeck 明显更快（MCP 16–36ms/步、plan RPC 301ms/5 步 vs BSK 每步约 190ms）。

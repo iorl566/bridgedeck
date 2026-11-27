@@ -139,6 +139,25 @@ await benchCli('screenshot', ['screenshot', '--out', path.join(TMP, 'shot.png')]
   }
   results.plan.avgMs = round(avg(samples));
   results.plan.samples = samples.map(round);
+  const fastSamples = [];
+  for (let i = 0; i < 3; i += 1) {
+    const run = await cli(['plan', '--steps', JSON.stringify(steps), '--fast', '--session', sessionId]);
+    fastSamples.push(run.ms);
+    results.plan.fastLastCode = run.code;
+  }
+  results.plan.fastAvgMs = round(avg(fastSamples));
+  results.plan.fastSamples = fastSamples.map(round);
+  // plan 的 daemon 侧批量执行耗时（不含 CLI 启动/spawn）
+  const planRpc = [];
+  for (let i = 0; i < 5; i += 1) {
+    const started = performance.now();
+    await rpc('plan', { sessionId, steps, observeAfter: false });
+    planRpc.push(performance.now() - started);
+  }
+  results.plan.rpcAvgMs = round(avg(planRpc));
+  results.plan.rpcSamples = planRpc.map(round);
+  results.plan.fastMedianMs = round(fastSamples.slice().sort((a, b) => a - b)[1]);
+  results.plan.medianMs = round(samples.slice().sort((a, b) => a - b)[1]);
 }
 
 // daemon RPC 单独计时
@@ -210,6 +229,6 @@ console.log('CLI 单发（ms）');
 for (const [name, value] of Object.entries(results.cli)) console.log('  ' + name.padEnd(12), value.avgMs);
 console.log('daemon RPC（ms）');
 for (const [name, value] of Object.entries(results.rpc)) console.log('  ' + name.padEnd(12), value.avgMs);
-console.log('plan 批量 5 步（ms）', results.plan.avgMs, 'code=' + results.plan.lastCode);
+console.log('plan 批量 5 步：cli avg=' + results.plan.avgMs + ' median=' + results.plan.medianMs + ' | --fast avg=' + results.plan.fastAvgMs + ' median=' + results.plan.fastMedianMs + ' | daemon rpc=' + results.plan.rpcAvgMs);
 console.log('MCP 常驻（ms）', 'initialize=' + results.mcp.initializeMs, 'tool=' + results.mcp.tool, 'call=' + results.mcp.avgMs, 'tools=' + results.mcp.tools);
 console.log('→', path.relative(ROOT, OUT));
