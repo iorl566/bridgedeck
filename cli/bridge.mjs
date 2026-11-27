@@ -1305,6 +1305,10 @@ const __planCommandsCtx = {
 };
 let __planCommands = null;
 const planCommands = {
+  async cmdStep(...args) {
+    if (!__planCommands) __planCommands = (await import('./commands/plan.mjs')).createPlanCommands(__planCommandsCtx);
+    return __planCommands.cmdStep(...args);
+  },
   async cmdView(...args) {
     if (!__planCommands) __planCommands = (await import('./commands/plan.mjs')).createPlanCommands(__planCommandsCtx);
     return __planCommands.cmdView(...args);

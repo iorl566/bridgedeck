@@ -34,11 +34,13 @@ function makeCommand(handler) {
 }
 
 test('navigate 发送 url 并打印', async () => {
-  let seen = null;
-  const { cmd, printed } = makeCommand((method, params) => { seen = { method, params }; return { ok: true, result: { url: 'https://x', title: 'T' } }; });
+  const calls = [];
+  const { cmd, printed } = makeCommand((method, params) => { calls.push({ method, params }); return { ok: true, result: { url: 'https://x', title: 'T' } }; });
   assert.equal(await cmd('navigate', {}, ['navigate', 'https://x']), 0);
-  assert.equal(seen.method, 'navigate');
-  assert.equal(seen.params.url, 'https://x');
+  const nav = calls.find((item) => item.method === 'navigate');
+  assert.ok(nav, 'navigate 必须发送 navigate RPC');
+  assert.equal(nav.params.url, 'https://x');
+  assert.ok(calls.some((item) => item.method === 'wait-for-navigation'), 'domcontentloaded 后应等待导航提交');
   assert.match(printed.join('\n'), /已导航：https:\/\/x/);
 });
 
