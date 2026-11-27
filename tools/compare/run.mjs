@@ -14,6 +14,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
+import { web2Tasks } from './web2-tasks.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -202,7 +203,11 @@ const adapters = {
       }, 120000);
     },
     async cli(args, options = {}) {
-      const first = await run(BSK_EXE, args, { ...options, env: { ...this.env, ...(options.env || {}) } });
+      let first = await run(BSK_EXE, args, { ...options, env: { ...this.env, ...(options.env || {}) } });
+      if (/still settling/i.test(first.stdout)) {
+        await sleep(1200);
+        first = await run(BSK_EXE, args, { ...options, env: { ...this.env, ...(options.env || {}) } });
+      }
       if (first.code === 0 && !/observation_required|permission_denied/.test(first.stdout)) return first;
       // bsk 默认 strict：每个动作都要一次未使用过的 cooperate sync 观察。
       const sync = await run(BSK_EXE, ['sync', '--json'], { ...options, env: { ...this.env, ...(options.env || {}) } });
@@ -557,6 +562,7 @@ const tasks = [
     },
   },
 ];
+tasks.push(...web2Tasks);
 
 
 // ---------------------------------------------------------------- 主流程
