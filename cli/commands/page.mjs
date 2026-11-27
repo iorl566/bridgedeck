@@ -789,6 +789,25 @@ function normalizeWaitUntil(value) {
         body = await healAction(command, params, body, flags);
         if (body.ok && button && body.result) body.result.button = button;
       }
+      if (command === 'click' && flags['accept-dialog'] === true && !body.ok && body.error && body.error.code === 'E_DIALOG_PENDING') {
+        // 一步式确认框：点击后自动接受对话框，并取回被挂起的原始点击结果。
+        const data = body.error.data || {};
+        const dialogId = data.dialog && Number.isInteger(data.dialog.id) ? data.dialog.id : null;
+        if (dialogId !== null) {
+          const accepted = await callRpc('dialog.accept', withControl(flags, { id: dialogId }), Math.max(timeoutOf(flags), 15000));
+          if (accepted.ok) {
+            let result = { dialog: { id: dialogId, action: 'accept' } };
+            if (data.operationId) {
+              const awaited = await callRpc('operation.await', withControl(flags, { id: data.operationId, timeoutMs: 5000 }), 20000).catch(() => null);
+              if (awaited && awaited.ok && awaited.result) {
+                result = { ...(awaited.result.result || awaited.result), dialog: { id: dialogId, action: 'accept' } };
+              }
+            }
+            body = { ok: true, result };
+          }
+        }
+      }
+
       if (body.ok && command === 'click' && flags.follow === true) {
         try {
           const followed = await followOpenedTab(String(followSession), followBefore);

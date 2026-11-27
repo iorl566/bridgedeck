@@ -82,9 +82,11 @@ node tools/compare/report.mjs --run docs/comparison/runs/<id>
 
 回归：CLI selftest 404/404 PASS；E2E 8 项仍 8/8、耗时基本不变（T1 969ms、T2 1601ms、T3 211ms、T4 370ms、T5 220ms、T6 478ms、T7 772ms、T8 442ms）。
 
+**动态页 ref 失效自动重观察（第 2 项）**：`healAction` 从“必须显式 `--heal`”改为**默认开启**——动作返回 `E_STALE_REF / E_REF_NOT_FOUND` 时，自动重新 observe、按稳定的动作缓存找回目标并重试一次；`--heal=false` 可关闭。回归：CLI selftest 404/404、E2E 8/8。
+
+**`click --accept-dialog` 一步式确认框（第 3 项）**：点击命中原生 confirm/alert/prompt 时，CLI 自动接受对话框并取回被挂起的原始点击结果（内部 `dialog.accept` + `operation.await`），不再需要手动两步。夹具页实测：`bridge click "#dlg-confirm" --accept-dialog` 返回 ok，随后 `#dlg-out` 读到 `accepted`。
+
 **待办（按优先级）**：
 
 1. `extract` 提速（目标接近 BSK 的 90–160ms；当前 211–289ms）；
-2. ref 失效自动重观察一次（动态页）；
-3. `click --accept-dialog` 一步式确认框（当前 click → dialog accept 两步）；
-4. 截图落盘错误码细分（daemon 侧写盘失败 vs 扩展下载失败）。
+2. 截图落盘错误码细分（daemon 侧写盘失败 vs 扩展下载失败）。
