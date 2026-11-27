@@ -61,7 +61,13 @@ if (fs.existsSync(dist)) {
     }
     if (r.status === 0) walk(tmp);
     else hits.push(`dist/${name}: 解压失败，无法扫描`);
-    fs.rmSync(tmp, { recursive: true, force: true });
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch {
+      // zip 解压可能保留只读目录权限；Linux runner 上先 chmod 再清理。
+      spawnSync('chmod', ['-R', 'u+w', tmp], { windowsHide: true });
+      try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* 临时目录清理失败不阻断扫描 */ }
+    }
   }
 }
 
