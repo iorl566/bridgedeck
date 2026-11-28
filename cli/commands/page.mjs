@@ -748,6 +748,7 @@ function normalizeWaitUntil(value) {
       const target = stableRef ? { stableRef } : resolveTarget(flags, pos, 1, { required: true });
       let params = withControl(flags, { ...target });
       params = defaultInputMode(params, flags);
+      if (flags.modifiers !== undefined) params.modifiers = String(flags.modifiers);
       if (flags.synthetic === true) { params.synthetic = true; params.trusted = false; }
       if (flags.human === true) params.human = true;
       if (flags.force === true) params.force = true;

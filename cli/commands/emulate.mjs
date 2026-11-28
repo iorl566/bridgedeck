@@ -47,7 +47,7 @@ export function createEmulateCommand({
       }
       params.geolocation = { latitude: parts[0], longitude: parts[1] };
     }
-    if (flags.reset === true) params.reset = true;
+    if (flags.reset === true || flags.off === true) params.reset = true;
     if (!Object.keys(params).length) throw new ArgError('emulate 至少给一个参数（--width/--timezone/--geolocation/--reset 等）');
     const body = await callRpc('emulate', withControl(flags, params), timeoutOf(flags));
     return renderPageBody(body, () => print('ok'));

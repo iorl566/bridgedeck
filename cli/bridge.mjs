@@ -164,10 +164,11 @@ const VALUE_FLAGS = new Set([
   'capture', 'image-x', 'image-y', 'image-dx', 'image-dy', 'grid-step', 'profile', 'region-scale', 'visual', 'points', 'plan', 'settle', 'depends-on', 'rule', 'rule-file', 'window-ms', 'ms', 'scope', 'ttl', 'label', 'host', 'daemon-url', 'daemon-token', 'operation-id', 'closed-shadow-text', 'until-visible', 'wait-timeout-ms', 'wait-timeout', 'session-scope', 'agent-name', 'project', 'controller-color', 'code', 'input', 'sandbox',
 ]);
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'max-cells', 'max-targets', 'preview-columns', 'max-steps', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
-for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force', 'accept-dialog', 'fast']) BOOL_FLAGS.add(name);
+for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force', 'accept-dialog', 'fast', 'off']) BOOL_FLAGS.add(name);
 for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before', 'allow-domains', 'deny-domains', 'allow-origins', 'secret', 'by', 'min-interval']) VALUE_FLAGS.add(name);
 for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'synthetic', 'quiet', 'verbose', 'diagnostics', 'cdp-frames', 'commands', 'actions', 'heal', 'insight', 'synthetic', 'read-only', 'clear', 'keep-open', 'release', 'foreground', 'share', 'node-scope', 'focus', 'stream', 'reuse-window']) BOOL_FLAGS.add(name);
 VALUE_FLAGS.add('max-requests');
+VALUE_FLAGS.add('hold-ms');
 VALUE_FLAGS.add('max-console');
 VALUE_FLAGS.add('request-id');
 VALUE_FLAGS.add('encoder');
