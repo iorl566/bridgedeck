@@ -891,7 +891,7 @@ const OPEN_SPEC = Object.freeze({
   ],
   subs: Object.freeze({
     default: sub('default', {
-      usage: 'bridge open [url] [--observe] [--wait-for <文本>] [--wait-not <文本>] [--timeout-ms N] [--wait-until load|domcontentloaded|commit] [--reuse-window] [--browser <id|名字>] [--focus] [--incognito] [--scope <名字>] [--agent-name <名字>] [--max-tokens N]',
+      usage: 'bridge open [url] [--observe] [--wait-for <文本>] [--wait-not <文本>] [--timeout-ms N] [--wait-until load|domcontentloaded|commit] [--reuse-window] [--snapshot] [--browser <id|名字>] [--focus] [--incognito] [--scope <名字>] [--agent-name <名字>] [--max-tokens N]',
       summary: '新建会话并可一键导航/观察（可选等待 VOM 出现/消失指定文本）',
       examples: [
         'bridge open https://example.com/',
@@ -920,6 +920,7 @@ const OPEN_SPEC = Object.freeze({
         'timeout-ms': flag('int', { min: 1, desc: '--wait-for/--wait-not 的轮询上限（默认 5000ms）' }),
         'wait-until': flag('enum', { values: ['load', 'domcontentloaded', 'commit'], desc: '导航等待阶段（默认 domcontentloaded；load 会等整页加载完）' }),
         'reuse-window': bool('复用已存在的 Agent Window（更快；默认新建）'),
+        snapshot: bool('等同 --observe：open 同时返回观察结果'),
         // 显式声明以便给出"open 会新建会话"的针对性错误，而不是"未知参数"。
         session: text('open 不接受 --session（它总会新建会话）'),
       }),

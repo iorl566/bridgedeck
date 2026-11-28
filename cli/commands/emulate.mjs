@@ -36,6 +36,10 @@ export function createEmulateCommand({
     const ua = flags.ua !== undefined ? String(flags.ua) : (preset ? preset.ua : '');
     if (ua) params.userAgent = ua;
     if (flags['accept-language'] !== undefined) params.acceptLanguage = String(flags['accept-language']);
+    if (flags['max-touch-points'] !== undefined) {
+      params.touch = flags['no-touch'] === true ? false : true;
+      params.maxTouchPoints = intFlag(flags, 'max-touch-points', { min: 1, max: 10 });
+    }
     if (flags.touch === true) params.touch = true;
     if (flags['no-touch'] === true) params.touch = false;
     if (flags.timezone !== undefined) params.timezone = String(flags.timezone);

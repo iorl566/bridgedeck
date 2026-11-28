@@ -117,8 +117,11 @@ export async function emulate(params = {}) {
   }
 
   if (params.touch === true) {
-    await trySend(tabId, 'Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    const maxTouchPoints = Number(params.maxTouchPoints);
+    const points = Number.isFinite(maxTouchPoints) && maxTouchPoints > 0 ? Math.min(10, Math.round(maxTouchPoints)) : 5;
+    await trySend(tabId, 'Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: points });
     applied.touch = true;
+    applied.maxTouchPoints = points;
   } else if (params.touch === false) {
     await trySend(tabId, 'Emulation.setTouchEmulationEnabled', { enabled: false });
     applied.touch = false;

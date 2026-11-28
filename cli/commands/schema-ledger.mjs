@@ -114,7 +114,7 @@ export function createSchemaLedgerCommands(ctx) {
         target: { kind: 'tab', url },
         risk: RISK.BROWSER_MUTATION,
       }));
-      if (flags.observe === true) {
+      if ((flags.observe === true || flags.snapshot === true)) {
         const observeParams = { session: sessionPlaceholder };
         const maxTokens = Number(flags['max-tokens']);
         if (Number.isInteger(maxTokens) && maxTokens > 0) observeParams.maxTokens = maxTokens;
@@ -232,7 +232,7 @@ export function createSchemaLedgerCommands(ctx) {
           }
           await sleep(OPEN_WAIT_POLL_MS);
         }
-      } else if (flags.observe === true) {
+      } else if ((flags.observe === true || flags.snapshot === true)) {
         const obsStep = rpcStep('observe', observeParams, {
           description: '返回一次观察',
           target: { kind: 'observe', url },
