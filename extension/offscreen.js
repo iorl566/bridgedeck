@@ -484,6 +484,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       active: Boolean((recorder && recorder.state === 'recording') || encoderSession),
       state: encoderSession ? 'recording' : (recorder ? recorder.state : 'idle'),
       meta: meta || null,
+      // 启动校验用：编码器帧数 / MediaRecorder 已收到的分片数；均为 0 说明 tab 没有产出画面。
+      frames: encoderSession ? Number(encoderSession.frames) || 0 : null,
+      chunks: Array.isArray(chunks) ? chunks.length : 0,
     });
     return false;
   }

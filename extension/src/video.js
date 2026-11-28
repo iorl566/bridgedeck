@@ -403,6 +403,29 @@ export async function startVideo(params = {}) {
     log('录制持久化会话创建失败（不影响录制）：' + ((error && error.message) || error));
   }
   await injectVideoStatusChip(tabId, active.startedAt);
+  // 启动校验：tab 在后台/最小化时 tabCapture 可能拿不到任何帧，MediaRecorder 会静默产出 0 字节，
+  // 表现为 start 成功但随后 list/status/save 都找不到录制。这里在返回前确认确实有帧/分片。
+  if (active.mode === 'stream' && params.verifyStart !== false) {
+    let produced = 0;
+    for (let attempt = 0; attempt < 2 && produced === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 1200 : 900));
+      const status = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'bb.rec.status' }).catch(() => null);
+      produced = Number(status && status.frames) || Number(status && status.chunks) || 0;
+      if ((!status || status.active === false) && produced === 0) {
+        const early = await readRecord(recordingId).catch(() => null);
+        if (early && Number(early.bytes) > 0) produced = 1;
+      }
+    }
+    if (produced === 0) {
+      await chrome.runtime.sendMessage({ target: 'offscreen', type: 'bb.rec.stop' }).catch(() => {});
+      await stopScreencast().catch(() => {});
+      await removeVideoStatusChip(tabId).catch(() => {});
+      if (active && active.id === recordingId) active = null;
+      persistenceSession = null;
+      await chrome.storage.local.remove('bb.video.active').catch(() => {});
+      throw new Error('录制启动失败：标签页没有产生任何画面（可能处于后台/最小化）；请把标签页切到前台可见后重试');
+    }
+  }
   return {
     ok: true,
     recordingId,

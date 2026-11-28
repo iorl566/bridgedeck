@@ -1975,6 +1975,10 @@ async function runCommand(flags, pos) {
     case 'daemon':
       return cmdDaemon(flags, pos);
     case 'help':
+      if (jsonMode) {
+        emitJson(errorEnvelope({ code: 'E_ARG_CONFLICT', message: 'help 只输出人类可读文本，不支持 --json；请直接运行 bridge help' }));
+        return 2;
+      }
       if (pos[1]) return cmdHelpTopic(String(pos[1]));
       await printHelp();
       return 0;
@@ -2108,6 +2112,10 @@ async function main(argv) {
     flags['tab-id'] = String((resolved.result || {}).tabId || '');
   }
   if (flags.help) {
+    if (jsonMode) {
+      emitJson(errorEnvelope({ code: 'E_ARG_CONFLICT', message: 'help 只输出人类可读文本，不支持 --json；请直接运行 bridge help' }));
+      return 2;
+    }
     const topic = pos.length ? specFor(pos[0]) : null;
     if (topic) {
       print(renderCommandHelp(topic.command));
