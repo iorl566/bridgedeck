@@ -1,6 +1,8 @@
 // src/video.js —— 视频录制（tabCapture → offscreen MediaRecorder，优先 MP4；必要时调试器截帧）
 import { acquire, onEvent, release, send as cdpSend } from './debugger.js';
 import { injectVideoStatusChip, removeVideoStatusChip } from './video-status-chip.js';
+import { verifyCaptureOrThrow } from './video-capture-check.js';
+import { journalFields } from './video-record-fields.js';
 import { log } from './log.js';
 import { listRecords, readRecord, deleteRecord, patchRecord } from './lib/video-store.js';
 import { verifyRecording } from './lib/video-verify.js';
@@ -403,28 +405,12 @@ export async function startVideo(params = {}) {
     log('录制持久化会话创建失败（不影响录制）：' + ((error && error.message) || error));
   }
   await injectVideoStatusChip(tabId, active.startedAt);
-  // 启动校验：tab 在后台/最小化时 tabCapture 可能拿不到任何帧，MediaRecorder 会静默产出 0 字节，
-  // 表现为 start 成功但随后 list/status/save 都找不到录制。这里在返回前确认确实有帧/分片。
+  // 启动校验：后台/最小化标签页可能拿不到任何帧；确认产出后再返回，避免随后查不到录制。
   if (active.mode === 'stream' && params.verifyStart !== false) {
-    let produced = 0;
-    for (let attempt = 0; attempt < 2 && produced === 0; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 1200 : 900));
-      const status = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'bb.rec.status' }).catch(() => null);
-      produced = Number(status && status.frames) || Number(status && status.chunks) || 0;
-      if ((!status || status.active === false) && produced === 0) {
-        const early = await readRecord(recordingId).catch(() => null);
-        if (early && Number(early.bytes) > 0) produced = 1;
-      }
-    }
-    if (produced === 0) {
-      await chrome.runtime.sendMessage({ target: 'offscreen', type: 'bb.rec.stop' }).catch(() => {});
-      await stopScreencast().catch(() => {});
-      await removeVideoStatusChip(tabId).catch(() => {});
-      if (active && active.id === recordingId) active = null;
+    await verifyCaptureOrThrow(recordingId, readRecord, () => {
+      active = null;
       persistenceSession = null;
-      await chrome.storage.local.remove('bb.video.active').catch(() => {});
-      throw new Error('录制启动失败：标签页没有产生任何画面（可能处于后台/最小化）；请把标签页切到前台可见后重试');
-    }
+    });
   }
   return {
     ok: true,
@@ -440,20 +426,6 @@ export async function startVideo(params = {}) {
     ...(durationPlan.clamped ? { duration_clamped: true, requestedMs: durationPlan.requestedMs } : {}),
     ...(normalized.problems.length ? { budget_problems: normalized.problems.slice(0, 4) } : {}),
     ...(persistenceSession ? { persistence: persistenceBrief(persistenceSession) } : {}),
-  };
-}
-
-function journalFields(record) {
-  if (!record) return {};
-  return {
-    ...(record.complete_frames !== undefined ? { complete_frames: record.complete_frames } : {}),
-    ...(record.finish_via ? { finish_via: record.finish_via } : {}),
-    ...(record.journal ? { journal: record.journal } : {}),
-    ...(record.raw_bytes !== undefined ? { raw_bytes: record.raw_bytes } : {}),
-    ...(record.trimmed_bytes !== undefined ? { trimmed_bytes: record.trimmed_bytes } : {}),
-    ...(record.indexed ? { indexed: true } : {}),
-    ...(record.sidx_bytes ? { sidx_bytes: record.sidx_bytes } : {}),
-    ...(record.faststart ? { faststart: true, faststart_bytes: record.faststart_bytes, faststart_packets: record.faststart_packets } : {}),
   };
 }
 
