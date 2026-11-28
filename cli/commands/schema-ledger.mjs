@@ -153,11 +153,8 @@ export function createSchemaLedgerCommands(ctx) {
     if (isDryRun(flags)) return outputDryRun(planned, io);
     const url = planned.steps.length > 1 ? planned.steps[1].params.url : '';
     if (url && flags['reuse-window'] === true && flags.incognito !== true) {
-      // 复用已有 Agent Window：先确保窗口存在，再把会话直接绑定到它的标签页，省掉新建窗口的成本。
-      const ensured = await callRpc('window.ensureAgent', { focus: flags.focus === true }, Math.max(timeoutOf(flags), 15000)).catch(() => null);
-      if (ensured && ensured.ok && ensured.result && Number.isInteger(ensured.result.tabId)) {
-        planned.steps[0].params.tab = ensured.result.tabId;
-      }
+      // 复用已有 Agent Window：让 session.start 在同一窗口里新开标签页（默认也会复用窗口，这里显式保证不抢占已有 tab）。
+      planned.steps[0].params.newTab = true;
     }
     const started = await callStep(planned.steps[0], io);
     if (!started.ok) return outputFailure(started);
@@ -178,12 +175,13 @@ export function createSchemaLedgerCommands(ctx) {
       });
       const nav = await callStep(navStep, io);
       if (!nav.ok) return outputFailure(nav);
-      if (waitUntil === 'domcontentloaded') {
-        const waitStep = rpcStep('wait-for-navigation', { session: sessionId, waitUntil: 'domcontentloaded', timeoutMs: 30000 }, {
+      const navReceipt = (nav.result && nav.result.receipt) || {};
+      if (waitUntil === 'domcontentloaded' && navReceipt.effectState !== 'committed') {
+        const waitStep = rpcStep('wait-for-navigation', { session: sessionId, waitUntil: 'domcontentloaded', timeoutMs: 5000 }, {
           description: '等待导航到 domcontentloaded',
           target: { kind: 'navigation', name: 'domcontentloaded' },
           risk: RISK.READ_ONLY,
-          minTimeoutMs: 45000,
+          minTimeoutMs: 8000,
         });
         await callStep(waitStep, io).catch(() => null);
       }

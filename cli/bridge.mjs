@@ -166,7 +166,7 @@ const VALUE_FLAGS = new Set([
 for (const name of ['item-selector', 'max-depth', 'fields', 'tab-id', 'wait-until', 'device', 'ua', 'accept-language', 'max-bytes', 'max-cells', 'max-targets', 'preview-columns', 'max-steps', 'wait-ms', 'command-id', 'url', 'resource-type', 'state', 'kind', 'max-chars', 'pointer', 'budget']) VALUE_FLAGS.add(name);
 for (const name of ['csv-safe', 'touch', 'no-touch', 'full-page', 'debug-surfaces', 'include-controlled', 'embedded', 'vom', 'ax', 'check', 'mcp', 'delta', 'replace', 'auto', 'force', 'accept-dialog', 'fast']) BOOL_FLAGS.add(name);
 for (const name of ['manifest', 'staging', 'backup', 'modifiers', 'key', 'source', 'region', 'interval', 'from', 'dest', 'rollback', 'older-than', 'before', 'allow-domains', 'deny-domains', 'allow-origins', 'secret', 'by', 'min-interval']) VALUE_FLAGS.add(name);
-for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'synthetic', 'quiet', 'verbose', 'diagnostics', 'cdp-frames', 'commands', 'actions', 'heal', 'insight', 'synthetic', 'read-only', 'clear', 'keep-open', 'release', 'foreground', 'share', 'node-scope', 'focus', 'stream']) BOOL_FLAGS.add(name);
+for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'facts', 'synthetic', 'quiet', 'verbose', 'diagnostics', 'cdp-frames', 'commands', 'actions', 'heal', 'insight', 'synthetic', 'read-only', 'clear', 'keep-open', 'release', 'foreground', 'share', 'node-scope', 'focus', 'stream', 'reuse-window']) BOOL_FLAGS.add(name);
 VALUE_FLAGS.add('max-requests');
 VALUE_FLAGS.add('max-console');
 VALUE_FLAGS.add('request-id');
@@ -2084,8 +2084,14 @@ if (STARTUP_TRACE) process.on('exit', (code) => traceStartup('exit:' + code));
 
 async function main(argv) {
   traceStartup('main');
-  if (argv.length === 1 && ['--version', '-v', 'version'].includes(argv[0])) {
-    print(VERSION);
+  const isVersionArg = (arg) => ['--version', '-v', 'version'].includes(arg);
+  if (argv.length >= 1 && isVersionArg(argv[0]) && argv.every((arg) => isVersionArg(arg) || arg === '--json' || arg === '--quiet')) {
+    if (argv.includes('--json')) {
+      setJsonContext('version', null, { json: true });
+      emitJson({ ok: true, result: { version: VERSION } });
+    } else {
+      print(VERSION);
+    }
     return 0;
   }
   const { flags, pos } = parseArgs(argv);
@@ -2138,8 +2144,8 @@ main(process.argv.slice(2))
     if (err instanceof ArgError) {
       const code = err.code || 'E_ARG_USAGE';
       const usage = err.usage || jsonContext.usage || '';
-      if (jsonMode) {
-        // --json 下参数错误也遵守单行 JSON 契约（stdout 一行；人类提示仍在 stderr）。
+      // 解析阶段失败时 jsonMode 还没设置；仍按 argv 里的 --json 输出 JSON 契约。
+      if (jsonMode || process.argv.slice(2).includes('--json')) {
         emitJson(errorEnvelope({ code, message: err.message, hint: err.hint, usage }, jsonContext));
       }
       process.stderr.write('参数错误：' + err.message + '\n');

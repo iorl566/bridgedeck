@@ -53,7 +53,8 @@ export function createPlanCommands(ctx) {
       ? (() => {
         const file = path.resolve(process.cwd(), String(flags['steps-file']));
         try {
-          return fs.readFileSync(file, 'utf8');
+          // Windows 记事本/PowerShell 写出 UTF-8 BOM 很常见，解析前先剥掉。
+          return fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
         } catch (error) {
           throw new ContractError('E_ARG_TYPE', '读取 --steps-file 失败：' + error.message, {
             hint: '检查路径：' + file,

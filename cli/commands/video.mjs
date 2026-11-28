@@ -89,8 +89,15 @@ export function createVideoCommand({
           return 0;
         }
       }
-      const listed = expectOkBody(await callRpc('video.list', session, timeoutOf(flags)), 'video list');
-      const record = (listed.recordings || []).find((item) => !id || item.id === id);
+      let listed = null;
+      let record = null;
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        listed = expectOkBody(await callRpc('video.list', session, timeoutOf(flags)), 'video list');
+        record = (listed.recordings || []).find((item) => !id || item.id === id);
+        if (record) break;
+        // 录制刚结束、封装尚未完成时 list 可能短暂为空：给约 3s 宽限，避免把“收尾中”误报成 E_NOT_FOUND。
+        if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 500));
+      }
       if (!record) {
         const detail = state && state.trace ? ' trace=' + JSON.stringify(state.trace) : '';
         if (isJson()) return emitJson({ ok: false, error: { code: 'E_NOT_FOUND', message: '找不到录制 ' + (id || '') + detail } }), 1;
@@ -157,7 +164,12 @@ export function createVideoCommand({
     if (sub === 'save') {
       const id = requirePos(pos, 2, '<recordingId>');
       if (!flags.out) throw new ArgError('video save 需要 --out <path>');
-      const body = await callRpc('video.fetch', { ...session, recording: String(id) }, Math.max(timeoutOf(flags), 120000));
+      let body = await callRpc('video.fetch', { ...session, recording: String(id) }, Math.max(timeoutOf(flags), 120000));
+      for (let attempt = 0; attempt < 6 && !body.ok && /找不到录制|E_NOT_FOUND/i.test(String((body.error && body.error.code) || '') + ' ' + String((body.error && body.error.message) || '')); attempt += 1) {
+        // 刚 stop 的录制可能还在收尾：save 先宽限等待，再判定不存在。
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        body = await callRpc('video.fetch', { ...session, recording: String(id) }, Math.max(timeoutOf(flags), 120000));
+      }
       if (!body.ok) return outputFailure(body);
       const result = body.result || {};
       const journal = result.journal || null;
