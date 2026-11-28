@@ -1673,6 +1673,7 @@ const DEBUG_SPEC = Object.freeze({
       flags: mergeFlags({
         name: flag('name', { desc: '采集名字（历史列表里可读）' }),
         bodies: bool('采集请求/响应正文（会挂 debugger，单条上限 1MB）'),
+        'run-id': text('采集名字的同义（BSK 兼容）'),
         ...SESSION_FLAGS,
       }),
     }),

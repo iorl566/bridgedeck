@@ -170,6 +170,7 @@ for (const name of ['no-restart', 'yes', 'dry-run', 'unverified', 'observe', 'fa
 VALUE_FLAGS.add('max-requests');
 VALUE_FLAGS.add('hold-ms');
 VALUE_FLAGS.add('max-touch-points');
+VALUE_FLAGS.add('run-id');
 VALUE_FLAGS.add('max-console');
 VALUE_FLAGS.add('request-id');
 VALUE_FLAGS.add('encoder');

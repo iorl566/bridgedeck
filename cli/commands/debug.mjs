@@ -79,6 +79,7 @@ export function createDebugCommand({
   if (sub === 'start') {
     const params = { ...session };
     if (flags.name !== undefined) params.name = String(flags.name);
+    if (flags.name === undefined && flags['run-id'] !== undefined) params.name = String(flags['run-id']);
     if (flags.bodies === true) params.bodies = true;
     const body = await callRpc('debug.start', params, timeoutOf(flags));
     if (!body.ok) return outputFailure(body);
