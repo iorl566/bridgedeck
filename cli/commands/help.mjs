@@ -6,7 +6,13 @@ export async function requestHelpCommand(ctx, flags, pos) {
   if (prompt === undefined) throw new ArgError('request-help 需要 --prompt 或 --reason <text>');
   const timeoutMs = Math.max(5000, parseDurationMs(flags.timeout, 180000));
   const params = withControl(flags, { reason: String(prompt), timeoutMs });
-  if (flags.target !== undefined) params.target = String(flags.target);
+  if (flags.target !== undefined) {
+    const targets = String(flags.target).split(',').map((item) => item.trim()).filter(Boolean).slice(0, 8);
+    if (targets.length) {
+      params.targets = targets; // 多目标高亮；第一个仍是主目标
+      params.target = targets[0];
+    }
+  }
   if (flags.title !== undefined) params.title = String(flags.title);
   if (flags.until !== undefined) {
     let criteria;

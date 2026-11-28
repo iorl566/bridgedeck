@@ -71,20 +71,33 @@ export async function requestHelp(params = {}) {
       return null;
     })();
   }
-  let highlightTarget = params.target ? String(params.target) : '';
+  // 支持多目标：params.targets 数组，或逗号分隔的 params.target；第一个作为主目标（卡片锚点），其余画额外高亮。
+  const rawTargets = Array.isArray(params.targets) ? params.targets : (params.target ? String(params.target).split(',') : []);
+  const targets = rawTargets.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 8);
+  let highlightTarget = '';
   let highlightRect = null;
-  if (highlightTarget.startsWith('@')) {
-    const frameMatch = /^@f(\d+)e(\d+)$/.exec(highlightTarget);
-    const frameId = frameMatch ? Number(frameMatch[1]) : 0;
-    const localRef = frameMatch ? '@e' + frameMatch[2] : highlightTarget;
-    try { highlightRect = await execPage(tabId, 'rect', { ref: localRef }, frameId); } catch { highlightRect = null; }
-    highlightTarget = '';
+  const extraTargets = [];
+  for (let index = 0; index < targets.length; index += 1) {
+    const entry = targets[index];
+    if (entry.startsWith('@')) {
+      const frameMatch = /^@f(\d+)e(\d+)$/.exec(entry);
+      const frameId = frameMatch ? Number(frameMatch[1]) : 0;
+      const localRef = frameMatch ? '@e' + frameMatch[2] : entry;
+      let rect = null;
+      try { rect = await execPage(tabId, 'rect', { ref: localRef }, frameId); } catch { rect = null; }
+      if (index === 0) highlightRect = rect;
+      else if (rect) extraTargets.push({ rect });
+    } else if (index === 0) {
+      highlightTarget = entry;
+    } else {
+      extraTargets.push({ selector: entry });
+    }
   }
   await hideTakeover(tabId, { preserveState: true }).catch(() => {});
   openOverlay(tabId, 'help', { priority: 50 });
   try {
     const overlayLang = await readUiLang();
-    await injectBanner(tabId, helpOverlayFunc, [requestId, reason, highlightTarget, highlightRect, String(params.title || ''), overlayLang, OVERLAY_THEME, overlayTexts(overlayLang)]);
+    await injectBanner(tabId, helpOverlayFunc, [requestId, reason, highlightTarget, highlightRect, String(params.title || ''), overlayLang, OVERLAY_THEME, overlayTexts(overlayLang), extraTargets]);
     try {
       await notifyActionRequest('help', { requestId, tabId, title: params.title || '', lang: overlayLang });
     } catch { /* 通知失败不影响页面协助 */ }
@@ -102,7 +115,7 @@ export async function requestHelp(params = {}) {
       stopCriteriaPolling = true;
     }
     clearActionNotification('help', requestId);
-    try { await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: () => { const n = document.getElementById('__bb_help_host'); if (n) n.remove(); const h = document.getElementById('__bb_help_highlight'); if (h) h.remove(); } }); } catch { /* 页面可能已关闭 */ }
+    try { await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: () => { const n = document.getElementById('__bb_help_host'); if (n) n.remove(); const h = document.getElementById('__bb_help_highlight'); if (h) h.remove(); document.querySelectorAll('[data-bb-help-extra]').forEach((el) => el.remove()); } }); } catch { /* 页面可能已关闭 */ }
     // 用户点“完成并交还控制权”（或完成条件满足）＝明确把控制权交回 Agent：
     // 解除可能由协助期间人工输入触发的 daemon auto pause，并把 controller 收回 agent-ready。
     if (answer.action === 'done') {

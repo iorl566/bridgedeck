@@ -288,7 +288,7 @@ export function borrowToast(requestId, tabTitle, timeoutMs, lang, theme, texts, 
 }
 
 /** 注入函数：人工协助卡片（统一 token + 深色模式）。 */
-export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, titleText, lang, theme, texts) {
+export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, titleText, lang, theme, texts, extraTargets) {
   const __BB_MARK = '<svg viewBox="0 0 32 32" width="22" height="22" fill="none" aria-hidden="true"><path d="M4.6 24.5h22.8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M8.9 24.5V13.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M23.1 24.5V13.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M8.9 13.2c2.1-3.7 4.9-5.5 7.1-5.5s5 1.8 7.1 5.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M12.6 24.5v-3.9M19.4 24.5v-3.9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 
   const BASE = lang === 'en' ? {
@@ -327,6 +327,7 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
   if (old) old.remove();
   const oldHl = document.getElementById(HL);
   if (oldHl) oldHl.remove();
+  document.querySelectorAll('[data-bb-help-extra]').forEach((node) => node.remove());
 
   let target = null;
   if (targetSelector) {
@@ -338,6 +339,14 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
   hl.setAttribute('data-bb-overlay', '');
   hl.style.cssText = 'position:fixed;z-index:2147483645;pointer-events:none;border:2px solid var(--bb-accent,#2f6fed);border-radius:8px;box-shadow:0 0 0 6px var(--bb-accent-soft,#e8f0ff),0 0 22px var(--bb-shadow-strong,rgba(28,34,48,.28));display:none';
   document.documentElement.appendChild(hl);
+  const extraBoxes = (Array.isArray(extraTargets) ? extraTargets : []).slice(0, 8).map((item, index) => {
+    const box = document.createElement('div');
+    box.setAttribute('data-bb-overlay', '');
+    box.setAttribute('data-bb-help-extra', String(index));
+    box.style.cssText = hl.style.cssText.replace('display:none', 'display:block');
+    document.documentElement.appendChild(box);
+    return box;
+  });
 
   const host = document.createElement('div');
   host.id = HOST;
@@ -403,7 +412,26 @@ export function helpOverlayFunc(requestId, reason, targetSelector, targetRect, t
     const clamped = Math.max(12, Math.min(window.innerWidth - 392, x));
     return rtl ? Math.max(12, window.innerWidth - clamped - 384) : clamped;
   };
+  const placeExtras = () => {
+    extraBoxes.forEach((box, index) => {
+      const spec = extraTargets[index];
+      let rect = spec && spec.rect ? spec.rect : null;
+      if (!rect && spec && spec.selector) {
+        try { const node = document.querySelector(spec.selector); if (node) rect = node.getBoundingClientRect(); } catch { rect = null; }
+      }
+      if (rect && (rect.width || rect.height)) {
+        box.style.display = 'block';
+        box.style.left = (rect.left - 3) + 'px';
+        box.style.top = (rect.top - 3) + 'px';
+        box.style.width = (rect.width + 6) + 'px';
+        box.style.height = (rect.height + 6) + 'px';
+      } else {
+        box.style.display = 'none';
+      }
+    });
+  };
   const place = () => {
+    placeExtras();
     if (targetRect && targetRect.width >= 0) {
       hl.style.display = 'block';
       hl.style.left = (targetRect.x - 3) + 'px';
