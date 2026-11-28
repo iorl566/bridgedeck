@@ -171,6 +171,7 @@ VALUE_FLAGS.add('max-requests');
 VALUE_FLAGS.add('hold-ms');
 VALUE_FLAGS.add('max-touch-points');
 VALUE_FLAGS.add('run-id');
+VALUE_FLAGS.add('error-style');
 VALUE_FLAGS.add('max-console');
 VALUE_FLAGS.add('request-id');
 VALUE_FLAGS.add('encoder');
@@ -693,6 +694,38 @@ function print(text) {
   process.stdout.write(`${text}\n`);
 }
 
+let bskErrorStyle = (() => {
+  const argv = process.argv.slice(2);
+  const index = argv.indexOf('--error-style');
+  return index >= 0 && argv[index + 1] === 'bsk';
+})();
+
+/**
+ * BSK 兼容错误码映射（--error-style bsk）。
+ * BSK 协议只有 15 个稳定 snake_case 码；默认（不开启）保持我方 E_* 细粒度码。
+ */
+function mapErrorCode(code) {
+  if (!bskErrorStyle || !code) return code;
+  const raw = String(code);
+  const table = [
+    [/^E_(ARG|BAD_ARG|INVALID_PARAMS|BAD_JSON|BAD_REQUEST|BAD_SUBCOMMAND|UNKNOWN_FLAG)/, 'invalid_params'],
+    [/^E_(NOT_FOUND|STALE_REF|NO_SUCH)/, 'not_found'],
+    [/^E_(FORBIDDEN|BORROW_DENIED|HELP_DISABLED|POLICY)/, 'permission_denied'],
+    [/^E_(TIMEOUT|DAEMON_TIMEOUT)/, 'timeout'],
+    [/^E_DIALOG_PENDING$/, 'dialog_pending'],
+    [/^E_(CDP|JS_ERROR|EXEC_FAILED|EVAL)/, 'cdp_failed'],
+    [/^E_CANCELLED$/, 'cancelled'],
+    [/^E_(VERSION|PROTOCOL_UNSUPPORTED)/, 'version_too_old'],
+    [/^E_(BROWSER_AMBIGUOUS|MULTIPLE_BROWSERS)/, 'multiple_browsers_online'],
+    [/^E_(NO_BROWSER|BROWSER_GONE)/, 'no_browser_connected'],
+    [/^E_(PAIR|PAIRING)/, 'pairing_required'],
+    [/^E_UNKNOWN_METHOD$/, 'unknown_method'],
+    [/^E_PROTOCOL_/, 'protocol_error'],
+  ];
+  for (const [re, mapped] of table) if (re.test(raw)) return mapped;
+  return raw.replace(/^E_/, '').toLowerCase();
+}
+
 function outputFailure(body) {
   const error = body.error || { code: 'E_INTERNAL', message: 'unknown error' };
   if (error.code === 'E_DIALOG_PENDING') {
@@ -712,7 +745,7 @@ function outputFailure(body) {
     return 6;
   }
   if (jsonMode) {
-    emitJson(body);
+    emitJson(bskErrorStyle ? { ...body, error: { ...error, code: mapErrorCode(error.code), bbCode: error.code } } : body);
   } else {
     process.stderr.write(`错误 ${error.code}: ${error.message}\n`);
     const advice = recoveryHint(error.code);
@@ -723,7 +756,7 @@ function outputFailure(body) {
 
 function outputBridgeError(err) {
   if (jsonMode) {
-    emitJson({ ok: false, error: { code: err.code || 'E_INTERNAL', message: err.message } });
+    emitJson({ ok: false, error: { code: mapErrorCode(err.code || 'E_INTERNAL'), bbCode: err.code || 'E_INTERNAL', message: err.message } });
   } else {
     process.stderr.write(`错误 ${err.code || 'E_INTERNAL'}: ${err.message}\n`);
     const advice = recoveryHint(err.code || 'E_INTERNAL');
@@ -2104,6 +2137,7 @@ async function main(argv) {
   const { flags, pos } = parseArgs(argv);
   traceStartup('args-parsed');
   jsonMode = flags.json === true;
+  bskErrorStyle = flags['error-style'] === 'bsk';
   quietMode = flags.quiet === true;
   verboseMode = flags.verbose === true;
   setJsonContext(pos[0], null, flags);
@@ -2153,11 +2187,13 @@ main(process.argv.slice(2))
   .then((code) => finish(code))
   .catch((err) => {
     if (err instanceof ArgError) {
-      const code = err.code || 'E_ARG_USAGE';
+      const code = bskErrorStyle ? mapErrorCode(err.code || 'E_ARG_USAGE') : (err.code || 'E_ARG_USAGE');
       const usage = err.usage || jsonContext.usage || '';
       // 解析阶段失败时 jsonMode 还没设置；仍按 argv 里的 --json 输出 JSON 契约。
       if (jsonMode || process.argv.slice(2).includes('--json')) {
-        emitJson(errorEnvelope({ code, message: err.message, hint: err.hint, usage }, jsonContext));
+        const envelope = errorEnvelope({ code, message: err.message, hint: err.hint, usage }, jsonContext);
+        if (bskErrorStyle) envelope.error.bbCode = err.code || 'E_ARG_USAGE';
+        emitJson(envelope);
       }
       process.stderr.write('参数错误：' + err.message + '\n');
       if (code) process.stderr.write('  代码：' + code + '\n');
