@@ -186,7 +186,7 @@ const M6_NAV_TOOLS = ['browser_back', 'browser_forward', 'browser_reload', 'brow
 const M6_REQUEST_TOOLS = ['browser_session_request_prepare', 'browser_session_request_status', 'browser_session_request_claim', 'browser_session_request_cancel'];
 const M6_TAB_TOOLS = ['browser_tab_borrow', 'browser_tab_return'];
 const M6_NEW_TOOLS = [...M6_INPUT_TOOLS, ...M6_NAV_TOOLS, ...M6_REQUEST_TOOLS, ...M6_TAB_TOOLS];
-// M6-P0②：剩余 MCP 动作入口（bsk_inspect:html / bsk_assist 4 个 action / bsk_session browsers+list）。
+// M6-P0②：剩余 MCP 动作入口（inspect:html / assist 4 个 action / session browsers+list）。
 const M6B_INSPECT_TOOLS = ['browser_inspect_html'];
 const M6B_ASSIST_TOOLS = ['browser_assist_emulate', 'browser_assist_request_help', 'browser_assist_operation_await', 'browser_assist_operation_cancel'];
 const M6B_SESSION_TOOLS = ['browser_session_browsers', 'browser_session_list'];

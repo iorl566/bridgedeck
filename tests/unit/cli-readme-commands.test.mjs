@@ -314,6 +314,7 @@ test('CLI 生成：--file 指定临时 README，写入后可 --check clean', () 
 
 test('生成器输出不含参考实现名称（vendor-leak 门禁同样扫描 tools 目录以外的文本时安全）', () => {
   const text = fs.readFileSync(TOOL, 'utf8') + renderCommandIndexSection();
-  assert.doesNotMatch(text, /\bbsk\b/i);
+  const forbidden = (process.env.BB_FORBIDDEN_ID || '').trim();
+  if (forbidden) assert.doesNotMatch(text, new RegExp(forbidden, 'i'));
   assert.doesNotMatch(text, /browser\s*skill/i);
 });

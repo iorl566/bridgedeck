@@ -19,7 +19,7 @@ export function createNetworkCommand({
   ArgError,
 }) {
   return async function cmdNetwork(flags, pos) {
-    // 与 BSK 的 `bsk network` 对齐：不带子命令时默认读取当前缓冲。
+    // 不带子命令时默认读取当前缓冲（兼容外部脚本习惯）。
     const sub = pos[1] || 'list';
     if (sub === 'start') {
       const body = await callRpc('network.start', withControl(flags, { bodies: flags.bodies === true }), timeoutOf(flags));

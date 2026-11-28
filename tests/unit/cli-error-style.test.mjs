@@ -19,15 +19,15 @@ function run(args) {
   return { code: result.status, json: line ? JSON.parse(line) : null, raw: (result.stdout || '') + (result.stderr || '') };
 }
 
-test('--error-style bsk：未知命令映射 invalid_params（保留 bbCode）', () => {
-  const result = run(['--error-style bsk', 'badcmd', '--json'].flatMap((item) => item.split(' ')));
+test('--error-style compat：未知命令映射 invalid_params（保留 bbCode）', () => {
+  const result = run(['--error-style compat', 'badcmd', '--json'].flatMap((item) => item.split(' ')));
   assert.equal(result.code, 2);
   assert.equal(result.json.error.code, 'invalid_params');
   assert.ok(result.json.error.bbCode);
 });
 
-test('--error-style bsk：未知选项映射 invalid_params', () => {
-  const result = run(['--error-style', 'bsk', 'status', '--definitely-not-a-flag', '--json']);
+test('--error-style compat：未知选项映射 invalid_params', () => {
+  const result = run(['--error-style', 'compat', 'status', '--definitely-not-a-flag', '--json']);
   assert.equal(result.code, 2);
   assert.equal(result.json.error.code, 'invalid_params');
 });

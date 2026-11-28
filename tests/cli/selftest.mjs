@@ -1711,15 +1711,15 @@ async function runTests() {
     cliCancelNoArg.code === 2,
     `${cliCancelNoArg.code} ${cliCancelNoArg.stdout}${cliCancelNoArg.stderr}`,
   );
-  const cliLedgerStatusBsK = await runCli(['ledger', 'status', '--json']);
+  const cliLedgerStatusCompat = await runCli(['ledger', 'status', '--json']);
   check(
     'bridge ledger status 经 ledger.request 返回 action=status（人类输出与默认载荷不变）',
-    Boolean(cliLedgerStatusBsK.code === 0
-      && jsonOf(cliLedgerStatusBsK)
-      && jsonOf(cliLedgerStatusBsK).result
-      && jsonOf(cliLedgerStatusBsK).result.action === 'status'
-      && Array.isArray(jsonOf(cliLedgerStatusBsK).result.pending)),
-    `${cliLedgerStatusBsK.code} ${cliLedgerStatusBsK.stdout.slice(0, 300)}`,
+    Boolean(cliLedgerStatusCompat.code === 0
+      && jsonOf(cliLedgerStatusCompat)
+      && jsonOf(cliLedgerStatusCompat).result
+      && jsonOf(cliLedgerStatusCompat).result.action === 'status'
+      && Array.isArray(jsonOf(cliLedgerStatusCompat).result.pending)),
+    `${cliLedgerStatusCompat.code} ${cliLedgerStatusCompat.stdout.slice(0, 300)}`,
   );
 
   // CLI 参数对齐：兼容基线的 6 组参数都能被解析，并在参数层拒绝非法取值（退出码 2）。

@@ -694,18 +694,18 @@ function print(text) {
   process.stdout.write(`${text}\n`);
 }
 
-let bskErrorStyle = (() => {
+let compatErrorStyle = (() => {
   const argv = process.argv.slice(2);
   const index = argv.indexOf('--error-style');
-  return index >= 0 && argv[index + 1] === 'bsk';
+  return index >= 0 && argv[index + 1] === 'compat';
 })();
 
 /**
- * BSK 兼容错误码映射（--error-style bsk）。
- * BSK 协议只有 15 个稳定 snake_case 码；默认（不开启）保持我方 E_* 细粒度码。
+ * 粗粒度兼容错误码映射（--error-style compat）。
+ * 兼容契约 协议只有 15 个稳定 snake_case 码；默认（不开启）保持我方 E_* 细粒度码。
  */
 function mapErrorCode(code) {
-  if (!bskErrorStyle || !code) return code;
+  if (!compatErrorStyle || !code) return code;
   const raw = String(code);
   const table = [
     [/^E_(ARG|BAD_ARG|INVALID_PARAMS|BAD_JSON|BAD_REQUEST|BAD_SUBCOMMAND|UNKNOWN_FLAG)/, 'invalid_params'],
@@ -745,7 +745,7 @@ function outputFailure(body) {
     return 6;
   }
   if (jsonMode) {
-    emitJson(bskErrorStyle ? { ...body, error: { ...error, code: mapErrorCode(error.code), bbCode: error.code } } : body);
+    emitJson(compatErrorStyle ? { ...body, error: { ...error, code: mapErrorCode(error.code), bbCode: error.code } } : body);
   } else {
     process.stderr.write(`错误 ${error.code}: ${error.message}\n`);
     const advice = recoveryHint(error.code);
@@ -2137,7 +2137,7 @@ async function main(argv) {
   const { flags, pos } = parseArgs(argv);
   traceStartup('args-parsed');
   jsonMode = flags.json === true;
-  bskErrorStyle = flags['error-style'] === 'bsk';
+  compatErrorStyle = flags['error-style'] === 'compat';
   quietMode = flags.quiet === true;
   verboseMode = flags.verbose === true;
   setJsonContext(pos[0], null, flags);
@@ -2187,12 +2187,12 @@ main(process.argv.slice(2))
   .then((code) => finish(code))
   .catch((err) => {
     if (err instanceof ArgError) {
-      const code = bskErrorStyle ? mapErrorCode(err.code || 'E_ARG_USAGE') : (err.code || 'E_ARG_USAGE');
+      const code = compatErrorStyle ? mapErrorCode(err.code || 'E_ARG_USAGE') : (err.code || 'E_ARG_USAGE');
       const usage = err.usage || jsonContext.usage || '';
       // 解析阶段失败时 jsonMode 还没设置；仍按 argv 里的 --json 输出 JSON 契约。
       if (jsonMode || process.argv.slice(2).includes('--json')) {
         const envelope = errorEnvelope({ code, message: err.message, hint: err.hint, usage }, jsonContext);
-        if (bskErrorStyle) envelope.error.bbCode = err.code || 'E_ARG_USAGE';
+        if (compatErrorStyle) envelope.error.bbCode = err.code || 'E_ARG_USAGE';
         emitJson(envelope);
       }
       process.stderr.write('参数错误：' + err.message + '\n');

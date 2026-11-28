@@ -1,4 +1,4 @@
-// tests/unit/protocol-bsk-floors.test.mjs —— 兼容基线的 6 个 feature floor（M6-P0②）。
+// tests/unit/protocol-compat-floors.test.mjs —— 兼容基线的 6 个 feature floor（M6-P0②）。
 //
 // 证明三件事（都是机械可复核的）：
 //   1) 6 个门在单一目录里存在，floor=1.9，且带 基线侧原始 floor/operation 证据；

@@ -1,9 +1,7 @@
 // M6 P0③ 控制面语义单测：context_id / control_policy / allow-ask-deny / handoff 窗口 /
 // borrow 确认超时 / token ↔ context 双向映射。全部是真实模块 + 注入时钟，不复制实现。
 //
-// 兼容基线 对照位置（实现里已注明）：crates/bsk-protocol/src/tools/cooperate.rs:29,36-43；
-// crates/bsk-cli/src/cli/cooperate.rs:52-54,86-92,180-201；crates/bsk-protocol/src/compatibility.rs:139-145；
-// crates/bsk-cli/src/cli/tab.rs:233；apps/extension/src/cooperation/controller.ts:795-830,1023-1035。
+// 兼容基线对照位置（实现里已注明）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -119,8 +117,8 @@ test('策略协商：auto→target / 保留 strict / 会话内固定（controlle
   assert.equal(legacy.policy, 'target');
   assert.equal(legacy.localDefault, 'target');
   assert.equal(legacy.evidence.legacy, true);
-  const bskDefault = negotiateControlPolicy({ action: 'sync', defaultPolicy: 'strict' });
-  assert.equal(bskDefault.policy, 'strict');
+  const compatDefault = negotiateControlPolicy({ action: 'sync', defaultPolicy: 'strict' });
+  assert.equal(compatDefault.policy, 'strict');
 });
 
 test('协议门：TargetControl 要求协议 1.8+（compatibility.rs:139-145/:198-216）', () => {

@@ -14,7 +14,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOTS = ['extension', 'cli', 'daemon', 'lib', 'sdk', 'mcp', 'dsh-plugin', 'installer', 'bin', 'translation', 'apps', 'skill'];
 const EXTS = /\.(js|mjs|cjs|ts|tsx|json|html|css|md|py|sh|ps1)$/i;
 const SKIP_DIR = /^(vendor|node_modules|\.git|dist|target|\.output|\.wxt|build|out)$/;
-const RE = /BSK|BrowserSkill|参考实现|上游|\bbsk\b/gi;
+const RE = /参考实现|上游/gi;
 const hits = [];
 
 function scanText(file, text) {

@@ -209,7 +209,7 @@ export function writeScaleBaseline(summary, { file = BASELINE_PATH, recordedAt =
 /**
  * 门禁判定：绝对上限 + 单文件上限 + 基线容差 + 上游 对标门槛。
  * @param {{summary:object, records?:Array<{file:string,lines:number,generated?:boolean}>|null,
- *   limits?:object, baseline?:object|null, bskLines?:number}} input
+ *   limits?:object, baseline?:object|null, referenceLines?:number}} input
  */
 export function evaluateScale({ summary, records = null, limits = null, baseline = null, referenceLines = REFERENCE_LINES } = {}) {
   const merged = { ...DEFAULT_LIMITS, ...(limits || {}), referenceLines: Number(referenceLines) || REFERENCE_LINES };

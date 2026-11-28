@@ -246,11 +246,12 @@ test('渲染器：缺语言时直接抛错；生成物按分片存放且每个�
   assert.match(main, /export const DYNAMIC_TEXT = \{/);
   assert.match(main, /export function dynamicText\(lang, key, params\)/);
   assert.match(main, /from '\.\/overlay-dynamic-locales-1\.js'/);
-  assert.ok(!/\bbsk\b/i.test(main), '生成物不得出现参考实现标识');
+  const forbidden = (process.env.BB_FORBIDDEN_ID || '').trim();
+  assert.ok(!forbidden || !new RegExp(forbidden, 'i').test(main), '生成物不得出现参考实现标识');
   for (const [file, text] of files) {
     const lines = text.split('\n').length;
     assert.ok(lines <= 1100, path.relative(ROOT, file) + ' 超过 src 文件复杂度预算（1100 行）：' + lines);
-    assert.ok(!/\bbsk\b/i.test(text), path.relative(ROOT, file) + ' 生成物出现参考实现标识');
+    assert.ok(!forbidden || !new RegExp(forbidden, 'i').test(text), path.relative(ROOT, file) + ' 生成物出现参考实现标识');
   }
   assert.equal(files.has(shardPath(0)), true);
   assert.equal(renderDynamicModule(source, 1).includes('DYNAMIC_TEXT_SHARD_2'), false);

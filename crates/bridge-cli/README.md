@@ -1,6 +1,6 @@
 # bridge-cli（Rust 架构路线：协议编解码 + 会话状态机 + 真实 daemon 客户端）
 
-对应参考实现中的 `crates/bsk-cli`。当前是 **M-D 第四批**：在 std-only 前提下补齐
+当前是 **M-D 第四批**：在 std-only 前提下补齐
 **TLS 明确拒绝策略**与**真实会话命令**（`session start|stop|list`、只读 `observe`），
 所有命令都接线到**真实 Node daemon**（`daemon/server.mjs`），没有"未接线"占位输出。
 
